@@ -44,6 +44,7 @@ namespace OnScreenKeyboard
         private bool     _shiftLatched            = false;
         private bool     _sentenceFirstWordDone   = false;  // true after first word of sentence completed
         private bool     _lastActionWasPrediction = false;
+        private bool     _atSentenceStart         = false;  // true only after SetSentenceStart(), not after manual Shift
 
         private readonly string[] _predictions  = new string[10];
         private readonly int      _slotCount;
@@ -133,7 +134,7 @@ namespace OnScreenKeyboard
                 {
                     _lastActionWasPrediction = false;
                     // Capture BEFORE any state changes — shifted mid-sentence = proper noun intent
-                    bool preferProperNoun = shifted && !_nextWordUpper && _wordBuffer.Length == 0;
+                    bool preferProperNoun = shifted && !_atSentenceStart && _wordBuffer.Length == 0;
 
                     if (_wordBuffer.Length == 0)
                     {
@@ -141,6 +142,7 @@ namespace OnScreenKeyboard
                         {
                             // Starting the SECOND word after sentence start → mid-sentence
                             _nextWordUpper         = false;
+                            _atSentenceStart       = false;
                             _sentenceFirstWordDone = false;
                         }
                         else if (_nextWordUpper)
@@ -214,14 +216,12 @@ namespace OnScreenKeyboard
 
             int backspaces = _wordBuffer.Length;
 
-            // Capitalise if sentence start
-            string toSend = _nextWordUpper && predicted.Length > 0
-                ? char.ToUpper(predicted[0]) + predicted.Substring(1)
-                : predicted;
+            string toSend = predicted;
 
             // Update state
             CompleteWord(toSend);
             _nextWordUpper           = false;
+            _atSentenceStart         = false;
             _shiftLatched            = false;
             _sentenceFirstWordDone   = false;
             _lastActionWasPrediction = true;
@@ -236,7 +236,8 @@ namespace OnScreenKeyboard
         /// </summary>
         public void SetNextWordUpper(bool value)
         {
-            _nextWordUpper = value;
+            _nextWordUpper   = value;
+            _atSentenceStart = false;  // manual Shift toggle is never a sentence start
             RefreshPredictions();
         }
 
@@ -244,6 +245,7 @@ namespace OnScreenKeyboard
         private void SetSentenceStart()
         {
             _nextWordUpper           = true;
+            _atSentenceStart         = true;
             _shiftLatched            = true;
             _sentenceFirstWordDone   = false;
             ShiftLatchChanged?.Invoke(true);
@@ -262,9 +264,9 @@ namespace OnScreenKeyboard
             var preds = WordDatabase.GetPredictions(
                 _lastCompletedWord,
                 _wordBuffer,
-                _nextWordUpper,
+                _atSentenceStart,
                 _slotCount,
-                preferUpperCase: shiftActive && !_nextWordUpper);
+                preferUpperCase: shiftActive && !_atSentenceStart);
 
             // GetPredictions already capitalises when upperCase=true
             for (int i = 0; i < _predictions.Length; i++)

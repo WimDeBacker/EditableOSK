@@ -138,7 +138,7 @@ namespace OnScreenKeyboard
             var seen   = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             // ── Step 1: Second words ──────────────────────────────────
-            if (!string.IsNullOrEmpty(lastCompletedWord))
+            if (!sentenceStart && !string.IsNullOrEmpty(lastCompletedWord))
             {
                 // Try exact match first; also try lowercased key
                 WordEntry lastEntry = null;

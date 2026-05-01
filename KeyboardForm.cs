@@ -184,7 +184,7 @@ namespace OnScreenKeyboard
                 AutoSave();
             };
             SizeChanged += (s, e) => LayoutButtons();
-            Shown       += (s, e) => { LayoutButtons(); ForceTopMost(); _gearBtn.BringToFront(); LatchShiftForSentence(); };
+            Shown       += (s, e) => { LayoutButtons(); ForceTopMost(); _gearBtn.BringToFront(); _predictor.OnSentenceStart(); };
             Activated   += (s, e) => ForceTopMost();
             KeyDown     += OnFormKeyDown;
             RegisterFocusHook();
@@ -806,8 +806,6 @@ namespace OnScreenKeyboard
                 // Show prediction if available, else show slot placeholder
                 // Capitalise display label at sentence start / Caps Lock
                 string label = pred ?? "";
-                if (!string.IsNullOrEmpty(label) && (_predictor?.NextWordUpper ?? false))
-                    label = char.ToUpper(label[0]) + label.Substring(1);
                 btn.Tag = (label, "", "", fc);
                 btn.Invalidate();
             }
@@ -1174,9 +1172,6 @@ namespace OnScreenKeyboard
                 Size = new Size(_global.WindowWidth, _global.WindowHeight);
             }
             catch { }
-            // Restore predictor sentence-start state after layout load
-            if (_buttons.Count > 0 && _predictor?.NextWordUpper == true)
-                _predictor?.OnSentenceStart();
         }
 
         private void AutoSave()

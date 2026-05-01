@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <OnScreenKeyboard>
-  <Global BackgroundColor="1A1A2E" Opacity="1.00" FontName="Arial" FontSize="0" FontColor="E0E0FF" KeyColor="2D2D4A" BorderColor="3C3C5A" BorderThickness="1" Language="nl" WindowWidth="1452" WindowHeight="396" LastFile="C:\keyboard\0420\azerty.xml" GridRows="7" GearRow="6" GearCol="13" GridCols="14" HideTitlebar="0" StickyModifiers="0" AlwaysOnTop="1" />
+  <Global BackgroundColor="1A1A2E" Opacity="1.00" FontName="Arial" FontSize="0" FontColor="E0E0FF" KeyColor="2D2D4A" BorderColor="3C3C5A" BorderThickness="1" Language="nl" WindowWidth="1452" WindowHeight="396" LastFile="C:\keyboard\0420\azerty.xml" GridRows="7" GearRow="6" GearCol="13" GridCols="14" HideTitlebar="0" StickyModifiers="1" AlwaysOnTop="1" />
   <Key Row="0" Col="0" RowSpan="1" ColSpan="2" Label="Woord 1" Send="wp:0" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
   <Key Row="0" Col="2" RowSpan="1" ColSpan="2" Label="Woord 2" Send="wp:1" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
   <Key Row="0" Col="4" RowSpan="1" ColSpan="2" Label="Woord 3" Send="wp:2" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
