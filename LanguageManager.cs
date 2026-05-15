@@ -20,13 +20,59 @@ namespace OnScreenKeyboard
         // Built-in English strings (used as fallback when XML is missing or key not found)
         private static readonly Dictionary<string, string> _en = new Dictionary<string, string>
         {
+            // ── Toolbar tooltips ─────────────────────────────────────
+            ["tip: Load"]              = "Load layout file",
+            ["tip: Save"]              = "Save layout file",
+            ["tip: Undo"]              = "Undo last edit",
+            ["tip: Redo"]              = "Redo last undone edit",
+            ["tip: Edit mode"]         = "Switch to Edit mode",
+            ["tip: Edit Keyboard"]     = "Edit Keyboard",
+            ["tip: Exit edit mode"]    = "Exit edit mode",
+            ["tip: Edit key"]          = "Edit selected key",
+            ["tip: Remove key"]        = "Remove selected key (make empty)",
+            ["tip: Copy formatting"]   = "Copy key formatting (style only)",
+            ["tip: Copy formatting"]   = "Copy formatting — then click any key to apply",
+            ["tip: Copy key"]          = "Copy key (label, send, and style)",
+            ["tip: Copy key"]          = "Copy key — then click any key to paste",
+            ["tip: Insert row above"]  = "Insert row above selected row",
+            ["tip: Insert row below"]  = "Insert row below selected row",
+            ["tip: Insert column left"]  = "Insert column to the left",
+            ["tip: Insert column right"] = "Insert column to the right",
+            ["tip: Remove row"]        = "Remove selected row",
+            ["tip: Remove column"]     = "Remove selected column",
+            ["tip: Merge right"]       = "Merge selected cell with cell to the right",
+            ["tip: Merge down"]        = "Merge selected cell with cell below",
+            ["tip: Split cell"]        = "Split merged cell back into single cells",
+
+            // ── Toolbar row 1 buttons ────────────────────────────────
+            ["📂 Load"]               = "📂 Load",
+            ["↩ Undo"]               = "↩ Undo",
+            ["↪ Redo"]               = "↪ Redo",
+            ["✏ Edit"]               = "✏ Edit",
+            ["🖥 Keyboard"]          = "🖥 Keyboard",
+            ["✖ Exit"]               = "✖ Exit",
+
+            // ── Toolbar row 2: key actions ───────────────────────────
+            ["✏ Key"]                = "✏ Key",
+            ["🗑 Key"]               = "🗑 Key",
+            ["🖌 Copy fmt"]           = "🖌 Copy fmt",
+            ["📄 Copy key"]          = "📄 Copy key",
+
+            // ── Toolbar row 2: grid actions ──────────────────────────
+            ["⬆ Row+"]              = "⬆ Row+",
+            ["⬇ Row+"]              = "⬇ Row+",
+            ["⬅ Col+"]              = "⬅ Col+",
+            ["➡ Col+"]              = "➡ Col+",
+            ["🗑 Row"]               = "🗑 Row",
+            ["🗑 Col"]               = "🗑 Col",
+            ["⊞ →"]                 = "⊞ →",
+            ["⊞ ↓"]                 = "⊞ ↓",
+            ["⊟ Split"]             = "⊟ Split",
+
             // ── Gear / main menu ────────────────────────────────────
             ["💾 Save"]              = "💾 Save",
             ["💾 Save As…"]          = "💾 Save As…",
             ["📂 Load…"]             = "📂 Load…",
-            ["✏ Edit Mode"]          = "✏ Edit Mode",
-            ["⚡ Quick Edit"]         = "⚡ Quick Edit",
-            ["🖥 Edit Keyboard…"]    = "🖥 Edit Keyboard…",
             ["🔲 Hide title bar"]    = "🔲 Hide title bar",
 
             // ── Key context menu (grid edit) ─────────────────────────
@@ -59,6 +105,32 @@ namespace OnScreenKeyboard
             ["Preview"]              = "Preview",
             ["✔ Apply"]              = "✔  Apply",
             ["✖ Cancel"]             = "✖  Cancel",
+            // Clean keys (no emoji) — these are the ones code actually calls
+            ["Apply"]                = "Apply",
+            ["Cancel"]               = "Cancel",
+            ["Save"]                 = "Save",
+            ["Save As…"]             = "Save As…",
+            ["Load…"]                = "Load…",
+            ["Import"]               = "Import",
+            // ── Toolbar button text labels ───────────────────────────────
+            ["tb: Load"]             = "Load",
+            ["tb: Save"]             = "Save",
+            ["tb: Undo"]             = "Undo",
+            ["tb: Redo"]             = "Redo",
+            ["tb: Edit"]             = "Edit",
+            ["tb: Keyboard"]         = "Keyboard",
+            ["tb: Exit"]             = "Exit",
+            ["tb: Edit key"]         = "Edit key",
+            ["tb: Remove"]           = "Remove",
+            ["tb: Copy fmt"]         = "Copy fmt",
+            ["tb: Copy key"]         = "Copy key",
+            ["tb: Row"]              = "Row",
+            ["tb: Col"]              = "Col",
+            ["tb: Del row"]          = "Del row",
+            ["tb: Del col"]          = "Del col",
+            ["tb: Merge R"]          = "Merge R",
+            ["tb: Merge D"]          = "Merge D",
+            ["tb: Split"]            = "Split",
 
             // ── Keyboard editor ─────────────────────────────────────
             ["Edit Keyboard"]        = "Edit Keyboard",
@@ -78,6 +150,9 @@ namespace OnScreenKeyboard
             ["➡ Add col right"]     = "Add column to the right",
             ["🗑 Remove row"]        = "Remove this row",
             ["🗑 Remove col"]        = "Remove this column",
+            ["🗑 Remove key"]         = "Clear this key (make empty)",
+            ["📋 Copy formatting"]   = "Copy formatting",
+            ["📋 Paste formatting"]  = "Paste formatting",
             ["Split cell"]           = "Split merged cell",
             ["Merge right"]          = "Merge with cell to the right",
             ["Merge down"]           = "Merge with cell below",
@@ -85,6 +160,8 @@ namespace OnScreenKeyboard
 
             // ── Errors ──────────────────────────────────────────────
             ["Save failed"]          = "Save failed:",
+            ["Save invalid msg"]     = "The layout contains overlapping or missing cells and cannot be saved in its current state.\n\nTip: switch to Edit mode to inspect and fix the layout, then try saving again.",
+            ["Save invalid title"]   = "Layout invalid — not saved",
             ["Invalid file title"]   = "Unable to Open File",
             ["Invalid file msg"]     = "The file could not be opened because it is not a valid keyboard layout file, or it was created by an incompatible version.\n\nThe keyboard layout was not changed.",
             ["Invalid file detail"]  = "Technical details:",
@@ -93,6 +170,7 @@ namespace OnScreenKeyboard
             ["Hide title bar"]       = "Hide title bar",
             ["Always on top"]        = "Always on top",
             ["Sticky modifiers"]     = "Sticky modifiers",
+            ["Hold to edit"]         = "Hold to enter edit mode",
             ["Accessibility"]        = "Accessibility",
             ["Layout file"]          = "Layout file",
             ["Key width"]            = "Key width",
@@ -106,6 +184,10 @@ namespace OnScreenKeyboard
             ["Text"]                 = "Text",
             ["Key/Shortcut"]         = "Key/Shortcut",
             ["Modifier"]             = "Modifier",
+            ["🗂 Layout"]                = "🗂 Layout",
+            ["📂 Browse (Send)"]         = "📂 Browse (Send)",
+            ["📂 Browse (Shift-send)"]   = "📂 Browse (Shift-send)",
+            ["📂 Browse (AltGr-send)"]   = "📂 Browse (AltGr-send)",
             ["🎹 Record key / shortcut"]          = "🎹 Record key / shortcut",
             ["⏺ Press your key or shortcut now…"] = "⏺ Press your key or shortcut now…",
             ["Press Escape to cancel"]            = "Press Escape to cancel",
@@ -113,6 +195,26 @@ namespace OnScreenKeyboard
             ["Recorded — edit if needed"]    = "Recorded — edit if needed",
             ["Press 🎹 to record, or type directly"]    = "Press 🎹 to record, or type directly",
             ["Press 🎹 to re-record, or edit directly"] = "Press 🎹 to re-record, or edit directly",
+
+            // ── Group editor ─────────────────────────────────────────────
+            ["Key Groups"]              = "Key Groups",
+            ["Manage Groups…"]          = "Manage Groups…",
+            ["Group"]                   = "Group",
+            ["(no group)"]              = "(no group)",
+            ["Manage Groups"]           = "Manage Groups",
+            ["Groups"]                  = "Groups",
+            ["Style"]                   = "Style",
+            ["+ Add group"]             = "+ Add",
+            ["− Delete group"]          = "− Delete",
+            ["Name"]                    = "Name",
+            ["(inherit global)"]        = "(inherit global)",
+            ["(inherit)"]               = "(inherit)",
+            ["-1 = inherit global"]     = "-1 = inherit global",
+            ["0 = auto / inherit"]      = "0 = auto / inherit",
+            ["Clear (inherit global)"]  = "Clear (inherit global)",
+            ["Delete Group"]            = "Delete Group",
+            ["Delete group msg"]        = "Delete group \"{0}\"?\n\nKeys assigned to this group will revert to global style.",
+            ["New Group"]               = "New Group",
         };
 
         private static Dictionary<string, string> _overrides = new Dictionary<string, string>();

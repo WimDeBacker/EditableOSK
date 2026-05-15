@@ -1,0 +1,17 @@
+# Build output
+bin/
+obj/
+
+# User-specific Visual Studio / Rider files
+*.user
+.vs/
+.idea/
+
+# Claude Code internal folder
+.claude/
+
+# Backup files created by the editor
+*.bak
+
+# Auto-saved settings (machine-specific)
+bin/Debug/net10.0-windows/settings.xml

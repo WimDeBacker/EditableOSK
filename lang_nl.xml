@@ -6,95 +6,153 @@
 -->
 <Language code="nl" name="Nederlands">
 
-  <!-- Gear / main menu -->
-  <String key="💾 Save"            value="💾 Opslaan" />
-  <String key="💾 Save As…"        value="💾 Opslaan als…" />
-  <String key="📂 Load…"           value="📂 Laden…" />
-  <String key="✏ Edit Mode"        value="✏ Bewerkmodus" />
-  <String key="⚡ Quick Edit"       value="⚡ Snel bewerken" />
-  <String key="🖥 Edit Keyboard…"  value="🖥 Toetsenbord bewerken…" />
+  <!-- Toolbar tooltips -->
+  <String key="tip: Load"               value="Lay-outbestand laden" />
+  <String key="tip: Save"               value="Lay-outbestand opslaan" />
+  <String key="tip: Undo"               value="Laatste bewerking ongedaan maken" />
+  <String key="tip: Redo"               value="Ongedaan gemaakte bewerking opnieuw uitvoeren" />
+  <String key="tip: Edit mode"          value="Overschakelen naar bewerkingsmodus" />
+  <String key="tip: Edit Keyboard"      value="Toetsenbord bewerken" />
+  <String key="tip: Exit edit mode"     value="Bewerkingsmodus verlaten" />
+  <String key="tip: Edit key"           value="Geselecteerde toets bewerken" />
+  <String key="tip: Remove key"         value="Geselecteerde toets leegmaken" />
+  <String key="tip: Copy formatting"    value="Opmaak kopiëren — klik daarna op een toets om toe te passen" />
+  <String key="tip: Copy key"           value="Toets kopiëren — klik daarna op een toets om te plakken" />
+  <String key="tip: Insert row above"   value="Rij invoegen boven geselecteerde rij" />
+  <String key="tip: Insert row below"   value="Rij invoegen onder geselecteerde rij" />
+  <String key="tip: Insert column left"  value="Kolom links invoegen" />
+  <String key="tip: Insert column right" value="Kolom rechts invoegen" />
+  <String key="tip: Remove row"         value="Geselecteerde rij verwijderen" />
+  <String key="tip: Remove column"      value="Geselecteerde kolom verwijderen" />
+  <String key="tip: Merge right"        value="Samenvoegen met cel rechts" />
+  <String key="tip: Merge down"         value="Samenvoegen met cel eronder" />
+  <String key="tip: Split cell"         value="Samengevoegde cel splitsen" />
 
-  <!-- Key context menu -->
-  <String key="✏ Edit key"         value="✏ Toets bewerken" />
+  <!-- Toolbar button labels -->
+  <String key="tb: Load"      value="Laden" />
+  <String key="tb: Save"      value="Opslaan" />
+  <String key="tb: Undo"      value="Ongedaan" />
+  <String key="tb: Redo"      value="Opnieuw" />
+  <String key="tb: Edit"      value="Bewerken" />
+  <String key="tb: Keyboard"  value="Toetsenbord" />
+  <String key="tb: Exit"      value="Sluiten" />
+  <String key="tb: Edit key"  value="Toets" />
+  <String key="tb: Remove"    value="Wissen" />
+  <String key="tb: Copy fmt"  value="Kop. opmaak" />
+  <String key="tb: Copy key"  value="Kop. toets" />
+  <String key="tb: Row"       value="Rij" />
+  <String key="tb: Col"       value="Kol" />
+  <String key="tb: Del row"   value="Del rij" />
+  <String key="tb: Del col"   value="Del kol" />
+  <String key="tb: Merge R"   value="Sam. R" />
+  <String key="tb: Merge D"   value="Sam. D" />
+  <String key="tb: Split"     value="Splitsen" />
+
+  <!-- Gear menu -->
+  <String key="📌 Move gear button…" value="📌 Tandwielknop verplaatsen…" />
+
+  <!-- Dialog buttons (clean keys, no emoji) -->
+  <String key="Apply"      value="Toepassen" />
+  <String key="Cancel"     value="Annuleren" />
+  <String key="Save"       value="Opslaan" />
+  <String key="Save As…"   value="Opslaan als…" />
+  <String key="Load…"      value="Laden…" />
+  <String key="Import"     value="Importeren" />
 
   <!-- Key editor — Key Content group -->
-  <String key="Edit Key"           value="Toets bewerken" />
-  <String key="Key Content"        value="Toetsinhoud" />
-  <String key="Label"              value="Label" />
-  <String key="Send"               value="Verzenden" />
-  <String key="Shift label"        value="Shift-label" />
-  <String key="Shift send"         value="Shift-verzenden" />
-  <String key="AltGr label"        value="AltGr-label" />
-  <String key="AltGr send"         value="AltGr-verzenden" />
-  <String key="Key width"           value="Toets breedte" />
-  <String key="Key width hint"      value="1 = normaal,  2 = twee toetsen breed,  ..." />
-  <String key="Key height"          value="Toets hoogte" />
-  <String key="Key height hint"     value="1 = normaal,  2 = twee toetsen hoog,  ..." />
+  <String key="Edit Key"      value="Toets bewerken" />
+  <String key="Key Content"   value="Toetsinhoud" />
+  <String key="Label"         value="Label" />
+  <String key="Send"          value="Verzenden" />
+  <String key="Shift label"   value="Shift-label" />
+  <String key="Shift send"    value="Shift-verzenden" />
+  <String key="AltGr label"   value="AltGr-label" />
+  <String key="AltGr send"    value="AltGr-verzenden" />
+  <String key="Key width"     value="Toets breedte" />
+  <String key="Key height"    value="Toets hoogte" />
+
+  <!-- Key editor — Send mode -->
+  <String key="Text"                        value="Tekst" />
+  <String key="Key/Shortcut"                value="Toets/Sneltoets" />
+  <String key="Modifier"                    value="Modifier" />
+  <String key="Layout"                      value="Lay-out" />
+  <String key="Word prediction"             value="Woordvoorspelling" />
+  <String key="Prediction cell"             value="Voorspellingstoets" />
+  <String key="WP slot already in use"      value="⚠ Slot al in gebruik door een andere toets" />
+  <String key="Record key / shortcut"       value="Toets / sneltoets opnemen" />
+  <String key="Press key now…"              value="Druk nu op uw toets of sneltoets…" />
+  <String key="Press Escape to cancel"      value="Druk op Escape om te annuleren" />
+  <String key="Cancelled"                   value="Geannuleerd" />
+  <String key="Recorded — edit if needed"   value="Opgenomen — bewerk indien nodig" />
+  <String key="Press Record to record, or type directly"    value="Druk op Opnemen, of typ zelf" />
+  <String key="Press Record to re-record, or edit directly" value="Druk op Opnemen om opnieuw op te nemen, of bewerk zelf" />
+  <String key="Browse (Send)"               value="Bladeren (Verzenden)" />
+  <String key="Browse (Shift-send)"         value="Bladeren (Shift-verzenden)" />
+  <String key="Browse (AltGr-send)"         value="Bladeren (AltGr-verzenden)" />
 
   <!-- Key editor — Appearance group -->
-  <String key="Appearance"         value="Uiterlijk" />
-  <String key="Font"               value="Lettertype" />
-  <String key="Font size"          value="Lettergrootte" />
-  <String key="Auto"               value="Auto" />
-  <String key="Font color"         value="Letterkleur" />
-  <String key="Key color"          value="Toetskleur" />
-
-  <String key="Border"             value="Rand" />
-  <String key="Border color"       value="Randkleur" />
-  <String key="Border thickness"   value="Dikte (px)" />
-  <String key="-1 = global default  |  0 = no border  |  1-10 = px" value="-1 = globale standaard  |  0 = geen rand  |  1-10 = dikte in px" />
-
-  <!-- Key editor — Preview + buttons -->
-  <String key="Preview"            value="Voorbeeld" />
-  <String key="✔ Apply"            value="✔  Toepassen" />
-  <String key="✖ Cancel"           value="✖  Annuleren" />
+  <String key="Appearance"        value="Uiterlijk" />
+  <String key="Font"              value="Lettertype" />
+  <String key="Font size"         value="Lettergrootte" />
+  <String key="Auto"              value="Auto" />
+  <String key="Font color"        value="Letterkleur" />
+  <String key="Key color"         value="Toetskleur" />
+  <String key="Border color"      value="Randkleur" />
+  <String key="Border thickness"  value="Dikte (px)" />
+  <String key="Preview"           value="Voorbeeld" />
 
   <!-- Keyboard editor -->
   <String key="Edit Keyboard"      value="Toetsenbord bewerken" />
   <String key="Language"           value="Taal" />
-  <String key="Layout file"         value="Lay-outbestand" />
+  <String key="Layout file"        value="Lay-outbestand" />
   <String key="Window"             value="Venster" />
   <String key="Opacity"            value="Transparantie" />
   <String key="Background"         value="Achtergrond" />
   <String key="Default Key Style"  value="Standaard toetsstijl" />
-  <String key="Apply to all keys"   value="Stijl nu op alle toetsen toepassen" />
-  <String key="Preview"              value="Voorbeeld" />
-  <String key="Always on top"        value="Altijd bovenaan" />
-  <String key="Hide title bar"       value="Titelbalk verbergen" />
-  <String key="Accessibility"        value="Toegankelijkheid" />
-  <String key="Sticky modifiers"     value="Plaktoetsen (Sticky Keys)" />
+  <String key="Apply to all keys"  value="Stijl nu op alle toetsen toepassen" />
+  <String key="Always on top"      value="Altijd bovenaan" />
+  <String key="Hide title bar"     value="Titelbalk verbergen" />
+  <String key="Accessibility"      value="Toegankelijkheid" />
+  <String key="Sticky modifiers"   value="Plaktoetsen (Sticky Keys)" />
+  <String key="Hold to edit"       value="Ingedrukt houden voor bewerkingsmodus" />
 
-
-  <!-- Key editor — Option 3: Send mode selector and recorder -->
-  <String key="📌 Move gear button…" value="📌 Tandwielknop verplaatsen…" />
-  <String key="Word prediction"      value="Woordvoorspelling" />
-  <String key="Prediction cell"      value="Voorspellingstoets" />
-  <String key="WP slot already in use" value="⚠ Slot al in gebruik door een andere toets" />
-  <String key="Send mode"                               value="Verzendmodus" />
-  <String key="Text"                                    value="Tekst" />
-  <String key="Key/Shortcut"                            value="Toets/Sneltoets" />
-  <String key="Modifier"                                value="Modifier" />
-  <String key="🎹 Record key / shortcut"        value="🎹 Toets / sneltoets opnemen" />
-  <String key="⏺ Press your key or shortcut now…" value="⏺ Druk nu op uw toets of sneltoets…" />
-  <String key="Press Escape to cancel"                  value="Druk op Escape om te annuleren" />
-  <String key="Cancelled"                               value="Geannuleerd" />
-  <String key="Recorded — edit if needed"          value="Opgenomen — bewerk indien nodig" />
-  <String key="Press 🎹 to record, or type directly"    value="Druk op 🎹 om op te nemen, of typ zelf" />
-  <String key="Press 🎹 to re-record, or edit directly" value="Druk op 🎹 om opnieuw op te nemen, of bewerk zelf" />
-
-  <!-- Grid edit context menu -->
-  <String key="⬆ Add row above"    value="Rij boven invoegen" />
-  <String key="⬇ Add row below"    value="Rij onder invoegen" />
-  <String key="⬅ Add col left"     value="Kolom links invoegen" />
-  <String key="➡ Add col right"    value="Kolom rechts invoegen" />
-  <String key="🗑 Remove row"       value="Rij verwijderen" />
-  <String key="🗑 Remove col"       value="Kolom verwijderen" />
-  <String key="Split cell"          value="Samengevoegde cel splitsen" />
-  <String key="Merge right"         value="Samenvoegen met cel rechts" />
-  <String key="Merge down"          value="Samenvoegen met cel eronder" />
+  <!-- Group editor -->
+  <String key="Key Groups"             value="Toetsgroepen" />
+  <String key="Manage Groups…"         value="Groepen beheren…" />
+  <String key="Group"                  value="Groep" />
+  <String key="(no group)"             value="(geen groep)" />
+  <String key="Manage Groups"          value="Groepen beheren" />
+  <String key="Groups"                 value="Groepen" />
+  <String key="Style"                  value="Stijl" />
+  <String key="+ Add group"            value="+ Toevoegen" />
+  <String key="− Delete group"         value="− Verwijderen" />
+  <String key="Name"                   value="Naam" />
+  <String key="(inherit global)"       value="(globaal)" />
+  <String key="(inherit)"              value="(overnemen)" />
+  <String key="-1 = inherit global"    value="-1 = globaal overnemen" />
+  <String key="0 = auto / inherit"     value="0 = auto / overnemen" />
+  <String key="Clear (inherit global)" value="Wissen (globaal overnemen)" />
+  <String key="Delete Group"           value="Groep verwijderen" />
+  <String key="Delete group msg"       value="Groep &quot;{0}&quot; verwijderen?&#10;&#10;Toetsen die aan deze groep zijn toegewezen, keren terug naar de globale stijl." />
+  <String key="New Group"              value="Nieuwe groep" />
+  <String key="Import Groups"          value="Groepen importeren" />
+  <String key="Select a layout file to import groups from" value="Selecteer een lay-outbestand om groepen uit te importeren" />
+  <String key="No groups found in the selected file." value="Geen groepen gevonden in het geselecteerde bestand." />
+  <String key="{0} groups found — choose action for each conflict:" value="{0} groepen gevonden — kies een actie voor elk conflict:" />
+  <String key="{0} groups found — all new, no conflicts." value="{0} groepen gevonden — allemaal nieuw, geen conflicten." />
+  <String key="Status"                 value="Status" />
+  <String key="Action"                 value="Actie" />
+  <String key="New"                    value="Nieuw" />
+  <String key="Conflict"               value="Conflict" />
+  <String key="Overwrite"              value="Overschrijven" />
+  <String key="Add as new"             value="Toevoegen als nieuw" />
+  <String key="Skip"                   value="Overslaan" />
+  <String key="Add"                    value="Toevoegen" />
 
   <!-- Errors -->
   <String key="Save failed"         value="Opslaan mislukt:" />
+  <String key="Save invalid msg"    value="De indeling bevat overlappende of ontbrekende cellen en kan niet worden opgeslagen.&#10;&#10;Tip: schakel over naar de bewerkingsmodus om de indeling te controleren en te corrigeren." />
+  <String key="Save invalid title"  value="Indeling ongeldig — niet opgeslagen" />
   <String key="Invalid file title"  value="Bestand kan niet worden geopend" />
   <String key="Invalid file msg"    value="Het bestand kon niet worden geopend omdat het geen geldig toetsenbordlay-outbestand is, of het is gemaakt met een incompatibele versie.&#10;&#10;De toetsenbordindeling is niet gewijzigd." />
   <String key="Invalid file detail" value="Technische details:" />

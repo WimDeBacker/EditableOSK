@@ -15,7 +15,7 @@ using System.IO;
 
 namespace OnScreenKeyboard
 {
-    public static class TestRunner
+    public static partial class TestRunner
     {
         private static int _pass, _fail;
         private static readonly List<string> _failures = new List<string>();
@@ -45,6 +45,9 @@ namespace OnScreenKeyboard
             T_FontSizing();
             T_CharacterRouting();
             T_SlowReceiverStress();
+            T_UndoRedo();
+            T_StyleGroups();
+            T_XmlRobustness();
 
             // Run word prediction tests (uses shared Assert/Section → failures go to report)
             WordPredictionTests.Run(Assert, Section);
@@ -355,25 +358,30 @@ namespace OnScreenKeyboard
                 layout.Cells.Add(new GridCell(1, 1, new KeyProps("Space"," ")));
                 layout.Cells.Add(new GridCell(1, 2, new KeyProps("↵","{ENTER}")));
 
-                var global = new GlobalSettings
+                var saveTheme = new VisualTheme
                 {
                     BackgroundColor = Color.FromArgb(10,20,30),
-                    Opacity   = 0.85,
-                    FontName  = "Arial",
-                    FontSize  = 12,
-                    Language  = "nl",
+                    Opacity  = 0.85,
+                    FontName = "Arial",
+                    FontSize = 12,
+                };
+                var saveWindow = new WindowState
+                {
                     WindowWidth = 800, WindowHeight = 250,
-                    LastFile  = tmp,
-                    HideTitlebar    = true,
-                    StickyModifiers = false,
-                    AlwaysOnTop     = false,
+                    HideTitlebar = true, AlwaysOnTop = false,
+                };
+                var saveMeta = new LayoutMeta
+                {
+                    Language = "nl", LastFile = tmp, StickyModifiers = false,
                 };
 
-                SettingsManager.SaveSettings(layout, global, tmp);
+                SettingsManager.SaveSettings(layout, saveTheme, saveWindow, saveMeta, tmp);
                 Assert(File.Exists(tmp), "XML file created");
 
-                var lg = new GlobalSettings();
-                var lr = SettingsManager.LoadSettings(lg, tmp);
+                var lgTheme = new VisualTheme();
+                var lgWindow = new WindowState();
+                var lgMeta = new LayoutMeta();
+                var lr = SettingsManager.LoadSettings(lgTheme, lgWindow, lgMeta, tmp);
 
                 Assert(lr != null,          "GridLayout loaded");
                 Assert(lr.Rows == 2,        "Row count");
@@ -404,16 +412,16 @@ namespace OnScreenKeyboard
                 Assert(string.IsNullOrEmpty(cell00?.Props.FontName), "Sentinel FontName round-trip");
 
                 // Global settings
-                Assert(lg.FontName   == "Arial",   "Global FontName");
-                Assert(lg.FontSize   == 12,        "Global FontSize");
-                Assert(lg.Language   == "nl",      "Global Language");
-                Assert(lg.WindowWidth  == 800,     "Global WindowWidth");
-                Assert(lg.WindowHeight == 250,     "Global WindowHeight");
-                Assert(lg.HideTitlebar  == true,   "HideTitlebar round-trip");
-                Assert(lg.StickyModifiers == false,"StickyModifiers round-trip");
-                Assert(lg.AlwaysOnTop   == false,  "AlwaysOnTop round-trip");
-                Assert(Math.Abs(lg.Opacity - 0.85) < 0.001, "Opacity round-trip");
-                Assert(lg.BackgroundColor == Color.FromArgb(10,20,30), "BackgroundColor round-trip");
+                Assert(lgTheme.FontName   == "Arial",   "Global FontName");
+                Assert(lgTheme.FontSize   == 12,        "Global FontSize");
+                Assert(lgMeta.Language    == "nl",      "Global Language");
+                Assert(lgWindow.WindowWidth  == 800,    "Global WindowWidth");
+                Assert(lgWindow.WindowHeight == 250,    "Global WindowHeight");
+                Assert(lgWindow.HideTitlebar  == true,  "HideTitlebar round-trip");
+                Assert(lgMeta.StickyModifiers == false, "StickyModifiers round-trip");
+                Assert(lgWindow.AlwaysOnTop   == false, "AlwaysOnTop round-trip");
+                Assert(Math.Abs(lgTheme.Opacity - 0.85) < 0.001, "Opacity round-trip");
+                Assert(lgTheme.BackgroundColor == Color.FromArgb(10,20,30), "BackgroundColor round-trip");
             }
             finally { if (File.Exists(tmp)) File.Delete(tmp); }
         }
@@ -429,12 +437,12 @@ namespace OnScreenKeyboard
             string bad = Path.Combine(Path.GetTempPath(), $"osk_bad_{Guid.NewGuid()}.xml");
             File.WriteAllText(bad, "not xml <<< garbage >>>");
             bool threw = false;
-            try { SettingsManager.LoadSettings(new GlobalSettings(), bad); } catch { threw = true; }
+            try { SettingsManager.LoadSettings(new VisualTheme(), new WindowState(), new LayoutMeta(), bad); } catch { threw = true; }
             Assert(threw, "Corrupt XML throws exception");
             File.Delete(bad);
 
             // Missing file returns null
-            Assert(SettingsManager.LoadSettings(new GlobalSettings(),
+            Assert(SettingsManager.LoadSettings(new VisualTheme(), new WindowState(), new LayoutMeta(),
                 Path.Combine(Path.GetTempPath(), "osk_missing_xyz.xml")) == null,
                 "Missing file returns null");
 
@@ -457,7 +465,7 @@ namespace OnScreenKeyboard
             // FontSize 999 → clamped to 72
             string ff = Path.Combine(Path.GetTempPath(), $"osk_fs_{Guid.NewGuid()}.xml");
             File.WriteAllText(ff, MakeXml(keyAttribs: @"FontSize=""999"""));
-            var fr = SettingsManager.LoadSettings(new GlobalSettings(), ff);
+            var fr = SettingsManager.LoadSettings(new VisualTheme(), new WindowState(), new LayoutMeta(), ff);
             Assert(fr != null, "FontSize 999: loads without crash");
             Assert(fr?.CellAt(0,0)?.Props.FontSize <= 72, "FontSize 999 clamped to ≤72");
             File.Delete(ff);
@@ -465,7 +473,7 @@ namespace OnScreenKeyboard
             // BorderThickness 99 → clamped to 10
             string btf = Path.Combine(Path.GetTempPath(), $"osk_bt_{Guid.NewGuid()}.xml");
             File.WriteAllText(btf, MakeXml(keyAttribs: @"BorderThickness=""99"""));
-            var btr = SettingsManager.LoadSettings(new GlobalSettings(), btf);
+            var btr = SettingsManager.LoadSettings(new VisualTheme(), new WindowState(), new LayoutMeta(), btf);
             Assert(btr != null, "BorderThickness 99: loads without crash");
             Assert(btr?.CellAt(0,0)?.Props.BorderThickness <= 10, "BorderThickness 99 clamped to ≤10");
             File.Delete(btf);
@@ -515,9 +523,11 @@ namespace OnScreenKeyboard
                     FontName = "Verdana",
                 }));
 
-                SettingsManager.SaveSettings(layout, new GlobalSettings(), tmp);
-                var lg = new GlobalSettings();
-                var lr = SettingsManager.LoadSettings(lg, tmp);
+                SettingsManager.SaveSettings(layout, new VisualTheme(), new WindowState(), new LayoutMeta(), tmp);
+                var lgTheme2 = new VisualTheme();
+                var lgWindow2 = new WindowState();
+                var lgMeta2 = new LayoutMeta();
+                var lr = SettingsManager.LoadSettings(lgTheme2, lgWindow2, lgMeta2, tmp);
 
                 var a = lr?.CellAt(0, 0)?.Props;
                 var b = lr?.CellAt(0, 1)?.Props;
@@ -541,22 +551,24 @@ namespace OnScreenKeyboard
                 Assert(cc?.FontName == "Verdana",     "Key C: FontName override preserved");
 
                 // StickyModifiers and AlwaysOnTop round-trip
-                var gOn  = new GlobalSettings { StickyModifiers = true,  AlwaysOnTop = true  };
-                var gOff = new GlobalSettings { StickyModifiers = false, AlwaysOnTop = false };
+                var metaOn  = new LayoutMeta  { StickyModifiers = true  };
+                var windowOn = new WindowState { AlwaysOnTop = true  };
+                var metaOff  = new LayoutMeta  { StickyModifiers = false };
+                var windowOff = new WindowState { AlwaysOnTop = false };
                 string tmp2 = Path.Combine(Path.GetTempPath(), $"osk_sa_{Guid.NewGuid()}.xml");
-                SettingsManager.SaveSettings(new GridLayout(1,1), gOn, tmp2);
-                var lgOn = new GlobalSettings();
-                SettingsManager.LoadSettings(lgOn, tmp2);
-                Assert(lgOn.StickyModifiers == true,  "StickyModifiers=true round-trip");
-                Assert(lgOn.AlwaysOnTop     == true,  "AlwaysOnTop=true round-trip");
+                SettingsManager.SaveSettings(new GridLayout(1,1), new VisualTheme(), windowOn, metaOn, tmp2);
+                var lgOnMeta = new LayoutMeta(); var lgOnWindow = new WindowState();
+                SettingsManager.LoadSettings(new VisualTheme(), lgOnWindow, lgOnMeta, tmp2);
+                Assert(lgOnMeta.StickyModifiers == true,   "StickyModifiers=true round-trip");
+                Assert(lgOnWindow.AlwaysOnTop   == true,   "AlwaysOnTop=true round-trip");
                 File.Delete(tmp2);
 
                 string tmp3 = Path.Combine(Path.GetTempPath(), $"osk_sa2_{Guid.NewGuid()}.xml");
-                SettingsManager.SaveSettings(new GridLayout(1,1), gOff, tmp3);
-                var lgOff = new GlobalSettings();
-                SettingsManager.LoadSettings(lgOff, tmp3);
-                Assert(lgOff.StickyModifiers == false, "StickyModifiers=false round-trip");
-                Assert(lgOff.AlwaysOnTop     == false, "AlwaysOnTop=false round-trip");
+                SettingsManager.SaveSettings(new GridLayout(1,1), new VisualTheme(), windowOff, metaOff, tmp3);
+                var lgOffMeta = new LayoutMeta(); var lgOffWindow = new WindowState();
+                SettingsManager.LoadSettings(new VisualTheme(), lgOffWindow, lgOffMeta, tmp3);
+                Assert(lgOffMeta.StickyModifiers == false,  "StickyModifiers=false round-trip");
+                Assert(lgOffWindow.AlwaysOnTop   == false,  "AlwaysOnTop=false round-trip");
                 File.Delete(tmp3);
             }
             finally { if (File.Exists(tmp)) File.Delete(tmp); }
@@ -769,7 +781,7 @@ namespace OnScreenKeyboard
 
             var g4 = new GridLayout(1, 2);
             g4.Cells.Add(new GridCell(0, 0, new KeyProps("a","a"), 1, 2));
-            g4.SplitCell(0, 0, new GlobalSettings());
+            g4.SplitCell(0, 0, new VisualTheme());
             Assert(g4.Cells.Count == 2,      "After SplitCell: 2 cells");
             Assert(g4.IsValid(),             "After SplitCell: valid");
 
@@ -780,7 +792,7 @@ namespace OnScreenKeyboard
             gIR.Cells.Add(new GridCell(0, 1, new KeyProps("B","B")));
             gIR.Cells.Add(new GridCell(1, 0, new KeyProps("C","C")));
             gIR.Cells.Add(new GridCell(1, 1, new KeyProps("D","D")));
-            gIR.InsertRow(0, before: true, new GlobalSettings());
+            gIR.InsertRow(0, before: true, new VisualTheme());
             Assert(gIR.Rows == 3,                       "InsertRow above: Rows=3");
             Assert(gIR.CellAt(0,0)?.Props.Label == "",  "InsertRow above: new row blank");
             Assert(gIR.CellAt(1,0)?.Props.Label == "A", "InsertRow above: old row shifted");
@@ -800,7 +812,7 @@ namespace OnScreenKeyboard
             var gIC = new GridLayout(1, 2);
             gIC.Cells.Add(new GridCell(0, 0, new KeyProps("A","A")));
             gIC.Cells.Add(new GridCell(0, 1, new KeyProps("B","B")));
-            gIC.InsertCol(0, before: true, new GlobalSettings());
+            gIC.InsertCol(0, before: true, new VisualTheme());
             Assert(gIC.Cols == 3,                       "InsertCol: Cols=3");
             Assert(gIC.CellAt(0,0)?.Props.Label == "",  "InsertCol: new col blank");
             Assert(gIC.CellAt(0,1)?.Props.Label == "A", "InsertCol: old col shifted");
@@ -1009,6 +1021,355 @@ namespace OnScreenKeyboard
             foreach(var th in ths) th.Join(3000);
             foreach(var m in mis) if(m) stable=false;
             Assert(stable, "IsPlainText: thread-safe (4 threads × 500 reps)");
+        }
+
+        // ════════════════════════════════════════════════════════════════
+        // Style Groups — KeyGroup, GroupName, color resolution, XML round-trip
+        // ════════════════════════════════════════════════════════════════
+        private static void T_StyleGroups()
+        {
+            Section("StyleGroups — KeyGroup clone");
+
+            var grp = new KeyGroup
+            {
+                Name            = "Math",
+                KeyColor        = Color.FromArgb(255, 74, 48, 16),
+                FontColor       = Color.FromArgb(255, 255, 179, 71),
+                BorderColor     = Color.FromArgb(255, 30, 60, 30),
+                BorderThickness = 2,
+                FontName        = "Consolas",
+                FontSize        = 14,
+            };
+            var clone = grp.Clone();
+            Assert(clone.Name            == grp.Name,            "KeyGroup.Clone: Name");
+            Assert(clone.KeyColor        == grp.KeyColor,        "KeyGroup.Clone: KeyColor");
+            Assert(clone.FontColor       == grp.FontColor,       "KeyGroup.Clone: FontColor");
+            Assert(clone.BorderColor     == grp.BorderColor,     "KeyGroup.Clone: BorderColor");
+            Assert(clone.BorderThickness == grp.BorderThickness, "KeyGroup.Clone: BorderThickness");
+            Assert(clone.FontName        == grp.FontName,        "KeyGroup.Clone: FontName");
+            Assert(clone.FontSize        == grp.FontSize,        "KeyGroup.Clone: FontSize");
+            Assert(!ReferenceEquals(clone, grp),                 "KeyGroup.Clone: new object");
+
+            Section("StyleGroups — GridLayout.Groups deep-cloned");
+
+            var layout = new GridLayout(1, 1);
+            layout.Groups.Add(grp);
+            layout.Cells.Add(new GridCell(0, 0, new KeyProps("a", "a") { GroupName = "Math" }));
+            var copy = layout.Clone();
+            Assert(copy.Groups.Count == 1,             "Clone: groups count preserved");
+            Assert(copy.Groups[0].Name == "Math",      "Clone: group name preserved");
+            copy.Groups[0].Name = "Changed";
+            Assert(layout.Groups[0].Name == "Math",    "Clone: mutating copy does not affect original");
+
+            Section("StyleGroups — GroupName on KeyProps");
+
+            var p = new KeyProps("a", "a") { GroupName = "Math" };
+            Assert(p.GroupName == "Math", "GroupName stored");
+            var pc = p.Clone();
+            Assert(pc.GroupName == "Math", "GroupName cloned");
+            pc.GroupName = "Other";
+            Assert(p.GroupName == "Math",  "GroupName clone is independent");
+
+            var def = new KeyProps("a", "a");
+            Assert(string.IsNullOrEmpty(def.GroupName), "Default GroupName is empty");
+
+            Section("StyleGroups — IsPureSpacer respects GroupName");
+
+            // Empty key with no group → pure spacer (omitted in XML)
+            var spacer = new GridCell(0, 0, new KeyProps("", ""));
+            Assert(IsPureSpacer(spacer), "Empty key without group is pure spacer");
+
+            // Empty key with a group → not a pure spacer (group colors apply)
+            var groupedSpacer = new GridCell(0, 0, new KeyProps("", "") { GroupName = "Math" });
+            Assert(!IsPureSpacer(groupedSpacer), "Empty key with GroupName is not a pure spacer");
+
+            Section("StyleGroups — color resolution chain");
+
+            // Simulate: Global → Group → Per-key priority
+            Color globalKeyColor = Color.FromArgb(255, 30, 30, 60);
+            Color groupKeyColor  = Color.FromArgb(255, 74, 48, 16);
+            Color keyKeyColor    = Color.FromArgb(255, 10, 100, 10);
+
+            // Per-key wins when set
+            Assert(ResolveColor(keyKeyColor, groupKeyColor, globalKeyColor) == keyKeyColor,
+                "Color resolution: per-key wins");
+            // Group wins when per-key is empty
+            Assert(ResolveColor(Color.Empty, groupKeyColor, globalKeyColor) == groupKeyColor,
+                "Color resolution: group wins over global");
+            // Global is fallback when both upper levels are empty
+            Assert(ResolveColor(Color.Empty, Color.Empty, globalKeyColor) == globalKeyColor,
+                "Color resolution: global as fallback");
+            // All empty → global (which may also be empty)
+            Assert(ResolveColor(Color.Empty, Color.Empty, Color.Empty) == Color.Empty,
+                "Color resolution: all-empty returns empty");
+
+            Section("StyleGroups — border thickness resolution");
+
+            // -1 = inherit, 0+ = explicit
+            Assert(ResolveThickness(2,  1, 0) == 2, "Thickness: per-key wins");
+            Assert(ResolveThickness(-1, 1, 0) == 1, "Thickness: group wins over global");
+            Assert(ResolveThickness(-1,-1, 3) == 3, "Thickness: global as fallback");
+            Assert(ResolveThickness(0, -1, 3) == 0, "Thickness: per-key 0 beats group (explicit no-border)");
+
+            Section("StyleGroups — XML round-trip with groups and GroupName");
+
+            string tmp = Path.Combine(Path.GetTempPath(), $"osk_grp_{Guid.NewGuid()}.xml");
+            try
+            {
+                var cKey  = Color.FromArgb(255, 74, 48, 16);
+                var cFont = Color.FromArgb(255, 255, 179, 71);
+                var rtLayout = new GridLayout(1, 2);
+                var mathGroup = new KeyGroup
+                {
+                    Name = "Arithmetic", KeyColor = cKey, FontColor = cFont,
+                    BorderThickness = 1, FontName = "Consolas", FontSize = 13,
+                };
+                rtLayout.Groups.Add(mathGroup);
+                rtLayout.Cells.Add(new GridCell(0, 0, new KeyProps("+", "+") { GroupName = "Arithmetic" }));
+                rtLayout.Cells.Add(new GridCell(0, 1, new KeyProps("-", "-")));
+
+                var theme  = new VisualTheme { FontName = "Arial", FontSize = 12 };
+                var window = new WindowState { WindowWidth = 400, WindowHeight = 100 };
+                var meta   = new LayoutMeta  { Language = "en", LastFile = tmp };
+
+                SettingsManager.SaveSettings(rtLayout, theme, window, meta, tmp);
+                Assert(File.Exists(tmp), "Groups round-trip: XML file created");
+
+                var lgTheme = new VisualTheme(); var lgWindow = new WindowState(); var lgMeta = new LayoutMeta();
+                var loaded = SettingsManager.LoadSettings(lgTheme, lgWindow, lgMeta, tmp);
+
+                Assert(loaded != null,                          "Groups round-trip: loaded");
+                Assert(loaded.Groups.Count == 1,               "Groups round-trip: group count");
+                Assert(loaded.Groups[0].Name == "Arithmetic",  "Groups round-trip: group name");
+                Assert(loaded.Groups[0].KeyColor.ToArgb()  == cKey.ToArgb(),  "Groups round-trip: group KeyColor");
+                Assert(loaded.Groups[0].FontColor.ToArgb() == cFont.ToArgb(), "Groups round-trip: group FontColor");
+                Assert(loaded.Groups[0].BorderThickness == 1,  "Groups round-trip: group BorderThickness");
+                Assert(loaded.Groups[0].FontName == "Consolas","Groups round-trip: group FontName");
+                Assert(loaded.Groups[0].FontSize == 13,        "Groups round-trip: group FontSize");
+
+                var cell0 = loaded.CellAt(0, 0);
+                var cell1 = loaded.CellAt(0, 1);
+                Assert(cell0?.Props.GroupName == "Arithmetic",  "Groups round-trip: key GroupName preserved");
+                Assert(string.IsNullOrEmpty(cell1?.Props.GroupName), "Groups round-trip: ungrouped key has empty GroupName");
+            }
+            finally { if (File.Exists(tmp)) File.Delete(tmp); }
+        }
+
+        // Inline helpers mirroring KeyboardForm private methods for test isolation
+        private static Color ResolveColor(Color keyColor, Color groupColor, Color globalColor) =>
+            !keyColor.IsEmpty   ? keyColor   :
+            !groupColor.IsEmpty ? groupColor :
+            globalColor;
+
+        private static int ResolveThickness(int keyBt, int groupBt, int globalBt) =>
+            keyBt   != -1 ? keyBt   :
+            groupBt != -1 ? groupBt :
+            globalBt;
+
+        private static bool IsPureSpacer(GridCell cell)
+        {
+            var p = cell.Props;
+            return string.IsNullOrEmpty(p.Label)
+                && string.IsNullOrEmpty(p.Send)
+                && string.IsNullOrEmpty(p.GroupName)
+                && string.IsNullOrEmpty(p.FontName)
+                && p.FontSize        == 0
+                && p.FontColor.IsEmpty
+                && p.KeyColor.IsEmpty
+                && p.BorderColor.IsEmpty
+                && p.BorderThickness == -1
+                && cell.RowSpan == 1
+                && cell.ColSpan == 1;
+        }
+
+        // ════════════════════════════════════════════════════════════════
+        // XML robustness — malformed / edge-case layout files
+        // ════════════════════════════════════════════════════════════════
+        private static void T_XmlRobustness()
+        {
+            // Helper: build a minimal Theme/Layout XML with optional overrides
+            string MakeLayout(int gridRows = 2, int gridCols = 2,
+                              string themeAttribs  = "",
+                              string extraGroups   = "",
+                              string keys          = "") =>
+$@"<?xml version=""1.0"" encoding=""utf-8""?>
+<OnScreenKeyboard>
+  <Theme BackgroundColor=""1A1A2E"" Opacity=""1.00"" FontName=""Arial"" FontSize=""12""
+         FontColor=""E0E0FF"" KeyColor=""2D2D4A"" BorderColor=""3C3C5A"" BorderThickness=""1"" {themeAttribs}>
+{extraGroups}  </Theme>
+  <Layout GridRows=""{gridRows}"" GridCols=""{gridCols}"" Language=""en""
+          WindowWidth=""800"" WindowHeight=""200"" LastFile="""">
+{keys}  </Layout>
+</OnScreenKeyboard>";
+
+            // ── 1. Invalid grid coordinates → no crash, bad cell excluded ──────
+            Section("XmlRobustness — invalid grid coordinates");
+            {
+                string xml = MakeLayout(gridRows: 2, gridCols: 2, keys:
+                    "    <Key Row=\"0\" Col=\"0\" Label=\"A\" Send=\"A\" />\n" +
+                    "    <Key Row=\"5\" Col=\"5\" Label=\"X\" Send=\"X\" />\n");   // out of bounds
+                string tmp = Path.Combine(Path.GetTempPath(), $"osk_rob1_{Guid.NewGuid()}.xml");
+                try
+                {
+                    File.WriteAllText(tmp, xml);
+                    var layout = SettingsManager.LoadSettings(new VisualTheme(), new WindowState(), new LayoutMeta(), tmp);
+                    Assert(layout != null, "Invalid coords: loads without crash");
+                    // The out-of-bounds key should be absent; only (0,0) was explicit
+                    var bad = layout?.CellAt(5, 5);
+                    Assert(bad == null, "Invalid coords: out-of-bounds cell not present");
+                    // (0,0) should have loaded correctly
+                    Assert(layout?.CellAt(0, 0)?.Props.Label == "A", "Invalid coords: valid cell still loaded");
+                }
+                finally { if (File.Exists(tmp)) File.Delete(tmp); }
+            }
+
+            // ── 2. Overlapping cells → no crash ─────────────────────────────────
+            Section("XmlRobustness — overlapping cells");
+            {
+                // Two keys at the same grid position
+                string xml = MakeLayout(gridRows: 2, gridCols: 2, keys:
+                    "    <Key Row=\"0\" Col=\"0\" Label=\"First\" Send=\"A\" />\n" +
+                    "    <Key Row=\"0\" Col=\"0\" Label=\"Second\" Send=\"B\" />\n");
+                string tmp = Path.Combine(Path.GetTempPath(), $"osk_rob2_{Guid.NewGuid()}.xml");
+                try
+                {
+                    File.WriteAllText(tmp, xml);
+                    var layout = SettingsManager.LoadSettings(new VisualTheme(), new WindowState(), new LayoutMeta(), tmp);
+                    Assert(layout != null, "Overlapping cells: loads without crash");
+                    // Second key at same position is skipped; first key wins
+                    var cell = layout?.CellAt(0, 0);
+                    Assert(cell != null, "Overlapping cells: (0,0) is accessible");
+                    Assert(cell?.Props.Label == "First", "Overlapping cells: first key kept, second skipped");
+                }
+                finally { if (File.Exists(tmp)) File.Delete(tmp); }
+            }
+
+            // ── 3. Missing Row/Col attribute → phantom cell defaults to (0,0) ──
+            Section("XmlRobustness — missing Row/Col attribute");
+            {
+                string xml = MakeLayout(gridRows: 2, gridCols: 2, keys:
+                    "    <Key Label=\"Ghost\" Send=\"G\" />\n" +  // no Row= or Col=
+                    "    <Key Row=\"1\" Col=\"1\" Label=\"B\" Send=\"B\" />\n");
+                string tmp = Path.Combine(Path.GetTempPath(), $"osk_rob3_{Guid.NewGuid()}.xml");
+                try
+                {
+                    File.WriteAllText(tmp, xml);
+                    // Should not crash — missing attrs default to 0
+                    var layout = SettingsManager.LoadSettings(new VisualTheme(), new WindowState(), new LayoutMeta(), tmp);
+                    Assert(layout != null, "Missing Row/Col: loads without crash");
+                    // Row=0,Col=0 defaults are valid grid positions — a cell lands there
+                    var phantom = layout?.CellAt(0, 0);
+                    Assert(phantom != null, "Missing Row/Col: phantom cell appears at (0,0)");
+                }
+                finally { if (File.Exists(tmp)) File.Delete(tmp); }
+            }
+
+            // ── 4a. Global FontSize unclamped (extreme value must not crash) ────
+            Section("XmlRobustness — global FontSize unclamped");
+            {
+                // Build XML directly to avoid duplicate-attribute collision with MakeLayout's hardcoded FontSize
+                string xml =
+@"<?xml version=""1.0"" encoding=""utf-8""?>
+<OnScreenKeyboard>
+  <Theme BackgroundColor=""1A1A2E"" Opacity=""1.00"" FontName=""Arial"" FontSize=""999""
+         FontColor=""E0E0FF"" KeyColor=""2D2D4A"" BorderColor=""3C3C5A"" BorderThickness=""1"">
+  </Theme>
+  <Layout GridRows=""2"" GridCols=""2"" Language=""en""
+          WindowWidth=""800"" WindowHeight=""200"" LastFile="""">
+    <Key Row=""0"" Col=""0"" Label=""A"" Send=""A"" />
+  </Layout>
+</OnScreenKeyboard>";
+                string tmp = Path.Combine(Path.GetTempPath(), $"osk_rob4a_{Guid.NewGuid()}.xml");
+                try
+                {
+                    File.WriteAllText(tmp, xml);
+                    var theme = new VisualTheme();
+                    var layout = SettingsManager.LoadSettings(theme, new WindowState(), new LayoutMeta(), tmp);
+                    Assert(layout != null, "Global FontSize 999: loads without crash");
+                    Assert(theme.FontSize <= 200, "Global FontSize 999: clamped to ≤200");
+                }
+                finally { if (File.Exists(tmp)) File.Delete(tmp); }
+            }
+
+            // ── 4b. Group FontSize unclamped (extreme value must not crash) ──────
+            Section("XmlRobustness — group FontSize unclamped");
+            {
+                string xml = MakeLayout(extraGroups:
+                    "    <Group Name=\"Test\" FontSize=\"999\" />\n");
+                string tmp = Path.Combine(Path.GetTempPath(), $"osk_rob4b_{Guid.NewGuid()}.xml");
+                try
+                {
+                    File.WriteAllText(tmp, xml);
+                    var layout = SettingsManager.LoadSettings(new VisualTheme(), new WindowState(), new LayoutMeta(), tmp);
+                    Assert(layout != null, "Group FontSize 999: loads without crash");
+                    var grp = layout?.Groups.Find(g => g.Name == "Test");
+                    Assert(grp != null, "Group FontSize 999: group present");
+                    Assert(grp?.FontSize <= 200, "Group FontSize 999: clamped to ≤200");
+                }
+                finally { if (File.Exists(tmp)) File.Delete(tmp); }
+            }
+
+            // ── 5. ColSpan overflow past right edge ──────────────────────────────
+            Section("XmlRobustness — ColSpan overflow past right edge");
+            {
+                // 4-col grid; key at col=2 with ColSpan=10 would extend 8 cols past the edge
+                string xml = MakeLayout(gridRows: 2, gridCols: 4, keys:
+                    "    <Key Row=\"0\" Col=\"2\" ColSpan=\"10\" Label=\"Wide\" Send=\"W\" />\n");
+                string tmp = Path.Combine(Path.GetTempPath(), $"osk_rob5_{Guid.NewGuid()}.xml");
+                try
+                {
+                    File.WriteAllText(tmp, xml);
+                    var layout = SettingsManager.LoadSettings(new VisualTheme(), new WindowState(), new LayoutMeta(), tmp);
+                    Assert(layout != null, "ColSpan overflow: loads without crash");
+                    var cell = layout?.CellAt(0, 2);
+                    Assert(cell != null, "ColSpan overflow: cell present at (0,2)");
+                    // gridCols=4, col=2 → max valid span is 4-2=2
+                    Assert(cell?.ColSpan <= 2, "ColSpan overflow: ColSpan clamped to gridCols - col");
+                }
+                finally { if (File.Exists(tmp)) File.Delete(tmp); }
+            }
+
+            // ── 6. WindowWidth/Height with no ceiling ────────────────────────────
+            Section("XmlRobustness — WindowWidth/Height no ceiling");
+            {
+                string xml = MakeLayout(themeAttribs: "",
+                    keys: "    <Key Row=\"0\" Col=\"0\" Label=\"A\" Send=\"A\" />\n");
+                // Inject huge window dimensions into the Layout element
+                string hugeXml = xml.Replace(
+                    "WindowWidth=\"800\" WindowHeight=\"200\"",
+                    "WindowWidth=\"2000000\" WindowHeight=\"2000000\"");
+                string tmp = Path.Combine(Path.GetTempPath(), $"osk_rob6_{Guid.NewGuid()}.xml");
+                try
+                {
+                    File.WriteAllText(tmp, hugeXml);
+                    var window = new WindowState();
+                    var layout = SettingsManager.LoadSettings(new VisualTheme(), window, new LayoutMeta(), tmp);
+                    Assert(layout != null, "Huge window size: loads without crash");
+                    // Ceiling is 7680×4320; out-of-range values leave the WindowState at its default
+                    Assert(window.WindowWidth  <= 7680, "Huge WindowWidth: clamped to ≤7680");
+                    Assert(window.WindowHeight <= 4320, "Huge WindowHeight: clamped to ≤4320");
+                }
+                finally { if (File.Exists(tmp)) File.Delete(tmp); }
+            }
+
+            // ── 7. Duplicate group names ──────────────────────────────────────────
+            Section("XmlRobustness — duplicate group names");
+            {
+                string xml = MakeLayout(extraGroups:
+                    "    <Group Name=\"Klinkers\" KeyColor=\"FF0000\" />\n" +
+                    "    <Group Name=\"Klinkers\" KeyColor=\"00FF00\" />\n");
+                string tmp = Path.Combine(Path.GetTempPath(), $"osk_rob7_{Guid.NewGuid()}.xml");
+                try
+                {
+                    File.WriteAllText(tmp, xml);
+                    var layout = SettingsManager.LoadSettings(new VisualTheme(), new WindowState(), new LayoutMeta(), tmp);
+                    Assert(layout != null, "Duplicate group names: loads without crash");
+                    // Second entry with the same name is silently skipped
+                    int dupeCount = layout?.Groups.FindAll(g => g.Name == "Klinkers").Count ?? 0;
+                    Assert(dupeCount == 1, "Duplicate group names: only first entry kept");
+                }
+                finally { if (File.Exists(tmp)) File.Delete(tmp); }
+            }
         }
 
         // ── Helpers ──────────────────────────────────────────────────────
@@ -1906,6 +2267,111 @@ namespace OnScreenKeyboard
                     if (!string.IsNullOrEmpty(pred)) filled++;
                 _assert(filled == n, $"E2E-18: {n} slots filled with {n}-slot predictor");
             }
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // Undo / Redo infrastructure tests
+    // (Tests Clone() correctness and undo-stack behaviour without
+    //  needing a live KeyboardForm / Windows handle.)
+    // ════════════════════════════════════════════════════════════════
+    public static partial class TestRunner
+    {
+        private static void T_UndoRedo()
+        {
+            Section("Undo/Redo infrastructure");
+
+            // ── VisualTheme.Clone() ───────────────────────────────────
+            var t = new VisualTheme
+            {
+                FontName        = "Courier",
+                FontSize        = 14,
+                BorderThickness = 2,
+                BackgroundColor = Color.FromArgb(10, 20, 30),
+                Opacity         = 0.75,
+            };
+            var tc = t.Clone();
+            Assert(tc.FontName        == "Courier",                   "VisualTheme.Clone: FontName");
+            Assert(tc.FontSize        == 14,                          "VisualTheme.Clone: FontSize");
+            Assert(tc.BorderThickness == 2,                           "VisualTheme.Clone: BorderThickness");
+            Assert(tc.BackgroundColor == Color.FromArgb(10, 20, 30), "VisualTheme.Clone: BackgroundColor");
+            Assert(Math.Abs(tc.Opacity - 0.75) < 0.0001,             "VisualTheme.Clone: Opacity");
+            Assert(!ReferenceEquals(t, tc),                           "VisualTheme.Clone: new object");
+            tc.FontName = "Arial";
+            Assert(t.FontName == "Courier", "VisualTheme.Clone: mutation independent");
+
+            // ── WindowState.Clone() ───────────────────────────────────
+            var ws = new WindowState { WindowWidth = 800, WindowHeight = 300, HideTitlebar = true, AlwaysOnTop = false };
+            var wsc = ws.Clone();
+            Assert(wsc.WindowWidth  == 800,  "WindowState.Clone: WindowWidth");
+            Assert(wsc.WindowHeight == 300,  "WindowState.Clone: WindowHeight");
+            Assert(wsc.HideTitlebar == true, "WindowState.Clone: HideTitlebar");
+            Assert(wsc.AlwaysOnTop  == false,"WindowState.Clone: AlwaysOnTop");
+            Assert(!ReferenceEquals(ws, wsc),"WindowState.Clone: new object");
+
+            // ── LayoutMeta.Clone() ────────────────────────────────────
+            var m = new LayoutMeta { Language = "nl", StickyModifiers = false, GearRow = 3, GearCol = 5, LastFile = "test.xml" };
+            var mc = m.Clone();
+            Assert(mc.Language        == "nl",      "LayoutMeta.Clone: Language");
+            Assert(mc.StickyModifiers == false,     "LayoutMeta.Clone: StickyModifiers");
+            Assert(mc.GearRow         == 3,         "LayoutMeta.Clone: GearRow");
+            Assert(mc.GearCol         == 5,         "LayoutMeta.Clone: GearCol");
+            Assert(mc.LastFile        == "test.xml","LayoutMeta.Clone: LastFile");
+            Assert(!ReferenceEquals(m, mc),         "LayoutMeta.Clone: new object");
+            mc.GearRow = 99;
+            Assert(m.GearRow == 3, "LayoutMeta.Clone: mutation independent");
+
+            // ── Undo stack cap at 50 ──────────────────────────────────
+            var layout = KeyLayout.BuildDefaultQwerty();
+            var undoStack = new Stack<(GridLayout, VisualTheme, WindowState, LayoutMeta)>();
+            var redoStack = new Stack<(GridLayout, VisualTheme, WindowState, LayoutMeta)>();
+            var theme0 = new VisualTheme(); var window0 = new WindowState(); var meta0 = new LayoutMeta();
+
+            for (int i = 0; i < 55; i++)
+            {
+                undoStack.Push((layout.Clone(), theme0.Clone(), window0.Clone(), meta0.Clone()));
+                redoStack.Clear();
+                if (undoStack.Count > 50)
+                {
+                    var arr = undoStack.ToArray(); // [0]=newest
+                    undoStack.Clear();
+                    for (int j = arr.Length - 2; j >= 0; j--) undoStack.Push(arr[j]);
+                }
+            }
+            Assert(undoStack.Count == 50, "UndoStack capped at 50 after 55 pushes");
+
+            // ── Redo clears on new action ─────────────────────────────
+            undoStack.Clear();
+            redoStack.Push((layout.Clone(), theme0.Clone(), window0.Clone(), meta0.Clone()));
+            redoStack.Push((layout.Clone(), theme0.Clone(), window0.Clone(), meta0.Clone()));
+            Assert(redoStack.Count == 2, "Redo has 2 entries before new push");
+
+            undoStack.Push((layout.Clone(), theme0.Clone(), window0.Clone(), meta0.Clone()));
+            redoStack.Clear();
+            Assert(redoStack.Count == 0, "Redo cleared after new push");
+
+            // ── Undo / Redo round-trip (snapshot content) ─────────────
+            var before = KeyLayout.BuildDefaultQwerty();
+            before.Cells[0].Props.Label = "BEFORE";
+            var snapshotTheme = new VisualTheme { FontName = "Before-Font" };
+            undoStack.Clear(); redoStack.Clear();
+
+            undoStack.Push((before.Clone(), snapshotTheme.Clone(), window0.Clone(), meta0.Clone()));
+
+            before.Cells[0].Props.Label = "AFTER";
+            var afterTheme = new VisualTheme { FontName = "After-Font" };
+
+            redoStack.Push((before.Clone(), afterTheme.Clone(), window0.Clone(), meta0.Clone()));
+            var (restoredLayout, restoredTheme, _, _) = undoStack.Pop();
+
+            Assert(restoredLayout.Cells[0].Props.Label == "BEFORE",    "Undo restores layout label");
+            Assert(restoredTheme.FontName              == "Before-Font","Undo restores theme FontName");
+
+            undoStack.Push((restoredLayout.Clone(), restoredTheme.Clone(), window0.Clone(), meta0.Clone()));
+            var (redoneLayout, redoneTheme, _, _) = redoStack.Pop();
+
+            Assert(redoneLayout.Cells[0].Props.Label == "AFTER",     "Redo re-applies layout label");
+            Assert(redoneTheme.FontName              == "After-Font", "Redo re-applies theme FontName");
         }
     }
 }

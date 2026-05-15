@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace OnScreenKeyboard
@@ -21,7 +22,7 @@ namespace OnScreenKeyboard
         private void ForceTopMost()
         {
             if (!IsHandleCreated) return;
-            var target = _global.AlwaysOnTop ? HWND_TOPMOST : HWND_NOTOPMOST;
+            var target = _window.AlwaysOnTop ? HWND_TOPMOST : HWND_NOTOPMOST;
             SetWindowPos(Handle, target, 0, 0, 0, 0,
                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
         }
@@ -31,34 +32,73 @@ namespace OnScreenKeyboard
             // WS_EX_NOACTIVATE: clicking keyboard never steals focus from target app.
             // WS_EX_TOOLWINDOW removed — it caused a small non-standard title bar and
             // suppressed minimize/maximize buttons. ShowInTaskbar=false hides from taskbar instead.
-            get { var cp = base.CreateParams; cp.ExStyle |= WS_EX_NOACTIVATE; return cp; }
+            get { var cp = base.CreateParams; cp.ExStyle |= WS_EX_NOACTIVATE | 0x02000000; return cp; }  // 0x02000000 = WS_EX_COMPOSITED
         }
 
         // ── State ────────────────────────────────────────────────────
         private GridLayout          _layout;
         private readonly Dictionary<GridCell, Button> _buttons = new();
-        internal readonly GlobalSettings _global = new GlobalSettings();
+        internal VisualTheme  _theme  = new VisualTheme();
+        internal WindowState  _window = new WindowState();
+        internal LayoutMeta   _meta   = new LayoutMeta();
 
-        private enum Mode { Normal, Edit, QuickEdit, GearPlacement }
+        private enum Mode { Normal, Edit, GearPlacement }
 
         // Gear button appearance per mode
-        private static readonly Color _gearNormalBg   = ColorTranslator.FromHtml("#2A2A4A");
-        private static readonly Color _gearNormalFg   = ColorTranslator.FromHtml("#CCCCFF");
-        private static readonly Color _gearEditBg     = Color.FromArgb(200, 100, 0);   // amber
-        private static readonly Color _gearQuickBg    = Color.FromArgb(0,  130, 130);  // teal
-        private static readonly Color _stripEditColor  = Color.FromArgb(220, 120, 0);  // orange
-        private static readonly Color _stripQuickColor = Color.FromArgb(0,  160, 160); // teal
+        private static readonly Color _gearNormalBg  = ColorTranslator.FromHtml("#2A2A4A");
+        private static readonly Color _gearNormalFg  = ColorTranslator.FromHtml("#CCCCFF");
+        private static readonly Color _gearEditBg    = Color.FromArgb(200, 100, 0);   // amber
+        private static readonly Color _stripEditColor = Color.FromArgb(220, 120, 0);  // orange
         private Mode _mode = Mode.Normal;
 
-        private GridCell _quickEditCell;
-        // Double-click detection for Edit mode: a timer defers the context menu
-        // so a second click within the double-click interval cancels it.
-        private GridCell _pendingEditCell  = null;
-        private System.Windows.Forms.Timer _editClickTimer;
-        private string   _quickEditText = "";
+        // ── Drag-to-swap (Edit mode) ──────────────────────────────────
+        private GridCell _dragCandidate = null;   // cell under mousedown; set before threshold
+        private Point    _dragStartPt   = Point.Empty;
+
+        // Sentinel object used as drag data when the gear button itself is being repositioned.
+        private sealed class GearDragToken { }
+        private static readonly GearDragToken _gearDragSentinel = new GearDragToken();
+
+        // ── Format clipboard (Edit mode) ─────────────────────────────
+        private KeyProps _copiedFormatting = null;  // null = nothing copied yet
+        private bool     _fmtPaintMode    = false;  // true = format-painter active; next click applies fmt
+        private KeyProps _copiedKey        = null;  // full key copy (content + formatting)
+        private bool     _keyPaintMode    = false;  // true = key-painter active; next click pastes key
+
+        // ── Undo / Redo ───────────────────────────────────────────────
+        private readonly Stack<(GridLayout Layout, VisualTheme Theme, WindowState Window, LayoutMeta Meta)> _undoStack = new();
+        private readonly Stack<(GridLayout Layout, VisualTheme Theme, WindowState Window, LayoutMeta Meta)> _redoStack = new();
 
         private Button _gearBtn;
+        private System.Windows.Forms.Timer _holdTimer;  // fires after 1 s when HoldToEdit is on
         private Panel  _editStrip;   // thin colored bar along bottom — signals edit/quickedit mode
+        private Panel  _toolbar;     // toolbar row 1: file ops + mode buttons (Edit+QuickEdit)
+        private Panel  _toolbarEdit; // toolbar row 2: key/grid actions (Edit only)
+        private ToolbarButton _btnEdit;       // toolbar: switch to Edit mode
+        private ToolbarButton _btnExitEdit;   // toolbar: return to Normal mode
+        private ToolbarButton _btnEditKeyboard; // toolbar: open keyboard editor
+        private ToolbarButton _btnLoad;       // toolbar: load layout file
+        private ToolbarButton _btnSave;       // toolbar: save layout file
+        private ToolbarButton _btnUndo;       // toolbar: undo last edit
+        private ToolbarButton _btnRedo;       // toolbar: redo last undone edit
+        private Label         _lblFilename;   // toolbar: current file name
+
+        // ── Selection (Edit mode) ─────────────────────────────────────
+        private GridCell      _selectedCell = null;
+        private ToolbarButton _btnKeyEdit;    // toolbar2: open key editor
+        private ToolbarButton _btnKeyRemove;  // toolbar2: clear key
+        private ToolbarButton _btnCopyFmt;    // toolbar2: copy formatting + enter paint mode
+        private ToolbarButton _btnCopyKey;    // toolbar2: copy full key + enter key-paint mode
+        private Label         _lblSelectedKey;// toolbar2: selected key info
+
+        // ── Grid action buttons (toolbar2, Edit only) ─────────────────
+        private ToolbarButton _btnAddRowAbove, _btnAddRowBelow;
+        private ToolbarButton _btnAddColLeft,  _btnAddColRight;
+        private ToolbarButton _btnRemoveRow,   _btnRemoveCol;
+        private ToolbarButton _btnMergeRight,  _btnMergeDown;
+        private ToolbarButton _btnSplitCell;
+
+        private ToolTip          _toolTip;          // shared tooltip for all toolbar buttons
         private string _currentFilePath = null;
 
         // ── Word prediction ──────────────────────────────────────────
@@ -136,8 +176,8 @@ namespace OnScreenKeyboard
         public KeyboardForm()
         {
             Text            = "On-Screen Keyboard";
-            BackColor       = _global.BackgroundColor;
-            Opacity         = _global.Opacity;
+            BackColor       = _theme.BackgroundColor;
+            Opacity         = _theme.Opacity;
             TopMost         = true;
             ShowInTaskbar   = false;   // hide from taskbar without WS_EX_TOOLWINDOW
             MinimumSize     = new Size(400, 150);
@@ -161,26 +201,19 @@ namespace OnScreenKeyboard
             _layout = KeyLayout.BuildDefaultQwerty();
             BuildGearButton();
             BuildEditStrip();
+            BuildToolbar();
             // Timer for deferred single-click in Edit mode
-            _editClickTimer = new System.Windows.Forms.Timer
-                { Interval = SystemInformation.DoubleClickTime };
-            _editClickTimer.Tick += (s, e) =>
-            {
-                _editClickTimer.Stop();
-                if (_pendingEditCell != null)
-                {
-                    var cell = _pendingEditCell;
-                    _pendingEditCell = null;
-                    ShowKeyEditMenu(cell);
-                }
-            };
             RebuildAllButtons();
+
+            void onLangChanged() { _meta.Language = Lang.CurrentCode; RefreshToolbarButtonLabels(); }
+            Lang.LanguageChanged += onLangChanged;
+
             TryAutoLoad();
 
             ResizeEnd   += (s, e) =>
             {
-                _global.WindowWidth  = Width;
-                _global.WindowHeight = Height;
+                _window.WindowWidth  = Width;
+                _window.WindowHeight = Height;
                 AutoSave();
             };
             SizeChanged += (s, e) => LayoutButtons();
@@ -188,15 +221,11 @@ namespace OnScreenKeyboard
             Activated   += (s, e) => ForceTopMost();
             KeyDown     += OnFormKeyDown;
             RegisterFocusHook();
-
-            void onLangChanged() => _global.Language = Lang.CurrentCode;
-            Lang.LanguageChanged += onLangChanged;
             FormClosing += (s, e) =>
             {
                 Lang.LanguageChanged -= onLangChanged;
                 if (_hookHandle != IntPtr.Zero) { UnhookWinEvent(_hookHandle); _hookHandle = IntPtr.Zero; }
-                _editClickTimer.Stop();
-                _editClickTimer.Dispose();
+                _toolTip?.Dispose();
                 AutoSave();
                 _lastGearFont?.Dispose();
                 foreach (var f in _fontCache.Values) f.Dispose();
@@ -222,7 +251,7 @@ namespace OnScreenKeyboard
 
         private void ApplyTitlebarState()
         {
-            bool hide = _global.HideTitlebar;
+            bool hide = _window.HideTitlebar;
             FormBorderStyle = hide ? FormBorderStyle.None : FormBorderStyle.Sizable;
             // Both MaximizeBox and MinimizeBox must be true for the minimize
             // button to appear in the title bar. We allow maximize here —
@@ -246,8 +275,75 @@ namespace OnScreenKeyboard
             };
             _gearBtn.FlatAppearance.BorderColor = Color.FromArgb(80, 80, 120);
             _gearBtn.FlatAppearance.BorderSize  = 1;
-            _gearBtn.Click += (s, e) => ShowGearMenu();
-            ForwardMouseEvents(_gearBtn);
+            _gearBtn.AllowDrop = true;
+
+            // Left-click toggles edit mode (immediate), unless HoldToEdit is on —
+            // in that case the Click event is suppressed and the timer handles it.
+            _gearBtn.Click      += (s, e) =>
+            {
+                if (_meta.HoldToEdit) return;   // handled by _holdTimer instead
+                SetMode(_mode == Mode.Edit ? Mode.Normal : Mode.Edit);
+            };
+            _gearBtn.MouseClick += (s, e) => { if (e.Button == MouseButtons.Right) ShowGearMenu(); };
+
+            // Hold-to-edit timer: fires after 1 second when HoldToEdit setting is on.
+            _holdTimer = new System.Windows.Forms.Timer { Interval = 1000 };
+            _holdTimer.Tick += (s, e) =>
+            {
+                _holdTimer.Stop();
+                _gearBtn.BackColor = _mode == Mode.Edit ? _gearEditBg : _gearNormalBg; // restore colour
+                SetMode(_mode == Mode.Edit ? Mode.Normal : Mode.Edit);
+            };
+
+            // Dual-mode drag handler:
+            //   Edit mode  → drag the gear button to a new cell (DoDragDrop with GearDragToken)
+            //   Other modes → drag the whole window (WM_NCLBUTTONDOWN on HTCAPTION)
+            bool   gearArming  = false;
+            Point  gearDownScr = Point.Empty;
+
+            _gearBtn.MouseDown += (s, e) =>
+            {
+                if (e.Button != MouseButtons.Left) return;
+                gearArming  = true;
+                gearDownScr = _gearBtn.PointToScreen(e.Location);
+                if (_meta.HoldToEdit)
+                {
+                    // Visual feedback: darken button while the user holds it down.
+                    _gearBtn.BackColor = Color.FromArgb(80, 80, 110);
+                    _holdTimer.Start();
+                }
+            };
+            _gearBtn.MouseMove += (s, e) =>
+            {
+                if (!gearArming || e.Button != MouseButtons.Left) { gearArming = false; return; }
+                var cur = _gearBtn.PointToScreen(e.Location);
+                if (Math.Abs(cur.X - gearDownScr.X) < 4 &&
+                    Math.Abs(cur.Y - gearDownScr.Y) < 4) return;
+                gearArming = false;
+                _holdTimer.Stop();                              // cancel hold if user dragged
+                _gearBtn.BackColor = _mode == Mode.Edit ? _gearEditBg : _gearNormalBg;
+                if (_mode == Mode.Edit)
+                {
+                    // Reposition gear by dragging — dropped cell becomes new gear home.
+                    _gearBtn.DoDragDrop(_gearDragSentinel, DragDropEffects.Move);
+                }
+                else
+                {
+                    // Move the whole window (same as ForwardMouseEvents behaviour).
+                    ReleaseCapture();
+                    SendMessage(Handle, WM_NCLBUTTONDOWN, new IntPtr(HTCAPTION), IntPtr.Zero);
+                }
+            };
+            _gearBtn.MouseUp += (s, e) =>
+            {
+                gearArming = false;
+                if (_holdTimer.Enabled)                        // released before 1 s — cancel
+                {
+                    _holdTimer.Stop();
+                    _gearBtn.BackColor = _mode == Mode.Edit ? _gearEditBg : _gearNormalBg;
+                }
+            };
+
             // NOTE: _gearBtn is NOT added to Controls here.
             // It is re-added at the end of RebuildAllButtons so it is always
             // the last control added — guaranteeing it sits on top in z-order.
@@ -263,6 +359,373 @@ namespace OnScreenKeyboard
                 BackColor = Color.Orange,
             };
             Controls.Add(_editStrip);
+        }
+
+        private void BuildToolbar()
+        {
+            _toolTip = new ToolTip { ShowAlways = true, AutoPopDelay = 6000, InitialDelay = 400, ReshowDelay = 200 };
+
+            _toolbar = new Panel
+            {
+                Height    = 54,
+                Dock      = DockStyle.None,   // positioned manually in LayoutButtons
+                BackColor = Fluent.DarkBg,
+                Visible   = false,
+            };
+            ForwardMouseEvents(_toolbar);
+            BuildToolbarButtons();
+
+            _toolbarEdit = new Panel
+            {
+                Height    = 54,
+                Dock      = DockStyle.None,   // positioned manually in LayoutButtons
+                BackColor = Fluent.DarkBg2,
+                Visible   = false,
+            };
+            ForwardMouseEvents(_toolbarEdit);
+            BuildToolbarEditButtons();
+
+            // Both panels use DockStyle.None — LayoutButtons() positions them explicitly:
+            //   _toolbar    at y=0                      (row 1: file/mode buttons)
+            //   _toolbarEdit at y=_toolbar.Height       (row 2: key/grid actions)
+            // This avoids the WinForms DockStyle.Top stacking-order ambiguity entirely.
+            Controls.Add(_toolbar);
+            Controls.Add(_toolbarEdit);
+        }
+
+        /// <summary>
+        /// Splits a translated label at the first space so the emoji sits on its
+        /// own line above the text: "✏ Edit" → "✏\nEdit".
+        /// Labels without a space are returned unchanged.
+        /// </summary>
+        private static string TwoLine(string s)
+        {
+            int sp = s.IndexOf(' ');
+            return sp < 0 ? s : s.Substring(0, sp) + "\n" + s.Substring(sp + 1);
+        }
+
+        private void BuildToolbarButtons()
+        {
+            ToolbarButton MakeBtn(string icon, string label)
+            {
+                var b = new ToolbarButton { IconGlyph = icon, Text = label };
+                _toolbar.Controls.Add(b);
+                return b;
+            }
+
+            _btnLoad         = MakeBtn(FIcon.Load,     Lang.T("tb: Load"));
+            _btnSave         = MakeBtn(FIcon.Save,     Lang.T("tb: Save"));
+            _btnUndo         = MakeBtn(FIcon.Undo,     Lang.T("tb: Undo"));
+            _btnRedo         = MakeBtn(FIcon.Redo,     Lang.T("tb: Redo"));
+            _btnEdit         = MakeBtn(FIcon.Edit,     Lang.T("tb: Edit"));
+            _btnEditKeyboard = MakeBtn(FIcon.Settings, Lang.T("tb: Keyboard"));
+            _btnExitEdit     = MakeBtn(FIcon.Exit,     Lang.T("tb: Exit"));
+
+            _lblFilename = new Label
+            {
+                TextAlign = ContentAlignment.MiddleCenter,
+                ForeColor = Color.FromArgb(160, 170, 200),
+                BackColor = Color.Transparent,
+                Font      = new Font("Segoe UI", 11f),
+                AutoSize  = false,
+            };
+            _toolbar.Controls.Add(_lblFilename);
+
+            _btnLoad.Click         += (s, e) => LoadSettings();
+            _btnSave.Click         += (s, e) => SaveSettings(false);
+            _btnUndo.Click         += (s, e) => Undo();
+            _btnRedo.Click         += (s, e) => Redo();
+            _btnEdit.Click         += (s, e) => SetMode(Mode.Edit);
+            _btnEditKeyboard.Click += (s, e) => OpenKeyboardEditor();
+            _btnExitEdit.Click     += (s, e) => SetMode(Mode.Normal);
+
+            _toolbar.Resize += (s, e) => PositionToolbarControls();
+        }
+
+        private void PositionToolbarControls()
+        {
+            const int h = 48, y = 3, gap = 2;
+            int W = _toolbar.ClientSize.Width;
+            if (W < 50) return;
+
+            // Left side: Load, Save, Undo, Redo
+            int lx = 2;
+            _btnLoad.SetBounds(lx, y, 60, h); lx += 60 + gap;
+            _btnSave.SetBounds(lx, y, 60, h); lx += 60 + gap;
+            _btnUndo.SetBounds(lx, y, 64, h); lx += 64 + gap;
+            _btnRedo.SetBounds(lx, y, 64, h); lx += 64 + gap;
+
+            // Right side (from right edge inward): Exit, Keyboard, Edit
+            int rx = W - 2;
+            rx -= 65;       _btnExitEdit    .SetBounds(rx, y, 65,  h);
+            rx -= gap + 88; _btnEditKeyboard.SetBounds(rx, y, 88,  h);
+            rx -= gap + 72; _btnEdit        .SetBounds(rx, y, 72,  h);
+
+            // Filename label fills the middle gap
+            int lblX = lx + 4;
+            int lblW = Math.Max(0, rx - gap - lblX);
+            _lblFilename.SetBounds(lblX, y, lblW, h);
+        }
+
+        private void BuildToolbarEditButtons()
+        {
+            ToolbarButton MakeBtn(string icon, string label)
+            {
+                var b = new ToolbarButton { IconGlyph = icon, Text = label };
+                _toolbarEdit.Controls.Add(b);
+                return b;
+            }
+
+            // ── Key action buttons (left) ──────────────────────────────
+            _btnKeyEdit   = MakeBtn(FIcon.Edit,   Lang.T("tb: Edit key"));
+            _btnKeyRemove = MakeBtn(FIcon.Delete,  Lang.T("tb: Remove"));
+            _btnCopyFmt   = MakeBtn(FIcon.Brush,  Lang.T("tb: Copy fmt"));
+            _btnCopyKey   = MakeBtn(FIcon.Copy,   Lang.T("tb: Copy key"));
+
+            // ── Selected key label (middle, flexible) ──────────────────
+            _lblSelectedKey = new Label
+            {
+                TextAlign = ContentAlignment.MiddleCenter,
+                ForeColor = Color.FromArgb(160, 170, 200),
+                BackColor = Color.Transparent,
+                Font      = new Font("Segoe UI", 10f),
+                AutoSize  = false,
+                Text      = "—",
+            };
+            _toolbarEdit.Controls.Add(_lblSelectedKey);
+
+            // ── Grid action buttons (right) ────────────────────────────
+            _btnAddRowAbove = MakeBtn(FIcon.ArrowUp,    Lang.T("tb: Row"));
+            _btnAddRowBelow = MakeBtn(FIcon.ArrowDown,  Lang.T("tb: Row"));
+            _btnAddColLeft  = MakeBtn(FIcon.ArrowLeft,  Lang.T("tb: Col"));
+            _btnAddColRight = MakeBtn(FIcon.ArrowRight, Lang.T("tb: Col"));
+            _btnRemoveRow   = MakeBtn(FIcon.Remove,     Lang.T("tb: Del row"));
+            _btnRemoveCol   = MakeBtn(FIcon.Remove,     Lang.T("tb: Del col"));
+            _btnMergeRight  = MakeBtn(FIcon.Merge,      Lang.T("tb: Merge R"));
+            _btnMergeDown   = MakeBtn(FIcon.Merge,      Lang.T("tb: Merge D"));
+            _btnSplitCell   = MakeBtn(FIcon.Split,      Lang.T("tb: Split"));
+
+            // ── Wire key action handlers ───────────────────────────────
+            _btnKeyEdit.Click += (s, e) =>
+            {
+                if (_selectedCell != null) OpenEditor(_selectedCell);
+            };
+            _btnKeyRemove.Click += (s, e) =>
+            {
+                if (_selectedCell == null) return;
+                PushUndo();
+                var cell = _selectedCell;
+                if (cell.ColSpan > 1 || cell.RowSpan > 1)
+                {
+                    FillFreedSpanCells(cell, 1, 1);
+                    cell.ColSpan = 1; cell.RowSpan = 1;
+                }
+                cell.Props = new KeyProps("", "");
+                _latchedMods.Remove(cell); _lockedMods.Remove(cell);
+                _selectedCell = null;
+                NormaliseWPSlots();
+                LayoutButtons(); RefreshAllButtons(skipFontCalc: true); SyncPredictorSlotCount(); AutoSave();
+            };
+            _btnCopyFmt.Click += (s, e) =>
+            {
+                if (_fmtPaintMode)
+                {
+                    // Second click cancels paint mode
+                    _fmtPaintMode = false;
+                    UpdatePaintModeCursors();
+                    RefreshToolbarEditState();
+                    return;
+                }
+                if (_selectedCell == null) return;
+                var p = _selectedCell.Props;
+                _copiedFormatting = new KeyProps("", "")
+                {
+                    FontName = p.FontName, FontSize = p.FontSize,
+                    FontColor = p.FontColor, KeyColor = p.KeyColor,
+                    BorderColor = p.BorderColor, BorderThickness = p.BorderThickness,
+                    GroupName = p.GroupName,
+                };
+                _fmtPaintMode = true;
+                UpdatePaintModeCursors();
+                RefreshToolbarEditState();
+            };
+            _btnCopyKey.Click += (s, e) =>
+            {
+                if (_keyPaintMode)
+                {
+                    _keyPaintMode = false;
+                    UpdateKeyPaintModeCursors();
+                    RefreshToolbarEditState();
+                    return;
+                }
+                if (_selectedCell == null) return;
+                _copiedKey = _selectedCell.Props.Clone();
+                _keyPaintMode = true;
+                UpdateKeyPaintModeCursors();
+                RefreshToolbarEditState();
+            };
+
+            // ── Wire grid action handlers ──────────────────────────────
+            _btnAddRowAbove.Click += (s, e) =>
+            {
+                if (_selectedCell == null) return;
+                PushUndo();
+                _layout.InsertRow(_selectedCell.Row, true,  _theme); RebuildAllButtons(); AutoSave();
+            };
+            _btnAddRowBelow.Click += (s, e) =>
+            {
+                if (_selectedCell == null) return;
+                PushUndo();
+                _layout.InsertRow(_selectedCell.Row, false, _theme); RebuildAllButtons(); AutoSave();
+            };
+            _btnAddColLeft.Click += (s, e) =>
+            {
+                if (_selectedCell == null) return;
+                PushUndo();
+                _layout.InsertCol(_selectedCell.Col, true,  _theme); RebuildAllButtons(); AutoSave();
+            };
+            _btnAddColRight.Click += (s, e) =>
+            {
+                if (_selectedCell == null) return;
+                PushUndo();
+                _layout.InsertCol(_selectedCell.Col, false, _theme); RebuildAllButtons(); AutoSave();
+            };
+            _btnRemoveRow.Click += (s, e) =>
+            {
+                if (_selectedCell == null) return;
+                PushUndo();
+                if (_layout.RemoveRow(_selectedCell.Row)) { _selectedCell = null; RebuildAllButtons(); AutoSave(); }
+            };
+            _btnRemoveCol.Click += (s, e) =>
+            {
+                if (_selectedCell == null) return;
+                PushUndo();
+                if (_layout.RemoveCol(_selectedCell.Col)) { _selectedCell = null; RebuildAllButtons(); AutoSave(); }
+            };
+            _btnMergeRight.Click += (s, e) =>
+            {
+                if (_selectedCell == null) return;
+                PushUndo();
+                if (_layout.MergeRight(_selectedCell.Row, _selectedCell.Col)) { RebuildAllButtons(); AutoSave(); }
+            };
+            _btnMergeDown.Click += (s, e) =>
+            {
+                if (_selectedCell == null) return;
+                PushUndo();
+                if (_layout.MergeDown(_selectedCell.Row, _selectedCell.Col)) { RebuildAllButtons(); AutoSave(); }
+            };
+            _btnSplitCell.Click += (s, e) =>
+            {
+                if (_selectedCell == null) return;
+                PushUndo();
+                _layout.SplitCell(_selectedCell.Row, _selectedCell.Col, _theme);
+                _selectedCell = null; RebuildAllButtons(); AutoSave();
+            };
+
+            _toolbarEdit.Resize += (s, e) => PositionToolbarEditControls();
+
+            // Set initial tooltip text (also called on every language change)
+            RefreshToolbarTooltips();
+        }
+
+        private void PositionToolbarEditControls()
+        {
+            const int h = 48, y = 3, gap = 2;
+            int W = _toolbarEdit.ClientSize.Width;
+            if (W < 100) return;
+
+            // Left: key action buttons
+            int lx = 2;
+            _btnKeyEdit  .SetBounds(lx, y, 52, h); lx += 52 + gap;
+            _btnKeyRemove.SetBounds(lx, y, 52, h); lx += 52 + gap;
+            _btnCopyFmt  .SetBounds(lx, y, 58, h); lx += 58 + gap;
+            _btnCopyKey  .SetBounds(lx, y, 58, h); lx += 58 + gap;
+
+            // Right: grid action buttons (from right edge inward)
+            int rx = W - 2;
+            rx -= 54; _btnSplitCell  .SetBounds(rx, y, 54, h);
+            rx -= gap + 52; _btnMergeDown  .SetBounds(rx, y, 52, h);
+            rx -= gap + 52; _btnMergeRight .SetBounds(rx, y, 52, h);
+            rx -= gap + 52; _btnRemoveCol  .SetBounds(rx, y, 52, h);
+            rx -= gap + 52; _btnRemoveRow  .SetBounds(rx, y, 52, h);
+            rx -= gap + 48; _btnAddColRight.SetBounds(rx, y, 48, h);
+            rx -= gap + 48; _btnAddColLeft .SetBounds(rx, y, 48, h);
+            rx -= gap + 48; _btnAddRowBelow.SetBounds(rx, y, 48, h);
+            rx -= gap + 48; _btnAddRowAbove.SetBounds(rx, y, 48, h);
+
+            // Middle: selected key label fills the remaining gap
+            int lblX = lx + 4;
+            int lblW = Math.Max(0, rx - 4 - lblX);
+            _lblSelectedKey.SetBounds(lblX, y, lblW, h);
+        }
+
+        private void RefreshToolbarButtonLabels()
+        {
+            // Row 1 button labels
+            if (_btnLoad         != null) _btnLoad.Text         = Lang.T("tb: Load");
+            if (_btnSave         != null) _btnSave.Text         = Lang.T("tb: Save");
+            if (_btnUndo         != null) _btnUndo.Text         = Lang.T("tb: Undo");
+            if (_btnRedo         != null) _btnRedo.Text         = Lang.T("tb: Redo");
+            if (_btnEdit         != null) _btnEdit.Text         = Lang.T("tb: Edit");
+            if (_btnEditKeyboard != null) _btnEditKeyboard.Text = Lang.T("tb: Keyboard");
+            if (_btnExitEdit     != null) _btnExitEdit.Text     = Lang.T("tb: Exit");
+
+            // Row 2 — key actions
+            if (_btnKeyEdit   != null) _btnKeyEdit.Text   = Lang.T("tb: Edit key");
+            if (_btnKeyRemove != null) _btnKeyRemove.Text = Lang.T("tb: Remove");
+            if (_btnCopyFmt   != null) _btnCopyFmt.Text   = Lang.T("tb: Copy fmt");
+            if (_btnCopyKey   != null) _btnCopyKey.Text   = Lang.T("tb: Copy key");
+
+            // Row 2 — grid actions
+            if (_btnAddRowAbove != null) _btnAddRowAbove.Text = Lang.T("tb: Row");
+            if (_btnAddRowBelow != null) _btnAddRowBelow.Text = Lang.T("tb: Row");
+            if (_btnAddColLeft  != null) _btnAddColLeft.Text  = Lang.T("tb: Col");
+            if (_btnAddColRight != null) _btnAddColRight.Text = Lang.T("tb: Col");
+            if (_btnRemoveRow   != null) _btnRemoveRow.Text   = Lang.T("tb: Del row");
+            if (_btnRemoveCol   != null) _btnRemoveCol.Text   = Lang.T("tb: Del col");
+            if (_btnMergeRight  != null) _btnMergeRight.Text  = Lang.T("tb: Merge R");
+            if (_btnMergeDown   != null) _btnMergeDown.Text   = Lang.T("tb: Merge D");
+            if (_btnSplitCell   != null) _btnSplitCell.Text   = Lang.T("tb: Split");
+
+            // Force repaint so new labels are visible immediately
+            _toolbar?.Invalidate(true);
+            _toolbarEdit?.Invalidate(true);
+
+            // Tooltips
+            RefreshToolbarTooltips();
+        }
+
+        private void RefreshToolbarTooltips()
+        {
+            if (_toolTip == null || _btnEdit == null) return;
+
+            // Row 1
+            _toolTip.SetToolTip(_btnLoad,      Lang.T("tip: Load"));
+            _toolTip.SetToolTip(_btnSave,      Lang.T("tip: Save"));
+            _toolTip.SetToolTip(_btnUndo,      Lang.T("tip: Undo"));
+            _toolTip.SetToolTip(_btnRedo,      Lang.T("tip: Redo"));
+            _toolTip.SetToolTip(_btnEdit,         Lang.T("tip: Edit mode"));
+            _toolTip.SetToolTip(_btnEditKeyboard, Lang.T("tip: Edit Keyboard"));
+            _toolTip.SetToolTip(_btnExitEdit,     Lang.T("tip: Exit edit mode"));
+
+            if (_btnKeyEdit == null) return;
+
+            // Row 2 — key actions
+            _toolTip.SetToolTip(_btnKeyEdit,   Lang.T("tip: Edit key"));
+            _toolTip.SetToolTip(_btnKeyRemove, Lang.T("tip: Remove key"));
+            _toolTip.SetToolTip(_btnCopyFmt,   Lang.T("tip: Copy formatting"));
+            _toolTip.SetToolTip(_btnCopyKey,   Lang.T("tip: Copy key"));
+
+            // Row 2 — grid actions
+            _toolTip.SetToolTip(_btnAddRowAbove, Lang.T("tip: Insert row above"));
+            _toolTip.SetToolTip(_btnAddRowBelow, Lang.T("tip: Insert row below"));
+            _toolTip.SetToolTip(_btnAddColLeft,  Lang.T("tip: Insert column left"));
+            _toolTip.SetToolTip(_btnAddColRight, Lang.T("tip: Insert column right"));
+            _toolTip.SetToolTip(_btnRemoveRow,   Lang.T("tip: Remove row"));
+            _toolTip.SetToolTip(_btnRemoveCol,   Lang.T("tip: Remove column"));
+            _toolTip.SetToolTip(_btnMergeRight,  Lang.T("tip: Merge right"));
+            _toolTip.SetToolTip(_btnMergeDown,   Lang.T("tip: Merge down"));
+            _toolTip.SetToolTip(_btnSplitCell,   Lang.T("tip: Split cell"));
         }
 
         // ── Rebuild all buttons ──────────────────────────────────────
@@ -291,8 +754,44 @@ namespace OnScreenKeyboard
             Controls.Add(_gearBtn);
             ResumeLayout();
             if (IsHandleCreated) LayoutButtons();
-            // Populate WP keys with initial predictions
-            UpdateWPKeys();
+
+            // Tell the predictor how many slots this layout actually uses so it
+            // generates enough predictions (max slot index + 1, capped at 10).
+            SyncPredictorSlotCount();
+        }
+
+        /// <summary>
+        /// Scans the current layout for wp: keys and updates the predictor's
+        /// slot count to match.  Call after any change that may add or remove
+        /// word-prediction keys (rebuild, load, or key-editor save).
+        /// </summary>
+        private void SyncPredictorSlotCount()
+        {
+            int maxWpSlot = -1;
+            foreach (var cell in _layout.Cells)
+                if (cell.Props.Send != null &&
+                    cell.Props.Send.StartsWith("wp:") &&
+                    int.TryParse(cell.Props.Send.Substring(3), out int s) &&
+                    s > maxWpSlot)
+                    maxWpSlot = s;
+            if (maxWpSlot >= 0)
+                _predictor.SetSlotCount(maxWpSlot + 1);
+        }
+
+        /// <summary>
+        /// Re-numbers wp: cells so slots are contiguous (0, 1, 2, …).
+        /// Call after any edit that may remove or reorder word-prediction keys.
+        /// </summary>
+        private void NormaliseWPSlots()
+        {
+            var wpCells = _layout.Cells
+                .Where(c => c.Props.Send != null &&
+                            c.Props.Send.StartsWith("wp:", StringComparison.Ordinal) &&
+                            int.TryParse(c.Props.Send.Substring(3), out _))
+                .OrderBy(c => c.Row).ThenBy(c => c.Col)
+                .ToList();
+            for (int i = 0; i < wpCells.Count; i++)
+                wpCells[i].Props.Send = "wp:" + i;
         }
 
         private Button CreateButton(GridCell cell, bool shifted, bool altGr)
@@ -305,29 +804,60 @@ namespace OnScreenKeyboard
                 Text      = "",  // cleared by UpdateCornerTag; we owner-draw via OnButtonPaint
                 FlatStyle = FlatStyle.Flat, TabStop = false, Margin = new Padding(0),
                 AutoSize  = false,
+                AllowDrop = true,  // needed for drag-to-swap in Edit mode
             };
             btn.FlatAppearance.BorderSize = 1;
             ApplyPropsToButton(btn, p, false);
             ApplyEmptyKeyStyle(btn, p);
+
             btn.MouseDown += (s, e) =>
             {
                 if (e.Button != MouseButtons.Left) return;
                 if (_mode == Mode.Edit)
                 {
+                    _selectedCell = cell;
+                    UpdateSelectedKeyLabel();
+
+                    if (_fmtPaintMode)
+                    {
+                        ApplyFormatPainter(cell);
+                        _fmtPaintMode = false;
+                        UpdatePaintModeCursors();
+                        RefreshToolbarEditState();
+                        LayoutButtons(); RefreshAllButtons(skipFontCalc: true);
+                        return;
+                    }
+                    if (_keyPaintMode)
+                    {
+                        if (_copiedKey != null)
+                        {
+                            PushUndo();
+                            cell.Props = _copiedKey.Clone();
+                            _latchedMods.Remove(cell); _lockedMods.Remove(cell);
+                            NormaliseWPSlots();
+                            SyncPredictorSlotCount(); AutoSave();
+                        }
+                        _keyPaintMode = false;
+                        UpdateKeyPaintModeCursors();
+                        RefreshToolbarEditState();
+                        LayoutButtons(); RefreshAllButtons(skipFontCalc: true);
+                        return;
+                    }
+
+                    RefreshAllButtons();        // redraws selection border
+                    RefreshToolbarEditState();  // updates enabled states
+
                     if (e.Clicks == 2)
                     {
-                        // Second click arrived — cancel pending menu, open editor
-                        _editClickTimer.Stop();
-                        _pendingEditCell = null;
+                        _dragCandidate = null;
                         OpenEditor(cell);
                     }
                     else
                     {
-                        // First click — defer menu until timer fires
-                        // If a second click arrives first, the timer is cancelled above
-                        _pendingEditCell = cell;
-                        _editClickTimer.Stop();
-                        _editClickTimer.Start();
+                        // Record as drag candidate; actual drag starts on MouseMove
+                        // once the system drag threshold is crossed.
+                        _dragCandidate = cell;
+                        _dragStartPt   = btn.PointToScreen(e.Location);
                     }
                 }
                 else
@@ -335,8 +865,195 @@ namespace OnScreenKeyboard
                     OnKeyClick(cell);
                 }
             };
+
+            btn.MouseMove += (s, e) =>
+            {
+                if (_mode != Mode.Edit) return;
+                if (e.Button != MouseButtons.Left) return;
+                if (_dragCandidate == null) return;
+
+                // Only start drag once mouse has moved beyond the system threshold
+                var cur = btn.PointToScreen(e.Location);
+                var sz  = SystemInformation.DragSize;
+                if (Math.Abs(cur.X - _dragStartPt.X) < sz.Width &&
+                    Math.Abs(cur.Y - _dragStartPt.Y) < sz.Height) return;
+
+                var src = _dragCandidate;
+                _dragCandidate = null;
+
+                // DoDragDrop blocks until drop or cancel; pass the source GridCell as data
+                btn.DoDragDrop(src, DragDropEffects.Move);
+            };
+
+            btn.MouseUp += (s, e) => { _dragCandidate = null; };
+
+            // ── Drop target events ────────────────────────────────────
+            btn.DragEnter += (s, e) =>
+            {
+                if (_mode != Mode.Edit) { e.Effect = DragDropEffects.None; return; }
+
+                bool isGear = e.Data.GetDataPresent(typeof(GearDragToken));
+                bool isKey  = e.Data.GetDataPresent(typeof(GridCell));
+
+                if (!isGear && !isKey) { e.Effect = DragDropEffects.None; return; }
+                if (isKey)
+                {
+                    var src = (GridCell)e.Data.GetData(typeof(GridCell));
+                    if (src == cell) { e.Effect = DragDropEffects.None; return; }
+                }
+
+                e.Effect = DragDropEffects.Move;
+                // Highlight the drop target with a bright border
+                btn.FlatAppearance.BorderColor = Color.Gold;
+                btn.FlatAppearance.BorderSize  = 3;
+                btn.Invalidate();
+            };
+
+            btn.DragLeave += (s, e) =>
+            {
+                // Restore the button's normal appearance
+                ApplyPropsToButton(btn, cell.Props, _latchedMods.Contains(cell), _lockedMods.Contains(cell));
+                ApplyEmptyKeyStyle(btn, cell.Props);
+                btn.Invalidate();
+            };
+
+            btn.DragDrop += (s, e) =>
+            {
+                // Restore border first (DragLeave does not fire when drop succeeds)
+                ApplyPropsToButton(btn, cell.Props, false);
+                ApplyEmptyKeyStyle(btn, cell.Props);
+
+                if (_mode != Mode.Edit) return;
+
+                // Gear-reposition drop: move gear to this cell, stay in Edit mode.
+                if (e.Data.GetDataPresent(typeof(GearDragToken)))
+                {
+                    _meta.GearRow = cell.Row;
+                    _meta.GearCol = cell.Col;
+                    LayoutButtons();       // reposition gear overlay immediately
+                    RefreshAllButtons(skipFontCalc: true);
+                    AutoSave();
+                    return;
+                }
+
+                if (!e.Data.GetDataPresent(typeof(GridCell))) return;
+                var src = (GridCell)e.Data.GetData(typeof(GridCell));
+                if (src == null || src == cell) return;
+
+                SwapCells(src, cell);
+            };
+
             btn.Paint += OnButtonPaint;
             return btn;
+        }
+
+        /// <summary>
+        /// <summary>
+        /// Removes any cells (and their buttons) that fall inside <paramref name="cell"/>'s
+        /// current span, excluding the cell itself.
+        /// Call this AFTER setting the new (larger) span values so the correct area is swept.
+        /// This is the mirror of <see cref="FillFreedSpanCells"/>: where that method creates
+        /// cells when a span shrinks, this one removes them when a span grows.
+        /// </summary>
+        private void AbsorbCoveredCells(GridCell cell)
+        {
+            var toRemove = new List<GridCell>();
+            foreach (var other in _layout.Cells)
+            {
+                if (other == cell) continue;
+                if (other.Row >= cell.Row && other.Row < cell.Row + cell.RowSpan &&
+                    other.Col >= cell.Col && other.Col < cell.Col + cell.ColSpan)
+                    toRemove.Add(other);
+            }
+            foreach (var r in toRemove)
+            {
+                _layout.Cells.Remove(r);
+                if (_buttons.TryGetValue(r, out var oldBtn))
+                {
+                    Controls.Remove(oldBtn);
+                    oldBtn.Dispose();
+                    _buttons.Remove(r);
+                }
+                _latchedMods.Remove(r);
+                _lockedMods.Remove(r);
+            }
+        }
+
+        /// <summary>
+        /// Fills any grid positions that fall inside <paramref name="cell"/>'s current span
+        /// but would be outside a new span of <paramref name="newColSpan"/> × <paramref name="newRowSpan"/>
+        /// with fresh empty GridCells + buttons.  Call this BEFORE shrinking the span.
+        /// </summary>
+        private void FillFreedSpanCells(GridCell cell, int newColSpan, int newRowSpan)
+        {
+            bool shifted = ShiftActive, altGr = AltGrActive;
+
+            for (int dr = 0; dr < cell.RowSpan; dr++)
+            {
+                for (int dc = 0; dc < cell.ColSpan; dc++)
+                {
+                    if (dr == 0 && dc == 0) continue;           // top-left stays with the cell
+                    if (dr < newRowSpan && dc < newColSpan) continue; // still inside new span
+
+                    int nr = cell.Row + dr;
+                    int nc = cell.Col + dc;
+                    if (nr >= _layout.Rows || nc >= _layout.Cols) continue;
+
+                    // Don't double-create if a cell already exists at this position
+                    bool exists = false;
+                    foreach (var c in _layout.Cells)
+                        if (c.Row == nr && c.Col == nc) { exists = true; break; }
+                    if (exists) continue;
+
+                    var emptyCell = new GridCell(nr, nc, new KeyProps("", ""), 1, 1);
+                    _layout.Cells.Add(emptyCell);
+
+                    var newBtn = CreateButton(emptyCell, shifted, altGr);
+                    _buttons[emptyCell] = newBtn;
+                    Controls.Add(newBtn);
+                    Controls.SetChildIndex(_gearBtn, 0); // keep gear on top
+                }
+            }
+        }
+
+        /// <summary>
+        /// Swaps the content of two grid cells.
+        /// If the source has a span larger than 1×1 it is first shrunk to 1×1.
+        /// Clears all modifier latch/lock state since a modifier key may have moved.
+        /// </summary>
+        private void SwapCells(GridCell src, GridCell tgt)
+        {
+            PushUndo();
+            // Resize source to 1×1 before swapping if it currently spans multiple cells.
+            // The extra positions that were covered by the span become independent empty
+            // cells; create a GridCell + Button for each so they remain reachable.
+            if (src.ColSpan > 1 || src.RowSpan > 1)
+            {
+                FillFreedSpanCells(src, 1, 1);
+                src.ColSpan = 1;
+                src.RowSpan = 1;
+            }
+
+            // Swap Props
+            var tmpProps  = src.Props;
+            src.Props     = tgt.Props;
+            tgt.Props     = tmpProps;
+
+            // Swap spans (source is already 1×1; target keeps its original span)
+            (src.ColSpan, tgt.ColSpan) = (tgt.ColSpan, src.ColSpan);
+            (src.RowSpan, tgt.RowSpan) = (tgt.RowSpan, src.RowSpan);
+
+            // src has inherited tgt's original span and may now overlap empty cells
+            // that FillFreedSpanCells previously created. Remove them.
+            AbsorbCoveredCells(src);
+
+            // A modifier key may have moved to a different cell — clear all state
+            _latchedMods.Clear();
+            _lockedMods.Clear();
+
+            LayoutButtons();
+            RefreshAllButtons(skipFontCalc: true);
+            AutoSave();
         }
 
         /// <summary>
@@ -383,12 +1100,22 @@ namespace OnScreenKeyboard
             if (!IsEmptyKey(p)) return;
             if (_mode == Mode.Edit)
             {
+                btn.Visible   = true;   // restore visibility — btn may have been hidden in Normal mode
                 btn.Enabled   = true;
                 btn.BackColor = Color.FromArgb(55, 55, 75);
                 btn.ForeColor = Color.FromArgb(110, 110, 130);
                 btn.FlatAppearance.BorderColor = Color.FromArgb(80, 80, 100);
                 btn.FlatAppearance.BorderSize  = 1;
                 btn.Text = "";
+            }
+            else if (_mode == Mode.GearPlacement)
+            {
+                // Empty cells must be visible and clickable so the user can
+                // place the gear button on them.  The blue highlight is applied
+                // by RefreshAllButtons; just ensure the button is shown.
+                btn.Visible = true;
+                btn.Enabled = true;
+                btn.Text    = "";
             }
             else
             {
@@ -410,35 +1137,59 @@ namespace OnScreenKeyboard
             if (rows == 0 || cols == 0) return;
             if (ClientSize.Width < 50 || ClientSize.Height < 50) return;
 
+            // Position toolbar panels explicitly (DockStyle.None) so the row order is
+            // always deterministic: _toolbar (row 1) at y=0, _toolbarEdit (row 2) below it.
+            int th = 0;
+            int W  = ClientSize.Width;
+            if (_toolbar != null && _toolbar.Visible)
+            {
+                _toolbar.SetBounds(0, 0, W, _toolbar.Height);
+                th += _toolbar.Height;
+                PositionToolbarControls();
+            }
+            if (_toolbarEdit != null && _toolbarEdit.Visible)
+            {
+                _toolbarEdit.SetBounds(0, th, W, _toolbarEdit.Height);
+                th += _toolbarEdit.Height;
+                PositionToolbarEditControls();
+            }
+
             // No extra column reserved — gear overlays the top-right grid cell
             int usableW = ClientSize.Width  - Pad * 2 - Gap * (cols - 1);
-            int usableH = ClientSize.Height - Pad * 2 - Gap * (rows - 1);
+            int usableH = ClientSize.Height - th - Pad * 2 - Gap * (rows - 1);
             float cellW = Math.Max(8f, (float)usableW / cols);
             float cellH = Math.Max(8f, (float)usableH / rows);
 
             bool shifted = ShiftActive, altGr = AltGrActive;
             var placed = new HashSet<GridCell>();
 
-            foreach (var cell in _layout.Cells)
+            SuspendLayout();
+            try
             {
-                if (!_buttons.TryGetValue(cell, out var btn)) continue;
-                if (placed.Contains(cell)) continue;
-                placed.Add(cell);
+                foreach (var cell in _layout.Cells)
+                {
+                    if (!_buttons.TryGetValue(cell, out var btn)) continue;
+                    if (placed.Contains(cell)) continue;
+                    placed.Add(cell);
 
-                int x = Pad + (int)(cell.Col * (cellW + Gap));
-                int y = Pad + (int)(cell.Row * (cellH + Gap));
-                int w = Math.Max(8, (int)(cell.ColSpan * cellW + (cell.ColSpan - 1) * Gap));
-                int h = Math.Max(8, (int)(cell.RowSpan * cellH + (cell.RowSpan - 1) * Gap));
+                    int x = Pad + (int)(cell.Col * (cellW + Gap));
+                    int y = th + Pad + (int)(cell.Row * (cellH + Gap));
+                    int w = Math.Max(8, (int)(cell.ColSpan * cellW + (cell.ColSpan - 1) * Gap));
+                    int h = Math.Max(8, (int)(cell.RowSpan * cellH + (cell.RowSpan - 1) * Gap));
 
-                btn.SetBounds(x, y, w, h);
-                SetButtonFont(btn, cell.Props, h, w, shifted, altGr);
-                ApplyEmptyKeyStyle(btn, cell.Props);
+                    btn.SetBounds(x, y, w, h);
+                    if (w > 8 && h > 8)
+                        btn.Region = Fluent.RoundedRegion(w, h, 4);
+                    SetButtonFont(btn, cell.Props, h, w, shifted, altGr);
+                    ApplyEmptyKeyStyle(btn, cell.Props);
+                }
             }
+            finally { ResumeLayout(false); }
 
             // Gear button: overlays the designated gear cell (default: row 0, last column)
             var (gRow, gCol) = GearCell(cols);
             int gearX = Pad + (int)(gCol * (cellW + Gap));
-            int gearY = Pad + (int)(gRow * (cellH + Gap));
+            int gearY = th + Pad + (int)(gRow * (cellH + Gap));
             int gearW = Math.Max(8, (int)(cellW));
             int gearH = Math.Max(8, (int)(cellH));
             _gearBtn.SetBounds(gearX, gearY, gearW, gearH);
@@ -456,41 +1207,52 @@ namespace OnScreenKeyboard
             string label = p.GetDisplayLabel(shifted, altGr);
             if (string.IsNullOrEmpty(label)) label = p.Label ?? "";
 
+            var grpFont = FindGroup(p.GroupName);
+            string fn   = ResolveFontName(p.FontName, grpFont?.FontName);
+
             int fs;
             if (p.FontSize > 0)
-            {
                 fs = p.FontSize;
-            }
+            else if (grpFont?.FontSize > 0)
+                fs = grpFont.FontSize;
             else
             {
-                // Measured Bold Arial metrics inside a WinForms Flat button:
-                //   charW  ≈ 0.72× pt size  (average for caps + digits + lower)
-                //   charH  ≈ 1.35× pt size  (em + internal leading)
-                //   hMargin = 10px total     (button internal padding 4+4 + 2 safety)
-                //   vMargin =  8px total     (button internal padding 2+2 + 2+2 safety)
-                const float charW   = 0.72f;
-                const float charH   = 1.35f;
-                const int   hMargin = 10;
-                const int   vMargin =  8;
+                // Step 1: height-based upper bound
+                const float charH   = 1.35f;   // em + internal leading factor
+                const int   vMargin =  8;       // button vertical padding (px)
+                const int   hMargin = 14;       // button horizontal padding (px) — generous for any font
 
                 float maxFsByHeight = (btnH - vMargin) / charH;
-                float maxFsByWidth  = btnW > 0 && label.Length > 0
-                    ? (btnW - hMargin) / (Math.Max(1f, label.Length) * charW)
-                    : maxFsByHeight;
+                float baseFs = Math.Min(btnH * 0.36f, maxFsByHeight);
 
-                // Base: 36% of height, never exceeding either dimension cap
-                float baseFs = Math.Min(btnH * 0.36f,
-                               Math.Min(maxFsByHeight, maxFsByWidth));
-
-                // Large symbol keys (⌫ ↵) may use more height
+                // Large symbol keys (⌫ ↵) may use more vertical room
                 bool big = KeyLayout.LargeSymbolLabels.Contains(p.Label)
                         || KeyLayout.LargeSymbolLabels.Contains(p.ShiftLabel ?? "");
                 if (big) baseFs = Math.Min(baseFs * 1.25f, maxFsByHeight);
 
                 fs = Math.Max(6, (int)baseFs);
+
+                // Step 2: measure the actual rendered label at that size and scale
+                // down proportionally if it overflows the button width.
+                // This works correctly for any font (Verdana, Arial, etc.) and any
+                // label length — no per-font empirical constants needed.
+                if (btnW > 0 && label.Length > 0 && fs > 6)
+                {
+                    try
+                    {
+                        using var probe = new Font(fn, fs, FontStyle.Bold);
+                        int measuredW = TextRenderer.MeasureText(
+                            label, probe,
+                            new Size(int.MaxValue, int.MaxValue),
+                            TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine).Width;
+                        int avail = btnW - hMargin;
+                        if (measuredW > avail && measuredW > 0)
+                            fs = Math.Max(6, (int)(fs * avail / (float)measuredW));
+                    }
+                    catch { }
+                }
             }
 
-            string fn = ResolveFontName(p.FontName);
             try { btn.Font = GetButtonFont(fn, fs); }
             catch { btn.Font = GetButtonFont("Arial", fs); }
             // Main label and corners are painted by OnButtonPaint via UpdateCornerTag
@@ -508,7 +1270,19 @@ namespace OnScreenKeyboard
             // accelerator (only WinForms text rendering does). BtnText's &&-escaping
             // is only needed when assigning to btn.Text, which we always set to "".
             string ml = p.GetDisplayLabel(shifted, altGr) ?? "";
-            btn.Tag = (ml, sl, al, ResolveColor(p.FontColor, _global.FontColor));
+            var grpTag = FindGroup(p.GroupName);
+            Color fc = ResolveColor(p.FontColor, grpTag?.FontColor ?? Color.Empty, _theme.FontColor);
+
+            // Skip Invalidate when nothing visible changed — avoids redundant GDI paint
+            // passes on the ~40 buttons whose labels/colours are unchanged (e.g. selection
+            // border moves, mode indicator updates, paired LayoutButtons+RefreshAllButtons).
+            // The 5th element (isWP) is ignored for the equality check because UpdateCornerTag
+            // is never called on WP buttons in the normal code path.
+            if (btn.Tag is (string oml, string osl, string oal, Color ofc, bool _, int _) &&
+                oml == ml && osl == sl && oal == al && ofc == fc)
+                return;
+
+            btn.Tag = (ml, sl, al, fc, false, 0);   // isWP=false, typedLen=0 for normal keys
             // Clear the button's own text so WinForms draws nothing — we paint it.
             if (btn.Text != "") btn.Text = "";
             btn.Invalidate();
@@ -523,18 +1297,67 @@ namespace OnScreenKeyboard
         private void OnButtonPaint(object sender, PaintEventArgs e)
         {
             if (sender is not Button btn) return;
-            if (btn.Tag is not (string ml, string sl, string al, Color fc)) return;
+            if (btn.Tag is not (string ml, string sl, string al, Color fc, bool isWP, int typedLen)) return;
 
-            // ── Main label — centred, no hotkey interpretation ────────
+            // ── Main label ────────────────────────────────────────────
             if (!string.IsNullOrEmpty(ml))
             {
-                var mainRect = new Rectangle(2, 2, btn.Width - 4, btn.Height - 4);
-                TextRenderer.DrawText(e.Graphics, ml, btn.Font, mainRect, fc,
-                    TextFormatFlags.HorizontalCenter |
-                    TextFormatFlags.VerticalCenter   |
-                    TextFormatFlags.SingleLine       |
-                    TextFormatFlags.EndEllipsis      |
-                    TextFormatFlags.NoPrefix);        // NoPrefix: & is never a hotkey
+                // WP keys: full-width rect — text is right-aligned so the left margin is
+                // wasted space; the "…" may bleed into the left edge, which is acceptable.
+                // Regular keys: keep a small inset so EndEllipsis has room to work.
+                var mainRect = isWP
+                    ? new Rectangle(0, 2, btn.Width,     btn.Height - 4)
+                    : new Rectangle(2, 2, btn.Width - 4, btn.Height - 4);
+                TextFormatFlags mainFlags;
+                if (isWP)
+                {
+                    // Word-prediction keys: right-aligned; text is already tail-truncated
+                    // by ApplyWPTags so no EndEllipsis needed.
+                    mainFlags = TextFormatFlags.Right            |
+                                TextFormatFlags.VerticalCenter   |
+                                TextFormatFlags.SingleLine       |
+                                TextFormatFlags.NoPrefix;
+                }
+                else
+                {
+                    mainFlags = TextFormatFlags.HorizontalCenter |
+                                TextFormatFlags.VerticalCenter   |
+                                TextFormatFlags.SingleLine       |
+                                TextFormatFlags.EndEllipsis      |
+                                TextFormatFlags.NoPrefix;         // NoPrefix: & is never a hotkey
+                }
+                TextRenderer.DrawText(e.Graphics, ml, btn.Font, mainRect, fc, mainFlags);
+
+                // ── Underline for the still-visible typed prefix (WP keys only) ───────
+                if (isWP && typedLen > 0)
+                {
+                    int typedStart = (ml.Length > 0 && ml[0] == '…') ? 1 : 0;
+                    if (typedStart + typedLen <= ml.Length)
+                    {
+                        var   mf      = TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine;
+                        var   inf     = new Size(int.MaxValue, int.MaxValue);
+                        string afterTyped    = ml.Substring(typedStart + typedLen);
+                        string typedAndAfter = ml.Substring(typedStart);   // typedPart + afterTyped
+
+                        // Compute typedW as the DIFFERENCE of two measurements so the
+                        // per-call MeasureText overhead (~8 px) cancels out, giving an
+                        // accurate line length.  afterW uses a single call; a small
+                        // absolute offset there only shifts the line, not its length.
+                        int afterW      = Math.Max(0, TextRenderer.MeasureText(afterTyped,    btn.Font, inf, mf).Width - 8);
+                        int combinedW   = Math.Max(0, TextRenderer.MeasureText(typedAndAfter, btn.Font, inf, mf).Width - 8);
+                        int typedW      = Math.Max(0, combinedW - afterW);
+
+                        // Text is right-aligned in mainRect — work backwards from right edge
+                        int ulRight = mainRect.Right  - afterW;
+                        int ulLeft  = ulRight - typedW;
+
+                        // Underline at text baseline: vertically centred text, baseline ≈ centre + ½ fontH
+                        int ulY = mainRect.Top + (mainRect.Height + btn.Font.Height) / 2;
+
+                        using var pen = new Pen(Color.FromArgb(210, fc), 1f);
+                        e.Graphics.DrawLine(pen, ulLeft, ulY, ulRight, ulY);
+                    }
+                }
             }
 
             // ── Corner labels (shift top-right, AltGr top-left) ──────
@@ -585,77 +1408,132 @@ namespace OnScreenKeyboard
         }
 
         // ── Refresh ───────────────────────────────────────────────────
-        private void RefreshAllButtons()
+        // skipFontCalc: pass true when LayoutButtons() was already called immediately
+        // before this — fonts/sizes were computed there, so we skip the TextRenderer
+        // measurement pass and only update tags and colours.
+        private void RefreshAllButtons(bool skipFontCalc = false)
         {
             bool shifted = ShiftActive, altGr = AltGrActive;
-            foreach (var (cell, btn) in _buttons)
+            SuspendLayout();
+            try
             {
-                var p = cell.Props;
-                bool latched = _latchedMods.Contains(cell);
-                if (_mode == Mode.GearPlacement)
+                foreach (var (cell, btn) in _buttons)
                 {
-                    // Highlight all keys — user picks the new gear location
-                    btn.BackColor = Color.FromArgb(50, 60, 160);
-                    btn.ForeColor = Color.White;
-                    btn.FlatAppearance.BorderColor = Color.FromArgb(120, 140, 255);
-                    btn.FlatAppearance.BorderSize  = 2;
+                    var p = cell.Props;
+                    bool isWP = p.Send != null &&
+                                p.Send.StartsWith("wp:", StringComparison.Ordinal);
+                    bool latched = _latchedMods.Contains(cell);
+                    if (_mode == Mode.GearPlacement)
+                    {
+                        // Highlight all keys — user picks the new gear location
+                        btn.BackColor = Color.FromArgb(50, 60, 160);
+                        btn.ForeColor = Color.White;
+                        btn.FlatAppearance.BorderColor = Color.FromArgb(120, 140, 255);
+                        btn.FlatAppearance.BorderSize  = 2;
+                        // SetButtonFont is skipped in this mode, so update tags directly
+                        if (!isWP)
+                            UpdateCornerTag(btn, p, shifted, altGr);
+                    }
+                    else
+                    {
+                        ApplyPropsToButton(btn, p, latched, _lockedMods.Contains(cell));
+                        if (skipFontCalc)
+                        {
+                            // Font already set by the preceding LayoutButtons() call;
+                            // just refresh the tag/label without re-measuring text.
+                            // WP buttons are skipped — LayoutButtons() already ran ApplyWPTags().
+                            if (!isWP)
+                                UpdateCornerTag(btn, p, shifted, altGr);
+                        }
+                        else
+                        {
+                            // SetButtonFont calculates size AND calls UpdateCornerTag internally.
+                            SetButtonFont(btn, p, btn.Height, btn.Width, shifted, altGr);
+                        }
+                        ApplyEmptyKeyStyle(btn, p);
+                        // Selection highlight — white border over whatever style is applied
+                        if (_mode == Mode.Edit && cell == _selectedCell)
+                        {
+                            btn.FlatAppearance.BorderColor = Color.White;
+                            btn.FlatAppearance.BorderSize  = 2;
+                        }
+                    }
                 }
-                else
-                {
-                    ApplyPropsToButton(btn, p, latched, _lockedMods.Contains(cell));
-                    ApplyEmptyKeyStyle(btn, p);
-                }
-                UpdateCornerTag(btn, p, shifted, altGr);
             }
-            // Override WP key tags with current predictions (must come AFTER
-            // UpdateCornerTag which would otherwise reset them to static labels)
-            ApplyWPTags();
+            finally { ResumeLayout(false); }
+            // When skipFontCalc is true, LayoutButtons() already ran ApplyWPTags() —
+            // no need to run it a second time.
+            if (!skipFontCalc) ApplyWPTags();
         }
 
         /// <summary>Returns the gear button's grid row and column.</summary>
         private (int row, int col) GearCell(int cols)
         {
             int rows = _layout?.Rows ?? 1;
-            int row = Math.Clamp(_global.GearRow, 0, rows - 1);
-            int col = _global.GearCol < 0 ? cols - 1 : Math.Min(_global.GearCol, cols - 1);
+            int row = Math.Clamp(_meta.GearRow, 0, rows - 1);
+            int col = _meta.GearCol < 0 ? cols - 1 : Math.Min(_meta.GearCol, cols - 1);
             return (row, col);
         }
 
         /// <summary>Resolve per-key properties against global defaults.</summary>
-        private int    ResolveThickness(int keyThickness) =>
-            keyThickness == -1 ? _global.BorderThickness : keyThickness;
-        private Color  ResolveColor(Color keyColor, Color globalColor) =>
+        private int ResolveThickness(int keyThickness) =>
+            keyThickness == -1 ? _theme.BorderThickness : keyThickness;
+        private int ResolveThickness(int keyThickness, int groupThickness) =>
+            keyThickness  != -1 ? keyThickness  :
+            groupThickness != -1 ? groupThickness :
+            _theme.BorderThickness;
+        private Color ResolveColor(Color keyColor, Color globalColor) =>
             keyColor.IsEmpty ? globalColor : keyColor;
-        private string ResolveFontName(string keyFont) =>
-            string.IsNullOrEmpty(keyFont) ? _global.FontName : keyFont;
+        private Color ResolveColor(Color keyColor, Color groupColor, Color globalColor) =>
+            !keyColor.IsEmpty  ? keyColor  :
+            !groupColor.IsEmpty ? groupColor :
+            globalColor;
+        private string ResolveFontName(string keyFont, string groupFont = null) =>
+            !string.IsNullOrEmpty(keyFont)  ? keyFont  :
+            !string.IsNullOrEmpty(groupFont) ? groupFont :
+            _theme.FontName;
+
+        private KeyGroup FindGroup(string groupName) =>
+            string.IsNullOrEmpty(groupName) ? null :
+            _layout.Groups.Find(g => g.Name == groupName);
 
         private void ApplyPropsToButton(Button btn, KeyProps p, bool latched, bool locked = false)
         {
+            // Non-empty keys are always visible; a key may have transitioned from
+            // empty (hidden in Normal mode) to having content, so restore explicitly.
+            if (!IsEmptyKey(p)) btn.Visible = true;
+
+            var grp = FindGroup(p.GroupName);
+            Color gKc = grp?.KeyColor     ?? Color.Empty;
+            Color gFc = grp?.FontColor    ?? Color.Empty;
+            Color gBc = grp?.BorderColor  ?? Color.Empty;
+            int   gBt = grp?.BorderThickness ?? -1;
+
             if (locked)
             {
                 // Locked: strong amber — stays until clicked again
                 btn.BackColor = Color.FromArgb(220, 140, 0);
                 btn.ForeColor = Color.FromArgb(30, 30, 30);
                 btn.FlatAppearance.BorderColor = Color.FromArgb(255, 200, 0);
-                btn.FlatAppearance.BorderSize  = Math.Max(3, ResolveThickness(p.BorderThickness));
+                btn.FlatAppearance.BorderSize  = Math.Max(3, ResolveThickness(p.BorderThickness, gBt));
             }
             else if (latched)
             {
                 // Latched: moderate highlight — clears after next key
-                Color rKc = ResolveColor(p.KeyColor,  _global.KeyColor);
-                Color rFc = ResolveColor(p.FontColor, _global.FontColor);
+                Color rKc = ResolveColor(p.KeyColor, gKc, _theme.KeyColor);
+                Color rFc = ResolveColor(p.FontColor, gFc, _theme.FontColor);
                 btn.BackColor = AdjustBrightness(rKc, IsLight(rKc) ? -60 : 60);
                 btn.ForeColor = AdjustBrightness(rFc, IsLight(rFc) ? -40 : 40);
                 btn.FlatAppearance.BorderColor = IsLight(rKc)
                     ? Color.FromArgb(220,180,40) : Color.FromArgb(255,220,80);
-                btn.FlatAppearance.BorderSize = Math.Max(2, ResolveThickness(p.BorderThickness));
+                btn.FlatAppearance.BorderSize = Math.Max(2, ResolveThickness(p.BorderThickness, gBt));
             }
             else
             {
-                btn.BackColor = ResolveColor(p.KeyColor,  _global.KeyColor);
-                btn.ForeColor = ResolveColor(p.FontColor, _global.FontColor);
-                btn.FlatAppearance.BorderColor = ResolveColor(p.BorderColor, _global.BorderColor);
-                btn.FlatAppearance.BorderSize = ResolveThickness(p.BorderThickness);
+                btn.BackColor = ResolveColor(p.KeyColor,  gKc, _theme.KeyColor);
+                btn.ForeColor = ResolveColor(p.FontColor, gFc, _theme.FontColor);
+                btn.FlatAppearance.BorderColor = ResolveColor(p.BorderColor, gBc, _theme.BorderColor);
+                btn.FlatAppearance.BorderSize  = ResolveThickness(p.BorderThickness, gBt);
             }
         }
 
@@ -673,13 +1551,6 @@ namespace OnScreenKeyboard
         {
             var menu = StyledMenu();
             menu.Closed += (s, e) => BeginInvoke((Action)menu.Dispose);
-            MI(menu, Lang.T("✏ Edit Mode")  + (_mode == Mode.Edit      ? "  ✔" : ""),
-               () => SetMode(_mode == Mode.Edit      ? Mode.Normal : Mode.Edit));
-            MI(menu, Lang.T("⚡ Quick Edit") + (_mode == Mode.QuickEdit ? "  ✔" : ""),
-               () => SetMode(_mode == Mode.QuickEdit ? Mode.Normal : Mode.QuickEdit));
-            menu.Items.Add(new ToolStripSeparator());
-            MI(menu, Lang.T("🖥 Edit Keyboard…"), OpenKeyboardEditor);
-            menu.Items.Add(new ToolStripSeparator());
             MI(menu, Lang.T("📌 Move gear button…"), StartGearPlacement);
             menu.Show(_gearBtn, new Point(0, _gearBtn.Height));
         }
@@ -704,10 +1575,8 @@ namespace OnScreenKeyboard
         {
             switch (_mode)
             {
-                case Mode.Normal:        HandleNormalClick(cell);    break;
-                case Mode.Edit:          ShowKeyEditMenu(cell);      break;
-                case Mode.QuickEdit:     StartQuickEdit(cell);       break;
-                case Mode.GearPlacement: FinishGearPlacement(cell);  break;
+                case Mode.Normal:        HandleNormalClick(cell);   break;
+                case Mode.GearPlacement: FinishGearPlacement(cell); break;
             }
         }
 
@@ -733,6 +1602,34 @@ namespace OnScreenKeyboard
 
             bool shift = AnyModifier("Shift"), ctrl = AnyModifier("Ctrl"),
                  alt   = AnyModifier("Alt"),   altGr= AnyModifier("AltGr");
+
+            // Resolve raw send value (no SendKeys modifier prefixes) to detect layout: keys
+            string rawChar;
+            if (altGr && !string.IsNullOrEmpty(cell.Props.AltGrSend))
+                rawChar = cell.Props.AltGrSend;
+            else if (shift && !string.IsNullOrEmpty(cell.Props.ShiftSend))
+                rawChar = cell.Props.ShiftSend;
+            else
+                rawChar = cell.Props.Send;
+
+            // ── Layout switch ─────────────────────────────────────────
+            if (rawChar != null && rawChar.StartsWith("layout:", StringComparison.Ordinal))
+            {
+                ClearModifiers();
+                string filePath = ResolveLayoutPath(rawChar.Substring(7).Trim());
+                if (!File.Exists(filePath ?? ""))
+                {
+                    FlashKeyError(cell);
+                    return;
+                }
+                SetMode(Mode.Normal);
+                _undoStack.Clear();
+                _redoStack.Clear();
+                RefreshUndoRedoState();
+                ApplyLoadedSettings(filePath);
+                return;
+            }
+
             string send;
             if (altGr && !string.IsNullOrEmpty(cell.Props.AltGrSend))
                 send = SendKeysHelper.ApplyModifiers(cell.Props.AltGrSend, false, ctrl, false);
@@ -741,16 +1638,6 @@ namespace OnScreenKeyboard
             else
                 send = SendKeysHelper.ApplyModifiers(cell.Props.Send, shift, ctrl, alt || altGr);
 
-            // ── Track typed characters for word prediction ────────────
-            // Use the raw resolved character (before ApplyModifiers adds SendKeys
-            // prefixes like + ^ %) so TrackSendForPrediction sees "a" not "+a".
-            string rawChar;
-            if (altGr && !string.IsNullOrEmpty(cell.Props.AltGrSend))
-                rawChar = cell.Props.AltGrSend;
-            else if (shift && !string.IsNullOrEmpty(cell.Props.ShiftSend))
-                rawChar = cell.Props.ShiftSend;
-            else
-                rawChar = cell.Props.Send;
             ClearModifiers();
 
             // For punctuation after a predicted word, the predictor needs to
@@ -773,19 +1660,6 @@ namespace OnScreenKeyboard
         // ── Word prediction methods ──────────────────────────────────
 
         /// <summary>
-        /// Called after each key send to update the word buffer and
-        /// refresh WP key predictions when a word boundary is reached.
-        /// </summary>
-        /// <summary>
-        /// Recompute predictions and refresh all wp: key labels.
-        /// Call this when the word context changes (typing, space, backspace).
-        /// </summary>
-        private void UpdateWPKeys()
-        {
-            _predictor?.SetNextWordUpper(_predictor.NextWordUpper);
-        }
-
-        /// <summary>
         /// Push the current _wpPredictions onto the button Tags.
         /// Called after every UpdateCornerTag pass so predictions are never
         /// overwritten by the static placeholder labels.
@@ -802,13 +1676,119 @@ namespace OnScreenKeyboard
                 if (!_buttons.TryGetValue(cell, out var btn)) continue;
 
                 string pred = (_predictor != null && slot < _predictor.Predictions.Count) ? _predictor.Predictions[slot] : "";
-                Color  fc   = ResolveColor(cell.Props.FontColor, _global.FontColor);
-                // Show prediction if available, else show slot placeholder
-                // Capitalise display label at sentence start / Caps Lock
-                string label = pred ?? "";
-                btn.Tag = (label, "", "", fc);
+                var grpWP = FindGroup(cell.Props.GroupName);
+                Color fc = ResolveColor(cell.Props.FontColor, grpWP?.FontColor ?? Color.Empty, _theme.FontColor);
+
+                // ── Font: 80 % of auto-sized height, idempotent (from btn.Height) ─────
+                const float charH   = 1.35f;
+                const int   vMargin = 8;
+                int baseFs = Math.Max(6, (int)Math.Min(btn.Height * 0.36f,
+                                                       (btn.Height - vMargin) / charH));
+                int    wpFs = Math.Max(6, (int)(baseFs * 0.80f));
+                string fn   = btn.Font.FontFamily.Name;
+                Font wpFont = GetButtonFont(fn, wpFs);
+
+                // ── Measure helper: subtract TextRenderer's ~8 px overhead ───────────
+                var   mf  = TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine;
+                var   inf = new Size(int.MaxValue, int.MaxValue);
+                int MeasureW(string t, Font f) =>
+                    Math.Max(0, TextRenderer.MeasureText(t, f, inf, mf).Width - 8);
+
+                // ── How many prefix characters may be stripped ───────────────────────
+                // The typed buffer is the MAXIMUM strip, not the minimum.
+                // If the prediction doesn't start with the buffer (e.g. proper nouns),
+                // no stripping is possible.
+                string typed     = _predictor?.WordBuffer ?? "";
+                int    maxStrip  = (typed.Length > 0 &&
+                                    pred.StartsWith(typed, StringComparison.OrdinalIgnoreCase))
+                                   ? typed.Length : 0;
+
+                // ── Display strategy ──────────────────────────────────────────────────
+                // Phase 1: at 80 % font, try strip = 0, 1, 2 … maxStrip.
+                //   strip = 0 → full word (no "…")
+                //   strip > 0 → "…" + pred.Substring(strip)
+                // Take the first (least aggressive) candidate that fits.
+                string display    = null;
+                Font   displayFont = wpFont;
+                int    usedStrip  = 0;
+
+                for (int strip = 0; strip <= maxStrip; strip++)
+                {
+                    string candidate = strip == 0 ? pred : "…" + pred.Substring(strip);
+                    if (MeasureW(candidate, wpFont) <= btn.Width)
+                    {
+                        display   = candidate;
+                        usedStrip = strip;
+                        break;
+                    }
+                }
+
+                // Phase 2: nothing fit at 80 % → auto-shrink font for the most-stripped
+                // candidate ("…" + full suffix, or full word when no prefix was typed).
+                if (display == null)
+                {
+                    string textToFit = maxStrip > 0 ? "…" + pred.Substring(maxStrip) : pred;
+                    int fitW = MeasureW(textToFit, wpFont);
+                    // Proportional first estimate, then fine-tune down 1 pt at a time
+                    int  shrFs   = fitW > 0 ? Math.Max(6, (int)(wpFs * (float)btn.Width / fitW)) : 6;
+                    Font shrFont = GetButtonFont(fn, shrFs);
+                    while (shrFs > 6 && MeasureW(textToFit, shrFont) > btn.Width)
+                    { shrFs--;  shrFont = GetButtonFont(fn, shrFs); }
+                    // Last resort: TailFit if even 6 pt is still too wide
+                    display     = MeasureW(textToFit, shrFont) <= btn.Width
+                                  ? textToFit
+                                  : TailFit(textToFit, shrFont, btn.Width);
+                    displayFont = shrFont;
+                    usedStrip   = maxStrip;   // all prefix chars stripped in phase 2
+                }
+
+                // Typed chars still visible = prefix length minus how many were stripped
+                int visibleTypedLen = Math.Max(0, typed.Length - usedStrip);
+
+                btn.Font = displayFont;
+                string label = display;
+                var newTag = (label, "", "", fc, true, visibleTypedLen);   // isWP=true
+                if (btn.Tag is (string ol, string _, string _, Color ofc, bool owp, int otl) &&
+                    owp && ol == label && ofc == fc && otl == visibleTypedLen)
+                    continue;   // nothing changed — skip Invalidate
+                btn.Tag = newTag;
                 btn.Invalidate();
             }
+        }
+
+        /// <summary>
+        /// Returns the longest suffix of <paramref name="text"/> that fits within
+        /// <paramref name="availPx"/> pixels, prepending "…" when the full string is too wide.
+        /// Called by ApplyWPTags so measurement happens once per prediction update,
+        /// not on every paint.
+        /// </summary>
+        private static string TailFit(string text, Font font, int availPx)
+        {
+            if (string.IsNullOrEmpty(text) || availPx <= 0 || font == null)
+                return text ?? "";
+
+            var flags = TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine;
+            var inf   = new Size(int.MaxValue, int.MaxValue);
+
+            // TextRenderer.MeasureText with Size(MaxValue,MaxValue) adds ~8 px of internal
+            // horizontal padding to every result.  Subtract it so the budget comparison
+            // reflects actual rendered text width rather than the padded measurement.
+            const int pad = 8;
+
+            if (TextRenderer.MeasureText(text, font, inf, flags).Width - pad <= availPx)
+                return text;    // fits without truncation
+
+            const string ell  = "…";
+            int           ellW = TextRenderer.MeasureText(ell, font, inf, flags).Width - pad;
+            int           budget = availPx - ellW;
+
+            for (int i = 1; i < text.Length; i++)
+            {
+                string suffix = text.Substring(i);
+                if (TextRenderer.MeasureText(suffix, font, inf, flags).Width - pad <= budget)
+                    return ell + suffix;
+            }
+            return ell;
         }
 
         private void ToggleModifier(GridCell cell)
@@ -823,7 +1803,7 @@ namespace OnScreenKeyboard
                 _predictor?.SetNextWordUpper(turningOn);
             }
 
-            if (!_global.StickyModifiers)
+            if (!_meta.StickyModifiers)
             {
                 bool wasLatched = _latchedMods.Contains(cell);
                 foreach (var c in _layout.Cells)
@@ -856,36 +1836,7 @@ namespace OnScreenKeyboard
             RefreshAllButtons();
         }
 
-        // ── Edit mode: key context menu ───────────────────────────────
-        private void ShowKeyEditMenu(GridCell cell)
-        {
-            var menu = StyledMenu();
-            menu.Closed += (s, e) => BeginInvoke((Action)menu.Dispose);
-            MI(menu, $"{Lang.T("✏ Edit key")}  [{cell.Props.Label}]", () => OpenEditor(cell));
-            menu.Items.Add(new ToolStripSeparator());
 
-            // Grid operations
-            MI(menu, Lang.T("⬆ Add row above"),    () => { _layout.InsertRow(cell.Row, true, _global);  RebuildAllButtons(); AutoSave(); });
-            MI(menu, Lang.T("⬇ Add row below"),    () => { _layout.InsertRow(cell.Row, false, _global); RebuildAllButtons(); AutoSave(); });
-            MI(menu, Lang.T("⬅ Add col left"),     () => { _layout.InsertCol(cell.Col, true, _global);  RebuildAllButtons(); AutoSave(); });
-            MI(menu, Lang.T("➡ Add col right"),    () => { _layout.InsertCol(cell.Col, false, _global); RebuildAllButtons(); AutoSave(); });
-            menu.Items.Add(new ToolStripSeparator());
-            MI(menu, Lang.T("🗑 Remove row"),  () => { if(_layout.RemoveRow(cell.Row)) { RebuildAllButtons(); AutoSave(); } });
-            MI(menu, Lang.T("🗑 Remove col"),  () => { if(_layout.RemoveCol(cell.Col)) { RebuildAllButtons(); AutoSave(); } });
-            menu.Items.Add(new ToolStripSeparator());
-
-            // Merge / split
-            if (cell.ColSpan > 1 || cell.RowSpan > 1)
-                MI(menu, Lang.T("Split cell"), () => { _layout.SplitCell(cell.Row, cell.Col, _global); RebuildAllButtons(); AutoSave(); });
-            else
-            {
-                MI(menu, Lang.T("Merge right"), () => { if(_layout.MergeRight(cell.Row,cell.Col)){ RebuildAllButtons(); AutoSave(); } });
-                MI(menu, Lang.T("Merge down"),  () => { if(_layout.MergeDown(cell.Row,cell.Col)) { RebuildAllButtons(); AutoSave(); } });
-            }
-
-            if (_buttons.TryGetValue(cell, out var btn))
-                menu.Show(btn, new Point(0, btn.Height));
-        }
 
         private void OpenEditor(GridCell cell)
         {
@@ -906,203 +1857,313 @@ namespace OnScreenKeyboard
                 rowSpan:      cell.RowSpan,
                 maxCols:      _layout.Cols,
                 maxRows:      _layout.Rows,
-                usedWpSlots:  usedWpSlots);
+                usedWpSlots:  usedWpSlots,
+                groups:       _layout.Groups,
+                layoutDir:    _currentFilePath != null
+                              ? System.IO.Path.GetDirectoryName(_currentFilePath) : null);
             if (dlg.ShowDialog(this) != DialogResult.OK) return;
-            cell.Props   = dlg.Result;
+            PushUndo();
+            cell.Props = dlg.Result;
+            NormaliseWPSlots();
+
+            int oldColSpan = cell.ColSpan;
+            int oldRowSpan = cell.RowSpan;
+
+            if (dlg.ResultColSpan < oldColSpan || dlg.ResultRowSpan < oldRowSpan)
+            {
+                // Span shrank: create empty cells for freed positions BEFORE applying.
+                FillFreedSpanCells(cell, dlg.ResultColSpan, dlg.ResultRowSpan);
+            }
+
             cell.ColSpan = dlg.ResultColSpan;
             cell.RowSpan = dlg.ResultRowSpan;
+
+            if (dlg.ResultColSpan > oldColSpan || dlg.ResultRowSpan > oldRowSpan)
+            {
+                // Span grew: remove any cells now covered by the expanded span AFTER applying.
+                AbsorbCoveredCells(cell);
+            }
+
             if (_buttons.TryGetValue(cell, out var btn))
             {
                 ApplyPropsToButton(btn, cell.Props, false);
                 UpdateCornerTag(btn, cell.Props, ShiftActive, AltGrActive);
             }
             LayoutButtons();
+            SyncPredictorSlotCount();
             AutoSave();
         }
 
-        // ── Quick Edit ────────────────────────────────────────────────
         private void SetMode(Mode newMode)
         {
-            if (_mode == Mode.QuickEdit && _quickEditCell != null) CancelQuickEdit();
+            if (newMode != Mode.Edit) { _selectedCell = null; UpdateSelectedKeyLabel(); }
+            if (newMode != Mode.Edit && _fmtPaintMode)  { _fmtPaintMode  = false; UpdatePaintModeCursors();    }
+            if (newMode != Mode.Edit && _keyPaintMode)  { _keyPaintMode  = false; UpdateKeyPaintModeCursors(); }
             _mode = newMode;
-            ApplyModeIndicators();
-            RefreshAllButtons();
+            ApplyModeIndicators();          // ends with LayoutButtons()
+            RefreshAllButtons(skipFontCalc: true);
         }
 
         private void StartGearPlacement()
         {
-            if (_mode == Mode.QuickEdit && _quickEditCell != null) CancelQuickEdit();
             _mode = Mode.GearPlacement;
-            ApplyModeIndicators();
-            RefreshAllButtons();
+            ApplyModeIndicators();          // ends with LayoutButtons()
+            RefreshAllButtons(skipFontCalc: true);
         }
 
         private void FinishGearPlacement(GridCell cell)
         {
-            _global.GearRow = cell.Row;
-            _global.GearCol = cell.Col;
+            _meta.GearRow = cell.Row;
+            _meta.GearCol = cell.Col;
             _mode = Mode.Normal;
-            ApplyModeIndicators();
-            RefreshAllButtons();
+            ApplyModeIndicators();          // ends with LayoutButtons()
+            RefreshAllButtons(skipFontCalc: true);
             LayoutButtons();   // reposition gear button immediately
             AutoSave();
         }
 
         private void ApplyModeIndicators()
         {
+            bool inEdit = _mode == Mode.Edit;
+
             switch (_mode)
             {
                 case Mode.Edit:
                     _editStrip.BackColor = _stripEditColor;
                     _editStrip.Visible   = true;
+                    _toolbar.Visible     = true;
                     _gearBtn.Text        = "✏";
                     _gearBtn.BackColor   = _gearEditBg;
                     _gearBtn.ForeColor   = Color.White;
                     break;
-                case Mode.QuickEdit:
-                    _editStrip.BackColor = _stripQuickColor;
-                    _editStrip.Visible   = true;
-                    _gearBtn.Text        = "⚡";
-                    _gearBtn.BackColor   = _gearQuickBg;
-                    _gearBtn.ForeColor   = Color.White;
-                    break;
                 case Mode.GearPlacement:
-                    _editStrip.BackColor = Color.FromArgb(80, 80, 200);  // blue
+                    _editStrip.BackColor = Color.FromArgb(80, 80, 200);
                     _editStrip.Visible   = true;
+                    _toolbar.Visible     = false;
                     _gearBtn.Text        = "📌";
                     _gearBtn.BackColor   = Color.FromArgb(60, 60, 180);
                     _gearBtn.ForeColor   = Color.White;
                     break;
                 default:
-                    _editStrip.Visible = false;
-                    _gearBtn.Text      = "⚙";
-                    _gearBtn.BackColor = _gearNormalBg;
-                    _gearBtn.ForeColor = _gearNormalFg;
+                    _editStrip.Visible   = false;
+                    _toolbar.Visible     = false;
+                    _gearBtn.Text        = "⚙";
+                    _gearBtn.BackColor   = _gearNormalBg;
+                    _gearBtn.ForeColor   = _gearNormalFg;
                     break;
+            }
+
+            // Row 2 toolbar: only in Edit mode
+            if (_toolbarEdit != null)
+                _toolbarEdit.Visible = inEdit;
+
+            // Hide Edit button when already in Edit mode
+            _btnEdit    .Visible = _mode != Mode.Edit;
+            _btnEdit    .Invalidate();
+            _btnExitEdit.Invalidate();
+
+            RefreshToolbarEditState();
+            RefreshUndoRedoState();
+            LayoutButtons();   // reflow keys to match toolbar visibility
+        }
+
+        // ── Destructive-action helpers ────────────────────────────────
+
+        /// <summary>True when a key has any per-key style override (font, color, border).</summary>
+        private static bool HasCustomFormatting(KeyProps p) =>
+            !string.IsNullOrEmpty(p.FontName) || p.FontSize > 0 ||
+            !p.FontColor.IsEmpty || !p.KeyColor.IsEmpty ||
+            !p.BorderColor.IsEmpty || p.BorderThickness != -1;
+
+        /// <summary>Finds the single cell whose top-left corner is at (row, col).</summary>
+        private GridCell FindCellAt(int row, int col) =>
+            _layout.Cells.Find(c => c.Row == row && c.Col == col);
+
+        /// <summary>
+        /// Shows a Yes/No warning dialog. "No" is the default button so an
+        /// accidental Enter press does not confirm the destructive action.
+        /// Returns true only when the user explicitly chooses Yes.
+        /// </summary>
+
+        // ── Toolbar state helpers ─────────────────────────────────────
+
+        private void UpdateFilenameLabel()
+        {
+            if (_lblFilename == null) return;
+            string name = _currentFilePath != null
+                ? Path.GetFileName(_currentFilePath)
+                : "default";
+            _lblFilename.Text = name;
+        }
+
+        private void UpdateSelectedKeyLabel()
+        {
+            if (_lblSelectedKey == null) return;
+            if (_selectedCell == null) { _lblSelectedKey.Text = "—"; return; }
+            var p = _selectedCell.Props;
+
+            // Main line: label  →  send
+            string lbl  = string.IsNullOrEmpty(p.Label) ? "(empty)" : p.Label;
+            string send = string.IsNullOrEmpty(p.Send)  ? ""        : $"  →  {p.Send}";
+            string main = lbl + send;
+
+            // Shift line (shown above main when either shift field is set)
+            bool hasShift = !string.IsNullOrEmpty(p.ShiftLabel) || !string.IsNullOrEmpty(p.ShiftSend);
+            if (hasShift)
+            {
+                string shiftLbl  = p.ShiftLabel ?? "";
+                string shiftSend = string.IsNullOrEmpty(p.ShiftSend) ? "" : $"  →  {p.ShiftSend}";
+                _lblSelectedKey.Text = $"⇧  {shiftLbl}{shiftSend}\n{main}";
+            }
+            else
+            {
+                _lblSelectedKey.Text = main;
             }
         }
 
-        private void StartQuickEdit(GridCell cell)
+        /// <summary>
+        /// Updates the enabled state of all toolbar2 buttons based on whether
+        /// a cell is selected and what its span is.
+        /// </summary>
+        private void RefreshToolbarEditState()
         {
-            if (_quickEditCell != null && _quickEditCell != cell) ConfirmQuickEdit();
-            _quickEditCell = cell; _quickEditText = "";
-            if (_buttons.TryGetValue(cell, out var btn))
+            if (_btnKeyEdit == null) return;
+
+            bool hasSel    = _selectedCell != null && _mode == Mode.Edit;
+            bool canMergeR = hasSel && _selectedCell.ColSpan == 1;
+            bool canMergeD = hasSel && _selectedCell.RowSpan == 1;
+            bool canSplit  = hasSel && (_selectedCell.ColSpan > 1 || _selectedCell.RowSpan > 1);
+            bool hasFmt    = _copiedFormatting != null;
+            bool hasKey    = _copiedKey        != null;
+
+            void SetBtn(ToolbarButton b, bool enabled, bool active = false)
             {
-                btn.FlatAppearance.BorderColor = Color.Orange;
-                btn.FlatAppearance.BorderSize  = 2;
-                btn.Text = "▌";
+                b.Enabled  = enabled;
+                b.IsActive = active;
+                b.Invalidate();
             }
+
+            SetBtn(_btnKeyEdit,     hasSel);
+            SetBtn(_btnKeyRemove,   hasSel);
+            SetBtn(_btnCopyFmt,     hasSel || _fmtPaintMode, _fmtPaintMode);
+            SetBtn(_btnCopyKey,     hasSel || _keyPaintMode, _keyPaintMode);
+            SetBtn(_btnAddRowAbove, hasSel);
+            SetBtn(_btnAddRowBelow, hasSel);
+            SetBtn(_btnAddColLeft,  hasSel);
+            SetBtn(_btnAddColRight, hasSel);
+            SetBtn(_btnRemoveRow,   hasSel);
+            SetBtn(_btnRemoveCol,   hasSel);
+            SetBtn(_btnMergeRight,  canMergeR);
+            SetBtn(_btnMergeDown,   canMergeD);
+            SetBtn(_btnSplitCell,   canSplit);
+        }
+
+        private void ApplyFormatPainter(GridCell cell)
+        {
+            if (_copiedFormatting == null) return;
+            PushUndo();
+            var p = cell.Props;
+            p.FontName        = _copiedFormatting.FontName;
+            p.FontSize        = _copiedFormatting.FontSize;
+            p.FontColor       = _copiedFormatting.FontColor;
+            p.KeyColor        = _copiedFormatting.KeyColor;
+            p.BorderColor     = _copiedFormatting.BorderColor;
+            p.BorderThickness = _copiedFormatting.BorderThickness;
+            p.GroupName       = _copiedFormatting.GroupName;
+            AutoSave();
+        }
+
+        private void UpdatePaintModeCursors()
+        {
+            var cur = _fmtPaintMode ? Cursors.Hand : Cursors.Default;
+            foreach (var btn in _buttons.Values) btn.Cursor = cur;
+        }
+
+        private void UpdateKeyPaintModeCursors()
+        {
+            var cur = _keyPaintMode ? Cursors.Hand : Cursors.Default;
+            foreach (var btn in _buttons.Values) btn.Cursor = cur;
         }
 
         private void OnFormKeyDown(object sender, KeyEventArgs e)
         {
-            if (_mode == Mode.GearPlacement && e.KeyCode == Keys.Escape)
+            if ((_fmtPaintMode || _keyPaintMode) && e.KeyCode == Keys.Escape)
             {
-                _mode = Mode.Normal;
-                ApplyModeIndicators();
-                RefreshAllButtons();
+                _fmtPaintMode = false; UpdatePaintModeCursors();
+                _keyPaintMode = false; UpdateKeyPaintModeCursors();
+                RefreshToolbarEditState();
                 e.Handled = true;
                 return;
             }
-            if (_mode != Mode.QuickEdit || _quickEditCell == null) return;
-            if (e.KeyCode == Keys.Return) { ConfirmQuickEdit(); e.Handled = true; return; }
-            if (e.KeyCode == Keys.Escape) { CancelQuickEdit();  e.Handled = true; return; }
-            if (e.KeyCode == Keys.Back && _quickEditText.Length > 0)
-            { _quickEditText = _quickEditText[..^1]; UpdateQuickEditDisplay(); e.Handled = true; return; }
-            char ch = KeyEventToChar(e);
-            if (ch != '\0')
-            { _quickEditText += ch; UpdateQuickEditDisplay(); e.Handled = true; }
-        }
-
-        private void UpdateQuickEditDisplay()
-        {
-            if (_quickEditCell != null && _buttons.TryGetValue(_quickEditCell, out var btn))
-                btn.Text = _quickEditText + "▌";
-        }
-
-        private void ConfirmQuickEdit()
-        {
-            if (_quickEditCell == null) return;
-            string lbl = _quickEditText.Trim();
-            if (lbl.Length > 0)
+            if (_mode == Mode.GearPlacement && e.KeyCode == Keys.Escape)
             {
-                _quickEditCell.Props.Label      = lbl;
-                _quickEditCell.Props.Send       = SendKeysHelper.EscapeForSend(lbl);
-                _quickEditCell.Props.ShiftLabel = "";
-                _quickEditCell.Props.ShiftSend  = "";
-                _quickEditCell.Props.AltGrLabel = "";
-                _quickEditCell.Props.AltGrSend  = "";
-                AutoSave();
+                _mode = Mode.Normal;
+                ApplyModeIndicators();          // ends with LayoutButtons()
+                RefreshAllButtons(skipFontCalc: true);
+                e.Handled = true;
+                return;
             }
-            RestoreQuickEditButton(_quickEditCell);
-        }
-
-        private void CancelQuickEdit()
-        {
-            if (_quickEditCell != null) RestoreQuickEditButton(_quickEditCell);
-        }
-
-        private void RestoreQuickEditButton(GridCell cell)
-        {
-            if (_buttons.TryGetValue(cell, out var btn))
-            {
-                ApplyPropsToButton(btn, cell.Props, _latchedMods.Contains(cell), _lockedMods.Contains(cell));
-                UpdateCornerTag(btn, cell.Props, ShiftActive, AltGrActive);
-            }
-            _quickEditCell = null; _quickEditText = "";
-        }
-
-        private static char KeyEventToChar(KeyEventArgs e)
-        {
-            bool shift = e.Shift; int k = (int)e.KeyCode;
-            if (k>=(int)Keys.A && k<=(int)Keys.Z) return (char)(shift ? k : k+32);
-            if (k>=(int)Keys.D0 && k<=(int)Keys.D9)
-            { return shift ? ")!@#$%^&*("[k-(int)Keys.D0] : (char)('0'+k-(int)Keys.D0); }
-            if (k>=(int)Keys.NumPad0 && k<=(int)Keys.NumPad9) return (char)('0'+k-(int)Keys.NumPad0);
-            return (e.KeyCode, shift) switch
-            {
-                (Keys.Space,_)               => ' ',
-                (Keys.OemMinus,false)        => '-',  (Keys.OemMinus,true)         => '_',
-                (Keys.Oemplus,false)         => '=',  (Keys.Oemplus,true)          => '+',
-                (Keys.OemOpenBrackets,false) => '[',  (Keys.OemOpenBrackets,true)  => '{',
-                (Keys.OemCloseBrackets,false)=> ']',  (Keys.OemCloseBrackets,true) => '}',
-                (Keys.OemSemicolon,false)    => ';',  (Keys.OemSemicolon,true)     => ':',
-                (Keys.OemQuotes,false)       => '\'', (Keys.OemQuotes,true)        => '"',
-                (Keys.Oemcomma,false)        => ',',  (Keys.Oemcomma,true)         => '<',
-                (Keys.OemPeriod,false)       => '.',  (Keys.OemPeriod,true)        => '>',
-                (Keys.OemQuestion,false)     => '/',  (Keys.OemQuestion,true)      => '?',
-                (Keys.OemBackslash,false)    => '\\', (Keys.OemBackslash,true)     => '|',
-                (Keys.Oem5,false)            => '\\', (Keys.Oem5,true)             => '|',
-                _                            => '\0'
-            };
         }
 
         // ── Keyboard editor ───────────────────────────────────────────
         private void OpenKeyboardEditor()
         {
-            using var dlg = new KeyboardEditorForm(_global, this,
-                onSave:   () => SaveSettings(false),
-                onSaveAs: () => SaveSettings(true),
-                onLoad:   () => LoadSettings());
+            using var dlg = new KeyboardEditorForm(_theme, _window, _meta, this,
+                groups:    _layout.Groups,
+                onSave:    () => SaveSettings(false),
+                onSaveAs:  () => SaveSettings(true),
+                onLoad:    () => LoadSettings(),
+                getGroups: () => _layout.Groups);
             if (dlg.ShowDialog(this) != DialogResult.OK) return;
-            var g = dlg.ResultGlobal;
-            _global.BackgroundColor = g.BackgroundColor; _global.Opacity        = g.Opacity;
-            _global.FontName        = g.FontName;         _global.FontSize       = g.FontSize;
-            _global.FontColor       = g.FontColor;        _global.KeyColor       = g.KeyColor;
-            _global.BorderColor     = g.BorderColor;      _global.BorderThickness = g.BorderThickness;
-            _global.HideTitlebar    = g.HideTitlebar;
-            _global.StickyModifiers = g.StickyModifiers;
-            _global.AlwaysOnTop     = g.AlwaysOnTop;
-            ApplyTitlebarState();
-            ForceTopMost();  // re-apply always-on-top setting immediately
-            BackColor = _global.BackgroundColor; Opacity = _global.Opacity;
-            if (dlg.ApplyToKeys)
+            PushUndo();
+
+            var chg = dlg.ChangedFields;
+
+            if (!dlg.ApplyToKeys)
+            {
+                // "Apply style to all keys" was NOT ticked.
+                // Freeze every currently-inheriting key at the current (old) global value so the
+                // global change doesn't silently affect keys the user hasn't explicitly styled.
+                // Explicitly-set per-key values are untouched.
+                // (Empty spacer keys are excluded: they have no visible appearance in Normal mode
+                //  and the key editor will always show global colours for them regardless.)
                 foreach (var cell in _layout.Cells)
                 {
-                    cell.Props.FontName  = "";         cell.Props.FontSize   = g.FontSize;
-                    cell.Props.FontColor  = Color.Empty; cell.Props.KeyColor   = Color.Empty;
-                    cell.Props.BorderColor = Color.Empty; cell.Props.BorderThickness = -1;
+                    if (IsEmptyKey(cell.Props)) continue;  // spacers: skip bake-in
+                    var p = cell.Props;
+                    if (chg.FontName   && string.IsNullOrEmpty(p.FontName))  p.FontName   = _theme.FontName;
+                    if (chg.FontColor  && p.FontColor.IsEmpty)                p.FontColor  = _theme.FontColor;
+                    if (chg.KeyColor   && p.KeyColor.IsEmpty)                 p.KeyColor   = _theme.KeyColor;
+                    if (chg.BorderColor && p.BorderColor.IsEmpty)             p.BorderColor = _theme.BorderColor;
+                    if (chg.BorderThickness && p.BorderThickness == -1)       p.BorderThickness = _theme.BorderThickness;
                 }
+            }
+
+            // Copy new values into the existing objects (keeps _theme/_window/_meta as stable
+            // references so any code that captured them — e.g. KeyEditorForm._ownerGlobal —
+            // always sees the latest values without needing a fresh reference).
+            _layout.Groups = dlg.ResultGroups;
+            _theme .CopyFrom(dlg.ResultTheme);
+            _window.CopyFrom(dlg.ResultWindow);
+            _meta  .CopyFrom(dlg.ResultMeta);
+            ApplyTitlebarState();
+            ForceTopMost();  // re-apply always-on-top setting immediately
+            BackColor = _theme.BackgroundColor; Opacity = _theme.Opacity;
+            if (dlg.ApplyToKeys)
+            {
+                // "Apply style to all keys" WAS ticked: clear per-key style overrides for every
+                // changed field so all keys immediately adopt the new global values.
+                foreach (var cell in _layout.Cells)
+                {
+                    var p = cell.Props;
+                    if (chg.FontName)        p.FontName        = "";
+                    if (chg.FontSize)        p.FontSize        = _theme.FontSize;
+                    if (chg.FontColor)       p.FontColor       = Color.Empty;
+                    if (chg.KeyColor)        p.KeyColor        = Color.Empty;
+                    if (chg.BorderColor)     p.BorderColor     = Color.Empty;
+                    if (chg.BorderThickness) p.BorderThickness = -1;
+                }
+            }
             RefreshAllButtons();
             AutoSave();
         }
@@ -1110,6 +2171,17 @@ namespace OnScreenKeyboard
         // ── Save / Load ───────────────────────────────────────────────
         private void SaveSettings(bool saveAs)
         {
+            // Guard: refuse to save a structurally broken layout so the file on disk
+            // always stays loadable.  AutoSave bypasses this check deliberately —
+            // it preserves the in-memory state even when invalid so data is never lost.
+            if (!_layout.IsValid())
+            {
+                MessageBox.Show(Lang.T("Save invalid msg"),
+                    Lang.T("Save invalid title"),
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
             string path = _currentFilePath ?? SettingsManager.DefaultPath;
             if (saveAs || _currentFilePath == null)
             {
@@ -1121,11 +2193,12 @@ namespace OnScreenKeyboard
             }
             try
             {
-                _global.LastFile = path;
-                SettingsManager.SaveSettings(_layout, _global, path);
+                _meta.LastFile = path;
+                SettingsManager.SaveSettings(_layout, _theme, _window, _meta, path);
                 _currentFilePath = path;
+                UpdateFilenameLabel();
                 if (path != SettingsManager.DefaultPath)
-                    SettingsManager.SaveSettings(_layout, _global, SettingsManager.DefaultPath);
+                    SettingsManager.SaveSettings(_layout, _theme, _window, _meta, SettingsManager.DefaultPath);
             }
             catch (Exception ex)
             {
@@ -1150,9 +2223,11 @@ namespace OnScreenKeyboard
             {
                 try
                 {
-                    var peek = new GlobalSettings();
-                    SettingsManager.LoadSettings(peek, settingsPath);
-                    string last = peek.LastFile ?? "";
+                    var peekTheme = new VisualTheme();
+                    var peekWindow = new WindowState();
+                    var peekMeta = new LayoutMeta();
+                    SettingsManager.LoadSettings(peekTheme, peekWindow, peekMeta, settingsPath);
+                    string last = peekMeta.LastFile ?? "";
                     if (!string.IsNullOrEmpty(last) && last != settingsPath && File.Exists(last))
                         pathToLoad = last;
                 }
@@ -1161,17 +2236,92 @@ namespace OnScreenKeyboard
             if (!File.Exists(pathToLoad)) return;
             try
             {
-                var loaded = SettingsManager.LoadSettings(_global, pathToLoad);
+                var loaded = SettingsManager.LoadSettings(_theme, _window, _meta, pathToLoad);
                 if (loaded == null || !loaded.IsValid()) return;
                 _layout = loaded; _latchedMods.Clear(); _lockedMods.Clear();
                 _currentFilePath = pathToLoad;
-                BackColor = _global.BackgroundColor; Opacity = _global.Opacity;
+                UpdateFilenameLabel();
+                BackColor = _theme.BackgroundColor; Opacity = _theme.Opacity;
                 ApplyTitlebarState();
-                if (!string.IsNullOrEmpty(_global.Language)) Lang.Load(_global.Language);
+                if (!string.IsNullOrEmpty(_meta.Language)) Lang.Load(_meta.Language);
                 RebuildAllButtons();
-                Size = new Size(_global.WindowWidth, _global.WindowHeight);
+                Size = new Size(_window.WindowWidth, _window.WindowHeight);
             }
             catch { }
+        }
+
+        // ── Undo / Redo ───────────────────────────────────────────────
+
+        /// <summary>
+        /// Captures the current layout + global settings onto the undo stack and
+        /// clears the redo stack. Call this immediately before any destructive edit.
+        /// The stack is capped at 50 snapshots; the oldest entry is discarded when full.
+        /// </summary>
+        private void PushUndo()
+        {
+            _undoStack.Push((_layout.Clone(), _theme.Clone(), _window.Clone(), _meta.Clone()));
+            _redoStack.Clear();
+            if (_undoStack.Count > 50)
+            {
+                // Discard the oldest (bottom) entry — rebuild without it.
+                var arr = _undoStack.ToArray(); // [0] = top/newest
+                _undoStack.Clear();
+                for (int i = arr.Length - 2; i >= 0; i--) _undoStack.Push(arr[i]);
+            }
+            RefreshUndoRedoState();
+        }
+
+        private void Undo()
+        {
+            if (_undoStack.Count == 0) return;
+            _redoStack.Push((_layout.Clone(), _theme.Clone(), _window.Clone(), _meta.Clone()));
+            var (layout, theme, window, meta) = _undoStack.Pop();
+            ApplySnapshot(layout, theme, window, meta);
+            // RefreshUndoRedoState() is called inside ApplySnapshot via RebuildAllButtons chain,
+            // but call it again here to be safe after the stack mutates.
+            RefreshUndoRedoState();
+        }
+
+        private void Redo()
+        {
+            if (_redoStack.Count == 0) return;
+            _undoStack.Push((_layout.Clone(), _theme.Clone(), _window.Clone(), _meta.Clone()));
+            var (layout, theme, window, meta) = _redoStack.Pop();
+            ApplySnapshot(layout, theme, window, meta);
+            RefreshUndoRedoState();
+        }
+
+        /// <summary>Updates the enabled/colour state of the Undo and Redo toolbar buttons.</summary>
+        private void RefreshUndoRedoState()
+        {
+            if (_btnUndo == null) return;
+            _btnUndo.Enabled = _undoStack.Count > 0; _btnUndo.Invalidate();
+            _btnRedo.Enabled = _redoStack.Count > 0; _btnRedo.Invalidate();
+        }
+
+        /// <summary>
+        /// Restores layout + settings from a snapshot, then rebuilds the UI.
+        /// Called by Undo() and Redo().
+        /// </summary>
+        private void ApplySnapshot(GridLayout layout, VisualTheme theme, WindowState window, LayoutMeta meta)
+        {
+            _layout = layout;
+            _theme  = theme;
+            _window = window;
+            _meta   = meta;
+            // Reset edit state
+            _selectedCell = null;
+            UpdateSelectedKeyLabel();
+            _latchedMods.Clear();
+            _lockedMods.Clear();
+            // Re-apply visual state derived from settings
+            BackColor = _theme.BackgroundColor;
+            Opacity   = _theme.Opacity;
+            ApplyTitlebarState();
+            ForceTopMost();
+            RebuildAllButtons();
+            RefreshUndoRedoState();
+            AutoSave();
         }
 
         private void AutoSave()
@@ -1179,18 +2329,50 @@ namespace OnScreenKeyboard
             string path = _currentFilePath ?? SettingsManager.DefaultPath;
             try
             {
-                _global.LastFile = path;
-                SettingsManager.SaveSettings(_layout, _global, path);
+                _meta.LastFile = path;
+                SettingsManager.SaveSettings(_layout, _theme, _window, _meta, path);
                 if (path != SettingsManager.DefaultPath)
-                    SettingsManager.SaveSettings(_layout, _global, SettingsManager.DefaultPath);
+                    SettingsManager.SaveSettings(_layout, _theme, _window, _meta, SettingsManager.DefaultPath);
             }
             catch { }
+        }
+
+        /// <summary>
+        /// Resolves a (possibly relative) path from a layout: key.
+        /// Tries: (1) absolute as-is, (2) relative to current layout dir, (3) relative to app dir.
+        /// </summary>
+        private string ResolveLayoutPath(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return null;
+            if (Path.IsPathRooted(path)) return path;
+            if (_currentFilePath != null)
+            {
+                string candidate = Path.Combine(Path.GetDirectoryName(_currentFilePath), path);
+                if (File.Exists(candidate)) return candidate;
+            }
+            return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, path);
+        }
+
+        /// <summary>
+        /// Briefly flashes a key button red (or white if the key is already red-ish)
+        /// to signal that a layout: path could not be resolved.
+        /// </summary>
+        private void FlashKeyError(GridCell cell)
+        {
+            if (!_buttons.TryGetValue(cell, out var btn)) return;
+            var original  = btn.BackColor;
+            bool isRedish = original.R > 150 && original.G < 80 && original.B < 80;
+            var flash     = isRedish ? Color.White : Color.FromArgb(220, 50, 50);
+            btn.BackColor = flash;
+            var t = new System.Windows.Forms.Timer { Interval = 400 };
+            t.Tick += (s, e) => { t.Stop(); t.Dispose(); btn.BackColor = original; };
+            t.Start();
         }
 
         private void ApplyLoadedSettings(string path)
         {
             GridLayout loaded = null; Exception loadEx = null;
-            try { loaded = SettingsManager.LoadSettings(_global, path); }
+            try { loaded = SettingsManager.LoadSettings(_theme, _window, _meta, path); }
             catch (Exception ex) { loadEx = ex; }
 
             if (loadEx != null)
@@ -1200,11 +2382,12 @@ namespace OnScreenKeyboard
 
             _layout = loaded; _latchedMods.Clear(); _lockedMods.Clear();
             _currentFilePath = path;
-            BackColor = _global.BackgroundColor; Opacity = _global.Opacity;
+            UpdateFilenameLabel();
+            BackColor = _theme.BackgroundColor; Opacity = _theme.Opacity;
             ApplyTitlebarState();
-            if (!string.IsNullOrEmpty(_global.Language)) Lang.Load(_global.Language);
+            if (!string.IsNullOrEmpty(_meta.Language)) Lang.Load(_meta.Language);
             RebuildAllButtons();
-            Size = new Size(_global.WindowWidth, _global.WindowHeight);
+            Size = new Size(_window.WindowWidth, _window.WindowHeight);
             AutoSave();
         }
 

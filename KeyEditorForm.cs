@@ -29,33 +29,36 @@ namespace OnScreenKeyboard
         private Panel         _pnlPreview;
         private Label         _lblPreviewKey;
         private Button        _btnApply, _btnCancel;
+        private ComboBox      _cmbGroup;
 
-        private readonly KeyProps _original;
-        private readonly Color   _globalBorderColor;  // fallback shown when key has no border override
+        private readonly KeyProps        _original;
+        private readonly Color          _globalBorderColor;  // fallback shown when key has no border override
+        private readonly VisualTheme _ownerGlobal;        // cached at ctor time; Owner property is null until ShowDialog
         private readonly List<(Label Ctrl, Func<string> GetText)> _transLabels
             = new List<(Label, Func<string>)>();
         private readonly List<(Panel Pnl, Func<string> GetTitle)> _transGroups
             = new List<(Panel, Func<string>)>();
 
-        // ── Theme ─────────────────────────────────────────────────────
-        private static readonly Color C_BG        = Color.FromArgb(240, 242, 246);
-        private static readonly Color C_PANEL_BG  = Color.White;
-        private static readonly Color C_BORDER    = Color.FromArgb(210, 215, 220);
-        private static readonly Color C_LBL       = Color.FromArgb(70, 80, 95);
-        private static readonly Color C_HINT      = Color.FromArgb(160, 165, 170);
-        private static readonly Color C_BTN_OK    = Color.FromArgb(39, 174, 96);
-        private static readonly Color C_BTN_CANCEL= Color.FromArgb(192, 57, 43);
-        private static readonly Color C_INPUT_BG  = Color.FromArgb(250, 252, 255);
-        private static readonly Font  F_LABEL     = new Font("Segoe UI", 12.5f);
-        private static readonly Font  F_INPUT     = new Font("Segoe UI", 12.5f);
-        private static readonly Font  F_HEADER    = new Font("Segoe UI", 12f, FontStyle.Bold);
-        private static readonly Font  F_BTN       = new Font("Segoe UI", 13f, FontStyle.Bold);
-        private static readonly Font  F_HINT      = new Font("Segoe UI", 10.5f);
-        private const int HDR_H = 36;
-        private const int ROW_H = 46;
-        private const int PAD   = 14;
+        // ── Theme (WinUI 3) ───────────────────────────────────────────
+        private static Color C_BG        => Fluent.BgPage;
+        private static Color C_PANEL_BG  => Fluent.BgCard;
+        private static Color C_BORDER    => Fluent.BorderCard;
+        private static Color C_LBL       => Fluent.TextPrimary;
+        private static Color C_HINT      => Fluent.TextHint;
+        private static Color C_BTN_OK    => Fluent.Success;
+        private static Color C_BTN_CANCEL=> Fluent.Danger;
+        private static Color C_INPUT_BG  => Fluent.BgInput;
+        private static Font  F_LABEL     => Fluent.FontLabel;
+        private static Font  F_INPUT     => Fluent.FontInput;
+        private static Font  F_HEADER    => Fluent.FontTitle;
+        private static Font  F_BTN       => Fluent.FontBtnLg;
+        private static Font  F_HINT      => Fluent.FontHint;
+        private const int HDR_H = 42;
+        private const int ROW_H = 50;
+        private const int PAD   = 18;
 
-        private readonly int _maxCols;  // total columns in layout, caps ColSpan
+        private readonly int             _maxCols;  // total columns in layout, caps ColSpan
+        private readonly List<KeyGroup>  _groups;   // available named groups for this layout
 
         // ══════════════════════════════════════════════════════════════
         // ── OPTION 3 BEGIN: SendMode enum and mode-related fields ─────
@@ -63,15 +66,29 @@ namespace OnScreenKeyboard
         // and OPTION 3 END markers, then revert the two marked changes
         // in BuildUI() and PopulateFields().
         // ─────────────────────────────────────────────────────────────
-        private enum SendMode { Text, KeySequence, Modifier, WordPrediction }
+        private enum SendMode { Text, KeySequence, Modifier, WordPrediction, Layout }
         private SendMode _sendMode = SendMode.Text;
 
         // Mode selector buttons
-        private Button _btnModeText, _btnModeKey, _btnModeMod, _btnModeWP;
+        private FluentButton _btnModeText, _btnModeKey, _btnModeMod, _btnModeWP, _btnModeLayout;
+
+        // Layout picker panel (browse button, shown in Layout mode)
+        private Panel        _pnlLayoutPicker;
+        private FluentButton _btnBrowseLayout;
+        private string  _layoutDir;        // directory of the current layout file, for relative path suggestions
+        private TextBox _activeSendField;  // which send field was last focused (drives Browse target)
+        // Whether ShiftSend / AltGrSend are being displayed without their "layout:" prefix
+        private bool _shiftSendIsLayout  = false;
+        private bool _altGrSendIsLayout  = false;
+        // Guards: true while code is setting the text programmatically (suppresses the TextChanged flag-reset)
+        private bool _progShiftSend = false;
+        private bool _progAltGrSend = false;
+
+        private static readonly Color C_MODE_LAYOUT = Color.FromArgb(211, 84, 0); // dark orange
 
         // Key sequence recorder panel: shown when mode = KeySequence
-        private Panel  _pnlKeyPicker;   // reuse name so OPTION 3 markers stay consistent
-        private Button _btnRecord;
+        private Panel        _pnlKeyPicker;   // reuse name so OPTION 3 markers stay consistent
+        private FluentButton _btnRecord;
         private Label  _lblRecordHint;
         private bool   _recording = false;
         private bool   _winHeld  = false;   // Win key held during low-level hook recording
@@ -137,14 +154,16 @@ namespace OnScreenKeyboard
         // ── OPTION 3 END: enum and field declarations ─────────────────
 
         // ── Constructor ───────────────────────────────────────────────
-        public KeyEditorForm(KeyProps props, Form owner, int colSpan = 1, int rowSpan = 1, int maxCols = 14, int maxRows = 6, HashSet<int> usedWpSlots = null)
+        public KeyEditorForm(KeyProps props, Form owner, int colSpan = 1, int rowSpan = 1, int maxCols = 14, int maxRows = 6, HashSet<int> usedWpSlots = null, List<KeyGroup> groups = null, string layoutDir = null)
         {
             _original    = props;
+            _layoutDir   = layoutDir;
+            _groups      = groups ?? new List<KeyGroup>();
             _maxCols     = Math.Max(1, maxCols);
             _usedWpSlots = usedWpSlots ?? new HashSet<int>();
-            // Grab global border color for the placeholder shown in border color swatch
-            _globalBorderColor = (owner as KeyboardForm)?._global?.BorderColor
-                                 ?? ColorTranslator.FromHtml("#3C3C5A");
+            // Cache the owner's global settings now — Owner property is null until ShowDialog fires
+            _ownerGlobal       = (owner as KeyboardForm)?._theme;
+            _globalBorderColor = _ownerGlobal?.BorderColor ?? ColorTranslator.FromHtml("#3C3C5A");
             Result    = props.Clone();
             ResultColSpan = Math.Max(1, colSpan);
             ResultRowSpan = Math.Max(1, rowSpan);
@@ -155,8 +174,9 @@ namespace OnScreenKeyboard
             BackColor    = C_BG;
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox  = MinimizeBox = false;
+            ShowIcon     = false;
             StartPosition = FormStartPosition.CenterParent;
-            Size         = new Size(1060, 560);
+            Size         = new Size(980, 560);
             TopMost      = true;
             Font         = F_LABEL;
 
@@ -177,9 +197,11 @@ namespace OnScreenKeyboard
         private void OnLanguageChanged()
         {
             Text = $"{Lang.T("Edit Key")}  [{_original.Label}]";
-            _btnApply.Text      = Lang.T("✔ Apply");
-            _btnCancel.Text     = Lang.T("✖ Cancel");
-            _chkAutoSize.Text   = Lang.T("Auto");
+            _btnApply.Text         = Lang.T("Apply");
+            _btnCancel.Text        = Lang.T("Cancel");
+            _chkAutoSize.Text      = Lang.T("Auto");
+            _btnModeLayout.Text    = Lang.T("Layout");
+            UpdateBrowseLabel();
             foreach (var (ctrl, getText) in _transLabels) ctrl.Text = getText();
             foreach (var (pnl,  _)       in _transGroups) pnl.Invalidate();
             Invalidate(true);
@@ -188,23 +210,24 @@ namespace OnScreenKeyboard
         // ══════════════════════════════════════════════════════════════
         private void BuildUI(KeyProps p)
         {
-            int margin  = 14;
-            int formW   = ClientSize.Width  - margin * 2;
-            int gap     = 12;
-            int colW    = (formW - gap) / 2;
+            int margin  = 18;
+            int gap     = 14;
+            int leftW   = 510;   // Key Content column
+            int rightW  = ClientSize.Width - margin * 2 - gap - leftW;  // Appearance column
             int leftX   = margin;
-            int rightX  = margin + colW + gap;
+            int rightX  = margin + leftW + gap;
+            int colW    = leftW;  // alias used by left-column group sizing
 
             // ── OPTION 3 BEGIN: extra rows in Key Content for mode UI ─
-            // Original keyRows = 8. Added 3 rows: mode selector (2 rows) + picker row.
-            int keyRows = 11;
+            // Original keyRows = 8. Added 4 rows: mode selector (3 rows) + picker row.
+            int keyRows = 12;
             // ── OPTION 3 END ──────────────────────────────────────────
 
             int keyH    = HDR_H + PAD + keyRows * ROW_H + PAD;
             var grpKey  = AddGroup(() => Lang.T("Key Content"), leftX, margin, colW, keyH,
                                    Color.FromArgb(41, 128, 185));
 
-            int lx = PAD, vx = 160, vw = colW - lx - vx - PAD;
+            int lx = PAD, vx = 175, vw = colW - lx - vx - PAD;
             int gy = HDR_H + PAD;
 
             AddFieldLabel(grpKey, () => Lang.T("Label"), lx, gy);
@@ -225,7 +248,7 @@ namespace OnScreenKeyboard
             _nudWPSlot = new NumericUpDown
             {
                 Left = vx, Top = gy, Width = 65, Minimum = 0, Maximum = 9,
-                BackColor = C_INPUT_BG, ForeColor = Color.FromArgb(30,40,50),
+                BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary,
                 Font = F_INPUT, Visible = false,
             };
             _nudWPSlot.ValueChanged += (s, e) => { Refresh2(); CheckWPDuplicate(); };
@@ -234,8 +257,8 @@ namespace OnScreenKeyboard
             _lblWPDuplicate = new Label
             {
                 Left = vx, Top = gy + 24, Width = vw, Height = 18,
-                ForeColor = Color.FromArgb(255, 100, 80), BackColor = Color.Transparent,
-                Font = new Font("Segoe UI", 9.5f), Visible = false, Text = "",
+                ForeColor = Fluent.Danger, BackColor = Color.Transparent,
+                Font = Fluent.FontHint, Visible = false, Text = "",
             };
             grpKey.Controls.Add(_lblWPDuplicate);
             gy += ROW_H;
@@ -260,31 +283,31 @@ namespace OnScreenKeyboard
             _nudColSpan = new NumericUpDown
             {
                 Left = vx, Top = gy, Width = 65, Minimum = 1, Maximum = _maxCols,
-                BackColor = C_INPUT_BG, ForeColor = Color.FromArgb(30,40,50), Font = F_INPUT,
+                BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary, Font = F_INPUT,
             };
             grpKey.Controls.Add(_nudColSpan);
-            AddHint(grpKey, () => Lang.T("Key width hint"), vx + 71, gy); gy += ROW_H;
+            gy += ROW_H;
 
             AddFieldLabel(grpKey, () => Lang.T("Key height"), lx, gy);
             _nudRowSpan = new NumericUpDown
             {
                 Left = vx, Top = gy, Width = 65, Minimum = 1, Maximum = _maxRows,
-                BackColor = C_INPUT_BG, ForeColor = Color.FromArgb(30,40,50), Font = F_INPUT,
+                BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary, Font = F_INPUT,
             };
             grpKey.Controls.Add(_nudRowSpan);
-            AddHint(grpKey, () => Lang.T("Key height hint"), vx + 71, gy); gy += ROW_H;
+            gy += ROW_H;
 
 
 
             // ── RIGHT COLUMN ──────────────────────────────────────────
             int rightY = margin;
-            int styleRows = 7;  // font+size+fontcolor+keycolor+bordercolor+borderthickness+preview
+            int styleRows = 8;  // font+size+fontcolor+keycolor+bordercolor+borderthickness+group+preview
             int styleH    = HDR_H + PAD + styleRows * ROW_H + 28 + PAD;
-            var grpStyle  = AddGroup(() => Lang.T("Appearance"), rightX, rightY, colW, styleH,
+            var grpStyle  = AddGroup(() => Lang.T("Appearance"), rightX, rightY, rightW, styleH,
                                      Color.FromArgb(39, 174, 96));
             rightY += styleH + gap;
 
-            int slx = PAD, svx = 160, svw = colW - slx - svx - PAD;
+            int slx = PAD, svx = 140, svw = rightW - slx - svx - PAD;
             gy = HDR_H + PAD;
 
             AddFieldLabel(grpStyle, () => Lang.T("Font"), slx, gy);
@@ -292,7 +315,7 @@ namespace OnScreenKeyboard
             {
                 Left = svx, Top = gy, Width = svw,
                 DropDownStyle = ComboBoxStyle.DropDownList,
-                BackColor = C_INPUT_BG, ForeColor = Color.FromArgb(30,40,50),
+                BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary,
                 Font = F_INPUT, FlatStyle = FlatStyle.Flat,
             };
             _cmbFont.Items.AddRange(GetInstalledFonts().ToArray<object>());
@@ -304,7 +327,7 @@ namespace OnScreenKeyboard
             {
                 Left = svx, Top = gy, Width = 65,
                 Minimum = 0, Maximum = 72,
-                BackColor = C_INPUT_BG, ForeColor = Color.FromArgb(30,40,50), Font = F_INPUT,
+                BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary, Font = F_INPUT,
             };
             _nudFontSize.ValueChanged += (s, e) => Refresh2();
             grpStyle.Controls.Add(_nudFontSize);
@@ -333,12 +356,25 @@ namespace OnScreenKeyboard
             _nudBorderThickness = new NumericUpDown
             {
                 Left = svx, Top = gy, Width = 65, Minimum = -1, Maximum = 10,
-                BackColor = C_INPUT_BG, ForeColor = Color.FromArgb(30,40,50), Font = F_INPUT,
+                BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary, Font = F_INPUT,
             };
             _nudBorderThickness.ValueChanged += (s, e) => Refresh2();
             grpStyle.Controls.Add(_nudBorderThickness);
-            AddHint(grpStyle, () => Lang.T("-1 = global default  |  0 = no border  |  1-10 = px"), svx + 71, gy);
             gy += ROW_H;
+
+            AddFieldLabel(grpStyle, () => Lang.T("Group"), slx, gy);
+            _cmbGroup = new ComboBox
+            {
+                Left = svx, Top = gy, Width = svw,
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary,
+                Font = F_INPUT, FlatStyle = FlatStyle.Flat,
+            };
+            _cmbGroup.Items.Add(Lang.T("(no group)"));
+            foreach (var g in _groups) _cmbGroup.Items.Add(g.Name);
+            _cmbGroup.SelectedIndex = 0;
+            _cmbGroup.SelectedIndexChanged += (s, e) => Refresh2();
+            grpStyle.Controls.Add(_cmbGroup); gy += ROW_H;
 
             AddFieldLabel(grpStyle, () => Lang.T("Preview"), slx, gy);
             int keyBtnW = 80, keyBtnH = 46;
@@ -358,15 +394,16 @@ namespace OnScreenKeyboard
             };
             _pnlPreview.Controls.Add(_lblPreviewKey);
 
-            int btnTop = Math.Max(margin + keyH, rightY + styleH + gap) + gap;
-            int bw     = (formW - gap) / 2;
-            _btnCancel = MakeActionBtn(Lang.T("✖ Cancel"), C_BTN_CANCEL, margin,        btnTop, bw, 40);
-            _btnApply  = MakeActionBtn(Lang.T("✔ Apply"),  C_BTN_OK,     margin+bw+gap, btnTop, bw, 40);
+            int btnTop = Math.Max(margin + keyH, rightY) + gap;
+            int bw     = (leftW + gap + rightW - gap) / 2;
+            _btnCancel = MakeActionBtn(Lang.T("Cancel"), margin,        btnTop, bw, 44);
+            _btnApply  = MakeActionBtn(Lang.T("Apply"),  margin+bw+gap, btnTop, bw, 44);
             _btnApply.Click  += (s, e) => Apply();
             _btnCancel.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
 
-            ClientSize = new Size(ClientSize.Width, btnTop + 40 + margin);
+            ClientSize = new Size(ClientSize.Width, btnTop + 44 + margin);
 
+            SetupLayoutFocusTracking();
             PopulateFields(p);
         }
 
@@ -380,26 +417,26 @@ namespace OnScreenKeyboard
 
         private void AddOption3ModeSelector(Panel parent, int lx, int vx, int vw, ref int gy)
         {
-            var lbl = new Label
-            {
-                Text = Lang.T("Send mode"), Left = lx, Top = gy + 4, AutoSize = true,
-                ForeColor = C_LBL, BackColor = Color.Transparent, Font = F_LABEL,
-            };
-            parent.Controls.Add(lbl);
+            // Buttons span the full panel width (lx → right edge) so translated labels always fit.
+            // 2×2 grid + full-width row:
+            //   row 1 = Text | Key/Shortcut
+            //   row 2 = Modifier | Word prediction
+            //   row 3 = Layout switch (full width)
+            int fullW = vx + vw - lx;   // from lx to the same right edge as value fields
+            int bw    = (fullW - 4) / 2;
+            _btnModeText   = MakeModeBtn(parent, Lang.T("Text"),            lx,          gy,             bw);
+            _btnModeKey    = MakeModeBtn(parent, Lang.T("Key/Shortcut"),    lx + bw + 4, gy,             bw);
+            _btnModeMod    = MakeModeBtn(parent, Lang.T("Modifier"),        lx,          gy + ROW_H,     bw);
+            _btnModeWP     = MakeModeBtn(parent, Lang.T("Word prediction"), lx + bw + 4, gy + ROW_H,     bw);
+            _btnModeLayout = MakeModeBtn(parent, Lang.T("Layout"),          lx,          gy + ROW_H * 2, fullW);
 
-            // 2×2 grid: row 1 = Text | Key/Shortcut, row 2 = Modifier | Word prediction
-            int bw  = (vw - 4) / 2;
-            _btnModeText = MakeModeBtn(parent, Lang.T("Text"),            vx,          gy,          bw);
-            _btnModeKey  = MakeModeBtn(parent, Lang.T("Key/Shortcut"),    vx + bw + 4, gy,          bw);
-            _btnModeMod  = MakeModeBtn(parent, Lang.T("Modifier"),        vx,          gy + ROW_H,  bw);
-            _btnModeWP   = MakeModeBtn(parent, Lang.T("Word prediction"), vx + bw + 4, gy + ROW_H,  bw);
+            _btnModeText.Click   += (s, e) => SetSendMode(SendMode.Text,           applyPicker: true);
+            _btnModeKey.Click    += (s, e) => SetSendMode(SendMode.KeySequence,    applyPicker: true);
+            _btnModeMod.Click    += (s, e) => SetSendMode(SendMode.Modifier,       applyPicker: true);
+            _btnModeWP.Click     += (s, e) => SetSendMode(SendMode.WordPrediction, applyPicker: true);
+            _btnModeLayout.Click += (s, e) => SetSendMode(SendMode.Layout,         applyPicker: true);
 
-            _btnModeText.Click += (s, e) => SetSendMode(SendMode.Text,           applyPicker: true);
-            _btnModeKey.Click  += (s, e) => SetSendMode(SendMode.KeySequence,    applyPicker: true);
-            _btnModeMod.Click  += (s, e) => SetSendMode(SendMode.Modifier,       applyPicker: true);
-            _btnModeWP.Click   += (s, e) => SetSendMode(SendMode.WordPrediction, applyPicker: true);
-
-            gy += ROW_H * 2;  // two rows of buttons
+            gy += ROW_H * 3;  // three rows of buttons
         }
 
         private void AddOption3PickerRow(Panel parent, int lx, int vx, int vw, ref int gy)
@@ -410,18 +447,16 @@ namespace OnScreenKeyboard
             _pnlKeyPicker = new Panel
             {
                 Left = lx, Top = gy, Width = lx + vx + vw, Height = ROW_H - 4,
-                BackColor = Color.Transparent, Visible = false,
+                BackColor = Fluent.BgCard, Visible = false,
             };
             parent.Controls.Add(_pnlKeyPicker);
 
-            _btnRecord = new Button
+            _btnRecord = new FluentButton
             {
-                Text = Lang.T("🎹 Record key / shortcut"),
+                Text = Lang.T("Record key / shortcut"),
                 Left = pickerVx, Top = 0, Width = vw, Height = ROW_H - 8,
-                FlatStyle = FlatStyle.Flat, Font = new Font("Segoe UI", 11f),
-                BackColor = C_MODE_KEY, ForeColor = Color.White, TabStop = false,
+                Style = FluentButton.Variant.Neutral, TabStop = false,
             };
-            _btnRecord.FlatAppearance.BorderSize = 0;
             _btnRecord.Click += (s, e) => StartRecording();
             _pnlKeyPicker.Controls.Add(_btnRecord);
 
@@ -429,15 +464,53 @@ namespace OnScreenKeyboard
             {
                 Text = "", Left = pickerVx, Top = ROW_H - 6, AutoSize = true,
                 ForeColor = C_HINT, BackColor = Color.Transparent,
-                Font = new Font("Segoe UI", 10.5f),
+                Font = Fluent.FontHint,
             };
             _pnlKeyPicker.Controls.Add(_lblRecordHint);
+
+            // ── Layout file picker ────────────────────────────────────
+            _pnlLayoutPicker = new Panel
+            {
+                Left = lx, Top = gy, Width = lx + vx + vw, Height = ROW_H - 4,
+                BackColor = Fluent.BgCard, Visible = false,
+            };
+            parent.Controls.Add(_pnlLayoutPicker);
+
+            _btnBrowseLayout = new FluentButton
+            {
+                Text = Lang.T("Browse (Send)"),
+                Left = pickerVx, Top = 0, Width = vw, Height = ROW_H - 8,
+                Style = FluentButton.Variant.Neutral, TabStop = false,
+            };
+            _btnBrowseLayout.Click += (s, e) =>
+            {
+                string initDir = _layoutDir ?? AppDomain.CurrentDomain.BaseDirectory;
+                using var dlg = new OpenFileDialog
+                {
+                    Title            = Lang.T("Layout file"),
+                    Filter           = "XML files (*.xml)|*.xml|All files (*.*)|*.*",
+                    InitialDirectory = initDir,
+                };
+                if (dlg.ShowDialog() != DialogResult.OK) return;
+                string selected = dlg.FileName;
+                // Prefer a relative path when the file is inside the layout directory
+                if (_layoutDir != null &&
+                    selected.StartsWith(_layoutDir, StringComparison.OrdinalIgnoreCase))
+                    selected = selected.Substring(_layoutDir.Length).TrimStart('\\', '/');
+                // Fill whichever send field was last focused (default: primary Send).
+                // All three fields display without "layout:" prefix; Apply() / the flags re-add it.
+                var target = _activeSendField ?? _txtSend;
+                if      (target == _txtShiftSend)  SetShiftSendText(selected, isLayout: true);
+                else if (target == _txtAltGrSend)  SetAltGrSendText(selected, isLayout: true);
+                else                               target.Text = selected;
+            };
+            _pnlLayoutPicker.Controls.Add(_btnBrowseLayout);
 
             // ── Modifier picker ───────────────────────────────────────
             _pnlModPicker = new Panel
             {
                 Left = lx, Top = gy, Width = lx + vx + vw, Height = ROW_H - 4,
-                BackColor = Color.Transparent, Visible = false,
+                BackColor = Fluent.BgCard, Visible = false,
             };
             parent.Controls.Add(_pnlModPicker);
 
@@ -452,7 +525,7 @@ namespace OnScreenKeyboard
             {
                 Left = pickerVx, Top = 0, Width = vw,
                 DropDownStyle = ComboBoxStyle.DropDownList,
-                BackColor = C_INPUT_BG, ForeColor = Color.FromArgb(30,40,50),
+                BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary,
                 Font = F_INPUT, FlatStyle = FlatStyle.Flat,
             };
             foreach (var (_, display) in _modifiers) _cmbModChoice.Items.Add(display);
@@ -463,15 +536,69 @@ namespace OnScreenKeyboard
             gy += ROW_H;
         }
 
-        private Button MakeModeBtn(Panel parent, string text, int x, int y, int w)
+        /// <summary>
+        /// Sets _txtShiftSend programmatically (suppressing the manual-edit flag reset).
+        /// </summary>
+        private void SetShiftSendText(string text, bool isLayout)
         {
-            var btn = new Button
+            _progShiftSend    = true;
+            _shiftSendIsLayout = isLayout;
+            _txtShiftSend.Text = text;
+            _progShiftSend    = false;
+        }
+
+        /// <summary>
+        /// Sets _txtAltGrSend programmatically (suppressing the manual-edit flag reset).
+        /// </summary>
+        private void SetAltGrSendText(string text, bool isLayout)
+        {
+            _progAltGrSend    = true;
+            _altGrSendIsLayout = isLayout;
+            _txtAltGrSend.Text = text;
+            _progAltGrSend    = false;
+        }
+
+        /// <summary>
+        /// Wires Enter events on the three send fields so the Browse button label
+        /// always reflects which field it will fill.
+        /// Also resets the layout-path flag when the user manually edits Shift/AltGr.
+        /// </summary>
+        private void SetupLayoutFocusTracking()
+        {
+            _activeSendField = _txtSend;  // default
+
+            void Track(TextBox txt)
+            {
+                txt.Enter += (s, e) => { _activeSendField = txt; UpdateBrowseLabel(); };
+            }
+            Track(_txtSend);
+            Track(_txtShiftSend);
+            Track(_txtAltGrSend);
+
+            // When the user manually types in Shift/AltGr fields, clear the layout flag
+            // so Apply() does not wrongly re-add "layout:" to a non-path value.
+            _txtShiftSend.TextChanged += (s, e) => { if (!_progShiftSend) _shiftSendIsLayout  = false; };
+            _txtAltGrSend.TextChanged += (s, e) => { if (!_progAltGrSend) _altGrSendIsLayout  = false; };
+        }
+
+        private void UpdateBrowseLabel()
+        {
+            if (_btnBrowseLayout == null) return;
+            if (_activeSendField == _txtShiftSend)
+                _btnBrowseLayout.Text = Lang.T("Browse (Shift-send)");
+            else if (_activeSendField == _txtAltGrSend)
+                _btnBrowseLayout.Text = Lang.T("Browse (AltGr-send)");
+            else
+                _btnBrowseLayout.Text = Lang.T("Browse (Send)");
+        }
+
+        private FluentButton MakeModeBtn(Panel parent, string text, int x, int y, int w)
+        {
+            var btn = new FluentButton
             {
                 Text = text, Left = x, Top = y, Width = w, Height = ROW_H - 6,
-                FlatStyle = FlatStyle.Flat, Font = new Font("Segoe UI", 10.5f, FontStyle.Bold),
-                BackColor = C_MODE_OFF, ForeColor = Color.White, TabStop = false,
+                Style = FluentButton.Variant.Neutral, TabStop = false,
             };
-            btn.FlatAppearance.BorderSize = 0;
             parent.Controls.Add(btn);
             return btn;
         }
@@ -480,33 +607,48 @@ namespace OnScreenKeyboard
         {
             _sendMode = mode;
 
-            _btnModeText.BackColor = mode == SendMode.Text           ? C_MODE_TEXT                  : C_MODE_OFF;
-            _btnModeKey.BackColor  = mode == SendMode.KeySequence    ? C_MODE_KEY                   : C_MODE_OFF;
-            _btnModeMod.BackColor  = mode == SendMode.Modifier       ? C_MODE_MOD                   : C_MODE_OFF;
-            _btnModeWP.BackColor   = mode == SendMode.WordPrediction ? Color.FromArgb(0, 140, 100)  : C_MODE_OFF;
+            _btnModeText.Style   = mode == SendMode.Text           ? FluentButton.Variant.Primary : FluentButton.Variant.Neutral;
+            _btnModeKey.Style    = mode == SendMode.KeySequence    ? FluentButton.Variant.Primary : FluentButton.Variant.Neutral;
+            _btnModeMod.Style    = mode == SendMode.Modifier       ? FluentButton.Variant.Primary : FluentButton.Variant.Neutral;
+            _btnModeWP.Style     = mode == SendMode.WordPrediction ? FluentButton.Variant.Primary : FluentButton.Variant.Neutral;
+            _btnModeLayout.Style = mode == SendMode.Layout         ? FluentButton.Variant.Primary : FluentButton.Variant.Neutral;
+            _btnModeText.Invalidate(); _btnModeKey.Invalidate(); _btnModeMod.Invalidate();
+            _btnModeWP.Invalidate();   _btnModeLayout.Invalidate();
 
-            bool isKey = mode == SendMode.KeySequence;
-            bool isMod = mode == SendMode.Modifier;
-            bool isWP  = mode == SendMode.WordPrediction;
+            bool isKey    = mode == SendMode.KeySequence;
+            bool isMod    = mode == SendMode.Modifier;
+            bool isWP     = mode == SendMode.WordPrediction;
+            bool isLayout = mode == SendMode.Layout;
 
-            // WP mode: show slot NUD, hide Send textbox. All other modes: vice versa.
-            _txtSend.Visible       = !isWP;
-            _nudWPSlot.Visible     = isWP;
-            _txtSend.Enabled       = !isMod;
-            _pnlKeyPicker.Visible  = isKey;
-            _pnlModPicker.Visible  = isMod;
+            // WP mode: show slot NUD, hide Send textbox. Layout/all others: show textbox.
+            _txtSend.Visible         = !isWP;
+            _nudWPSlot.Visible       = false;   // always hidden — slot is auto-assigned
+            _txtSend.Enabled         = !isMod;
+            _pnlKeyPicker.Visible    = isKey;
+            _pnlModPicker.Visible    = isMod;
+            _pnlLayoutPicker.Visible = isLayout;
             // Update the Send field label dynamically
             if (_lblSendFieldName != null)
-                _lblSendFieldName.Text = isWP ? Lang.T("Prediction cell") : Lang.T("Send");
-            if (!isWP && _lblWPDuplicate != null) _lblWPDuplicate.Visible = false;
-            if (isWP) CheckWPDuplicate();
+                _lblSendFieldName.Text = isWP     ? Lang.T("Prediction cell")
+                                       : isLayout ? Lang.T("Layout file")
+                                       : Lang.T("Send");
+            if (_lblWPDuplicate != null) _lblWPDuplicate.Visible = false;
+            if (isWP)
+            {
+                // Auto-assign the next free slot; never show a duplicate warning
+                int next = 0;
+                while (_usedWpSlots.Contains(next) && next < 9) next++;
+                _nudWPSlot.Value = Math.Min(9, next);
+            }
 
             if (applyPicker && isMod) ApplyModChoice();
             if (applyPicker && isKey)
             {
                 _txtSend.Text       = "";
-                _lblRecordHint.Text = Lang.T("Press 🎹 to record, or type directly");
+                _lblRecordHint.Text = Lang.T("Press Record to record, or type directly");
             }
+            if (applyPicker && isLayout)
+                _txtSend.Text = "";
         }
 
         // ── Recording ─────────────────────────────────────────────────
@@ -515,9 +657,10 @@ namespace OnScreenKeyboard
             if (_recording) return;
             _recording           = true;
             _winHeld             = false;
-            _btnRecord.Text      = Lang.T("⏺ Press your key or shortcut now…");
-            _btnRecord.BackColor = C_RECORDING;
-            _lblRecordHint.Text  = Lang.T("Press Escape to cancel");
+            _btnRecord.Text  = Lang.T("Press key now…");
+            _btnRecord.Style = FluentButton.Variant.Danger;
+            _btnRecord.Invalidate();
+            _lblRecordHint.Text = Lang.T("Press Escape to cancel");
             _txtSend.Text        = "";
 
             // Install low-level keyboard hook so we capture Win key combinations
@@ -536,9 +679,10 @@ namespace OnScreenKeyboard
                 UnhookWindowsHookEx(_hookHandle);
                 _hookHandle = IntPtr.Zero;
             }
-            _btnRecord.Text      = Lang.T("🎹 Record key / shortcut");
-            _btnRecord.BackColor = C_MODE_KEY;
-            _lblRecordHint.Text  = cancelled ? Lang.T("Cancelled") : Lang.T("Recorded — edit if needed");
+            _btnRecord.Text  = Lang.T("Record key / shortcut");
+            _btnRecord.Style = FluentButton.Variant.Neutral;
+            _btnRecord.Invalidate();
+            _lblRecordHint.Text = cancelled ? Lang.T("Cancelled") : Lang.T("Recorded — edit if needed");
         }
 
         private IntPtr LowLevelHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
@@ -762,6 +906,8 @@ namespace OnScreenKeyboard
                 return SendMode.Modifier;
             if (!string.IsNullOrEmpty(send) && send.StartsWith("wp:", StringComparison.Ordinal))
                 return SendMode.WordPrediction;
+            if (!string.IsNullOrEmpty(send) && send.StartsWith("layout:", StringComparison.Ordinal))
+                return SendMode.Layout;
             if (!string.IsNullOrEmpty(send) && !SendKeysHelper.IsPlainText(send))
                 return SendMode.KeySequence;
             return SendMode.Text;
@@ -769,15 +915,11 @@ namespace OnScreenKeyboard
         // ── OPTION 3 END: mode selector and picker UI methods ─────────
 
         // ── Group panel ───────────────────────────────────────────────
-        private Panel AddGroup(Func<string> getTitle, int x, int y, int w, int h, Color hdrColor)
+        private Panel AddGroup(Func<string> getTitle, int x, int y, int w, int h, Color accentColor)
         {
-            var pnl = new Panel { Left = x, Top = y, Width = w, Height = h, BackColor = C_PANEL_BG };
+            var pnl = new Panel { Left = x, Top = y, Width = w, Height = h, BackColor = Fluent.BgPage };
             pnl.Paint += (s, e) =>
-            {
-                e.Graphics.FillRectangle(new SolidBrush(hdrColor), 0, 0, pnl.Width, HDR_H);
-                e.Graphics.DrawString(getTitle(), F_HEADER, Brushes.White, 10, (HDR_H - F_HEADER.Height) / 2);
-                e.Graphics.DrawRectangle(new Pen(C_BORDER), 0, 0, pnl.Width - 1, pnl.Height - 1);
-            };
+                FluentPainter.PaintCard(e.Graphics, pnl.Width, pnl.Height, getTitle(), accentColor, HDR_H);
             Controls.Add(pnl);
             _transGroups.Add((pnl, getTitle));
             return pnl;
@@ -790,7 +932,7 @@ namespace OnScreenKeyboard
             var txtHex = new TextBox
             {
                 Left = x, Top = y, Width = totalW - sw - 5,
-                BackColor = C_INPUT_BG, ForeColor = Color.FromArgb(30,40,50),
+                BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary,
                 BorderStyle = BorderStyle.FixedSingle, Font = new Font("Courier New", 12f),
             };
             var swatch = new Panel
@@ -829,9 +971,11 @@ namespace OnScreenKeyboard
 
         private void AddHint(Panel parent, Func<string> getText, int x, int y)
         {
+            int maxW = parent.Width - x - PAD;
             parent.Controls.Add(new Label
             {
-                Text = getText(), Left = x, Top = y + 6, AutoSize = true,
+                Text = getText(), Left = x, Top = y + 6,
+                AutoSize = true, MaximumSize = new Size(maxW, 0),
                 ForeColor = C_HINT, BackColor = Color.Transparent, Font = F_HINT,
             });
         }
@@ -841,22 +985,20 @@ namespace OnScreenKeyboard
             var tb = new TextBox
             {
                 Left = x, Top = y, Width = w,
-                BackColor = C_INPUT_BG, ForeColor = Color.FromArgb(30,40,50),
+                BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary,
                 BorderStyle = BorderStyle.FixedSingle, Font = F_INPUT,
             };
             parent.Controls.Add(tb);
             return tb;
         }
 
-        private Button MakeActionBtn(string text, Color bg, int x, int y, int w, int h)
+        private Button MakeActionBtn(string text, int x, int y, int w, int h)
         {
-            var btn = new Button
+            var btn = new FluentButton
             {
                 Text = text, Left = x, Top = y, Width = w, Height = h,
-                BackColor = bg, ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat, Font = F_BTN, TabStop = false,
+                Style = FluentButton.Variant.Neutral,
             };
-            btn.FlatAppearance.BorderSize = 0;
             Controls.Add(btn);
             return btn;
         }
@@ -873,14 +1015,21 @@ namespace OnScreenKeyboard
             else
                 _nudWPSlot.Value = 0;
             _txtShiftLabel.Text = p.ShiftLabel ?? "";
-            _txtShiftSend.Text  = p.ShiftSend  ?? "";
             _txtAltGrLabel.Text = p.AltGrLabel ?? "";
-            _txtAltGrSend.Text  = p.AltGrSend  ?? "";
+            // Strip "layout:" prefix for display — flags let Apply() re-add it
+            string shiftRaw  = p.ShiftSend  ?? "";
+            string altGrRaw  = p.AltGrSend  ?? "";
+            SetShiftSendText(
+                shiftRaw.StartsWith("layout:", StringComparison.Ordinal) ? shiftRaw.Substring(7) : shiftRaw,
+                shiftRaw.StartsWith("layout:", StringComparison.Ordinal));
+            SetAltGrSendText(
+                altGrRaw.StartsWith("layout:", StringComparison.Ordinal) ? altGrRaw.Substring(7) : altGrRaw,
+                altGrRaw.StartsWith("layout:", StringComparison.Ordinal));
             _nudColSpan.Value = Math.Max(1, Math.Min(_maxCols, _initColSpan));
             _nudRowSpan.Value = Math.Max(1, Math.Min(_maxRows, _initRowSpan));
 
             // Resolve global settings once — used for font and colour placeholders
-            var ownerG = (Owner as KeyboardForm)?._global;
+            var ownerG = _ownerGlobal;   // set at ctor time; Owner property is null here (called before ShowDialog)
             Color gFontColor   = ownerG?.FontColor   ?? ColorTranslator.FromHtml("#E0E0FF");
             Color gKeyColor    = ownerG?.KeyColor    ?? ColorTranslator.FromHtml("#2D2D4A");
 
@@ -895,24 +1044,43 @@ namespace OnScreenKeyboard
             else
             { _nudFontSize.Value = 0; _chkAutoSize.Checked = true; _nudFontSize.Enabled = false; }
 
-            _nudBorderThickness.Value = Math.Clamp(p.BorderThickness, -1, (int)_nudBorderThickness.Maximum);
+            // For empty spacer keys (no label, no send) always show the current global values,
+            // even if the XML baked in explicit per-key styles (e.g. background-matching spacers).
+            // This lets the user see what the key would look like with current global settings.
+            bool isEmptyKey = string.IsNullOrEmpty(p.Label) && string.IsNullOrEmpty(p.Send);
 
-            // Show global colour as placeholder when key has no per-key override.
-            SetSwatchHex(_pnlFontColor,   SettingsManager.Hex(p.FontColor.IsEmpty   ? gFontColor  : p.FontColor));
-            SetSwatchHex(_pnlKeyColor,    SettingsManager.Hex(p.KeyColor.IsEmpty    ? gKeyColor   : p.KeyColor));
-            SetSwatchHex(_pnlBorderColor, SettingsManager.Hex(p.BorderColor.IsEmpty ? _globalBorderColor : p.BorderColor));
+            int globalBt = ownerG?.BorderThickness ?? 1;
+            _nudBorderThickness.Value = Math.Clamp(
+                (isEmptyKey || p.BorderThickness == -1) ? globalBt : p.BorderThickness,
+                -1, (int)_nudBorderThickness.Maximum);
+
+            SetSwatchHex(_pnlFontColor,   SettingsManager.Hex(
+                (isEmptyKey || p.FontColor.IsEmpty)   ? gFontColor         : p.FontColor));
+            SetSwatchHex(_pnlKeyColor,    SettingsManager.Hex(
+                (isEmptyKey || p.KeyColor.IsEmpty)    ? gKeyColor          : p.KeyColor));
+            SetSwatchHex(_pnlBorderColor, SettingsManager.Hex(
+                (isEmptyKey || p.BorderColor.IsEmpty) ? _globalBorderColor : p.BorderColor));
+
+            // Group selector
+            if (_cmbGroup != null)
+            {
+                int gi = string.IsNullOrEmpty(p.GroupName)
+                    ? 0
+                    : _cmbGroup.Items.IndexOf(p.GroupName);
+                _cmbGroup.SelectedIndex = gi >= 0 ? gi : 0;
+            }
 
             // ── OPTION 3 BEGIN: detect and set initial send mode ──────
-            // Fix 1: set _initialising so SetSendMode does not call Apply* and
-            //        overwrite _txtSend, which was just populated above.
+            // _initialising suppresses ApplyModChoice() while combo boxes are
+            // being populated — without it, the SelectedIndex assignment below
+            // fires the change event and overwrites fields mid-initialisation.
             // Fix 2: display human-readable Send value for key-sequence mode.
             // To revert: remove this block and replace with SetSendMode(SendMode.Text)
             _initialising = true;
             var detectedMode = DetectSendMode(p.Send ?? "", p.Label ?? "");
             SetSendMode(detectedMode, applyPicker: false);
             if (detectedMode == SendMode.WordPrediction) CheckWPDuplicate();
-            // Fix 1: show human-readable content in Send field for all non-text modes
-            // Fix 3: sync dropdowns to match the actual key function
+            // Sync dropdowns to match the actual key function
             if (detectedMode == SendMode.Modifier)
             {
                 _txtSend.Text = "{" + (p.Label ?? "") + "}";
@@ -922,7 +1090,14 @@ namespace OnScreenKeyboard
             else if (detectedMode == SendMode.KeySequence)
             {
                 _txtSend.Text = ToHuman(p.Send ?? "");
-                _lblRecordHint.Text = Lang.T("Press 🎹 to re-record, or edit directly");
+                _lblRecordHint.Text = Lang.T("Press Record to re-record, or edit directly");
+            }
+            else if (detectedMode == SendMode.Layout)
+            {
+                // Strip the "layout:" prefix — the mode button already indicates the type
+                string raw = p.Send ?? "";
+                _txtSend.Text = raw.StartsWith("layout:", StringComparison.Ordinal)
+                    ? raw.Substring(7) : raw;
             }
             _initialising = false;
             // ── OPTION 3 END ──────────────────────────────────────────
@@ -933,20 +1108,19 @@ namespace OnScreenKeyboard
         // ── Live preview ──────────────────────────────────────────────
         private void Refresh2()
         {
-            var ownerGlob = (Owner as KeyboardForm)?._global;
+            var ownerGlob = _ownerGlobal;   // cached at ctor time; Owner property is null during construction
             Color gFc = ownerGlob?.FontColor   ?? ColorTranslator.FromHtml("#E0E0FF");
             Color gKc = ownerGlob?.KeyColor    ?? ColorTranslator.FromHtml("#2D2D4A");
             Color gBc = ownerGlob?.BorderColor ?? ColorTranslator.FromHtml("#3C3C5A");
             Color fc = ParseColor(GetSwatchHex(_pnlFontColor),   gFc);
             Color kc = ParseColor(GetSwatchHex(_pnlKeyColor),    gKc);
             Color bc = ParseColor(GetSwatchHex(_pnlBorderColor), gBc);
-            string fn = _cmbFont.SelectedItem?.ToString() ?? "Arial";
+            string fn = _cmbFont.SelectedItem?.ToString() ?? ownerGlob?.FontName ?? "Arial";
             int    fs = (_chkAutoSize.Checked || _nudFontSize.Value == 0) ? 13 : (int)_nudFontSize.Value;
             int    btRaw = (int)_nudBorderThickness.Value;
             // -1 = use global (retrieve from owner); 0 = no border; n = explicit
-            var    ownerGlobal = (Owner as KeyboardForm)?._global;
             int    bt = btRaw == -1
-                ? (ownerGlobal?.BorderThickness ?? 1)
+                ? (ownerGlob?.BorderThickness ?? 1)
                 : btRaw;
 
             _lblPreviewKey.Text      = (_txtLabel?.Text ?? "").Replace("&", "&&");
@@ -971,9 +1145,8 @@ namespace OnScreenKeyboard
         private void Apply()
         {
             string label = _txtLabel.Text.Trim();
-            if (string.IsNullOrEmpty(label)) label = "?";
 
-            var ownerGl = (Owner as KeyboardForm)?._global;
+            var ownerGl = _ownerGlobal;   // cached at ctor time; consistent with PopulateFields and Refresh2
             // Store Color.Empty when the hex matches the global value — preserves the
             // "use global" sentinel so changing the global later cascades to this key.
             string fcHex = GetSwatchHex(_pnlFontColor).Trim();
@@ -1003,12 +1176,22 @@ namespace OnScreenKeyboard
                 send = FromHuman(_txtSend.Text);
                 // Fix 2: do NOT apply EscapeForSend — key sequences are already correct syntax
             }
+            else if (_sendMode == SendMode.Layout)
+            {
+                string path = _txtSend.Text.Trim();
+                send = string.IsNullOrEmpty(path) ? "" : "layout:" + path;
+            }
             else
             {
                 send = SendKeysHelper.EscapeForSend(_txtSend.Text);
                 if (string.IsNullOrEmpty(send)) send = label;
             }
             // ── OPTION 3 END ──────────────────────────────────────────
+
+            // A key only needs a visible label when it actually sends something.
+            // If both label and send are empty the key stays a spacer — don't force a label.
+            // If send is set but label is empty, mirror the send value as the label.
+            if (string.IsNullOrEmpty(label) && !string.IsNullOrEmpty(send)) label = send;
 
             ResultColSpan = (int)_nudColSpan.Value;
             ResultRowSpan = (int)_nudRowSpan.Value;
@@ -1020,16 +1203,34 @@ namespace OnScreenKeyboard
             int fontSize = (_chkAutoSize.Checked || _nudFontSize.Value == 0)
                 ? 0 : (int)_nudFontSize.Value;
 
+            string groupName = (_cmbGroup != null && _cmbGroup.SelectedIndex > 0)
+                ? _cmbGroup.SelectedItem?.ToString() ?? ""
+                : "";
+
+            // Re-add "layout:" prefix to Shift/AltGr sends when the field was showing a stripped path
+            string shiftSend = _txtShiftSend.Text ?? "";
+            if (_shiftSendIsLayout && !string.IsNullOrEmpty(shiftSend))
+                shiftSend = "layout:" + shiftSend;
+
+            string altGrSend = _txtAltGrSend.Text ?? "";
+            if (_altGrSendIsLayout && !string.IsNullOrEmpty(altGrSend))
+                altGrSend = "layout:" + altGrSend;
+
             Result = new KeyProps(label, send,
                                   _txtShiftLabel.Text ?? "",
-                                  _txtShiftSend.Text  ?? "",
+                                  shiftSend,
                                   _txtAltGrLabel.Text ?? "",
-                                  _txtAltGrSend.Text  ?? "")
+                                  altGrSend)
             {
                 FontName        = fontName,
                 FontSize        = fontSize,
                 FontColor       = fc, KeyColor = kc, BorderColor = bc,
-                BorderThickness = (int)_nudBorderThickness.Value,
+                // Store -1 (inherit from global) when the value matches the global setting,
+                // exactly like HexMatchesGlobal for colours — preserves the inherit sentinel.
+                BorderThickness = ((int)_nudBorderThickness.Value == -1 ||
+                                   (int)_nudBorderThickness.Value == (ownerGl?.BorderThickness ?? 1))
+                                  ? -1 : (int)_nudBorderThickness.Value,
+                GroupName       = groupName,
             };
             DialogResult = DialogResult.OK;
             Close();

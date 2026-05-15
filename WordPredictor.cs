@@ -47,7 +47,7 @@ namespace OnScreenKeyboard
         private bool     _atSentenceStart         = false;  // true only after SetSentenceStart(), not after manual Shift
 
         private readonly string[] _predictions  = new string[10];
-        private readonly int      _slotCount;
+        private int               _slotCount;
 
         // ── Events ────────────────────────────────────────────────────
         /// <summary>Fired when predictions change. UI should refresh WP keys.</summary>
@@ -74,6 +74,18 @@ namespace OnScreenKeyboard
         public WordPredictor(int slotCount = 7)
         {
             _slotCount = Math.Max(1, Math.Min(10, slotCount));
+        }
+
+        /// <summary>
+        /// Update the number of prediction slots and immediately refresh predictions.
+        /// Call this after loading a new layout so the predictor generates enough words.
+        /// </summary>
+        public void SetSlotCount(int slotCount)
+        {
+            int clamped = Math.Max(1, Math.Min(10, slotCount));
+            if (clamped == _slotCount) return;
+            _slotCount = clamped;
+            RefreshPredictions();
         }
 
         // ── API ───────────────────────────────────────────────────────

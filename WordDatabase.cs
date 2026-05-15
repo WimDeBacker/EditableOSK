@@ -138,7 +138,7 @@ namespace OnScreenKeyboard
             var seen   = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             // ── Step 1: Second words ──────────────────────────────────
-            if (!sentenceStart && !string.IsNullOrEmpty(lastCompletedWord))
+            if (!string.IsNullOrEmpty(lastCompletedWord))
             {
                 // Try exact match first; also try lowercased key
                 WordEntry lastEntry = null;
@@ -152,6 +152,15 @@ namespace OnScreenKeyboard
                     {
                         if (result.Count >= count) break;
                         if (hasPrefix && !MatchesPrefix(w, currentPrefix, !sentenceStart && prefixUpper)) continue;
+                        // Mid-sentence: apply the same case filter as Step 2 so results are
+                        // consistent. At sentence start the filter is skipped — all next-words
+                        // are included and then capitalised by the block below.
+                        if (!sentenceStart && w.Length > 0)
+                        {
+                            bool wUpper = char.IsUpper(w[0]);
+                            if ( filterUpper && !wUpper) continue;  // uppercase prefix → proper nouns only
+                            if (!filterUpper &&  wUpper) continue;  // normal mid-sentence → lowercase only
+                        }
                         if (seen.Add(w)) result.Add(w);
                     }
                 }

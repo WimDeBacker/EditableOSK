@@ -5,6 +5,33 @@ using System.Drawing;
 namespace OnScreenKeyboard
 {
     /// <summary>
+    /// A named style preset.  Keys that belong to this group inherit its visual
+    /// settings through the chain: Global → Group → Per-key.
+    /// </summary>
+    public class KeyGroup
+    {
+        public string Name            { get; set; } = "";
+        public Color  KeyColor        { get; set; } = Color.Empty;
+        public Color  FontColor       { get; set; } = Color.Empty;
+        public Color  BorderColor     { get; set; } = Color.Empty;
+        public int    BorderThickness { get; set; } = -1;   // -1 = inherit global
+        public string FontName        { get; set; } = "";
+        public int    FontSize        { get; set; } = 0;
+
+        public KeyGroup Clone() => new KeyGroup
+        {
+            Name            = Name,
+            KeyColor        = KeyColor,
+            FontColor       = FontColor,
+            BorderColor     = BorderColor,
+            BorderThickness = BorderThickness,
+            FontName        = FontName,
+            FontSize        = FontSize,
+        };
+    }
+
+
+    /// <summary>
     /// A key occupying a rectangular region of the grid.
     /// Row/Col are 0-based top-left corner; RowSpan/ColSpan ≥ 1.
     /// </summary>
@@ -38,9 +65,10 @@ namespace OnScreenKeyboard
     /// </summary>
     public class GridLayout
     {
-        public int            Rows  { get; set; }
-        public int            Cols  { get; set; }
-        public List<GridCell> Cells { get; set; } = new List<GridCell>();
+        public int            Rows   { get; set; }
+        public int            Cols   { get; set; }
+        public List<GridCell> Cells  { get; set; } = new List<GridCell>();
+        public List<KeyGroup> Groups { get; set; } = new List<KeyGroup>();
 
         public GridLayout(int rows, int cols)
         {
@@ -86,7 +114,7 @@ namespace OnScreenKeyboard
         // ── Structural edits ──────────────────────────────────────────
         /// Insert a new row of 1-wide keys above (insertBefore=true) or
         /// below (insertBefore=false) the row containing grid row r.
-        public void InsertRow(int atRow, bool before, GlobalSettings g)
+        public void InsertRow(int atRow, bool before, VisualTheme g)
         {
             int insertAt = before ? atRow : atRow + 1;
             insertAt = Math.Clamp(insertAt, 0, Rows);
@@ -132,7 +160,7 @@ namespace OnScreenKeyboard
 
         /// Insert a column of 1-tall keys to the left (before=true) or
         /// right (before=false) of column atCol.
-        public void InsertCol(int atCol, bool before, GlobalSettings g)
+        public void InsertCol(int atCol, bool before, VisualTheme g)
         {
             int insertAt = before ? atCol : atCol + 1;
             insertAt = Math.Clamp(insertAt, 0, Cols);
@@ -204,7 +232,7 @@ namespace OnScreenKeyboard
         }
 
         /// Split a merged cell back into individual 1×1 cells.
-        public void SplitCell(int r, int c, GlobalSettings g)
+        public void SplitCell(int r, int c, VisualTheme g)
         {
             var cell = CellAt(r, c);
             if (cell == null) return;
@@ -219,7 +247,7 @@ namespace OnScreenKeyboard
         }
 
         // ── Helpers ───────────────────────────────────────────────────
-        private static KeyProps DefaultKey(GlobalSettings g) => new KeyProps("", "")
+        private static KeyProps DefaultKey(VisualTheme g) => new KeyProps("", "")
         {
             // All style properties use sentinel values (inherit from global).
             // FontSize from global if set, otherwise 0 (auto-size from button dimensions).
@@ -229,7 +257,8 @@ namespace OnScreenKeyboard
         public GridLayout Clone()
         {
             var copy = new GridLayout(Rows, Cols);
-            foreach (var c in Cells) copy.Cells.Add(c.Clone());
+            foreach (var c in Cells)  copy.Cells.Add(c.Clone());
+            foreach (var g in Groups) copy.Groups.Add(g.Clone());
             return copy;
         }
     }

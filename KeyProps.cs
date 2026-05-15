@@ -16,6 +16,7 @@ namespace OnScreenKeyboard
         public Color  KeyColor        { get; set; }
         public Color  BorderColor     { get; set; }
         public int    BorderThickness { get; set; }
+        public string GroupName       { get; set; } = "";
         public KeyProps(string label, string send,
                         string shiftLabel = "", string shiftSend = "",
                         string altGrLabel = "", string altGrSend = "")
@@ -39,6 +40,7 @@ namespace OnScreenKeyboard
             KeyColor        = KeyColor,
             BorderColor     = BorderColor,
             BorderThickness = BorderThickness,
+            GroupName       = GroupName,
         };
 
         public string GetDisplayLabel(bool shifted, bool altGr = false)
