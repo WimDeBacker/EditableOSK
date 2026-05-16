@@ -7,9 +7,33 @@ using System.Windows.Forms;
 
 namespace OnScreenKeyboard
 {
+    /// <summary>
+    /// The main on-screen keyboard window.
+    ///
+    /// <para>
+    /// This form is the heart of the application. It displays a grid of keyboard
+    /// buttons, handles all user interaction (clicking keys, editing the layout,
+    /// saving/loading files), and coordinates with <see cref="WordPredictor"/> for
+    /// word prediction and <see cref="SendKeysHelper"/> for injecting keystrokes into
+    /// the focused application.
+    /// </para>
+    ///
+    /// <para>Key design decisions:</para>
+    /// <list type="bullet">
+    ///   <item><b>No focus stealing</b> — <c>WS_EX_NOACTIVATE</c> and
+    ///   <c>NoActivateButton</c> ensure clicking the keyboard never takes focus away
+    ///   from the application the user is typing into.</item>
+    ///   <item><b>Three modes</b> — Normal (typing), Edit (layout editing), and
+    ///   GearPlacement (repositioning the gear button).</item>
+    ///   <item><b>All state in memory</b> — the layout is auto-saved to XML after every
+    ///   edit so no data is lost if the app closes unexpectedly.</item>
+    /// </list>
+    /// </summary>
     public class KeyboardForm : Form
     {
         // ── Win32 ────────────────────────────────────────────────────
+        // These constants let us call Windows API functions that WinForms
+        // does not expose directly.
         private const int WS_EX_NOACTIVATE = 0x08000000;
         private static readonly IntPtr HWND_TOPMOST   = new IntPtr(-1);
         private static readonly IntPtr HWND_NOTOPMOST = new IntPtr(-2);
@@ -19,6 +43,12 @@ namespace OnScreenKeyboard
         private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter,
             int x, int y, int cx, int cy, uint uFlags);
 
+        /// <summary>
+        /// Tells Windows to keep this window above all other windows (or removes
+        /// that guarantee) depending on the <see cref="WindowState.AlwaysOnTop"/> setting.
+        /// Uses <c>SetWindowPos</c> with <c>SWP_NOACTIVATE</c> so the call does not
+        /// steal focus.
+        /// </summary>
         private void ForceTopMost()
         {
             if (!IsHandleCreated) return;
@@ -129,6 +159,15 @@ namespace OnScreenKeyboard
         private WinEventDelegate _hookDelegate;  // keep alive — GC must not collect
         private IntPtr           _hookHandle = IntPtr.Zero;
 
+        /// <summary>
+        /// Installs a system-wide hook that fires whenever any window in any
+        /// application gains focus.  We use this to track the last external window
+        /// so <see cref="SendKeysHelper"/> knows where to direct keystrokes.
+        /// <para>
+        /// <c>WINEVENT_SKIPOWNPROCESS</c> ensures our own form never appears as the
+        /// target, which would send keystrokes to ourselves.
+        /// </para>
+        /// </summary>
         private void RegisterFocusHook()
         {
             _hookDelegate = (hook, evt, hwnd, obj, child, thread, time) =>
@@ -142,9 +181,14 @@ namespace OnScreenKeyboard
                 WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
         }
 
+        /// <summary>Returns true if the given cell represents a modifier key (Shift, Ctrl, etc.).</summary>
         private bool IsModifier(GridCell cell) =>
             cell != null && KeyLayout.ModifierLabels.Contains(cell.Props.Label);
 
+        /// <summary>
+        /// Returns true if any currently latched modifier has the given label.
+        /// Used to check whether Shift, Ctrl, Alt, or AltGr is currently active.
+        /// </summary>
         private bool AnyModifier(string label)
         {
             foreach (var cell in _latchedMods)
@@ -152,9 +196,15 @@ namespace OnScreenKeyboard
             return false;
         }
 
+        /// <summary>True when Shift or Caps Lock is currently latched.</summary>
         private bool ShiftActive => AnyModifier("Shift") || AnyModifier("Caps");
+        /// <summary>True when AltGr is currently latched.</summary>
         private bool AltGrActive => AnyModifier("AltGr");
 
+        /// <summary>
+        /// Latches all Shift keys so the next letter is typed as a capital.
+        /// Called by the word predictor at the start of a new sentence.
+        /// </summary>
         private void LatchShiftForSentence()
         {
             foreach (var cell in _layout.Cells)
@@ -164,6 +214,10 @@ namespace OnScreenKeyboard
             ApplyWPTags();
         }
 
+        /// <summary>
+        /// Removes any non-locked Shift latches. Called by the predictor after a
+        /// capital letter has been committed so the keyboard returns to lower case.
+        /// </summary>
         private void UnlatchShift()
         {
             bool removed = _latchedMods.RemoveWhere(c =>
@@ -173,6 +227,22 @@ namespace OnScreenKeyboard
         }
 
         // ── Constructor ──────────────────────────────────────────────
+
+        /// <summary>
+        /// Creates and initialises the keyboard window.
+        /// <para>
+        /// In order:
+        /// <list type="number">
+        ///   <item>Sets window chrome properties (no taskbar button, always on top, no focus stealing).</item>
+        ///   <item>Loads the English translation and the word-prediction database if present.</item>
+        ///   <item>Wires the predictor events (predictions changed → refresh buttons, shift latch → capitalise, inject send → type).</item>
+        ///   <item>Builds the default QWERTY layout, gear button, edit strip, and toolbars.</item>
+        ///   <item>Calls <see cref="TryAutoLoad"/> to restore the last-used layout from disk.</item>
+        ///   <item>Registers window-resize and close handlers for auto-save and cleanup.</item>
+        ///   <item>Installs the system-wide focus hook via <see cref="RegisterFocusHook"/>.</item>
+        /// </list>
+        /// </para>
+        /// </summary>
         public KeyboardForm()
         {
             Text            = "On-Screen Keyboard";
@@ -249,6 +319,11 @@ namespace OnScreenKeyboard
         private const int WM_NCLBUTTONDOWN = 0x00A1;
         private const int HTCAPTION        = 2;
 
+        /// <summary>
+        /// Shows or hides the Windows title bar based on <see cref="WindowState.HideTitlebar"/>.
+        /// When hidden, <see cref="ForwardMouseEvents"/> lets the user drag the window by
+        /// clicking on the toolbar or empty key areas.
+        /// </summary>
         private void ApplyTitlebarState()
         {
             bool hide = _window.HideTitlebar;
@@ -261,6 +336,23 @@ namespace OnScreenKeyboard
             ForceTopMost();
         }
 
+        /// <summary>
+        /// Creates the small gear (⚙) button that floats over the keyboard grid.
+        /// <para>
+        /// The gear button has three distinct behaviours depending on context:
+        /// <list type="bullet">
+        ///   <item><b>Left-click</b> — toggles Edit mode (or, when HoldToEdit is on, is
+        ///   handled by a 1-second hold timer instead).</item>
+        ///   <item><b>Right-click</b> — shows the gear context menu (currently: move gear).</item>
+        ///   <item><b>Drag in Edit mode</b> — repositions the gear overlay to a different cell.</item>
+        ///   <item><b>Drag in Normal mode</b> — drags the entire window.</item>
+        /// </list>
+        /// </para>
+        /// <para>
+        /// Note: the button is NOT added to <c>Controls</c> here. It is added at the end of
+        /// <see cref="RebuildAllButtons"/> so it is always the last (topmost) control.
+        /// </para>
+        /// </summary>
         private void BuildGearButton()
         {
             _gearBtn = new NoActivateButton
@@ -349,6 +441,11 @@ namespace OnScreenKeyboard
             // the last control added — guaranteeing it sits on top in z-order.
         }
 
+        /// <summary>
+        /// Creates the thin coloured bar docked to the bottom of the window.
+        /// It is hidden in Normal mode and shown in Edit / GearPlacement mode as a
+        /// visual indicator that the keyboard is not in its typing state.
+        /// </summary>
         private void BuildEditStrip()
         {
             _editStrip = new Panel
@@ -361,6 +458,15 @@ namespace OnScreenKeyboard
             Controls.Add(_editStrip);
         }
 
+        /// <summary>
+        /// Creates the two toolbar panels that appear when Edit mode is active.
+        /// <list type="bullet">
+        ///   <item><c>_toolbar</c> (row 1) — file operations and mode-switch buttons.</item>
+        ///   <item><c>_toolbarEdit</c> (row 2) — key/grid editing actions, visible only in Edit mode.</item>
+        /// </list>
+        /// Both panels use <c>DockStyle.None</c> and are positioned manually by
+        /// <see cref="LayoutButtons"/> to guarantee a fixed top-to-bottom order.
+        /// </summary>
         private void BuildToolbar()
         {
             _toolTip = new ToolTip { ShowAlways = true, AutoPopDelay = 6000, InitialDelay = 400, ReshowDelay = 200 };
@@ -404,6 +510,11 @@ namespace OnScreenKeyboard
             return sp < 0 ? s : s.Substring(0, sp) + "\n" + s.Substring(sp + 1);
         }
 
+        /// <summary>
+        /// Creates all buttons for toolbar row 1 (Load, Save, Undo, Redo, Edit, Keyboard, Exit)
+        /// and the filename label, wires their click handlers, and subscribes to the panel's
+        /// Resize event so buttons stay correctly positioned when the window is resized.
+        /// </summary>
         private void BuildToolbarButtons()
         {
             ToolbarButton MakeBtn(string icon, string label)
@@ -442,6 +553,11 @@ namespace OnScreenKeyboard
             _toolbar.Resize += (s, e) => PositionToolbarControls();
         }
 
+        /// <summary>
+        /// Lays out the row-1 toolbar buttons and filename label within the toolbar panel.
+        /// Load/Save/Undo/Redo are anchored to the left; Exit/Keyboard/Edit are anchored to
+        /// the right; the filename label fills the space between them.
+        /// </summary>
         private void PositionToolbarControls()
         {
             const int h = 48, y = 3, gap = 2;
@@ -467,6 +583,11 @@ namespace OnScreenKeyboard
             _lblFilename.SetBounds(lblX, y, lblW, h);
         }
 
+        /// <summary>
+        /// Creates all buttons for toolbar row 2 (key actions on the left, grid actions on the
+        /// right, selected-key info label in the middle), wires their click handlers, and
+        /// sets initial tooltip text.
+        /// </summary>
         private void BuildToolbarEditButtons()
         {
             ToolbarButton MakeBtn(string icon, string label)
@@ -628,6 +749,11 @@ namespace OnScreenKeyboard
             RefreshToolbarTooltips();
         }
 
+        /// <summary>
+        /// Lays out the row-2 toolbar buttons and selected-key label within the edit toolbar panel.
+        /// Key-action buttons are anchored to the left; grid-action buttons to the right;
+        /// the selected-key label fills the space between them.
+        /// </summary>
         private void PositionToolbarEditControls()
         {
             const int h = 48, y = 3, gap = 2;
@@ -659,6 +785,10 @@ namespace OnScreenKeyboard
             _lblSelectedKey.SetBounds(lblX, y, lblW, h);
         }
 
+        /// <summary>
+        /// Re-reads all toolbar button labels and tooltips from the translation system
+        /// and forces a repaint. Called whenever the UI language is changed at runtime.
+        /// </summary>
         private void RefreshToolbarButtonLabels()
         {
             // Row 1 button labels
@@ -695,6 +825,11 @@ namespace OnScreenKeyboard
             RefreshToolbarTooltips();
         }
 
+        /// <summary>
+        /// Assigns translated tooltip strings to every toolbar button.
+        /// Also called from <see cref="RefreshToolbarButtonLabels"/> so tooltips stay in
+        /// sync when the language changes.
+        /// </summary>
         private void RefreshToolbarTooltips()
         {
             if (_toolTip == null || _btnEdit == null) return;
@@ -729,6 +864,19 @@ namespace OnScreenKeyboard
         }
 
         // ── Rebuild all buttons ──────────────────────────────────────
+
+        /// <summary>
+        /// Discards all existing key buttons and creates fresh ones from the current layout.
+        /// <para>
+        /// This is the "nuclear option" — call it after loading a new layout or making
+        /// structural changes (row/column insert/delete, span changes). For lighter updates
+        /// (colour or label changes only) use <see cref="RefreshAllButtons"/> instead.
+        /// </para>
+        /// <para>
+        /// The gear button is always added last so it stays on top in z-order regardless
+        /// of how many key buttons exist.
+        /// </para>
+        /// </summary>
         private void RebuildAllButtons()
         {
             SuspendLayout();
@@ -794,6 +942,23 @@ namespace OnScreenKeyboard
                 wpCells[i].Props.Send = "wp:" + i;
         }
 
+        /// <summary>
+        /// Creates a single keyboard button for the given <paramref name="cell"/> and
+        /// wires all mouse event handlers needed for Normal, Edit, and GearPlacement modes.
+        /// <para>
+        /// Uses <see cref="NoActivateButton"/> so clicking the key never steals focus from
+        /// the application the user is typing into.
+        /// </para>
+        /// <para>
+        /// Drag-to-swap: in Edit mode, dragging beyond the system drag threshold starts a
+        /// <c>DoDragDrop</c> operation that passes the source <see cref="GridCell"/> as data.
+        /// The corresponding <c>DragDrop</c> handler on the target button calls
+        /// <see cref="SwapCells"/>.
+        /// </para>
+        /// </summary>
+        /// <param name="cell">The grid cell this button represents.</param>
+        /// <param name="shifted">Whether Shift is currently active (affects the displayed label).</param>
+        /// <param name="altGr">Whether AltGr is currently active.</param>
         private Button CreateButton(GridCell cell, bool shifted, bool altGr)
         {
             var p   = cell.Props;
@@ -1128,9 +1293,18 @@ namespace OnScreenKeyboard
         }
 
         // ── Layout ───────────────────────────────────────────────────
-        // The gear button is positioned over the cell at row 0, last column.
+        // The gear button is a floating overlay, not part of the grid.
+        // It is positioned over the designated "gear cell" (default: row 0, last column).
         // That cell is kept blank in the XML (Label="" Send="") so it acts
         // as a reserved slot — invisible in normal mode, the gear sits on top.
+        /// <summary>
+        /// Computes and assigns pixel bounds to every key button and the gear overlay.
+        /// <para>
+        /// The available space (window minus toolbar height and padding) is divided equally
+        /// among all grid columns and rows. Multi-cell spans receive proportionally larger bounds.
+        /// This method is called on every resize, mode change, and after structural edits.
+        /// </para>
+        /// </summary>
         private void LayoutButtons()
         {
             int rows = _layout.Rows, cols = _layout.Cols;
@@ -1201,6 +1375,22 @@ namespace OnScreenKeyboard
             _gearBtn.BringToFront();
         }
 
+        /// <summary>
+        /// Picks the right font size for a key button and applies it.
+        /// <para>
+        /// Priority: per-key font size → group font size → auto-calculated size.
+        /// Auto-calculation uses the button height as a starting point, applies a correction
+        /// factor for upper-case letters, then measures the actual label width with
+        /// <see cref="TextRenderer.MeasureText"/> and scales down if it would overflow.
+        /// This avoids per-font empirical fudge factors — it works correctly for any font.
+        /// </para>
+        /// </summary>
+        /// <param name="btn">The button whose font is being set.</param>
+        /// <param name="p">The key's properties (font name, size, label).</param>
+        /// <param name="btnH">Current button height in pixels.</param>
+        /// <param name="btnW">Current button width in pixels.</param>
+        /// <param name="shifted">Whether Shift is active (affects which label to measure).</param>
+        /// <param name="altGr">Whether AltGr is active.</param>
         private void SetButtonFont(Button btn, KeyProps p, int btnH, int btnW,
                                    bool shifted, bool altGr)
         {
@@ -1259,8 +1449,15 @@ namespace OnScreenKeyboard
             UpdateCornerTag(btn, p, shifted, altGr);
         }
 
-        // After all buttons have been laid out and tagged, apply WP predictions.
-        // This is called once per LayoutButtons pass via the post-loop section below.
+        /// <summary>
+        /// Stores the main label, corner labels (Shift top-right, AltGr top-left), and font
+        /// colour into the button's <c>Tag</c> property so <see cref="OnButtonPaint"/> can
+        /// draw them without recalculating on every paint event.
+        /// <para>
+        /// Skips <c>Invalidate()</c> when nothing has changed to avoid redundant GDI paint
+        /// passes — this matters because ~40 buttons are refreshed per LayoutButtons call.
+        /// </para>
+        /// </summary>
         private void UpdateCornerTag(Button btn, KeyProps p, bool shifted, bool altGr)
         {
             bool isMod = KeyLayout.ModifierLabels.Contains(p.Label);
@@ -1294,6 +1491,22 @@ namespace OnScreenKeyboard
         // Graphics.DrawString which requires a StringFormat with HotkeyPrefix.None.
         // TextFormatFlags.NoPrefix suppresses all "&" interpretation entirely.
 
+        /// <summary>
+        /// Custom paint handler for every key button.  WinForms' default text rendering
+        /// cannot draw corner labels, so we set <c>btn.Text = ""</c> and paint everything
+        /// ourselves here.
+        /// <para>
+        /// Draws three strings per key:
+        /// <list type="bullet">
+        ///   <item><b>Main label</b> — centred (or right-aligned for word-prediction keys).</item>
+        ///   <item><b>Shift label</b> — small, top-right corner, 60% opacity.</item>
+        ///   <item><b>AltGr label</b> — small, top-left corner, 50% opacity.</item>
+        /// </list>
+        /// For word-prediction keys it also draws an underline beneath the part of the
+        /// word the user has already typed so they can see how the prediction relates to
+        /// their input.
+        /// </para>
+        /// </summary>
         private void OnButtonPaint(object sender, PaintEventArgs e)
         {
             if (sender is not Button btn) return;
@@ -1387,6 +1600,14 @@ namespace OnScreenKeyboard
         }
 
         // ── Font cache ────────────────────────────────────────────────
+        // Creating a new Font object on every paint or resize call is expensive and
+        // causes memory pressure. These caches ensure each (name, size) combination is
+        // only allocated once and reused.
+
+        /// <summary>
+        /// Returns a cached <see cref="Font"/> for the gear button at the given size.
+        /// Keeps only one font at a time since the gear button always uses the same family.
+        /// </summary>
         private Font _lastGearFont; private int _lastGearFontSize = -1;
         private Font GetGearFont(int size)
         {
@@ -1395,6 +1616,11 @@ namespace OnScreenKeyboard
             return _lastGearFont;
         }
         private readonly Dictionary<(string,int),Font> _fontCache = new();
+
+        /// <summary>
+        /// Returns a cached bold <see cref="Font"/> for key buttons at the given family name
+        /// and point size. Falls back to Arial if the requested family cannot be loaded.
+        /// </summary>
         private Font GetButtonFont(string name, int size)
         {
             var key = (name ?? "Arial", size);
@@ -1408,9 +1634,19 @@ namespace OnScreenKeyboard
         }
 
         // ── Refresh ───────────────────────────────────────────────────
-        // skipFontCalc: pass true when LayoutButtons() was already called immediately
-        // before this — fonts/sizes were computed there, so we skip the TextRenderer
-        // measurement pass and only update tags and colours.
+
+        /// <summary>
+        /// Refreshes every key button's colours, labels, and (optionally) font sizes.
+        /// <para>
+        /// Use <paramref name="skipFontCalc"/><c> = true</c> when <see cref="LayoutButtons"/>
+        /// was just called — fonts were already computed there, so skipping the
+        /// <see cref="TextRenderer"/> measurement pass avoids doing it twice.
+        /// </para>
+        /// </summary>
+        /// <param name="skipFontCalc">
+        /// When <c>true</c>, only colours and labels are updated (faster).
+        /// When <c>false</c> (default), font sizes are also recalculated.
+        /// </param>
         private void RefreshAllButtons(bool skipFontCalc = false)
         {
             bool shifted = ShiftActive, altGr = AltGrActive;
@@ -1497,6 +1733,19 @@ namespace OnScreenKeyboard
             string.IsNullOrEmpty(groupName) ? null :
             _layout.Groups.Find(g => g.Name == groupName);
 
+        /// <summary>
+        /// Sets a button's background colour, foreground colour, and border colour/thickness
+        /// by resolving the key's per-key properties against its group properties and the
+        /// global theme.
+        /// <para>
+        /// Three visual states:
+        /// <list type="bullet">
+        ///   <item><b>Locked modifier</b> — strong amber; stays until clicked again.</item>
+        ///   <item><b>Latched modifier</b> — moderate highlight; clears after the next regular key.</item>
+        ///   <item><b>Normal</b> — colours from key/group/theme inheritance chain.</item>
+        /// </list>
+        /// </para>
+        /// </summary>
         private void ApplyPropsToButton(Button btn, KeyProps p, bool latched, bool locked = false)
         {
             // Non-empty keys are always visible; a key may have transitioned from
@@ -1537,16 +1786,28 @@ namespace OnScreenKeyboard
             }
         }
 
+        /// <summary>Returns true if the colour is perceptually light (luminance &gt; 50%).</summary>
         private static bool IsLight(Color c) => (c.R*299+c.G*587+c.B*114)/1000 > 128;
+
+        /// <summary>Shifts each RGB channel by <paramref name="d"/>, clamped to [0,255].</summary>
         private static Color AdjustBrightness(Color c, int d) =>
             Color.FromArgb(Math.Clamp(c.R+d,0,255),Math.Clamp(c.G+d,0,255),Math.Clamp(c.B+d,0,255));
+
+        /// <summary>
+        /// Escapes a string for use as a WinForms button label: doubles every "&amp;" so
+        /// it is rendered as a literal ampersand rather than treated as an accelerator prefix.
+        /// </summary>
         private static string BtnText(string s) => (s ?? "").Replace("&","&&");
 
         // ── Gear menu ─────────────────────────────────────────────────
+        // The gear button's right-click context menu. Currently it has one entry:
+        // "Move gear button…" which enters GearPlacement mode.
+
         private static readonly Font   MenuFont = new Font("Segoe UI", 11.5f);
         private static readonly Color  MenuBg   = ColorTranslator.FromHtml("#1A1A2E");
         private static readonly Color  MenuFg   = ColorTranslator.FromHtml("#E0E0FF");
 
+        /// <summary>Shows the gear button's right-click context menu below the gear button.</summary>
         private void ShowGearMenu()
         {
             var menu = StyledMenu();
@@ -1555,6 +1816,7 @@ namespace OnScreenKeyboard
             menu.Show(_gearBtn, new Point(0, _gearBtn.Height));
         }
 
+        /// <summary>Creates a dark-themed <see cref="ContextMenuStrip"/> styled to match the toolbar.</summary>
         private ContextMenuStrip StyledMenu()
         {
             var m = new ContextMenuStrip();
@@ -1562,6 +1824,7 @@ namespace OnScreenKeyboard
             return m;
         }
 
+        /// <summary>Adds a styled menu item to the given context menu strip.</summary>
         private void MI(ContextMenuStrip m, string text, Action action)
         {
             var item = new ToolStripMenuItem(text)
@@ -1571,6 +1834,12 @@ namespace OnScreenKeyboard
         }
 
         // ── Key click ─────────────────────────────────────────────────
+
+        /// <summary>
+        /// Dispatches a key-button click to the appropriate handler based on the current mode.
+        /// In Edit mode, clicks are handled by <see cref="CreateButton"/>'s MouseDown handler
+        /// (selection / format painter) and never reach this method.
+        /// </summary>
         private void OnKeyClick(GridCell cell)
         {
             switch (_mode)
@@ -1580,6 +1849,16 @@ namespace OnScreenKeyboard
             }
         }
 
+        /// <summary>
+        /// Handles a key press in Normal mode.
+        /// <list type="bullet">
+        ///   <item>Modifier keys (Shift, Ctrl, etc.) are toggled via <see cref="ToggleModifier"/>.</item>
+        ///   <item>Word-prediction keys (Send = "wp:N") trigger <see cref="WordPredictor.OnWPClick"/>.</item>
+        ///   <item>Layout-switch keys (Send starts with "layout:") load a different layout file.</item>
+        ///   <item>All other keys resolve the correct send string (normal / shift / altgr),
+        ///   clear active modifiers, and call <see cref="SendKeysHelper.Send"/>.</item>
+        /// </list>
+        /// </summary>
         private void HandleNormalClick(GridCell cell)
         {
             if (IsModifier(cell)) { ToggleModifier(cell); return; }
@@ -1791,6 +2070,21 @@ namespace OnScreenKeyboard
             return ell;
         }
 
+        /// <summary>
+        /// Toggles a modifier key's latched/locked state.
+        /// <para>
+        /// With <b>StickyModifiers off</b>: one click latches (active for next key),
+        /// another click un-latches.
+        /// </para>
+        /// <para>
+        /// With <b>StickyModifiers on</b>: click 1 = latched, click 2 = locked (stays
+        /// active until clicked a third time). This matches the Windows Sticky Keys behaviour.
+        /// </para>
+        /// <para>
+        /// All keys with the same label (e.g. both Shift keys) are toggled together so
+        /// either Shift key activates the modifier.
+        /// </para>
+        /// </summary>
         private void ToggleModifier(GridCell cell)
         {
             // When shift is manually toggled with empty buffer:
@@ -1828,6 +2122,10 @@ namespace OnScreenKeyboard
             RefreshAllButtons();
         }
 
+        /// <summary>
+        /// Clears all one-shot latched modifiers after a regular key is pressed.
+        /// Locked modifiers (click-2 state) and Caps Lock are intentionally preserved.
+        /// </summary>
         private void ClearModifiers()
         {
             // Remove one-shot latched mods; keep locked mods and Caps
@@ -1838,6 +2136,11 @@ namespace OnScreenKeyboard
 
 
 
+        /// <summary>
+        /// Opens the <see cref="KeyEditorForm"/> dialog for the given cell.
+        /// If the user confirms, applies the resulting properties and any span change to the
+        /// layout, filling or absorbing neighbouring cells as needed.
+        /// </summary>
         private void OpenEditor(GridCell cell)
         {
             // Collect WP slots used by other keys so the editor can warn about duplicates
@@ -1894,6 +2197,10 @@ namespace OnScreenKeyboard
             AutoSave();
         }
 
+        /// <summary>
+        /// Transitions to a new application mode, updating all visual indicators and
+        /// toolbar visibility, then reflowing the button layout.
+        /// </summary>
         private void SetMode(Mode newMode)
         {
             if (newMode != Mode.Edit) { _selectedCell = null; UpdateSelectedKeyLabel(); }
@@ -1904,6 +2211,10 @@ namespace OnScreenKeyboard
             RefreshAllButtons(skipFontCalc: true);
         }
 
+        /// <summary>
+        /// Enters GearPlacement mode: all keys are highlighted in blue so the user can
+        /// click one to become the new gear button home cell.
+        /// </summary>
         private void StartGearPlacement()
         {
             _mode = Mode.GearPlacement;
@@ -1911,6 +2222,10 @@ namespace OnScreenKeyboard
             RefreshAllButtons(skipFontCalc: true);
         }
 
+        /// <summary>
+        /// Completes GearPlacement mode by recording the chosen cell's row/column as the
+        /// gear button's new home, then returning to Normal mode.
+        /// </summary>
         private void FinishGearPlacement(GridCell cell)
         {
             _meta.GearRow = cell.Row;
@@ -1922,6 +2237,11 @@ namespace OnScreenKeyboard
             AutoSave();
         }
 
+        /// <summary>
+        /// Updates all visual indicators that reflect the current mode: edit strip colour,
+        /// toolbar visibility, gear button glyph and colour, and the enabled state of toolbar
+        /// buttons. Always ends with <see cref="LayoutButtons"/> to reflow the key grid.
+        /// </summary>
         private void ApplyModeIndicators()
         {
             bool inEdit = _mode == Mode.Edit;
@@ -1987,6 +2307,10 @@ namespace OnScreenKeyboard
 
         // ── Toolbar state helpers ─────────────────────────────────────
 
+        /// <summary>
+        /// Updates the filename label in the toolbar to show the current layout file's
+        /// base name, or "default" when no file has been explicitly loaded.
+        /// </summary>
         private void UpdateFilenameLabel()
         {
             if (_lblFilename == null) return;
@@ -1996,6 +2320,10 @@ namespace OnScreenKeyboard
             _lblFilename.Text = name;
         }
 
+        /// <summary>
+        /// Updates the selected-key info label in the edit toolbar to show the current
+        /// cell's label and send value. Shows "—" when nothing is selected.
+        /// </summary>
         private void UpdateSelectedKeyLabel()
         {
             if (_lblSelectedKey == null) return;
@@ -2058,6 +2386,10 @@ namespace OnScreenKeyboard
             SetBtn(_btnSplitCell,   canSplit);
         }
 
+        /// <summary>
+        /// Applies the previously copied formatting (font, colours, border, group) to the
+        /// given cell. Does not affect the key's content (label, send strings).
+        /// </summary>
         private void ApplyFormatPainter(GridCell cell)
         {
             if (_copiedFormatting == null) return;
@@ -2073,18 +2405,30 @@ namespace OnScreenKeyboard
             AutoSave();
         }
 
+        /// <summary>
+        /// Sets the mouse cursor to a hand icon for all key buttons when format-paint mode
+        /// is active, or restores the default cursor when it is cancelled.
+        /// </summary>
         private void UpdatePaintModeCursors()
         {
             var cur = _fmtPaintMode ? Cursors.Hand : Cursors.Default;
             foreach (var btn in _buttons.Values) btn.Cursor = cur;
         }
 
+        /// <summary>
+        /// Sets the mouse cursor to a hand icon for all key buttons when key-paint mode
+        /// is active, or restores the default cursor when it is cancelled.
+        /// </summary>
         private void UpdateKeyPaintModeCursors()
         {
             var cur = _keyPaintMode ? Cursors.Hand : Cursors.Default;
             foreach (var btn in _buttons.Values) btn.Cursor = cur;
         }
 
+        /// <summary>
+        /// Handles keyboard shortcuts for the keyboard form itself (not for typing through).
+        /// Currently: Escape cancels format-paint mode, key-paint mode, and gear-placement mode.
+        /// </summary>
         private void OnFormKeyDown(object sender, KeyEventArgs e)
         {
             if ((_fmtPaintMode || _keyPaintMode) && e.KeyCode == Keys.Escape)
@@ -2106,6 +2450,17 @@ namespace OnScreenKeyboard
         }
 
         // ── Keyboard editor ───────────────────────────────────────────
+
+        /// <summary>
+        /// Opens the <see cref="KeyboardEditorForm"/> dialog for global keyboard settings
+        /// (theme, window, language, groups).
+        /// <para>
+        /// If the user did NOT tick "Apply to all keys", currently-inheriting keys are frozen
+        /// at the old global values so the global change doesn't silently restyle them.
+        /// If the user DID tick it, per-key overrides for changed fields are cleared so all
+        /// keys immediately adopt the new global style.
+        /// </para>
+        /// </summary>
         private void OpenKeyboardEditor()
         {
             using var dlg = new KeyboardEditorForm(_theme, _window, _meta, this,
@@ -2169,6 +2524,20 @@ namespace OnScreenKeyboard
         }
 
         // ── Save / Load ───────────────────────────────────────────────
+
+        /// <summary>
+        /// Saves the current layout to an XML file.
+        /// <para>
+        /// When <paramref name="saveAs"/> is <c>true</c>, always shows a Save dialog even if
+        /// a file path is already known. After saving, also saves a copy to the default
+        /// auto-save path so settings persist across restarts even if the user's file is on
+        /// a different drive.
+        /// </para>
+        /// <para>
+        /// The save is blocked when the layout is structurally invalid (overlapping or missing
+        /// cells) to prevent writing a file that cannot be loaded back.
+        /// </para>
+        /// </summary>
         private void SaveSettings(bool saveAs)
         {
             // Guard: refuse to save a structurally broken layout so the file on disk
@@ -2207,6 +2576,10 @@ namespace OnScreenKeyboard
             }
         }
 
+        /// <summary>
+        /// Shows an Open dialog and loads the selected layout file via
+        /// <see cref="ApplyLoadedSettings"/>.
+        /// </summary>
         private void LoadSettings()
         {
             using var dlg = new OpenFileDialog
@@ -2215,6 +2588,14 @@ namespace OnScreenKeyboard
             if (dlg.ShowDialog() == DialogResult.OK) ApplyLoadedSettings(dlg.FileName);
         }
 
+        /// <summary>
+        /// Called at startup. Reads the default auto-save file to find the path of the last
+        /// explicitly opened layout, then loads that file if it still exists.
+        /// <para>
+        /// Falls back to the auto-save file itself when the last-used file cannot be found.
+        /// Does nothing if no auto-save file exists (first run).
+        /// </para>
+        /// </summary>
         private void TryAutoLoad()
         {
             string settingsPath = SettingsManager.DefaultPath;
@@ -2271,6 +2652,10 @@ namespace OnScreenKeyboard
             RefreshUndoRedoState();
         }
 
+        /// <summary>
+        /// Pops the most recent snapshot from the undo stack, saves the current state to the
+        /// redo stack, and restores the popped snapshot.
+        /// </summary>
         private void Undo()
         {
             if (_undoStack.Count == 0) return;
@@ -2282,6 +2667,10 @@ namespace OnScreenKeyboard
             RefreshUndoRedoState();
         }
 
+        /// <summary>
+        /// Pops the most recent redo snapshot, saves the current state to the undo stack,
+        /// and restores the popped snapshot.
+        /// </summary>
         private void Redo()
         {
             if (_redoStack.Count == 0) return;
@@ -2324,6 +2713,11 @@ namespace OnScreenKeyboard
             AutoSave();
         }
 
+        /// <summary>
+        /// Silently saves the current layout to the default auto-save path (and to the
+        /// current file if one is open). Errors are swallowed — auto-save should never
+        /// interrupt the user.
+        /// </summary>
         private void AutoSave()
         {
             string path = _currentFilePath ?? SettingsManager.DefaultPath;
@@ -2369,6 +2763,11 @@ namespace OnScreenKeyboard
             t.Start();
         }
 
+        /// <summary>
+        /// Loads a layout file and applies it to the keyboard.
+        /// Shows an error dialog if the file cannot be read or is not a valid layout.
+        /// On success, rebuilds all buttons and resizes the window to match saved dimensions.
+        /// </summary>
         private void ApplyLoadedSettings(string path)
         {
             GridLayout loaded = null; Exception loadEx = null;
@@ -2391,6 +2790,10 @@ namespace OnScreenKeyboard
             AutoSave();
         }
 
+        /// <summary>
+        /// Shows a translated error dialog explaining that a file could not be opened.
+        /// Optionally appends a technical detail string (exception message) for diagnostics.
+        /// </summary>
         private void ShowFileError(string fileName, string detail)
         {
             string msg = Lang.T("Invalid file msg");
