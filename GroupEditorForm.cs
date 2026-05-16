@@ -7,14 +7,30 @@ using System.Windows.Forms;
 namespace OnScreenKeyboard
 {
     /// <summary>
-    /// Modal dialog for creating, renaming, deleting and styling named key groups.
-    /// Returns the modified list via <see cref="ResultGroups"/> on OK.
+    /// A modal dialog that lets the user create, rename, delete, and style named key groups.
+    ///
+    /// A "key group" is a named category that can be assigned to one or more keys on the
+    /// on-screen keyboard layout. Each group can carry its own colours, font, and border
+    /// settings so that visually related keys share a consistent look without having to
+    /// set those properties key by key.
+    ///
+    /// The dialog works on a private working copy of the group list so that cancelling
+    /// leaves the original data untouched. When the user clicks "Apply", the modified
+    /// list is exposed through <see cref="ResultGroups"/> and the dialog closes with
+    /// <see cref="DialogResult.OK"/>.
     /// </summary>
     public class GroupEditorForm : Form
     {
+        /// <summary>
+        /// The modified list of groups that should replace the caller's original list.
+        /// This property is only set when the dialog closes with <see cref="DialogResult.OK"/>;
+        /// if the user cancels it remains <c>null</c>.
+        /// </summary>
         public List<KeyGroup> ResultGroups { get; private set; }
 
         // ── Theme (WinUI 3) ───────────────────────────────────────────
+        // All colours and fonts are sourced from the static Fluent helper so that
+        // every dialog in the application shares the same WinUI 3-inspired palette.
         private static Color C_BG       => Fluent.BgPage;
         private static Color C_PANEL_BG => Fluent.BgCard;
         private static Color C_BORDER   => Fluent.BorderCard;
@@ -28,33 +44,88 @@ namespace OnScreenKeyboard
         private static Font  F_INPUT    => Fluent.FontInput;
         private static Font  F_HEADER   => Fluent.FontTitle;
         private static Font  F_BTN      => Fluent.FontBtnLg;
+
+        /// <summary>Standard padding (in pixels) used between all controls and panel edges.</summary>
         private const int PAD = 14;
+
+        /// <summary>
+        /// Vertical spacing (in pixels) between successive rows in the detail panel.
+        /// Each label + its input control occupies one ROW of vertical space.
+        /// </summary>
         private const int ROW = 50;
 
         // ── Working copy of groups ────────────────────────────────────
-        // Each entry is a clone; changes are applied only on OK.
+        /// <summary>
+        /// Private working copy of the group list. Every entry is a deep clone of the
+        /// caller's original, so cancelling the dialog leaves the source data unchanged.
+        /// Edits are only written back to the caller via <see cref="ResultGroups"/> when
+        /// the user clicks "Apply".
+        /// </summary>
         private readonly List<KeyGroup> _groups;
 
         // ── Controls ─────────────────────────────────────────────────
+        /// <summary>Shows the names of all groups so the user can select one to edit.</summary>
         private ListBox       _lstGroups;
+
+        /// <summary>Buttons that add a brand-new group or delete the selected one.</summary>
         private Button        _btnAdd, _btnDelete;
+
+        /// <summary>Editable name of the currently selected group.</summary>
         private TextBox       _txtName;
+
+        /// <summary>
+        /// Clickable colour swatches for the key background, key label font, and key border.
+        /// Each panel shows the chosen colour as its background, or a neutral "(inherit)"
+        /// label when no colour is set for this group.
+        /// </summary>
         private Panel         _pnlKeyColor, _pnlFontColor, _pnlBorderColor;
+
+        /// <summary>
+        /// Spinner for the border thickness in pixels.
+        /// The special value <c>-1</c> means "inherit the global setting".
+        /// </summary>
         private NumericUpDown _nudBorderThickness;
+
+        /// <summary>Drop-down listing every font installed on the system, plus an "(inherit global)" option at index 0.</summary>
         private ComboBox      _cmbFont;
+
+        /// <summary>
+        /// Spinner for the font size in points.
+        /// The value <c>0</c> means "auto / inherit from the global setting".
+        /// </summary>
         private NumericUpDown _nudFontSize;
+
+        /// <summary>The main action buttons: confirm changes, discard changes, or import groups from a file.</summary>
         private Button        _btnOK, _btnCancel, _btnImport;
 
-        // Suppress detail-panel SelectedIndexChanged during programmatic list rebuild
+        /// <summary>
+        /// Set to <c>true</c> while the code is programmatically rebuilding the list or
+        /// loading a group's data into the detail panel. Event handlers that would normally
+        /// save or commit UI changes check this flag and return early to avoid overwriting
+        /// data with half-initialised values.
+        /// </summary>
         private bool _loading = false;
 
-        // Index of the group whose settings are currently shown in the detail panel.
-        // Used to commit edits back to the correct group before switching to another.
+        /// <summary>
+        /// Tracks the index (in <see cref="_groups"/>) of whichever group is currently
+        /// shown in the detail panel. Before switching to a different group, we call
+        /// <see cref="CommitTo"/> with this index to write the UI values back to that
+        /// group object. <c>-1</c> means nothing is currently displayed.
+        /// </summary>
         private int _prevIdx = -1;
 
         // ── Constructor ───────────────────────────────────────────────
+
+        /// <summary>
+        /// Initialises the dialog and immediately shows the first group (if any).
+        /// </summary>
+        /// <param name="groups">
+        /// The caller's current list of groups. The dialog clones every entry so the
+        /// original objects are never modified until the user confirms with "Apply".
+        /// </param>
         public GroupEditorForm(List<KeyGroup> groups)
         {
+            // Deep-clone so cancelling truly discards all changes.
             _groups = groups.Select(g => g.Clone()).ToList();
 
             Text            = Lang.T("Manage Groups");
@@ -68,18 +139,25 @@ namespace OnScreenKeyboard
             Font            = F_LABEL;
 
             BuildUI();
+            // Select the first group so the detail panel is populated from the start.
             RebuildList(0);
         }
 
         // ── UI construction ───────────────────────────────────────────
+
+        /// <summary>
+        /// Creates and wires up every control in the dialog: the group list panel on the
+        /// left, the style detail panel on the right, and the OK / Cancel buttons at the
+        /// bottom. No business logic lives here — it is purely layout code.
+        /// </summary>
         private void BuildUI()
         {
             int formW  = ClientSize.Width  - PAD * 2;
-            int listW  = 300;
-            int detailX = PAD + listW + PAD;
-            int detailW = formW - listW - PAD;
-            int btnAreaH = 46;
-            int innerH   = ClientSize.Height - PAD * 2 - btnAreaH - PAD;
+            int listW  = 300;                          // fixed width of the left panel
+            int detailX = PAD + listW + PAD;           // x-origin of the right panel
+            int detailW = formW - listW - PAD;         // remaining width for detail
+            int btnAreaH = 46;                         // height reserved for OK/Cancel row
+            int innerH   = ClientSize.Height - PAD * 2 - btnAreaH - PAD; // panel height
 
             // ── List panel (left) ─────────────────────────────────────
             var pnlList = AddPanel(PAD, PAD, listW, innerH, Lang.T("Groups"), Color.FromArgb(41, 128, 185));
@@ -88,20 +166,25 @@ namespace OnScreenKeyboard
             {
                 Left = PAD, Top = 36 + PAD,
                 Width = listW - PAD * 2,
+                // Calculate height: panel height minus header row, two button rows, and padding.
                 Height = innerH - 36 - PAD * 2 - 34 - 4 - 34 - PAD,
                 BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary,
                 Font = F_INPUT, BorderStyle = BorderStyle.FixedSingle,
             };
             _lstGroups.SelectedIndexChanged += (s, e) =>
             {
+                // Do nothing while the code itself is programmatically selecting items.
                 if (_loading) return;
-                CommitTo(_prevIdx);   // persist edits on the group that was shown
+                // Save any pending edits for the group that was just visible…
+                CommitTo(_prevIdx);
+                // …then load the newly selected group into the detail panel.
                 LoadDetail();
             };
             pnlList.Controls.Add(_lstGroups);
 
+            // Add / Delete buttons sit directly below the list box.
             int btnY = _lstGroups.Bottom + PAD;
-            int halfW = (listW - PAD * 2 - 4) / 2;
+            int halfW = (listW - PAD * 2 - 4) / 2; // split width with a 4 px gap between the two buttons
             _btnAdd    = MakeSmallBtn(Lang.T("+ Add group"),    PAD,             btnY, halfW, 34);
             _btnDelete = MakeSmallBtn(Lang.T("− Delete group"), PAD + halfW + 4, btnY, halfW, 34);
             _btnAdd.Click    += OnAdd;
@@ -109,6 +192,7 @@ namespace OnScreenKeyboard
             pnlList.Controls.Add(_btnAdd);
             pnlList.Controls.Add(_btnDelete);
 
+            // Import button spans the full list width, one row below Add/Delete.
             int btnImportY = btnY + 34 + 4;
             _btnImport = MakeSmallBtn(Lang.T("Import..."), PAD, btnImportY, listW - PAD * 2, 34);
             _btnImport.Click += OnImport;
@@ -117,9 +201,14 @@ namespace OnScreenKeyboard
             // ── Detail panel (right) ──────────────────────────────────
             var pnlDetail = AddPanel(detailX, PAD, detailW, innerH, Lang.T("Style"), Color.FromArgb(39, 174, 96));
 
+            // Layout constants for the detail rows:
+            //   lx = left margin for labels
+            //   vx = x-position where input controls start (after the label column)
+            //   vw = width of input controls
             int lx = PAD, vx = 180, vw = detailW - lx - vx - PAD;
-            int gy = 36 + PAD;
+            int gy = 36 + PAD; // current vertical position, incremented by ROW after each field
 
+            // Name field
             AddLabel(pnlDetail, Lang.T("Name"), lx, gy);
             _txtName = new TextBox
             {
@@ -127,9 +216,11 @@ namespace OnScreenKeyboard
                 BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary,
                 Font = F_INPUT, BorderStyle = BorderStyle.FixedSingle,
             };
+            // Keep the list box label in sync as the user types the new name.
             _txtName.TextChanged += (s, e) => SaveCurrentName();
             pnlDetail.Controls.Add(_txtName); gy += ROW;
 
+            // Colour swatches — clicking opens a colour-picker, right-clicking resets to "inherit".
             AddLabel(pnlDetail, Lang.T("Key color"), lx, gy);
             _pnlKeyColor = AddColorSwatch(pnlDetail, vx, gy, vw); gy += ROW;
 
@@ -139,6 +230,7 @@ namespace OnScreenKeyboard
             AddLabel(pnlDetail, Lang.T("Border color"), lx, gy);
             _pnlBorderColor = AddColorSwatch(pnlDetail, vx, gy, vw); gy += ROW;
 
+            // Border thickness: -1 is the sentinel for "inherit from global settings".
             AddLabel(pnlDetail, Lang.T("Border thickness"), lx, gy);
             _nudBorderThickness = new NumericUpDown
             {
@@ -148,19 +240,21 @@ namespace OnScreenKeyboard
             AddSmallHint(pnlDetail, Lang.T("-1 = inherit global"), vx + 71, gy);
             pnlDetail.Controls.Add(_nudBorderThickness); gy += ROW;
 
+            // Font family: index 0 is the special "(inherit global)" entry; real font names follow.
             AddLabel(pnlDetail, Lang.T("Font"), lx, gy);
             _cmbFont = new ComboBox
             {
                 Left = vx, Top = gy, Width = vw,
-                DropDownStyle = ComboBoxStyle.DropDownList,
+                DropDownStyle = ComboBoxStyle.DropDownList, // prevent freeform text entry
                 BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary,
                 Font = F_INPUT, FlatStyle = FlatStyle.Flat,
             };
             _cmbFont.Items.Add(Lang.T("(inherit global)"));
             foreach (var fn in GetInstalledFonts()) _cmbFont.Items.Add(fn);
-            _cmbFont.SelectedIndex = 0;
+            _cmbFont.SelectedIndex = 0; // default to "inherit"
             pnlDetail.Controls.Add(_cmbFont); gy += ROW;
 
+            // Font size: 0 means "auto / inherit".
             AddLabel(pnlDetail, Lang.T("Font size"), lx, gy);
             _nudFontSize = new NumericUpDown
             {
@@ -172,16 +266,36 @@ namespace OnScreenKeyboard
 
             // ── OK / Cancel ───────────────────────────────────────────
             int btnY2 = ClientSize.Height - PAD - 40;
-            int bw    = (formW - PAD) / 2;
+            int bw    = (formW - PAD) / 2; // each button takes roughly half the form width
             _btnCancel = MakeBigBtn(Lang.T("Cancel"), PAD,            btnY2, bw, 40);
             _btnOK     = MakeBigBtn(Lang.T("Apply"),  PAD + bw + PAD, btnY2, bw, 40);
             _btnCancel.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
-            _btnOK.Click     += (s, e) => { CommitCurrent(); ResultGroups = _groups; DialogResult = DialogResult.OK; Close(); };
+            _btnOK.Click     += (s, e) =>
+            {
+                // Make sure the currently displayed group's UI values are saved before
+                // exposing the list to the caller.
+                CommitCurrent();
+                ResultGroups = _groups;
+                DialogResult = DialogResult.OK;
+                Close();
+            };
         }
 
         // ── List management ───────────────────────────────────────────
+
+        /// <summary>
+        /// Repopulates the group list box from <see cref="_groups"/> and selects the
+        /// entry at <paramref name="selectIndex"/>. If the list is empty the detail
+        /// panel is cleared and the Delete button is disabled.
+        /// </summary>
+        /// <param name="selectIndex">
+        /// The index to select after rebuilding. Automatically clamped to the valid
+        /// range so callers do not have to guard against off-by-one situations (e.g.
+        /// when the last item is deleted).
+        /// </param>
         private void RebuildList(int selectIndex)
         {
+            // Suppress SelectedIndexChanged while we repopulate to avoid spurious commits.
             _loading = true;
             _lstGroups.Items.Clear();
             foreach (var g in _groups) _lstGroups.Items.Add(g.Name);
@@ -189,30 +303,44 @@ namespace OnScreenKeyboard
 
             if (_groups.Count > 0)
             {
+                // Clamp prevents an out-of-range index, e.g. after deleting the last item.
                 _lstGroups.SelectedIndex = Math.Clamp(selectIndex, 0, _groups.Count - 1);
                 LoadDetail();
             }
             else
             {
+                // No groups left — reset the detail panel and disable editing controls.
                 ClearDetail();
             }
             UpdateEnabled();
         }
 
+        /// <summary>
+        /// Reads the selected group from <see cref="_groups"/> and populates every
+        /// control in the detail panel with its current values. Also records the
+        /// selected index in <see cref="_prevIdx"/> so that <see cref="CommitTo"/> can
+        /// write changes back to the correct group later.
+        /// </summary>
         private void LoadDetail()
         {
             int idx = _lstGroups.SelectedIndex;
+            // Guard: nothing selected or index out of range — just blank the panel.
             if (idx < 0 || idx >= _groups.Count) { ClearDetail(); _prevIdx = -1; return; }
             _prevIdx = idx;   // remember which group is now displayed
             var g = _groups[idx];
 
+            // Use _loading to stop SaveCurrentName() and other change handlers from
+            // writing half-loaded values back into the group while we are filling in controls.
             _loading = true;
             _txtName.Text = g.Name;
+            // Color.Empty means "no colour set for this group — inherit from global settings".
             SetSwatchColor(_pnlKeyColor,    g.KeyColor.IsEmpty   ? Color.Empty : g.KeyColor);
             SetSwatchColor(_pnlFontColor,   g.FontColor.IsEmpty  ? Color.Empty : g.FontColor);
             SetSwatchColor(_pnlBorderColor, g.BorderColor.IsEmpty? Color.Empty : g.BorderColor);
             _nudBorderThickness.Value = Math.Clamp(g.BorderThickness, -1, 10);
 
+            // IndexOf returns -1 if the font name isn't in the list (e.g. font was uninstalled).
+            // In that case we fall back to index 0 ("inherit global").
             int fi = _cmbFont.Items.IndexOf(g.FontName ?? "");
             _cmbFont.SelectedIndex = fi > 0 ? fi : 0;
 
@@ -222,21 +350,37 @@ namespace OnScreenKeyboard
             SetDetailEnabled(true);
         }
 
+        /// <summary>
+        /// Resets every control in the detail panel to its blank/default state and
+        /// disables all inputs. Called when no group is selected (e.g. the list is empty).
+        /// </summary>
         private void ClearDetail()
         {
             _txtName.Text = "";
+            // Color.Empty tells SetSwatchColor to show the "(inherit)" placeholder text.
             SetSwatchColor(_pnlKeyColor, Color.Empty);
             SetSwatchColor(_pnlFontColor, Color.Empty);
             SetSwatchColor(_pnlBorderColor, Color.Empty);
-            _nudBorderThickness.Value = -1;
-            _cmbFont.SelectedIndex = 0;
-            _nudFontSize.Value = 0;
+            _nudBorderThickness.Value = -1; // -1 = inherit global
+            _cmbFont.SelectedIndex = 0;     // 0 = "(inherit global)"
+            _nudFontSize.Value = 0;         // 0 = auto / inherit
             SetDetailEnabled(false);
         }
 
-        // Commits the currently displayed UI state to the group at the given index.
-        // Called with _prevIdx before switching to another group, or with the
-        // current index just before closing with OK.
+        /// <summary>
+        /// Writes the current values of every detail-panel control back into the group
+        /// at position <paramref name="idx"/> in <see cref="_groups"/>.
+        ///
+        /// This is the core "save" operation. It is called:
+        /// <list type="bullet">
+        ///   <item>with <see cref="_prevIdx"/> just before the user switches to a different group, and</item>
+        ///   <item>with the current index just before the dialog closes with OK.</item>
+        /// </list>
+        /// </summary>
+        /// <param name="idx">
+        /// Index of the group to update. If out of range the method returns without
+        /// doing anything, which is safe (e.g. when <c>_prevIdx</c> is <c>-1</c>).
+        /// </param>
         private void CommitTo(int idx)
         {
             if (idx < 0 || idx >= _groups.Count) return;
@@ -246,51 +390,84 @@ namespace OnScreenKeyboard
             g.FontColor       = GetSwatchColor(_pnlFontColor);
             g.BorderColor     = GetSwatchColor(_pnlBorderColor);
             g.BorderThickness = (int)_nudBorderThickness.Value;
+            // Index 0 is the special "(inherit global)" placeholder — map it to an empty string.
             string fname      = _cmbFont.SelectedIndex > 0 ? _cmbFont.SelectedItem?.ToString() ?? "" : "";
             g.FontName        = fname;
             g.FontSize        = (int)_nudFontSize.Value;
-            // Keep list display in sync with any name edits
+            // Keep the list box display in sync with any name edits the user typed.
             _loading = true;
             if (idx < _lstGroups.Items.Count) _lstGroups.Items[idx] = g.Name;
             _loading = false;
         }
 
-        // Commits the currently displayed group (convenience wrapper).
+        /// <summary>
+        /// Convenience wrapper around <see cref="CommitTo"/> that always targets the
+        /// group currently displayed in the detail panel (<see cref="_prevIdx"/>).
+        /// </summary>
         private void CommitCurrent() => CommitTo(_prevIdx);
 
+        /// <summary>
+        /// Called every time the user changes the text in the Name field.
+        /// Immediately mirrors the new name into both the <see cref="_groups"/> list and
+        /// the list box so the display stays in sync without needing a full rebuild.
+        /// </summary>
         private void SaveCurrentName()
         {
+            // Don't run while LoadDetail() is filling in controls programmatically.
             if (_loading) return;
             int idx = _lstGroups.SelectedIndex;
             if (idx < 0 || idx >= _groups.Count) return;
             string newName = _txtName.Text.Trim();
             _groups[idx].Name = newName;
+            // Temporarily set _loading so the SelectedIndexChanged handler ignores
+            // this programmatic update to the list box item text.
             _loading = true;
             _lstGroups.Items[idx] = newName;
             _loading = false;
         }
 
+        /// <summary>
+        /// Handles the "Add group" button. Prompts for a name, creates a new
+        /// <see cref="KeyGroup"/> with default settings, appends it, and selects it.
+        /// </summary>
         private void OnAdd(object sender, EventArgs e)
         {
+            // Save any unsaved edits on the currently displayed group first.
             CommitCurrent();
             string name = GetNewName();
-            if (name == null) return;
+            if (name == null) return; // user cancelled the name prompt
+            // BorderThickness = -1 means "inherit global border setting" by default.
             _groups.Add(new KeyGroup { Name = name, BorderThickness = -1 });
+            // Select the newly added item (last index).
             RebuildList(_groups.Count - 1);
         }
 
+        /// <summary>
+        /// Handles the "Delete group" button. Asks for confirmation and, if granted,
+        /// removes the selected group and refreshes the list.
+        /// </summary>
         private void OnDelete(object sender, EventArgs e)
         {
             int idx = _lstGroups.SelectedIndex;
             if (idx < 0 || idx >= _groups.Count) return;
             string name = _groups[idx].Name;
+            // Show a localised "are you sure?" prompt before destroying data.
             if (MessageBox.Show(string.Format(Lang.T("Delete group msg"), name),
                     Lang.T("Delete Group"), MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
             _groups.RemoveAt(idx);
-            _prevIdx = -1;   // group is gone — nothing to commit
+            // Reset _prevIdx so CommitTo won't try to write into the now-deleted slot.
+            _prevIdx = -1;
+            // After deletion, select the item just before the deleted one (or item 0).
             RebuildList(Math.Max(0, idx - 1));
         }
 
+        /// <summary>
+        /// Shows a small inline dialog that asks the user to type a name for a new group.
+        /// </summary>
+        /// <returns>
+        /// The trimmed name string the user entered, or <c>null</c> if the user cancelled
+        /// or left the field blank.
+        /// </returns>
         private string GetNewName()
         {
             using var dlg = new Form
@@ -304,13 +481,18 @@ namespace OnScreenKeyboard
             var txt = new TextBox { Left = 12, Top = 14, Width = 300, Font = F_INPUT, BorderStyle = BorderStyle.FixedSingle };
             var ok = new FluentButton { Text = Lang.T("Apply"),  Left = 12,  Top = 52, Width = 140, Height = 32, Style = FluentButton.Variant.Neutral };
             var cn = new FluentButton { Text = Lang.T("Cancel"), Left = 172, Top = 52, Width = 140, Height = 32, Style = FluentButton.Variant.Neutral };
+            // Only allow OK when there is some text — prevents empty group names.
             ok.Click += (s, e2) => { if (!string.IsNullOrWhiteSpace(txt.Text)) { dlg.DialogResult = DialogResult.OK; dlg.Close(); } };
             cn.Click += (s, e2) => { dlg.DialogResult = DialogResult.Cancel; dlg.Close(); };
-            dlg.AcceptButton = ok;
+            dlg.AcceptButton = ok; // pressing Enter triggers OK
             dlg.Controls.AddRange(new Control[] { txt, ok, cn });
             return dlg.ShowDialog(this) == DialogResult.OK ? txt.Text.Trim() : null;
         }
 
+        /// <summary>
+        /// Enables or disables the Delete button and all detail-panel controls based on
+        /// whether any groups currently exist. Called after every list change.
+        /// </summary>
         private void UpdateEnabled()
         {
             bool any = _groups.Count > 0;
@@ -318,6 +500,12 @@ namespace OnScreenKeyboard
             SetDetailEnabled(any);
         }
 
+        /// <summary>
+        /// Enables or disables all of the editable controls in the right-hand detail
+        /// panel as a group. Used to prevent the user from typing into an empty panel
+        /// when there are no groups.
+        /// </summary>
+        /// <param name="en"><c>true</c> to enable all detail controls; <c>false</c> to disable them.</param>
         private void SetDetailEnabled(bool en)
         {
             _txtName.Enabled = _pnlKeyColor.Enabled = _pnlFontColor.Enabled =
@@ -326,6 +514,20 @@ namespace OnScreenKeyboard
         }
 
         // ── Color swatch helpers ──────────────────────────────────────
+
+        /// <summary>
+        /// Creates a clickable coloured panel (a "swatch") and adds it to
+        /// <paramref name="parent"/>. Left-clicking opens the system colour picker;
+        /// right-clicking shows a context menu with a "Clear (inherit global)" option.
+        ///
+        /// The chosen colour is stored in the panel's <see cref="Control.Tag"/> property
+        /// so it can be retrieved later with <see cref="GetSwatchColor"/>.
+        /// </summary>
+        /// <param name="parent">The panel to add the swatch to.</param>
+        /// <param name="x">Left position inside <paramref name="parent"/>.</param>
+        /// <param name="y">Top position inside <paramref name="parent"/>.</param>
+        /// <param name="w">Maximum width (capped at 120 px to keep swatches compact).</param>
+        /// <returns>The newly created swatch panel.</returns>
         private Panel AddColorSwatch(Panel parent, int x, int y, int w)
         {
             var pnl = new Panel
@@ -334,6 +536,7 @@ namespace OnScreenKeyboard
                 BorderStyle = BorderStyle.FixedSingle, Cursor = Cursors.Hand,
                 BackColor = Fluent.Neutral,
             };
+            // The label is only visible when no colour is set ("inherit" state).
             var lbl = new Label
             {
                 Text = Lang.T("(inherit)"), Dock = DockStyle.Fill,
@@ -343,6 +546,8 @@ namespace OnScreenKeyboard
             };
             pnl.Controls.Add(lbl);
 
+            // Both the panel and its label forward clicks to PickColor so the entire
+            // swatch area is a valid click target regardless of which child is hit.
             pnl.Click += (s, e) => PickColor(pnl);
             lbl.Click += (s, e) => PickColor(pnl);
 
@@ -355,35 +560,72 @@ namespace OnScreenKeyboard
             return pnl;
         }
 
+        /// <summary>
+        /// Opens the system colour-picker dialog pre-filled with <paramref name="pnl"/>'s
+        /// current colour. If the user confirms a selection, the swatch is updated.
+        /// </summary>
+        /// <param name="pnl">The swatch panel whose colour should be changed.</param>
         private void PickColor(Panel pnl)
         {
-            using var cd = new ColorDialog { FullOpen = true };
+            using var cd = new ColorDialog { FullOpen = true }; // FullOpen shows the full custom-colour grid
             Color current = GetSwatchColor(pnl);
-            if (!current.IsEmpty) cd.Color = current;
+            if (!current.IsEmpty) cd.Color = current; // pre-select the current colour in the picker
             if (cd.ShowDialog(this) == DialogResult.OK)
                 SetSwatchColor(pnl, cd.Color);
         }
 
+        /// <summary>
+        /// Updates a swatch panel to display <paramref name="c"/>. If the colour is
+        /// <see cref="Color.Empty"/> the panel reverts to the neutral "(inherit)" state.
+        /// The colour is also stored in <see cref="Control.Tag"/> so it can be read back
+        /// with <see cref="GetSwatchColor"/>.
+        /// </summary>
+        /// <param name="pnl">The swatch panel to update.</param>
+        /// <param name="c">
+        /// The colour to display, or <see cref="Color.Empty"/> to revert to "inherit".
+        /// </param>
         private static void SetSwatchColor(Panel pnl, Color c)
         {
             var lbl = pnl.Controls.OfType<Label>().FirstOrDefault();
             if (c.IsEmpty)
             {
+                // No colour chosen — show the neutral background and the "(inherit)" label.
                 pnl.BackColor = Fluent.Neutral;
                 if (lbl != null) { lbl.Visible = true; lbl.ForeColor = Fluent.TextHint; }
             }
             else
             {
+                // A colour is chosen — paint the whole swatch and hide the text label.
                 pnl.BackColor = c;
                 if (lbl != null) lbl.Visible = false;
             }
+            // Store or clear the colour in Tag. Null means "no colour set" (inherit).
             pnl.Tag = c.IsEmpty ? null : (object)c;
         }
 
+        /// <summary>
+        /// Retrieves the colour stored in a swatch panel, or <see cref="Color.Empty"/>
+        /// if no colour has been chosen (the swatch is in "inherit" state).
+        /// </summary>
+        /// <param name="pnl">The swatch panel to read.</param>
+        /// <returns>The stored <see cref="Color"/>, or <see cref="Color.Empty"/>.</returns>
         private static Color GetSwatchColor(Panel pnl) =>
             pnl.Tag is Color c ? c : Color.Empty;
 
         // ── UI helpers ────────────────────────────────────────────────
+
+        /// <summary>
+        /// Creates a styled card panel with a painted title header and adds it to the form.
+        /// The actual drawing is delegated to <see cref="FluentPainter.PaintCard"/> in the
+        /// <c>Paint</c> event so the header redraws correctly on every resize or theme change.
+        /// </summary>
+        /// <param name="x">Left position on the form.</param>
+        /// <param name="y">Top position on the form.</param>
+        /// <param name="w">Panel width in pixels.</param>
+        /// <param name="h">Panel height in pixels.</param>
+        /// <param name="title">Text displayed in the card's header bar.</param>
+        /// <param name="accentColor">Colour used for the header bar background.</param>
+        /// <returns>The newly created panel (not yet containing any child controls).</returns>
         private Panel AddPanel(int x, int y, int w, int h, string title, Color accentColor)
         {
             var pnl = new Panel
@@ -392,12 +634,21 @@ namespace OnScreenKeyboard
                 BackColor = Fluent.BgPage,
                 BorderStyle = BorderStyle.None,
             };
+            // 36 is the height of the painted header strip at the top of the card.
             pnl.Paint += (s, e) =>
                 FluentPainter.PaintCard(e.Graphics, pnl.Width, pnl.Height, title, accentColor, 36);
             Controls.Add(pnl);
             return pnl;
         }
 
+        /// <summary>
+        /// Adds a right-aligned descriptive label to <paramref name="parent"/> at the
+        /// given position. The label uses the standard label font and primary text colour.
+        /// </summary>
+        /// <param name="parent">The panel that will own the label.</param>
+        /// <param name="text">The text to display.</param>
+        /// <param name="x">Left position inside <paramref name="parent"/>.</param>
+        /// <param name="y">Top position inside <paramref name="parent"/> (shifted down 6 px to align with input controls).</param>
         private void AddLabel(Panel parent, string text, int x, int y)
         {
             parent.Controls.Add(new Label
@@ -407,6 +658,14 @@ namespace OnScreenKeyboard
             });
         }
 
+        /// <summary>
+        /// Adds a small greyed-out hint label next to an input control — used to
+        /// explain sentinel values such as "-1 = inherit global" or "0 = auto".
+        /// </summary>
+        /// <param name="parent">The panel that will own the hint.</param>
+        /// <param name="text">The hint text to display.</param>
+        /// <param name="x">Left position inside <paramref name="parent"/>.</param>
+        /// <param name="y">Top position inside <paramref name="parent"/> (shifted down 14 px to vertically centre within a spinner).</param>
         private void AddSmallHint(Panel parent, string text, int x, int y)
         {
             parent.Controls.Add(new Label
@@ -417,6 +676,18 @@ namespace OnScreenKeyboard
             });
         }
 
+        /// <summary>
+        /// Creates a compact <see cref="FluentButton"/> with the Neutral style, suitable
+        /// for use inside a panel (e.g. "Add group" or "Delete group"). The button is
+        /// <em>not</em> added to the form's control collection here — the caller is
+        /// responsible for adding it to the appropriate parent.
+        /// </summary>
+        /// <param name="text">Button label.</param>
+        /// <param name="x">Left position.</param>
+        /// <param name="y">Top position.</param>
+        /// <param name="w">Button width.</param>
+        /// <param name="h">Button height.</param>
+        /// <returns>The new button, ready to be added to a parent control.</returns>
         private Button MakeSmallBtn(string text, int x, int y, int w, int h)
         {
             var b = new FluentButton
@@ -427,6 +698,17 @@ namespace OnScreenKeyboard
             return b;
         }
 
+        /// <summary>
+        /// Creates a full-width <see cref="FluentButton"/> with the Neutral style, used
+        /// for the main dialog actions (OK / Cancel). Unlike <see cref="MakeSmallBtn"/>,
+        /// this method also adds the button directly to the <em>form</em> (not a panel).
+        /// </summary>
+        /// <param name="text">Button label.</param>
+        /// <param name="x">Left position on the form.</param>
+        /// <param name="y">Top position on the form.</param>
+        /// <param name="w">Button width.</param>
+        /// <param name="h">Button height.</param>
+        /// <returns>The new button (already added to <c>Controls</c>).</returns>
         private Button MakeBigBtn(string text, int x, int y, int w, int h)
         {
             var b = new FluentButton
@@ -438,6 +720,11 @@ namespace OnScreenKeyboard
             return b;
         }
 
+        /// <summary>
+        /// Returns the names of all font families installed on the current system,
+        /// sorted alphabetically by the OS. Used to populate the font drop-down.
+        /// </summary>
+        /// <returns>A list of font family name strings.</returns>
         private static List<string> GetInstalledFonts()
         {
             var result = new List<string>();
@@ -447,10 +734,31 @@ namespace OnScreenKeyboard
         }
 
         // ── Import groups ─────────────────────────────────────────────
-        private enum ImportAction { Add, Overwrite, AddNew, Skip }
 
+        /// <summary>
+        /// Describes how a single imported group should be handled when its name
+        /// conflicts with — or is absent from — the existing group list.
+        /// </summary>
+        private enum ImportAction
+        {
+            /// <summary>The group is new; add it as-is.</summary>
+            Add,
+            /// <summary>A group with this name already exists; replace it.</summary>
+            Overwrite,
+            /// <summary>A group with this name already exists; add the import under a new unique name.</summary>
+            AddNew,
+            /// <summary>Skip this group entirely — do not import it.</summary>
+            Skip
+        }
+
+        /// <summary>
+        /// Handles the "Import..." button. Lets the user pick an XML layout file, reads
+        /// its group definitions, resolves any name conflicts via an interactive dialog,
+        /// and merges the chosen groups into <see cref="_groups"/>.
+        /// </summary>
         private void OnImport(object sender, EventArgs e)
         {
+            // Persist any in-progress edits before changing the list.
             CommitCurrent();
 
             using var ofd = new OpenFileDialog
@@ -471,10 +779,13 @@ namespace OnScreenKeyboard
                 return;
             }
 
+            // Build a case-insensitive set of existing names for quick conflict detection.
             var existing = new HashSet<string>(_groups.Select(g => g.Name), StringComparer.OrdinalIgnoreCase);
             var decisions = ShowImportResolutionDialog(imported, existing);
-            if (decisions == null) return;
+            if (decisions == null) return; // user cancelled the resolution dialog
 
+            // usedNames starts as a copy of existing names and grows as we add imports,
+            // so that GetUniqueName can avoid duplicate names even within the same import batch.
             var usedNames = new HashSet<string>(_groups.Select(g => g.Name), StringComparer.OrdinalIgnoreCase);
             foreach (var (group, action) in decisions)
             {
@@ -482,6 +793,7 @@ namespace OnScreenKeyboard
                 {
                     case ImportAction.Overwrite:
                     {
+                        // Find the existing group with the same name (case-insensitive) and replace it.
                         int idx = _groups.FindIndex(g =>
                             string.Equals(g.Name, group.Name, StringComparison.OrdinalIgnoreCase));
                         if (idx >= 0) _groups[idx] = group.Clone();
@@ -489,28 +801,47 @@ namespace OnScreenKeyboard
                     }
                     case ImportAction.AddNew:
                     {
+                        // Add the group under a unique name (e.g. "MyGroup 2") to avoid collision.
                         string newName = GetUniqueName(group.Name, usedNames);
                         var clone = group.Clone();
                         clone.Name = newName;
                         _groups.Add(clone);
-                        usedNames.Add(newName);
+                        usedNames.Add(newName); // register so subsequent groups don't get the same number
                         break;
                     }
                     case ImportAction.Add:
                     {
+                        // No conflict — add a clone to avoid sharing references with the imported data.
                         _groups.Add(group.Clone());
                         usedNames.Add(group.Name);
                         break;
                     }
+                    // ImportAction.Skip: do nothing — the group is intentionally omitted.
                 }
             }
 
+            // Refresh the list, keeping the selection as close as possible to where it was.
             RebuildList(Math.Max(0, _lstGroups.SelectedIndex));
         }
 
+        /// <summary>
+        /// Shows a modal dialog containing a data-grid where every imported group is
+        /// listed together with its conflict status and a per-row action combo box.
+        /// The user reviews the list and either confirms or cancels the import.
+        /// </summary>
+        /// <param name="imported">Groups read from the selected file.</param>
+        /// <param name="existing">
+        /// Case-insensitive set of names already in <see cref="_groups"/>, used to
+        /// detect conflicts and colour-code rows.
+        /// </param>
+        /// <returns>
+        /// A list of (group, action) pairs reflecting the user's per-row decisions, or
+        /// <c>null</c> if the user cancelled the dialog.
+        /// </returns>
         private List<(KeyGroup group, ImportAction action)> ShowImportResolutionDialog(
             List<KeyGroup> imported, HashSet<string> existing)
         {
+            // Localised strings for the action combo box items.
             string actAdd       = Lang.T("Add");
             string actOverwrite = Lang.T("Overwrite");
             string actAddNew    = Lang.T("Add as new");
@@ -519,6 +850,7 @@ namespace OnScreenKeyboard
             bool anyConflict = imported.Any(g => existing.Contains(g.Name));
 
             const int DLG_W = 580;
+            // Row height is 34 px; clamp total grid height so it doesn't overflow the screen.
             int dgvH  = Math.Clamp(imported.Count * 34 + 38, 160, 380);
             int dlgH  = PAD + 30 + PAD + dgvH + PAD + 44 + PAD + 16;
 
@@ -532,6 +864,7 @@ namespace OnScreenKeyboard
                 TopMost = true, BackColor = C_BG, Font = F_LABEL,
             };
 
+            // Info line at the top adapts its message depending on whether conflicts exist.
             string info = anyConflict
                 ? string.Format(Lang.T("{0} groups found — choose action for each conflict:"), imported.Count)
                 : string.Format(Lang.T("{0} groups found — all new, no conflicts."), imported.Count);
@@ -542,6 +875,7 @@ namespace OnScreenKeyboard
                 Font = F_LABEL, ForeColor = C_LBL, BackColor = Color.Transparent,
             });
 
+            // DataGridView with three columns: group name, conflict status, and action choice.
             var dgv = new DataGridView
             {
                 Left = PAD, Top = PAD + 30,
@@ -554,14 +888,16 @@ namespace OnScreenKeyboard
                 AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
                 ScrollBars = ScrollBars.Vertical,
             };
-            dgv.EnableHeadersVisualStyles = false;
+            dgv.EnableHeadersVisualStyles = false; // allow custom header colours
             dgv.ColumnHeadersDefaultCellStyle.BackColor = Fluent.Accent;
             dgv.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
             dgv.ColumnHeadersDefaultCellStyle.Font      = F_HEADER;
             dgv.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.Single;
             dgv.RowTemplate.Height = 38;
+            // Suppress the built-in error dialog for invalid combo box values.
             dgv.DataError += (s, ev) => ev.Cancel = true;
 
+            // FillWeight controls relative column widths when AutoSizeColumnsMode = Fill.
             var colName   = new DataGridViewTextBoxColumn    { HeaderText = Lang.T("Group"),  ReadOnly = true, FillWeight = 35 };
             var colStatus = new DataGridViewTextBoxColumn    { HeaderText = Lang.T("Status"), ReadOnly = true, FillWeight = 18 };
             var colAction = new DataGridViewComboBoxColumn   { HeaderText = Lang.T("Action"), FillWeight = 47,
@@ -575,20 +911,24 @@ namespace OnScreenKeyboard
                 row.CreateCells(dgv);
                 row.Cells[0].Value = g.Name;
                 row.Cells[1].Value = conflict ? Lang.T("Conflict") : Lang.T("New");
+                // Store the KeyGroup object on the row so we can recover it when reading results.
                 row.Tag = g;
 
                 var cb = (DataGridViewComboBoxCell)row.Cells[2];
                 if (conflict)
                 {
+                    // Conflicting groups default to Skip so the user must explicitly choose
+                    // Overwrite or Add as new — avoiding accidental data loss.
                     cb.Items.AddRange(new[] { actOverwrite, actAddNew, actSkip });
                     cb.Value = actSkip;
-                    row.DefaultCellStyle.BackColor = Color.FromArgb(255, 243, 228);
+                    row.DefaultCellStyle.BackColor = Color.FromArgb(255, 243, 228); // warm amber = warning
                 }
                 else
                 {
+                    // New groups default to Add — they have no risk of overwriting anything.
                     cb.Items.Add(actAdd);
                     cb.Value = actAdd;
-                    row.DefaultCellStyle.BackColor = Color.FromArgb(235, 252, 240);
+                    row.DefaultCellStyle.BackColor = Color.FromArgb(235, 252, 240); // light green = safe
                 }
                 dgv.Rows.Add(row);
             }
@@ -607,16 +947,17 @@ namespace OnScreenKeyboard
 
             if (dlg.ShowDialog(this) != DialogResult.OK) return null;
 
+            // Walk every data row and convert the user's combo-box selection into an ImportAction enum value.
             var result = new List<(KeyGroup, ImportAction)>();
             foreach (DataGridViewRow row in dgv.Rows)
             {
-                if (row.IsNewRow) continue;
+                if (row.IsNewRow) continue; // the DataGridView may append an empty placeholder row — skip it
                 var g       = (KeyGroup)row.Tag;
                 bool conflict = existing.Contains(g.Name);
                 string val  = row.Cells[2].Value?.ToString() ?? "";
 
                 ImportAction action;
-                if (!conflict)             action = ImportAction.Add;
+                if (!conflict)                action = ImportAction.Add;
                 else if (val == actOverwrite) action = ImportAction.Overwrite;
                 else if (val == actAddNew)    action = ImportAction.AddNew;
                 else                          action = ImportAction.Skip;
@@ -626,10 +967,19 @@ namespace OnScreenKeyboard
             return result;
         }
 
+        /// <summary>
+        /// Returns a name that is not already in <paramref name="usedNames"/>. If
+        /// <paramref name="baseName"/> is free it is returned as-is; otherwise a
+        /// numeric suffix is appended and incremented until a free slot is found
+        /// (e.g. "MyGroup", "MyGroup 2", "MyGroup 3", …).
+        /// </summary>
+        /// <param name="baseName">The preferred name.</param>
+        /// <param name="usedNames">The set of names that are already taken (case-insensitive).</param>
+        /// <returns>A unique name derived from <paramref name="baseName"/>.</returns>
         private static string GetUniqueName(string baseName, HashSet<string> usedNames)
         {
             if (!usedNames.Contains(baseName)) return baseName;
-            int n = 2;
+            int n = 2; // start at 2 so the first alternative reads "MyGroup 2", not "MyGroup 1"
             while (usedNames.Contains($"{baseName} {n}")) n++;
             return $"{baseName} {n}";
         }

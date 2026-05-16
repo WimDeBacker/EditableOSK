@@ -6,18 +6,59 @@ using System.Xml;
 namespace OnScreenKeyboard
 {
     /// <summary>
-    /// Static translation helper.
-    /// English text is baked in as fallbacks — the app works without any lang_*.xml files.
-    /// XML files only need to contain entries that differ from English.
+    /// Provides UI text translations for the entire application (internationalisation / i18n).
+    ///
+    /// How it works:
+    ///   1. Every piece of visible text in the UI is obtained by calling <see cref="T"/>(key)
+    ///      instead of using a hard-coded string directly.
+    ///   2. English text is baked in as the built-in fallback dictionary <see cref="_en"/>,
+    ///      so the app works correctly with no external files at all.
+    ///   3. If the user selects a different language (e.g. Dutch), <see cref="Load"/> reads
+    ///      a file named "lang_nl.xml" from the application folder and stores any translated
+    ///      strings in the <see cref="_overrides"/> dictionary.
+    ///   4. When <see cref="T"/> is called it checks overrides first, then falls back to
+    ///      the English dictionary, and finally returns the key itself. Because keys are
+    ///      written as English text, the last fallback always produces readable output.
+    ///
+    /// The class is <c>static</c> because only one language is active at a time and every
+    /// part of the app needs access to it — there is no need for multiple instances.
     /// </summary>
     public static class Lang
     {
+        /// <summary>
+        /// The BCP-47 language code of the currently active language, e.g. "en" or "nl".
+        /// Read-only from outside this class; changed by <see cref="Load"/>.
+        /// </summary>
         public static string CurrentCode { get; private set; } = "en";
+
+        /// <summary>
+        /// The human-readable name of the currently active language, e.g. "English" or "Nederlands".
+        /// Shown in the language-selection menu.
+        /// Read-only from outside this class; changed by <see cref="Load"/>.
+        /// </summary>
         public static string CurrentName { get; private set; } = "English";
 
+        /// <summary>
+        /// Fired after <see cref="Load"/> finishes switching to a new language.
+        /// Any UI form that displays translated text should subscribe to this event and
+        /// refresh its labels when it fires.
+        /// </summary>
         public static event Action LanguageChanged;
 
-        // Built-in English strings (used as fallback when XML is missing or key not found)
+        // ── Built-in English strings ──────────────────────────────────────────
+
+        /// <summary>
+        /// The complete set of English UI strings, stored as a key → value dictionary.
+        ///
+        /// The "key" is deliberately the same as the English text (e.g. "Save" → "Save").
+        /// This means that if a key is accidentally missing from this dictionary, the
+        /// fall-through in <see cref="T"/> still returns readable English text instead
+        /// of a cryptic identifier.
+        ///
+        /// <c>readonly</c> means this dictionary reference can never be replaced, though
+        /// its contents can theoretically be modified. That is intentional: it is compiled
+        /// into the executable so it is always available even if no XML files are present.
+        /// </summary>
         private static readonly Dictionary<string, string> _en = new Dictionary<string, string>
         {
             // ── Toolbar tooltips ─────────────────────────────────────
@@ -217,59 +258,132 @@ namespace OnScreenKeyboard
             ["New Group"]               = "New Group",
         };
 
+        // ── Active overrides for the selected non-English language ────────────
+
+        /// <summary>
+        /// Translations for the currently active language, loaded from a lang_*.xml file.
+        /// Only entries that differ from English need to be present in the XML file —
+        /// anything not listed here falls back to <see cref="_en"/>.
+        /// This dictionary is cleared and refilled every time <see cref="Load"/> is called.
+        /// </summary>
         private static Dictionary<string, string> _overrides = new Dictionary<string, string>();
 
-        // ── Load ─────────────────────────────────────────────────────
+        // ── Public API ────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Switches the active language to the one identified by <paramref name="code"/> and
+        /// fires the <see cref="LanguageChanged"/> event so all open UI forms can refresh.
+        ///
+        /// The XML file format is:
+        /// <code>
+        ///   &lt;Language code="nl" name="Nederlands"&gt;
+        ///     &lt;String key="Save" value="Opslaan" /&gt;
+        ///     ...
+        ///   &lt;/Language&gt;
+        /// </code>
+        ///
+        /// Only strings that differ from English need to be in the file. Missing strings
+        /// silently fall back to English.
+        /// </summary>
+        /// <param name="code">
+        /// The BCP-47 language code to activate, e.g. "en", "nl", "fr".
+        /// For "en" no file is read — the built-in English dictionary is used directly.
+        /// </param>
         public static void Load(string code)
         {
+            // Always start fresh so stale translations from the previous language do not bleed through.
             _overrides.Clear();
 
+            // English is fully covered by _en — no file needed.
             if (code == "en")
             {
                 CurrentCode = "en";
                 CurrentName = "English";
+                // Notify the UI even for English in case we are switching back from another language.
                 LanguageChanged?.Invoke();
                 return;
             }
 
+            // Construct the expected file path, e.g. "C:\app\lang_nl.xml".
             string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"lang_{code}.xml");
+
+            // Silently do nothing if the file does not exist — the app keeps showing English.
             if (!File.Exists(path)) return;
 
             var doc = new XmlDocument();
             doc.Load(path);
             var root = doc.DocumentElement;
+
+            // Read the canonical code and display name from the XML root element's attributes,
+            // falling back to the requested code if those attributes are absent.
             CurrentCode = root?.GetAttribute("code") ?? code;
             CurrentName = root?.GetAttribute("name") ?? code;
 
+            // Walk every <String key="..." value="..." /> node and store it in _overrides.
             var nodes = doc.SelectNodes("/Language/String");
             if (nodes != null)
                 foreach (XmlNode node in nodes)
                 {
                     string key = node.Attributes?["key"]?.Value   ?? "";
                     string val = node.Attributes?["value"]?.Value ?? "";
+                    // Skip any malformed nodes that have an empty key.
                     if (key != "") _overrides[key] = val;
                 }
 
+            // Tell the rest of the app that the language has changed so labels can be updated.
             LanguageChanged?.Invoke();
         }
 
-        // ── Translate ────────────────────────────────────────────────
         /// <summary>
-        /// Returns the translation for key. The key itself is the English text,
-        /// so T("💾 Save") always returns at least "💾 Save".
+        /// Returns the translated string for the given key in the currently active language.
+        ///
+        /// Lookup order (highest priority first):
+        ///   1. The language overrides loaded from the XML file (<see cref="_overrides"/>)
+        ///   2. The built-in English dictionary (<see cref="_en"/>)
+        ///   3. The key itself — because keys are written as English text this always
+        ///      produces a readable result, even for keys not yet added to <see cref="_en"/>.
+        ///
+        /// Usage example in a form:
+        /// <code>
+        ///   btnSave.Text = Lang.T("Save");
+        /// </code>
         /// </summary>
+        /// <param name="key">
+        /// The translation key. Conventionally this is the English text for the string,
+        /// so T("Save") returns "Save" in English and "Opslaan" in Dutch.
+        /// </param>
+        /// <returns>The best available translation for <paramref name="key"/>.</returns>
         public static string T(string key)
         {
+            // Check language-specific overrides first — they have the highest priority.
             if (_overrides.TryGetValue(key, out var ov)) return ov;
+
+            // Fall back to the built-in English strings.
             if (_en.TryGetValue(key, out var en)) return en;
-            return key;   // key IS the English text, so this is always readable
+
+            // Last resort: return the key itself. Because keys equal the English text,
+            // this guarantees the UI always shows something human-readable.
+            return key;
         }
 
-        // ── Discover available languages ─────────────────────────────
+        /// <summary>
+        /// Scans the application folder for all installed language files and returns them
+        /// as a sorted list so the UI can populate a language-selection menu.
+        ///
+        /// English is always included first (it requires no file). All other languages are
+        /// discovered by looking for files that match the pattern "lang_*.xml" and reading
+        /// the code and name attributes from each file's root element.
+        /// </summary>
+        /// <returns>
+        /// A list of (Code, Name) tuples, e.g. [("en","English"), ("nl","Nederlands")],
+        /// sorted alphabetically by display name (case-insensitive). English is always present.
+        /// </returns>
         public static List<(string Code, string Name)> GetAvailable()
         {
+            // Start with English as the always-available baseline.
             var result = new List<(string, string)> { ("en", "English") };
             string dir = AppDomain.CurrentDomain.BaseDirectory;
+
             foreach (string file in Directory.GetFiles(dir, "lang_*.xml"))
             {
                 try
@@ -278,10 +392,17 @@ namespace OnScreenKeyboard
                     doc.Load(file);
                     string code = doc.DocumentElement?.GetAttribute("code") ?? "";
                     string name = doc.DocumentElement?.GetAttribute("name") ?? code;
+
+                    // Skip files with no code, and skip "en" if it somehow has a file —
+                    // English is already in the list from the hard-coded entry above.
                     if (code != "" && code != "en") result.Add((code, name));
                 }
                 catch { }
+                // Silently skip any file that cannot be parsed (corrupt XML, wrong format, etc.)
+                // so a broken language file does not crash the language picker.
             }
+
+            // Sort by display name so the menu is in alphabetical order.
             result.Sort((a, b) => string.Compare(a.Item2, b.Item2, StringComparison.OrdinalIgnoreCase));
             return result;
         }
