@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   viewBox="0 0 24 24"
+   width="32"
+   height="32"
+   version="1.1"
+   id="svg2"
+   sodipodi:docname="cancel-outline.svg"
+   inkscape:version="1.4.2 (f4327f4, 2025-05-13)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs2" />
+  <sodipodi:namedview
+     id="namedview2"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="36.46875"
+     inkscape:cx="16"
+     inkscape:cy="16"
+     inkscape:window-width="2560"
+     inkscape:window-height="1369"
+     inkscape:window-x="1912"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg2" />
+  <!-- circular X to distinguish from plain Close -->
+  <g
+     fill="none"
+     stroke="#1a1a1c"
+     stroke-width="1.75"
+     stroke-linecap="round"
+     stroke-linejoin="round"
+     id="g2">
+    <circle
+       cx="12"
+       cy="12"
+       r="9"
+       id="circle1" />
+    <path
+       d="M9 9l6 6"
+       id="path1"
+       style="stroke:#bf534e;stroke-opacity:1" />
+    <path
+       d="M15 9l-6 6"
+       id="path2"
+       style="stroke:#bf534e;stroke-opacity:1" />
+  </g>
+</svg>

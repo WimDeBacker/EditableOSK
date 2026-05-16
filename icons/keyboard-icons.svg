@@ -1,0 +1,302 @@
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <symbol id="i-load" viewBox="0 0 24 24">
+    <g data-fill="outline" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 7a1 1 0 0 1 1-1h5l2 2h8a1 1 0 0 1 1 1v3"></path>
+      <path d="M3 9v9.5L5.6 11a1 1 0 0 1 .94-.66h14.13a1 1 0 0 1 .94 1.33L19.4 18a2 2 0 0 1-1.88 1.33H5"></path>
+    </g>
+    
+    </symbol>
+  <symbol id="i-save" viewBox="0 0 24 24">
+    <g data-fill="outline" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 4h10l4 4v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"></path>
+      <path d="M8 4v5h7"></path>
+      <rect x="7" y="13" width="10" height="6" rx="1"></rect>
+      <path d="M12 16h2"></path>
+    </g>
+    
+    </symbol>
+  <symbol id="i-import" viewBox="0 0 24 24">
+    <!-- file with arrow going INTO it from outside -->
+    <g data-fill="outline" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 3H7a2 2 0 0 0-2 2v5"></path>
+      <path d="M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"></path>
+      <path d="M14 3v5h5"></path>
+      <g class="accent" stroke="currentColor">
+        <path d="M2 12h8"></path>
+        <path d="M7 9l3 3-3 3"></path>
+      </g>
+    </g>
+    
+    </symbol>
+  <symbol id="i-file" viewBox="0 0 24 24">
+    <!-- generic document -->
+    <g data-fill="outline" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 3h8l5 5v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"></path>
+      <path d="M14 3v5h5"></path>
+      <path d="M8 13h8"></path><path d="M8 16h8"></path><path d="M8 19h5"></path>
+    </g>
+    
+    </symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24">
+    <g data-fill="outline" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 9h8a6 6 0 0 1 0 12H8"></path>
+      <path d="M8 5L4 9l4 4"></path>
+    </g>
+    
+    </symbol>
+  <symbol id="i-redo" viewBox="0 0 24 24">
+    <g data-fill="outline" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 9h-8a6 6 0 0 0 0 12h4"></path>
+      <path d="M16 5l4 4-4 4"></path>
+    </g>
+    
+    </symbol>
+  <symbol id="i-editKey" viewBox="0 0 24 24">
+    <!-- pencil drawing on a keycap -->
+    <g data-fill="outline" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="13" width="11" height="8" rx="1.5"></rect>
+      <path d="M16 3.5l4.5 4.5L13 15.5H8.5V11L16 3.5Z"></path>
+      <path d="M14 5.5l4.5 4.5"></path>
+    </g>
+    
+    </symbol>
+  <symbol id="i-removeKey" viewBox="0 0 24 24">
+    <!-- trash can with a tiny key (keycap) inside, explicit "remove KEY" -->
+    <g data-fill="outline" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 7h16"></path>
+      <path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>
+      <path d="M6 7l1 12.5A1.5 1.5 0 0 0 8.5 21h7a1.5 1.5 0 0 0 1.5-1.5L18 7"></path>
+      <rect x="9" y="11" width="6" height="6" rx="1"></rect>
+      <path d="M11 14h2"></path>
+    </g>
+    
+    </symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24">
+    <g data-fill="outline" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="8" y="8" width="12" height="12" rx="2"></rect>
+      <path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"></path>
+    </g>
+    
+    </symbol>
+  <symbol id="i-copyFormatting" viewBox="0 0 24 24">
+    <!-- duplicated keycap (copy) + paintbrush stroke (formatting) -->
+    <g data-fill="outline" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="3" width="10" height="10" rx="1.5"></rect>
+      <path d="M9 13v2a1 1 0 0 0 1 1h6"></path>
+      <path d="M16 13h4v4h-4z"></path>
+      <path d="M18 17v1.5a2.5 2.5 0 0 1-5 0V17"></path>
+      <circle cx="15.5" cy="20.5" r="0.6" fill="currentColor"></circle>
+    </g>
+    
+    </symbol>
+  <symbol id="i-addRow" viewBox="0 0 24 24">
+    <!-- table + plus, on the seam between two rows -->
+    <g data-fill="outline" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="5" width="18" height="14" rx="1"></rect>
+      <path d="M3 12h6"></path><path d="M15 12h6"></path>
+      <path d="M12 9v6"></path><path d="M9 12h6"></path>
+    </g>
+    
+    </symbol>
+  <symbol id="i-deleteRow" viewBox="0 0 24 24">
+    <!-- table with a row crossed out (minus on highlighted row) -->
+    <g data-fill="outline" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="4" width="18" height="16" rx="1"></rect>
+      <path d="M3 9h18"></path><path d="M3 15h18"></path>
+      <path d="M8 12h8"></path>
+    </g>
+    
+    </symbol>
+  <symbol id="i-insertRowAbove" viewBox="0 0 24 24">
+    <!-- table with new row INSERTED at top; up arrow above pointing in -->
+    <g data-fill="outline" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="9" width="18" height="11" rx="1"></rect>
+      <path d="M3 13h18"></path><path d="M3 16h18"></path>
+      <g class="accent" stroke="currentColor">
+        <path d="M9 3h6"></path><path d="M12 0v6"></path>
+      </g>
+    </g>
+    
+    </symbol>
+  <symbol id="i-insertRowBelow" viewBox="0 0 24 24">
+    <g data-fill="outline" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="4" width="18" height="11" rx="1"></rect>
+      <path d="M3 8h18"></path><path d="M3 11h18"></path>
+      <g class="accent" stroke="currentColor">
+        <path d="M9 21h6"></path><path d="M12 18v6"></path>
+      </g>
+    </g>
+    
+    </symbol>
+  <symbol id="i-insertColLeft" viewBox="0 0 24 24">
+    <g data-fill="outline" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="10" y="3" width="11" height="18" rx="1"></rect>
+      <path d="M14 3v18"></path><path d="M17 3v18"></path>
+      <g class="accent" stroke="currentColor">
+        <path d="M1 12h6"></path><path d="M4 9v6"></path>
+      </g>
+    </g>
+    
+    </symbol>
+  <symbol id="i-insertColRight" viewBox="0 0 24 24">
+    <g data-fill="outline" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="3" width="11" height="18" rx="1"></rect>
+      <path d="M7 3v18"></path><path d="M10 3v18"></path>
+      <g class="accent" stroke="currentColor">
+        <path d="M17 12h6"></path><path d="M20 9v6"></path>
+      </g>
+    </g>
+    
+    </symbol>
+  <symbol id="i-mergeRight" viewBox="0 0 24 24">
+    <!-- two cells, arrows colliding at the seam -->
+    <g data-fill="outline" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="6" width="8" height="12" rx="1"></rect>
+      <rect x="13" y="6" width="8" height="12" rx="1"></rect>
+      <g class="accent" stroke="currentColor">
+        <path d="M5 12h6"></path>
+        <path d="M9 9l2 3-2 3"></path>
+        <path d="M19 12h-6"></path>
+        <path d="M15 9l-2 3 2 3"></path>
+      </g>
+    </g>
+    
+    </symbol>
+  <symbol id="i-mergeDown" viewBox="0 0 24 24">
+    <g data-fill="outline" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="6" y="3" width="12" height="8" rx="1"></rect>
+      <rect x="6" y="13" width="12" height="8" rx="1"></rect>
+      <g class="accent" stroke="currentColor">
+        <path d="M12 5v6"></path>
+        <path d="M9 9l3 2 3-2"></path>
+        <path d="M12 19v-6"></path>
+        <path d="M9 15l3-2 3 2"></path>
+      </g>
+    </g>
+    
+    </symbol>
+  <symbol id="i-splitCell" viewBox="0 0 24 24">
+    <!-- one big cell, dashed seam, outward arrows -->
+    <g data-fill="outline" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="5" width="18" height="14" rx="1"></rect>
+      <path d="M12 5v14" stroke-dasharray="2 2"></path>
+      <g class="accent" stroke="currentColor">
+        <path d="M10 12H3"></path><path d="M6 9l-3 3 3 3"></path>
+        <path d="M14 12h7"></path><path d="M18 9l3 3-3 3"></path>
+      </g>
+    </g>
+    
+    </symbol>
+  <symbol id="i-editKeyboard" viewBox="0 0 24 24">
+    <!-- keyboard with a pencil overlay -->
+    <g data-fill="outline" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2.5" y="7" width="14" height="11" rx="2"></rect>
+      <path d="M5.5 11h.01"></path><path d="M9 11h.01"></path><path d="M12.5 11h.01"></path>
+      <path d="M5.5 15h7"></path>
+      <g class="accent" stroke="currentColor">
+        <path d="M15 9l5-5 3 3-5 5h-3V9Z"></path>
+        <path d="M18 6l3 3"></path>
+      </g>
+    </g>
+    
+    </symbol>
+  <symbol id="i-keyboardSettings" viewBox="0 0 24 24">
+    <!-- keyboard with a gear corner overlay -->
+    <g data-fill="outline" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2.5" y="6" width="14" height="11" rx="2"></rect>
+      <path d="M5.5 10h.01"></path><path d="M9 10h.01"></path><path d="M12.5 10h.01"></path>
+      <path d="M5.5 14h7"></path>
+      <g class="accent" stroke="currentColor">
+        <circle cx="18" cy="17" r="3.3"></circle>
+        <path d="M18 12v1.7"></path><path d="M18 20.3V22"></path>
+        <path d="M13 17h1.7"></path><path d="M21.3 17H23"></path>
+        <path d="M14.66 13.66l1.2 1.2"></path><path d="M20.14 19.14l1.2 1.2"></path>
+        <path d="M21.34 13.66l-1.2 1.2"></path><path d="M15.86 19.14l-1.2 1.2"></path>
+      </g>
+    </g>
+    
+    </symbol>
+  <symbol id="i-groups" viewBox="0 0 24 24">
+    <!-- stacked layers / planes -->
+    <g data-fill="outline" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3l9 5-9 5-9-5 9-5Z"></path>
+      <path d="M3 13l9 5 9-5"></path>
+      <path d="M3 18l9 5 9-5"></path>
+    </g>
+    
+    </symbol>
+  <symbol id="i-font" viewBox="0 0 24 24">
+    <!-- a stylized A with serif baseline + a small 'a' to imply font family -->
+    <g data-fill="outline" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 19L8.5 5l5.5 14"></path>
+      <path d="M5 14h7"></path>
+      <path d="M16.5 19h5"></path>
+      <path d="M19 19V9"></path>
+      <path d="M16.5 9h5"></path>
+    </g>
+    
+    </symbol>
+  <symbol id="i-language" viewBox="0 0 24 24">
+    <!-- globe with meridian + equator -->
+    <g data-fill="outline" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9"></circle>
+      <path d="M3 12h18"></path>
+      <path d="M12 3a13 13 0 0 1 0 18"></path>
+      <path d="M12 3a13 13 0 0 0 0 18"></path>
+    </g>
+    
+    </symbol>
+  <symbol id="i-window" viewBox="0 0 24 24">
+    <!-- app window with titlebar -->
+    <g data-fill="outline" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+      <path d="M3 9h18"></path>
+      <circle cx="6" cy="6.5" r=".6" fill="currentColor"></circle>
+      <circle cx="8.4" cy="6.5" r=".6" fill="currentColor"></circle>
+      <circle cx="10.8" cy="6.5" r=".6" fill="currentColor"></circle>
+    </g>
+    
+    </symbol>
+  <symbol id="i-accessibility" viewBox="0 0 24 24">
+    <!-- universal accessibility figure (head + outstretched limbs in circle) -->
+    <g data-fill="outline" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9"></circle>
+      <circle cx="12" cy="6.6" r="1.4" fill="currentColor"></circle>
+      <path d="M6.5 9.5c2 .7 3.7 1 5.5 1s3.5-.3 5.5-1"></path>
+      <path d="M12 10.5v3.5"></path>
+      <path d="M9 20l3-6 3 6"></path>
+    </g>
+    
+    </symbol>
+  <symbol id="i-accept" viewBox="0 0 24 24">
+    <g data-fill="outline" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 12.5l5 5L20 6.5"></path>
+    </g>
+    
+    </symbol>
+  <symbol id="i-cancel" viewBox="0 0 24 24">
+    <!-- circular X to distinguish from plain Close -->
+    <g data-fill="outline" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9"></circle>
+      <path d="M9 9l6 6"></path><path d="M15 9l-6 6"></path>
+    </g>
+    
+    </symbol>
+  <symbol id="i-close" viewBox="0 0 24 24">
+    <g data-fill="outline" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 6l12 12"></path><path d="M18 6L6 18"></path>
+    </g>
+    
+    </symbol>
+  <symbol id="i-stopEditing" viewBox="0 0 24 24">
+    <!-- pencil with a stop bar — leaves "edit mode" -->
+    <g data-fill="outline" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 3.5l5 5L10.5 17H6v-4.5L14 3.5Z"></path>
+      <path d="M12.5 5l5 5"></path>
+      <g class="danger" stroke="currentColor">
+        <path d="M4 21l16-16" stroke-width="2"></path>
+      </g>
+    </g>
+    
+    </symbol>
+</svg>

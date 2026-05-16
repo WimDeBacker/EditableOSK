@@ -34,18 +34,18 @@
   <String key="tb: Undo"      value="Ongedaan" />
   <String key="tb: Redo"      value="Opnieuw" />
   <String key="tb: Edit"      value="Bewerken" />
-  <String key="tb: Keyboard"  value="Toetsenbord" />
+  <String key="tb: Keyboard"  value="Bewerk toets." />
   <String key="tb: Exit"      value="Sluiten" />
-  <String key="tb: Edit key"  value="Toets" />
+  <String key="tb: Edit key"  value="Bewerk cel" />
   <String key="tb: Remove"    value="Wissen" />
-  <String key="tb: Copy fmt"  value="Kop. opmaak" />
+  <String key="tb: Copy fmt"  value="Kop. opm." />
   <String key="tb: Copy key"  value="Kop. toets" />
   <String key="tb: Row ↑"     value="Rij ↑" />
   <String key="tb: Row ↓"     value="Rij ↓" />
   <String key="tb: Col ←"     value="Kol ←" />
   <String key="tb: Col →"     value="Kol →" />
-  <String key="tb: Del ─"     value="Del ─" />
-  <String key="tb: Del │"     value="Del │" />
+  <String key="tb: Del ─"     value="Wis ─" />
+  <String key="tb: Del │"     value="Wis │" />
   <String key="tb: Merge →"   value="Sam. →" />
   <String key="tb: Merge ↓"   value="Sam. ↓" />
   <String key="tb: Split"     value="Splitsen" />
@@ -117,6 +117,10 @@
   <String key="Accessibility"      value="Toegankelijkheid" />
   <String key="Sticky modifiers"   value="Plaktoetsen (Sticky Keys)" />
   <String key="Hold to edit"       value="Ingedrukt houden voor bewerkingsmodus" />
+  <String key="Toolbar theme"      value="Werkbalkthema" />
+  <String key="Dark"               value="Donker" />
+  <String key="Light"              value="Licht" />
+  <String key="System default"     value="Systeemstandaard" />
 
   <!-- Group editor -->
   <String key="Key Groups"             value="Toetsgroepen" />

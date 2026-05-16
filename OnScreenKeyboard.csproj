@@ -11,6 +11,16 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Svg" Version="3.4.6" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="icons\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
   <!-- Copy layout and language files next to the exe on every build -->
   <ItemGroup>
     <Content Include="qwerty.xml">  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory> </Content>

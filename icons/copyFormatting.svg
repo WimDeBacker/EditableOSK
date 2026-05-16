@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   viewBox="0 0 24 24"
+   width="32"
+   height="32"
+   version="1.1"
+   id="svg5"
+   sodipodi:docname="copyFormatting-outline.svg"
+   inkscape:version="1.4.2 (f4327f4, 2025-05-13)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs5">
+    <linearGradient
+       id="swatch5"
+       inkscape:swatch="solid">
+      <stop
+         style="stop-color:#1a1a1c;stop-opacity:1;"
+         offset="0"
+         id="stop5" />
+    </linearGradient>
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#swatch5"
+       id="linearGradient5"
+       x1="1.625125"
+       y1="12.571124"
+       x2="23.728788"
+       y2="12.571124"
+       gradientUnits="userSpaceOnUse" />
+  </defs>
+  <sodipodi:namedview
+     id="namedview5"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="10"
+     inkscape:cx="24.85"
+     inkscape:cy="22.55"
+     inkscape:window-width="2560"
+     inkscape:window-height="1369"
+     inkscape:window-x="1912"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg5" />
+  <!-- small duplicated keycap + diagonal paintbrush (handle w/ hang-hole, trapezoid ferrule, wide flat bristles, bent foot) -->
+  <g
+     fill="none"
+     stroke="#1a1a1c"
+     stroke-width="1.75"
+     stroke-linecap="round"
+     stroke-linejoin="round"
+     id="g5"
+     style="stroke:url(#linearGradient5)">
+    <rect
+       x="2.5"
+       y="2.5"
+       width="5"
+       height="5"
+       rx="0.9"
+       id="rect1"
+       style="stroke-width:1.74975;stroke-dasharray:none;stroke:url(#linearGradient5)" />
+    <rect
+       x="5"
+       y="5"
+       width="5"
+       height="5"
+       rx="0.9"
+       id="rect2"
+       style="stroke:url(#linearGradient5)" />
+    <g
+       transform="rotate(40,-10.750265,28.370435)"
+       id="g4"
+       style="stroke-width:1.52475;stroke-dasharray:none;stroke:url(#linearGradient5)">
+      <rect
+         x="-1.6223581"
+         y="-8.959507"
+         width="4.0497851"
+         height="6.8910766"
+         rx="0.89999998"
+         id="rect3"
+         style="stroke-width:1.52475;stroke-dasharray:none;stroke:url(#linearGradient5)" />
+      <path
+         id="rect4"
+         d="m -3.6310144,-2.0916506 h 9 c 0.277,0 0.4557075,0.2265641 0.5,0.5 l 1.203526,7.4298634 c 0.044293,0.2734358 -0.2230118,0.5025593 -0.5,0.5 L -6.4750711,6.2176567 c -0.2769881,-0.00256 -0.6004451,-0.2418532 -0.5,-0.5 l 2.8440567,-7.3093073 c 0.1004451,-0.2581469 0.223,-0.5 0.5,-0.5 z"
+         sodipodi:nodetypes="sssssssss"
+         style="stroke:url(#linearGradient5)" />
+      <path
+         style="fill:#1a1a1c;fill-opacity:1;stroke:url(#linearGradient5);stroke-width:1.52475;stroke-dasharray:none"
+         d="m 9.0694092,18.22108 8.1645238,1.131105"
+         id="path5"
+         transform="rotate(-40,-12.482343,25.545472)"
+         sodipodi:nodetypes="cc" />
+    </g>
+  </g>
+</svg>

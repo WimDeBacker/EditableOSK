@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Text;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
@@ -122,7 +124,7 @@ namespace OnScreenKeyboard
         private ToolbarButton _btnKeyRemove;  // toolbar2: clear key
         private ToolbarButton _btnCopyFmt;    // toolbar2: copy formatting + enter paint mode
         private ToolbarButton _btnCopyKey;    // toolbar2: copy full key + enter key-paint mode
-        private Label         _lblSelectedKey;// toolbar2: selected key info
+        private Panel         _lblSelectedKey;// toolbar2: selected key chip (owner-drawn)
 
         // ── Grid action buttons (toolbar2, Edit only) ─────────────────
         private ToolbarButton _btnAddRowAbove, _btnAddRowBelow;
@@ -275,6 +277,7 @@ namespace OnScreenKeyboard
             BuildGearButton();
             BuildEditStrip();
             BuildToolbar();
+            ApplyToolbarTheme();
             // Timer for deferred single-click in Edit mode
             RebuildAllButtons();
 
@@ -305,7 +308,6 @@ namespace OnScreenKeyboard
                 _fontCache.Clear();
                 foreach (var f in _cornerFontCache.Values) f.Dispose();
                 _cornerFontCache.Clear();
-                _wpSizeCache.Clear();
                 // Dispose all remaining buttons (and their regions)
                 foreach (var btn in _buttons.Values) { btn.Region?.Dispose(); btn.Dispose(); }
                 _buttons.Clear();
@@ -525,20 +527,21 @@ namespace OnScreenKeyboard
         /// </summary>
         private void BuildToolbarButtons()
         {
-            ToolbarButton MakeBtn(string icon, string label)
+            ToolbarButton MakeBtn(string svgFile, string label)
             {
-                var b = new ToolbarButton { IconGlyph = icon, Text = label };
+                var ico = SvgIconLoader.Load(svgFile, Color.White, 24);
+                var b = new ToolbarButton { SvgFile = svgFile, IconImage = ico, Text = label };
                 _toolbar.Controls.Add(b);
                 return b;
             }
 
-            _btnLoad         = MakeBtn(FIcon.Load,     Lang.T("tb: Load"));
-            _btnSave         = MakeBtn(FIcon.Save,     Lang.T("tb: Save"));
-            _btnUndo         = MakeBtn(FIcon.Undo,     Lang.T("tb: Undo"));
-            _btnRedo         = MakeBtn(FIcon.Redo,     Lang.T("tb: Redo"));
-            _btnEdit         = MakeBtn(FIcon.Edit,     Lang.T("tb: Edit"));
-            _btnEditKeyboard = MakeBtn(FIcon.Settings, Lang.T("tb: Keyboard"));
-            _btnExitEdit     = MakeBtn(FIcon.Exit,     Lang.T("tb: Exit"));
+            _btnLoad         = MakeBtn("load.svg",            Lang.T("tb: Load"));
+            _btnSave         = MakeBtn("save.svg",            Lang.T("tb: Save"));
+            _btnUndo         = MakeBtn("undo.svg",            Lang.T("tb: Undo"));
+            _btnRedo         = MakeBtn("redo.svg",            Lang.T("tb: Redo"));
+            _btnEdit         = MakeBtn("editKey.svg",         Lang.T("tb: Edit"));
+            _btnEditKeyboard = MakeBtn("keyboardSettings.svg",Lang.T("tb: Keyboard"));
+            _btnExitEdit     = MakeBtn("stopEditing.svg",     Lang.T("tb: Exit"));
 
             _lblFilename = new Label
             {
@@ -598,44 +601,41 @@ namespace OnScreenKeyboard
         /// </summary>
         private void BuildToolbarEditButtons()
         {
-            ToolbarButton MakeBtn(string icon, string label)
+            ToolbarButton MakeBtn(string svgFile, string label)
             {
-                var b = new ToolbarButton { IconGlyph = icon, Text = label };
+                var ico = SvgIconLoader.Load(svgFile, Color.White, 24);
+                var b = new ToolbarButton { SvgFile = svgFile, IconImage = ico, Text = label };
                 _toolbarEdit.Controls.Add(b);
                 return b;
             }
 
             // ── Key action buttons (left) ──────────────────────────────
-            _btnKeyEdit   = MakeBtn(FIcon.Edit,   Lang.T("tb: Edit key"));
-            _btnKeyRemove = MakeBtn(FIcon.Delete,  Lang.T("tb: Remove"));
-            _btnCopyFmt   = MakeBtn(FIcon.Brush,  Lang.T("tb: Copy fmt"));
-            _btnCopyKey   = MakeBtn(FIcon.Copy,   Lang.T("tb: Copy key"));
+            _btnKeyEdit   = MakeBtn("editKey.svg",        Lang.T("tb: Edit key"));
+            _btnKeyRemove = MakeBtn("removeKey.svg",      Lang.T("tb: Remove"));
+            _btnCopyFmt   = MakeBtn("copyFormatting.svg", Lang.T("tb: Copy fmt"));
+            _btnCopyKey   = MakeBtn("copy.svg",           Lang.T("tb: Copy key"));
 
-            // ── Selected key label (middle, flexible) ──────────────────
-            _lblSelectedKey = new Label
-            {
-                TextAlign = ContentAlignment.MiddleCenter,
-                ForeColor = Color.FromArgb(160, 170, 200),
-                BackColor = Color.Transparent,
-                Font      = new Font("Segoe UI", 10f),
-                AutoSize  = false,
-                Text      = "—",
-            };
+            // ── Selected key chip (middle, flexible) ───────────────────
+            // Owner-drawn panel that paints the selected key as a styled
+            // mini chip so the user immediately understands which key is active.
+            var chip = new KeyChipPanel { BackColor = Color.Transparent };
+            chip.Paint += OnSelectedKeyPaint;
+            _lblSelectedKey = chip;
             _toolbarEdit.Controls.Add(_lblSelectedKey);
 
             // ── Grid action buttons (right) ────────────────────────────
             // Combined icons: two MDL2 glyphs side-by-side in the icon area.
             // + direction = insert;  trash alone = delete (different per row/col label);
             // merge + direction arrow = merge that way;  split stays single.
-            _btnAddRowAbove = MakeBtn(FIcon.Add + FIcon.ArrowUp,     Lang.T("tb: Row ↑"));
-            _btnAddRowBelow = MakeBtn(FIcon.Add + FIcon.ArrowDown,   Lang.T("tb: Row ↓"));
-            _btnAddColLeft  = MakeBtn(FIcon.Add + FIcon.ArrowLeft,   Lang.T("tb: Col ←"));
-            _btnAddColRight = MakeBtn(FIcon.Add + FIcon.ArrowRight,  Lang.T("tb: Col →"));
-            _btnRemoveRow   = MakeBtn(FIcon.Delete,                   Lang.T("tb: Del ─"));
-            _btnRemoveCol   = MakeBtn(FIcon.Delete + FIcon.ArrowRight,Lang.T("tb: Del │"));
-            _btnMergeRight  = MakeBtn(FIcon.Merge + FIcon.ArrowRight, Lang.T("tb: Merge →"));
-            _btnMergeDown   = MakeBtn(FIcon.Merge + FIcon.ArrowDown,  Lang.T("tb: Merge ↓"));
-            _btnSplitCell   = MakeBtn(FIcon.Split,                    Lang.T("tb: Split"));
+            _btnAddRowAbove = MakeBtn("insertRowAbove .svg", Lang.T("tb: Row ↑"));
+            _btnAddRowBelow = MakeBtn("insertRowBelow.svg",  Lang.T("tb: Row ↓"));
+            _btnAddColLeft  = MakeBtn("insertColLeft.svg",   Lang.T("tb: Col ←"));
+            _btnAddColRight = MakeBtn("insertColRight.svg",  Lang.T("tb: Col →"));
+            _btnRemoveRow   = MakeBtn("deleteRow.svg",       Lang.T("tb: Del ─"));
+            _btnRemoveCol   = MakeBtn("deleteColumn.svg",    Lang.T("tb: Del │"));
+            _btnMergeRight  = MakeBtn("mergeRight .svg",     Lang.T("tb: Merge →"));
+            _btnMergeDown   = MakeBtn("mergeDown .svg",      Lang.T("tb: Merge ↓"));
+            _btnSplitCell   = MakeBtn("splitCell.svg",       Lang.T("tb: Split"));
 
             // ── Wire key action handlers ───────────────────────────────
             _btnKeyEdit.Click += (s, e) =>
@@ -898,8 +898,6 @@ namespace OnScreenKeyboard
             _fontCache.Clear();
             foreach (var f in _cornerFontCache.Values) f.Dispose();
             _cornerFontCache.Clear();
-            // WP measurement cache is stale after a rebuild.
-            _wpSizeCache.Clear();
             // Rebuild the O(1) group dictionary for the (possibly new) layout.
             RebuildGroupDict();
             _latchedMods.RemoveWhere(c => !_layout.Cells.Contains(c));
@@ -1367,8 +1365,14 @@ namespace OnScreenKeyboard
                     int w = Math.Max(8, (int)(cell.ColSpan * cellW + (cell.ColSpan - 1) * Gap));
                     int h = Math.Max(8, (int)(cell.RowSpan * cellH + (cell.RowSpan - 1) * Gap));
 
+                    // Capture current size BEFORE SetBounds so we can skip the
+                    // Region rebuild when the button dimensions haven't changed.
+                    // Disposing + recreating a Region is a GDI syscall; doing it
+                    // for all ~40 buttons on every resize tick was the main cause
+                    // of the slowdown introduced by the GDI-leak fix.
+                    int prevW = btn.Width, prevH = btn.Height;
                     btn.SetBounds(x, y, w, h);
-                    if (w > 8 && h > 8)
+                    if (w > 8 && h > 8 && (prevW != w || prevH != h || btn.Region == null))
                     {
                         // Dispose the old Region before replacing — WinForms does not
                         // automatically free it, so leaving it causes a GDI object leak.
@@ -1376,8 +1380,20 @@ namespace OnScreenKeyboard
                         btn.Region = Fluent.RoundedRegion(w, h, 4);
                         oldRegion?.Dispose();
                     }
-                    SetButtonFont(btn, cell.Props, h, w, shifted, altGr);
-                    ApplyEmptyKeyStyle(btn, cell.Props);
+                    // WP buttons are handled entirely by ApplyWPTags() at the end of this
+                    // method — it sets both the font and the tag from the current prediction.
+                    // Calling SetButtonFont here would reset btn.Font to the wrong size
+                    // (calculated for the "woord 1" placeholder label), and would set the
+                    // tag to isWP=false via UpdateCornerTag. If ApplyWPTags then hits its
+                    // size cache, the wrong font/tag persists until the next cache miss,
+                    // causing "woord 1" to flash during slow resize.
+                    bool cellIsWP = cell.Props.Send != null &&
+                                    cell.Props.Send.StartsWith("wp:", StringComparison.Ordinal);
+                    if (!cellIsWP)
+                    {
+                        SetButtonFont(btn, cell.Props, h, w, shifted, altGr);
+                        ApplyEmptyKeyStyle(btn, cell.Props);
+                    }
                 }
             }
             finally { ResumeLayout(false); }
@@ -1467,8 +1483,14 @@ namespace OnScreenKeyboard
 
             try { btn.Font = GetButtonFont(fn, fs); }
             catch { btn.Font = GetButtonFont("Arial", fs); }
-            // Main label and corners are painted by OnButtonPaint via UpdateCornerTag
-            UpdateCornerTag(btn, p, shifted, altGr);
+            // WP buttons get their tag set by ApplyWPTags (called at the end of
+            // LayoutButtons). Calling UpdateCornerTag here would overwrite the tag
+            // with the static placeholder label ("woord 1"), which then flashes on
+            // screen during resize before ApplyWPTags restores the real prediction.
+            bool isWP = p.Send != null &&
+                        p.Send.StartsWith("wp:", StringComparison.Ordinal);
+            if (!isWP)
+                UpdateCornerTag(btn, p, shifted, altGr);
         }
 
         /// <summary>
@@ -1640,12 +1662,15 @@ namespace OnScreenKeyboard
         private readonly Dictionary<(string,int),Font> _fontCache = new();
         // Corner-label fonts are cached here to avoid allocating a new Font on every paint call.
         private readonly Dictionary<(string,int),Font> _cornerFontCache = new();
+        // Fonts for the selected-key chip on the edit toolbar.
+        // _chipFont      — small (9 pt): prefix labels ("Shift:") and send arrows.
+        // _chipLabelFont — larger (12 pt): the key label drawn inside the chip itself.
+        private static readonly Font _chipFont      = new Font("Segoe UI", 10f);
+        private static readonly Font _chipLabelFont = new Font("Segoe UI", 12f);
         // Group lookup dictionary — rebuilt whenever _layout.Groups changes.
         // O(1) lookup replaces the O(n) List.Find used previously.
         private Dictionary<string, KeyGroup> _groupDict = new();
-        // WP measurement cache: skip expensive MeasureText when prediction text and button
-        // size haven't changed since the last ApplyWPTags pass.
-        private readonly Dictionary<GridCell, (string pred, int w, int h)> _wpSizeCache = new();
+
 
         /// <summary>
         /// Returns a cached bold <see cref="Font"/> for key buttons at the given family name
@@ -2014,11 +2039,14 @@ namespace OnScreenKeyboard
 
                 string pred = (_predictor != null && slot < _predictor.Predictions.Count) ? _predictor.Predictions[slot] : "";
 
-                // Fast path: if the prediction text and button dimensions haven't changed
-                // since the last pass, the tag is already correct — skip all MeasureText work.
-                var sizeKey = (pred, btn.Width, btn.Height);
-                if (_wpSizeCache.TryGetValue(cell, out var cachedSize) && cachedSize == sizeKey)
-                    continue;
+                // NOTE: _wpSizeCache was removed.  The cache assumed the button's tag
+                // and font were still correct from the previous pass, but several code
+                // paths can touch those between calls (SetButtonFont, UpdateCornerTag,
+                // form resize events) and the cache would then mask the corruption,
+                // leaving "woord 1" visible until the next cache miss.  The inner
+                // tag-equality check below already prevents redundant Invalidate()
+                // calls, so the outer cache was only skipping MeasureText — not worth
+                // the fragility for the small number of WP buttons involved.
 
                 var grpWP = FindGroup(cell.Props.GroupName);
                 Color fc = ResolveColor(cell.Props.FontColor, grpWP?.FontColor ?? Color.Empty, _theme.FontColor);
@@ -2095,7 +2123,6 @@ namespace OnScreenKeyboard
                 if (btn.Tag is (string ol, string _, string _, Color ofc, bool owp, int otl) &&
                     owp && ol == label && ofc == fc && otl == visibleTypedLen)
                     continue;   // nothing changed — skip Invalidate
-                _wpSizeCache[cell] = sizeKey;  // record that this (pred, w, h) is now rendered
                 btn.Tag = newTag;
                 btn.Invalidate();
             }
@@ -2389,29 +2416,184 @@ namespace OnScreenKeyboard
         /// Updates the selected-key info label in the edit toolbar to show the current
         /// cell's label and send value. Shows "—" when nothing is selected.
         /// </summary>
+        /// <summary>
+        /// Triggers a repaint of the selected-key chip on the edit toolbar.
+        /// The <see cref="OnSelectedKeyPaint"/> handler reads <see cref="_selectedCell"/>
+        /// directly at paint time, so no text state needs to be set here.
+        /// </summary>
         private void UpdateSelectedKeyLabel()
         {
-            if (_lblSelectedKey == null) return;
-            if (_selectedCell == null) { _lblSelectedKey.Text = "—"; return; }
-            var p = _selectedCell.Props;
+            _lblSelectedKey?.Invalidate();
+        }
 
-            // Main line: label  →  send
-            string lbl  = string.IsNullOrEmpty(p.Label) ? "(empty)" : p.Label;
-            string send = string.IsNullOrEmpty(p.Send)  ? ""        : $"  →  {p.Send}";
-            string main = lbl + send;
+        /// <summary>
+        /// Owner-draw handler for the selected-key chip panel on the edit toolbar.
+        /// Renders the currently selected cell as a styled mini keyboard key chip,
+        /// making it visually clear which key is being edited.
+        ///
+        /// <para>When a Shift label is defined the normal chip and the Shift chip are
+        /// placed <b>side by side</b> (left half / right half) so both chips use the
+        /// full toolbar height and can be rendered at a larger font size.</para>
+        /// </summary>
+        private void OnSelectedKeyPaint(object sender, PaintEventArgs e)
+        {
+            var pnl = (Panel)sender;
+            var g   = e.Graphics;
+            int W   = pnl.Width;
+            int H   = pnl.Height;
+            bool light = ToolbarButton.IsLightTheme;
 
-            // Shift line (shown above main when either shift field is set)
-            bool hasShift = !string.IsNullOrEmpty(p.ShiftLabel) || !string.IsNullOrEmpty(p.ShiftSend);
+            // Fill with the same background as the edit toolbar panel.
+            Color panelBg = light ? Fluent.BgCard : Fluent.DarkBg2;
+            g.Clear(panelBg);
+
+            g.SmoothingMode     = SmoothingMode.AntiAlias;
+            g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+
+            // Text color for prefix labels ("Shift:") and send arrows.
+            // Must contrast clearly against both toolbar backgrounds:
+            //   Dark toolbar (DarkBg2 ≈ #2C2C2C): use near-white so text pops.
+            //   Light toolbar (BgCard ≈ #F3F3F3): use near-black for maximum legibility.
+            Color fgSecondary = light ? Fluent.TextPrimary : Color.FromArgb(225, 232, 245);
+
+            if (_selectedCell == null)
+            {
+                // No key selected — show an em dash centered in the panel.
+                TextRenderer.DrawText(g, "—", _chipLabelFont, new Rectangle(0, 0, W, H),
+                    fgSecondary,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter |
+                    TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine);
+                return;
+            }
+
+            var p   = _selectedCell.Props;
+            var grp = FindGroup(p.GroupName);
+
+            // Resolve key colors through cell → group → theme fallback chain.
+            Color keyBg  = ResolveColor(p.KeyColor,    grp?.KeyColor    ?? Color.Empty, _theme.KeyColor);
+            Color keyFg  = ResolveColor(p.FontColor,   grp?.FontColor   ?? Color.Empty, _theme.FontColor);
+            Color keyBdr = ResolveColor(p.BorderColor, grp?.BorderColor ?? Color.Empty, _theme.BorderColor);
+
+            // Keep both raw and stripped send values:
+            //   raw   — compared against the raw label to decide whether to show the arrow.
+            //           {(} differs from (, so the arrow IS shown even though they mean the same char.
+            //   display — outer { } stripped so "{(}" shows as "(" and "{Enter}" shows as "Enter".
+            string label       = p.Label      ?? "";
+            string rawSend     = p.Send       ?? "";
+            string sendDisplay = StripSendBraces(rawSend);
+            string shiftLbl    = p.ShiftLabel ?? "";
+            string rawShiftSnd = p.ShiftSend  ?? "";
+            string shiftSndDisplay = StripSendBraces(rawShiftSnd);
+
+            bool hasShift = !string.IsNullOrEmpty(shiftLbl);
+
             if (hasShift)
             {
-                string shiftLbl  = p.ShiftLabel ?? "";
-                string shiftSend = string.IsNullOrEmpty(p.ShiftSend) ? "" : $"  →  {p.ShiftSend}";
-                _lblSelectedKey.Text = $"⇧  {shiftLbl}{shiftSend}\n{main}";
+                // Side by side: normal chip on the left half, Shift chip on the right half.
+                // This keeps the full toolbar height available for each chip so both can
+                // use the larger font without squashing.
+                int halfW = W / 2;
+                DrawChipSection(g, 0,     halfW, H, "",       label,    sendDisplay,    rawSend,     keyBg, keyFg, keyBdr, fgSecondary);
+                DrawChipSection(g, halfW, halfW, H, "Shift:", shiftLbl, shiftSndDisplay, rawShiftSnd, keyBg, keyFg, keyBdr, fgSecondary);
             }
             else
             {
-                _lblSelectedKey.Text = main;
+                DrawChipSection(g, 0, W, H, "", label, sendDisplay, rawSend, keyBg, keyFg, keyBdr, fgSecondary);
             }
+        }
+
+        /// <summary>
+        /// Draws one horizontal section of the selected-key chip area.
+        /// The section occupies a rectangle starting at <paramref name="x"/> with
+        /// the full toolbar <paramref name="H"/> and a width of <paramref name="sectionW"/>.
+        ///
+        /// <para>Layout (all centered within the section):
+        /// <c>[prefix]  [chip]  →  sendVal</c></para>
+        ///
+        /// <para>The "→ send" part is omitted only when the raw send value is empty or
+        /// is byte-for-byte identical to the raw label (e.g. label="a", send="a").
+        /// A send like <c>{(}</c> with label <c>(</c> IS shown because the raw strings
+        /// differ — it is displayed as "→ (" after brace-stripping.</para>
+        /// </summary>
+        private void DrawChipSection(
+            Graphics g, int x, int sectionW, int H,
+            string prefix, string keyLabel, string sendVal, string rawSendVal,
+            Color keyBg, Color keyFg, Color keyBdr, Color textFg)
+        {
+            const int chipPadH = 10;  // horizontal padding inside the chip rounded-rect
+            const int chipPadV = 6;   // vertical margin above and below the chip
+            const int chipR    = 4;   // corner radius for the mini chip
+            const int arrowGap = 8;   // gap between chip right edge and the "→ send" text
+
+            var mf  = TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine;
+            var mfV = mf | TextFormatFlags.VerticalCenter;
+
+            // ── Measure prefix ("Shift:") ─────────────────────────────
+            int prefixW = 0;
+            if (!string.IsNullOrEmpty(prefix))
+                prefixW = TextRenderer.MeasureText(prefix + " ", _chipFont,
+                              new Size(200, H), mf).Width;
+
+            // ── Measure chip label (uses the larger chip font) ────────
+            string chipText = string.IsNullOrEmpty(keyLabel) ? " " : keyLabel;
+            int chipLabelW  = TextRenderer.MeasureText(chipText, _chipLabelFont,
+                                  new Size(400, H), mf).Width;
+            int chipW = chipLabelW + chipPadH * 2;
+            int chipH = H - chipPadV * 2;         // chip uses most of the toolbar height
+
+            // ── Measure "→ send" ──────────────────────────────────────
+            // Show send whenever it is non-empty — no equality suppression.
+            // The user wants to see what every key sends, even when the send text
+            // matches the label (e.g. label "a", send "a" → still shows "→ a").
+            bool showSend = !string.IsNullOrEmpty(rawSendVal);
+            string displaySend = showSend ? $"→  {sendVal}" : "";
+            int sendW = showSend
+                ? TextRenderer.MeasureText(displaySend, _chipFont, new Size(500, H), mf).Width
+                : 0;
+
+            // ── Center the whole block inside this section ────────────
+            int totalW  = prefixW + chipW + (showSend ? arrowGap + sendW : 0);
+            int startX  = x + Math.Max(4, (sectionW - totalW) / 2);
+            int chipX   = startX + prefixW;
+            int chipY   = (H - chipH) / 2;
+
+            // ── Prefix label ──────────────────────────────────────────
+            if (!string.IsNullOrEmpty(prefix))
+                TextRenderer.DrawText(g, prefix, _chipFont,
+                    new Rectangle(startX, 0, prefixW, H), textFg, mfV);
+
+            // ── Chip: filled rounded rect ─────────────────────────────
+            var chipRect = new Rectangle(chipX, chipY, chipW - 1, chipH - 1);
+            using var chipPath = Fluent.RoundedRect(chipRect, chipR);
+            using (var br = new SolidBrush(keyBg))
+                g.FillPath(br, chipPath);
+            using (var pen = new Pen(keyBdr))
+                g.DrawPath(pen, chipPath);
+
+            // ── Chip label ────────────────────────────────────────────
+            if (!string.IsNullOrEmpty(keyLabel))
+                TextRenderer.DrawText(g, keyLabel, _chipLabelFont,
+                    new Rectangle(chipX, chipY, chipW, chipH), keyFg,
+                    TextFormatFlags.NoPrefix | TextFormatFlags.HorizontalCenter |
+                    TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
+
+            // ── Send arrow + value ────────────────────────────────────
+            if (showSend)
+                TextRenderer.DrawText(g, displaySend, _chipFont,
+                    new Rectangle(chipX + chipW + arrowGap, 0, sendW + 4, H), textFg, mfV);
+        }
+
+        /// <summary>
+        /// Strips the outer curly-brace wrapper that SendKeys uses to escape
+        /// special characters, so the display is human-readable.
+        /// Examples: <c>{(}</c> → <c>(</c>, <c>{Enter}</c> → <c>Enter</c>.
+        /// Strings without braces are returned unchanged.
+        /// </summary>
+        private static string StripSendBraces(string s)
+        {
+            if (s.Length >= 3 && s[0] == '{' && s[s.Length - 1] == '}')
+                return s.Substring(1, s.Length - 2);
+            return s;
         }
 
         /// <summary>
@@ -2570,6 +2752,7 @@ namespace OnScreenKeyboard
             ApplyTitlebarState();
             ForceTopMost();  // re-apply always-on-top setting immediately
             BackColor = _theme.BackgroundColor; Opacity = _theme.Opacity;
+            ApplyToolbarTheme();
             if (dlg.ApplyToKeys)
             {
                 // "Apply style to all keys" WAS ticked: clear per-key style overrides for every
@@ -2690,6 +2873,7 @@ namespace OnScreenKeyboard
                 UpdateFilenameLabel();
                 BackColor = _theme.BackgroundColor; Opacity = _theme.Opacity;
                 ApplyTitlebarState();
+                ApplyToolbarTheme();
                 if (!string.IsNullOrEmpty(_meta.Language)) Lang.Load(_meta.Language);
                 RebuildAllButtons();
                 Size = new Size(_window.WindowWidth, _window.WindowHeight);
@@ -2782,6 +2966,63 @@ namespace OnScreenKeyboard
         /// current file if one is open). Errors are swallowed — auto-save should never
         /// interrupt the user.
         /// </summary>
+        /// <summary>
+        /// Returns <c>true</c> when the toolbar should currently use the light palette.
+        /// Resolves <see cref="ToolbarTheme.System"/> by reading the Windows
+        /// "Apps use light theme" registry value.
+        /// </summary>
+        private static bool EffectiveLightTheme(ToolbarTheme setting)
+        {
+            if (setting == ToolbarTheme.Light)  return true;
+            if (setting == ToolbarTheme.Dark)   return false;
+            // System: check registry
+            try
+            {
+                using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                    @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+                return key?.GetValue("AppsUseLightTheme") is int v && v != 0;
+            }
+            catch { return false; }
+        }
+
+        /// <summary>
+        /// Applies the toolbar colour palette selected in <see cref="LayoutMeta.ToolbarTheme"/>.
+        /// Updates the toolbar panel background colour, sets the global
+        /// <see cref="ToolbarButton.IsLightTheme"/> flag, and re-renders all SVG icon bitmaps
+        /// in the correct tint colour before invalidating every toolbar button.
+        /// </summary>
+        private void ApplyToolbarTheme()
+        {
+            bool light = EffectiveLightTheme(_meta.ToolbarTheme);
+            ToolbarButton.IsLightTheme = light;
+
+            Color panelBg = light ? Fluent.BgPage : Fluent.DarkBg;
+            if (_toolbar     != null) _toolbar.BackColor     = panelBg;
+            if (_toolbarEdit != null) _toolbarEdit.BackColor = light ? Fluent.BgCard : Fluent.DarkBg2;
+
+            // Reload SVG icons with the correct tint for the new theme.
+            Color iconTint = light ? Fluent.TextPrimary : Color.White;
+            foreach (Control c in (_toolbar?.Controls ?? new Control.ControlCollection(null)))
+                if (c is ToolbarButton tb && !string.IsNullOrEmpty(tb.SvgFile))
+                    tb.IconImage = SvgIconLoader.Load(tb.SvgFile, iconTint, 24);
+            foreach (Control c in (_toolbarEdit?.Controls ?? new Control.ControlCollection(null)))
+                if (c is ToolbarButton tb && !string.IsNullOrEmpty(tb.SvgFile))
+                    tb.IconImage = SvgIconLoader.Load(tb.SvgFile, iconTint, 24);
+
+            // Update filename label contrast: dark theme uses a bright tinted color
+            // so the text remains readable against the dark toolbar; light theme uses
+            // the standard secondary text color for a clean look on the light panel.
+            if (_lblFilename != null)
+                _lblFilename.ForeColor = light
+                    ? Fluent.TextSecondary
+                    : Color.FromArgb(190, 200, 225);
+
+            // Repaint all toolbar buttons and the key chip panel.
+            _toolbar?.Invalidate(true);
+            _toolbarEdit?.Invalidate(true);
+            _lblSelectedKey?.Invalidate();
+        }
+
         private void AutoSave()
         {
             string path = _currentFilePath ?? SettingsManager.DefaultPath;

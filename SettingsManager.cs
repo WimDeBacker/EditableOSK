@@ -7,6 +7,27 @@ using System.Xml;
 namespace OnScreenKeyboard
 {
     // ══════════════════════════════════════════════════════════════════════
+    // ToolbarTheme — colour palette of the main keyboard toolbar
+    // ══════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Controls the colour palette of the main keyboard toolbar.
+    /// </summary>
+    public enum ToolbarTheme
+    {
+        /// <summary>Dark background, white icons — matches the classic keyboard look.</summary>
+        Dark,
+        /// <summary>Light background, dark icons — matches light-mode applications.</summary>
+        Light,
+        /// <summary>
+        /// Follows the Windows "Apps use light theme" system setting.
+        /// Resolves to <see cref="Light"/> when the system is in light mode,
+        /// <see cref="Dark"/> otherwise.
+        /// </summary>
+        System,
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
     // VisualTheme — colours, fonts, opacity (everything purely cosmetic)
     // ══════════════════════════════════════════════════════════════════════
 
@@ -204,6 +225,12 @@ namespace OnScreenKeyboard
         public string LastFile        { get; set; } = "";
 
         /// <summary>
+        /// Colour palette used by the main toolbar.
+        /// <see cref="ToolbarTheme.System"/> follows the Windows Apps light/dark setting.
+        /// </summary>
+        public ToolbarTheme ToolbarTheme { get; set; } = ToolbarTheme.Dark;
+
+        /// <summary>
         /// Creates a new <see cref="LayoutMeta"/> with identical values to
         /// this one.
         /// </summary>
@@ -216,6 +243,7 @@ namespace OnScreenKeyboard
             GearRow         = GearRow,
             GearCol         = GearCol,
             LastFile        = LastFile,
+            ToolbarTheme    = ToolbarTheme,
         };
 
         /// <summary>
@@ -231,6 +259,7 @@ namespace OnScreenKeyboard
             GearRow         = src.GearRow;
             GearCol         = src.GearCol;
             LastFile        = src.LastFile;
+            ToolbarTheme    = src.ToolbarTheme;
         }
     }
 
@@ -375,6 +404,7 @@ namespace OnScreenKeyboard
             w.WriteAttributeString("HoldToEdit",      m.HoldToEdit      ? "1" : "0");
             w.WriteAttributeString("AlwaysOnTop",     ws.AlwaysOnTop    ? "1" : "0");
             w.WriteAttributeString("LastFile",        m.LastFile ?? "");
+            w.WriteAttributeString("ToolbarTheme",    m.ToolbarTheme.ToString());
             WriteGrid(w, layout);
             w.WriteEndElement();
         }
@@ -539,6 +569,8 @@ namespace OnScreenKeyboard
             var lNode = layoutNode ?? globalNode;
             meta.Language        = Attr(lNode,"Language","en");
             meta.LastFile        = Attr(lNode,"LastFile","");
+            meta.ToolbarTheme    = Enum.TryParse<ToolbarTheme>(Attr(lNode,"ToolbarTheme",""), out var tbTheme)
+                                   ? tbTheme : ToolbarTheme.Dark;
             // "1" / "0" string comparison — matches how SaveSettings writes these flags.
             meta.StickyModifiers = Attr(lNode,"StickyModifiers","1") == "1";
             meta.HoldToEdit      = Attr(lNode,"HoldToEdit","0")      == "1";

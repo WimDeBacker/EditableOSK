@@ -182,12 +182,35 @@ namespace OnScreenKeyboard
         public string IconGlyph { get; set; } = "";
 
         /// <summary>
+        /// An optional bitmap image displayed in the icon area of the button,
+        /// taking priority over <see cref="IconGlyph"/> when both are set.
+        /// Typically loaded from an SVG file via <see cref="SvgIconLoader"/>.
+        /// </summary>
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public Bitmap IconImage { get; set; } = null;
+
+        /// <summary>
         /// When <c>true</c> the button is drawn in the "active/toggled" state —
         /// a brighter fill that indicates the function is currently on
         /// (e.g. Shift is held, or a panel is open).
         /// </summary>
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool   IsActive  { get; set; } = false;
+
+        /// <summary>
+        /// The SVG filename (inside the icons directory) used for this button's icon.
+        /// Stored so the icon can be re-rendered at a different tint when the toolbar
+        /// theme changes at runtime.
+        /// </summary>
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public string SvgFile { get; set; } = "";
+
+        /// <summary>
+        /// When <c>true</c> all <see cref="ToolbarButton"/> instances paint in light-theme
+        /// mode (dark icons on a light background).  Set this before calling
+        /// <see cref="Control.Invalidate"/> on all toolbar buttons to switch themes at runtime.
+        /// </summary>
+        public static bool IsLightTheme { get; set; } = false;
 
         // Same hover/pressed flags as FluentButton — see comments there.
         private bool _hovered, _pressed;
@@ -233,9 +256,10 @@ namespace OnScreenKeyboard
         /// </summary>
         protected override void OnPaint(PaintEventArgs e)
         {
-            Color parentBg = Parent?.BackColor ?? Fluent.DarkBg;
-            FluentPainter.PaintDark(e.Graphics, ClientRectangle, Text, IconGlyph,
-                Font, IsActive, _hovered, _pressed, Enabled, Fluent.RadiusBtn, parentBg);
+            Color parentBg = Parent?.BackColor ?? (IsLightTheme ? Fluent.BgPage : Fluent.DarkBg);
+            FluentPainter.PaintDark(e.Graphics, ClientRectangle, Text, IconGlyph, IconImage,
+                Font, IsActive, _hovered, _pressed, Enabled, Fluent.RadiusBtn, parentBg,
+                IsLightTheme);
         }
     }
 
@@ -416,9 +440,9 @@ namespace OnScreenKeyboard
         /// <param name="radius">Corner radius in pixels.</param>
         /// <param name="parentBg">Parent background colour for corner blending.</param>
         internal static void PaintDark(
-            Graphics g, Rectangle r, string text, string icon,
+            Graphics g, Rectangle r, string text, string icon, Bitmap iconImage,
             Font font, bool active, bool hovered, bool pressed, bool enabled, int radius,
-            Color parentBg = default)
+            Color parentBg = default, bool lightTheme = false)
         {
             g.SmoothingMode     = SmoothingMode.AntiAlias;
             g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
@@ -426,20 +450,29 @@ namespace OnScreenKeyboard
             // Flood-fill to parent background first — this eliminates the "ghost"
             // remnant of a previous paint that would otherwise accumulate and create
             // a blurry halo effect around the button on repeated hover/leave cycles.
-            Color bg = parentBg == default ? Fluent.DarkBg : parentBg;
+            Color bg = parentBg == default ? (lightTheme ? Fluent.BgPage : Fluent.DarkBg) : parentBg;
             g.Clear(bg);
 
             var paint = new Rectangle(0, 0, r.Width - 1, r.Height - 1);
             using var path = Fluent.RoundedRect(paint, radius);
 
-            // Choose the overlay colour based on state priority: active > pressed > hovered > nothing.
-            // Transparent means no overlay is drawn, leaving the parent background visible —
-            // the button is "invisible" when in its normal resting state.
-            Color bgFill =
-                active  ? Fluent.DarkActive :
-                pressed ? Fluent.DarkPress  :
-                hovered ? Fluent.DarkHover  :
-                          Color.Transparent;
+            // Overlay colour: active uses accent blue in both themes; hover/press differ.
+            //
+            // Dark theme: white semi-transparent overlays on the dark background.
+            //   Hover alpha 60 → button goes from ~#202020 to ~#424242 — clearly visible.
+            //   Press alpha 40 → slightly darker than hover = "pushed in" feel.
+            //   (Previous values of 28/16 were too close to the background to see.)
+            //
+            // Light theme: dark semi-transparent overlays on the light background.
+            Color bgFill = lightTheme
+                ? (active  ? Fluent.DarkActive                :
+                   pressed ? Color.FromArgb(40,  0,   0,   0) :
+                   hovered ? Color.FromArgb(18,  0,   0,   0) :
+                             Color.Transparent)
+                : (active  ? Fluent.DarkActive :
+                   pressed ? Color.FromArgb(60, 255, 255, 255) :
+                   hovered ? Color.FromArgb(40, 255, 255, 255) :
+                             Color.Transparent);
 
             // Only paint if there is something to paint (alpha > 0).
             // Attempting to fill with a fully transparent brush wastes time and can
@@ -448,26 +481,90 @@ namespace OnScreenKeyboard
                 using (var br = new SolidBrush(bgFill))
                     g.FillPath(br, path);
 
-            // Disabled overlay: a dark semi-transparent wash (opposite of the light
-            // theme which uses a white wash, because we are on a dark background).
-            if (!enabled)
+            // Draw a subtle border around each button in light mode so buttons
+            // are distinguishable against the light panel background.
+            if (lightTheme && !active)
             {
-                using var dim = new SolidBrush(Color.FromArgb(90, 0, 0, 0));
-                g.FillPath(dim, path);
+                var bc = hovered
+                    ? Color.FromArgb(60, 0, 0, 0)
+                    : Color.FromArgb(28, 0, 0, 0);
+                using var pen = new Pen(bc);
+                g.DrawPath(pen, path);
             }
 
-            // Active buttons show pure white text for maximum contrast on the bright
-            // active highlight; normal buttons use the subdued DarkText colour.
-            Color fg = enabled
-                ? (active ? Color.White : Fluent.DarkText)
-                : Color.FromArgb(80, 255, 255, 255);   // very dim white for disabled state
-
-            if (!string.IsNullOrEmpty(icon))
+            if (!enabled)
             {
-                // Vertical stacked layout: icon fills the top region, label sits in
-                // a fixed 16-pixel strip at the bottom.  This matches the icon-over-label
-                // style common in toolbars (similar to a Windows ribbon bar).
-                int iconH = r.Height - 18;    // 18px = 16px label strip + 2px breathing room
+                // Light theme: white wash dims the coloured button surface (same as FluentButton).
+                // Dark theme: skip the black overlay (it made the already-dark button pitch-black
+                // and invisible).  Contrast is achieved entirely through the dimmed fg colour
+                // and reduced icon opacity below.
+                if (lightTheme)
+                    using (var dim = new SolidBrush(Color.FromArgb(80, 255, 255, 255)))
+                        g.FillPath(dim, path);
+            }
+
+            // Foreground colour for label text and MDL2 glyph icons.
+            //
+            // IMPORTANT: TextRenderer.DrawText uses GDI (not GDI+) and silently drops
+            // the alpha channel — Color.FromArgb(115, 255, 255, 255) renders as pure
+            // white, identical to the enabled state.  Disabled contrast must therefore
+            // be expressed as a solid pre-computed grey, not a semi-transparent white.
+            //
+            // Dark theme:  enabled = white (#FFFFFF),  disabled = medium grey (#868686)
+            // Light theme: enabled = near-black (#1C1C1C), disabled = medium grey (#ABABAB)
+            // Active (both): always white on the blue accent background.
+            Color fg = lightTheme
+                ? (enabled ? (active ? Color.White : Fluent.TextPrimary)
+                           : Color.FromArgb(171, 171, 171))   // solid mid-grey on light bg
+                : (enabled ? (active ? Color.White : Fluent.DarkText)
+                           : Color.FromArgb(134, 134, 134));  // solid mid-grey on dark bg
+
+            if (iconImage != null)
+            {
+                // Bitmap icon: draw scaled and centred in the upper portion of the button,
+                // with the text label in the fixed 16-px strip at the bottom.
+                int iconH = r.Height - 18;   // leave 18 px for the label strip
+                float scale = Math.Min(
+                    (float)(r.Width - 4) / iconImage.Width,
+                    (float)(iconH  - 4) / iconImage.Height);
+                int drawW = Math.Max(1, (int)(iconImage.Width  * scale));
+                int drawH = Math.Max(1, (int)(iconImage.Height * scale));
+                int drawX = (r.Width - drawW) / 2;
+                int drawY = 1 + (iconH - drawH) / 2;
+                var destRect = new Rectangle(drawX, drawY, drawW, drawH);
+
+                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+
+                if (!enabled)
+                {
+                    // Dim the icon for the disabled state using a colour matrix.
+                    // 0.30 alpha keeps the icon recognisable while making the enabled/disabled
+                    // contrast clearly visible, particularly in the dark theme where there is
+                    // no background wash to help distinguish the two states.
+                    using var ia = new System.Drawing.Imaging.ImageAttributes();
+                    var cm = new System.Drawing.Imaging.ColorMatrix { Matrix33 = 0.30f };
+                    ia.SetColorMatrix(cm);
+                    g.DrawImage(iconImage, destRect,
+                                0, 0, iconImage.Width, iconImage.Height,
+                                GraphicsUnit.Pixel, ia);
+                }
+                else
+                {
+                    g.DrawImage(iconImage, destRect);
+                }
+
+                if (!string.IsNullOrEmpty(text))
+                {
+                    var textRect = new Rectangle(0, r.Height - 16, r.Width, 16);
+                    TextRenderer.DrawText(g, text, font, textRect, fg,
+                        TextFormatFlags.NoPrefix | TextFormatFlags.HorizontalCenter |
+                        TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
+                }
+            }
+            else if (!string.IsNullOrEmpty(icon))
+            {
+                // Glyph icon (MDL2 Assets font): stacked icon + label layout.
+                int iconH = r.Height - 18;
                 var iconRect = new Rectangle(0, 1, r.Width, iconH);
                 var textRect = new Rectangle(0, r.Height - 16, r.Width, 16);
 
@@ -568,5 +665,36 @@ namespace OnScreenKeyboard
             int b = Math.Max(0, (int)(c.B * (1f - amount)));
             return Color.FromArgb(c.A, r, g, b);
         }
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    //  KeyChipPanel — double-buffered Panel for the selected-key chip.
+    //
+    //  Used on the edit toolbar to show the currently selected key as a
+    //  small graphical chip (mini key) instead of a plain text label.
+    //  Double buffering eliminates flicker when the panel is repainted
+    //  during window resizes or theme switches.
+    // ════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// A <see cref="Panel"/> subclass with owner-draw double buffering,
+    /// used to host the selected-key chip on the edit toolbar.
+    /// The actual painting is performed by the <c>Paint</c> event handler
+    /// wired up in <c>KeyboardForm.BuildToolbarEditButtons</c>.
+    /// </summary>
+    internal class KeyChipPanel : Panel
+    {
+        /// <summary>
+        /// Enables the owner-draw pipeline and double buffering so the
+        /// host's <c>Paint</c> handler can draw without flicker.
+        /// </summary>
+        public KeyChipPanel()
+        {
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
+                     ControlStyles.OptimizedDoubleBuffer, true);
+        }
+
+        /// <summary>Suppress background erase — the Paint handler fills everything.</summary>
+        protected override void OnPaintBackground(PaintEventArgs e) { /* suppress */ }
     }
 }

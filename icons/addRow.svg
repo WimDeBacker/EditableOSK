@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   viewBox="0 0 24 24"
+   width="32"
+   height="32"
+   version="1.1"
+   id="svg4"
+   sodipodi:docname="addRow-outline.svg"
+   inkscape:version="1.4.2 (f4327f4, 2025-05-13)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs4" />
+  <sodipodi:namedview
+     id="namedview4"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="10"
+     inkscape:cx="15.4"
+     inkscape:cy="23.8"
+     inkscape:window-width="1079"
+     inkscape:window-height="1360"
+     inkscape:window-x="1913"
+     inkscape:window-y="0"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="svg4" />
+  <!-- table + plus, on the seam between two rows -->
+  <path
+     d="M 2.9999999,9.1271281 H 21"
+     id="path1"
+     style="stroke:#000000;stroke-width:1.74975;stroke-dasharray:none" />
+  <path
+     d="M 2.9999999,15.052378 H 21"
+     id="path2-4"
+     style="stroke:#000000;stroke-width:1.74975;stroke-dasharray:none" />
+  <g
+     fill="none"
+     stroke="#1a1a1c"
+     stroke-width="1.75"
+     stroke-linecap="round"
+     stroke-linejoin="round"
+     id="g4">
+    <rect
+       x="3"
+       y="5"
+       width="18"
+       height="14"
+       rx="1"
+       id="rect1" />
+    <path
+       id="path4"
+       d="M 7.2581783,12 H 16.741822 M 12.000001,7.2581775 v 9.4836445"
+       style="stroke:#2b7ec9;stroke-width:2.766;stroke-opacity:1;stroke-dasharray:none" />
+  </g>
+</svg>

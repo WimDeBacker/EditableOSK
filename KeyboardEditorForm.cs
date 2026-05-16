@@ -112,6 +112,7 @@ namespace OnScreenKeyboard
         private CheckBox      _chkStickyMods;
         private CheckBox      _chkHoldToEdit;
         private CheckBox      _chkHideTitlebar;
+        private ComboBox      _cmbToolbarTheme;
 
         // File action delegates — called when Save/SaveAs/Load buttons are clicked
         private readonly Action _onSave;
@@ -379,7 +380,7 @@ namespace OnScreenKeyboard
             // ── Window card ───────────────────────────────────────────────
             // Contains: opacity slider, background colour, always-on-top,
             // hide-titlebar.  Heights are summed manually to fit everything.
-            int wndH = HDR_H + PAD + 52       + ROW_H + ROW_H + ROW_H + PAD + 6;
+            int wndH = HDR_H + PAD + 52       + ROW_H + ROW_H + ROW_H + ROW_H + PAD + 6;
             var grpWnd = AddGroup(() => Lang.T("Window"), leftX, leftY, colW, wndH,
                                   Color.FromArgb(41, 128, 185));
             leftY += wndH + gap;
@@ -424,6 +425,23 @@ namespace OnScreenKeyboard
                 Font = F_LABEL,
             };
             grpWnd.Controls.Add(_chkHideTitlebar); gy += ROW_H;
+
+            // Toolbar theme selector
+            AddFieldLabel(grpWnd, () => Lang.T("Toolbar theme"), lx, gy);
+            _cmbToolbarTheme = new ComboBox
+            {
+                Left = vx, Top = gy + 2, Width = vw,
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Font = F_LABEL,
+            };
+            _cmbToolbarTheme.Items.AddRange(new object[]
+            {
+                Lang.T("Dark"),
+                Lang.T("Light"),
+                Lang.T("System default"),
+            });
+            _cmbToolbarTheme.SelectedIndex = (int)ResultMeta.ToolbarTheme;
+            grpWnd.Controls.Add(_cmbToolbarTheme); gy += ROW_H;
 
             // ── Layout file card ──────────────────────────────────────────
             // Three equal-width buttons: Save, Save As, Load.
@@ -834,6 +852,7 @@ namespace OnScreenKeyboard
             _chkStickyMods.Checked   = m.StickyModifiers;
             _chkHoldToEdit.Checked   = m.HoldToEdit;
             _chkHideTitlebar.Checked = ws.HideTitlebar;
+            _cmbToolbarTheme.SelectedIndex = (int)m.ToolbarTheme;
 
             // Pre-select the font that matches the current theme.
             // If the font is not installed, fall back to the first item.
@@ -968,6 +987,7 @@ namespace OnScreenKeyboard
                 GearCol         = _srcMeta.GearCol,
                 StickyModifiers = _chkStickyMods.Checked,
                 HoldToEdit      = _chkHoldToEdit.Checked,
+                ToolbarTheme    = (ToolbarTheme)_cmbToolbarTheme.SelectedIndex,
             };
 
             ResultTheme  = theme;

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32">
+
+    <!-- globe with meridian + equator -->
+    <g fill="none" stroke="#1a1a1c" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9"></circle>
+      <path d="M3 12h18"></path>
+      <path d="M12 3a13 13 0 0 1 0 18"></path>
+      <path d="M12 3a13 13 0 0 0 0 18"></path>
+    </g>
+    
+    
+</svg>

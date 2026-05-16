@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32">
+
+    <!-- pencil drawing on a keycap -->
+    <g fill="none" stroke="#1a1a1c" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="13" width="11" height="8" rx="1.5"></rect>
+      <path d="M16 3.5l4.5 4.5L13 15.5H8.5V11L16 3.5Z"></path>
+      <path d="M14 5.5l4.5 4.5"></path>
+    </g>
+    
+    
+</svg>
