@@ -834,11 +834,10 @@ namespace OnScreenKeyboard
             // Fast path: focus is still where it should be — nothing to do.
             if (GetForegroundWindow() == target) return;
             // Focus was stolen by something outside our control.
-            // SetForegroundWindow can be blocked by Windows in some circumstances,
-            // but it is the best we can do here. The short sleep gives the window
-            // manager time to process the activation before we inject input.
+            // SetForegroundWindow posts an async activation message — no sleep is needed.
+            // Sleeping here blocks the UI thread for 30 ms on every keystroke where focus
+            // was unexpectedly stolen, which is worse than the original problem.
             SetForegroundWindow(target);
-            Thread.Sleep(30);
         }
 
         // ── INPUT factories ───────────────────────────────────────────────────

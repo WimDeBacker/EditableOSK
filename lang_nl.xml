@@ -40,12 +40,14 @@
   <String key="tb: Remove"    value="Wissen" />
   <String key="tb: Copy fmt"  value="Kop. opmaak" />
   <String key="tb: Copy key"  value="Kop. toets" />
-  <String key="tb: Row"       value="Rij" />
-  <String key="tb: Col"       value="Kol" />
-  <String key="tb: Del row"   value="Del rij" />
-  <String key="tb: Del col"   value="Del kol" />
-  <String key="tb: Merge R"   value="Sam. R" />
-  <String key="tb: Merge D"   value="Sam. D" />
+  <String key="tb: Row ↑"     value="Rij ↑" />
+  <String key="tb: Row ↓"     value="Rij ↓" />
+  <String key="tb: Col ←"     value="Kol ←" />
+  <String key="tb: Col →"     value="Kol →" />
+  <String key="tb: Del ─"     value="Del ─" />
+  <String key="tb: Del │"     value="Del │" />
+  <String key="tb: Merge →"   value="Sam. →" />
+  <String key="tb: Merge ↓"   value="Sam. ↓" />
   <String key="tb: Split"     value="Splitsen" />
 
   <!-- Gear menu -->

@@ -504,7 +504,7 @@ namespace OnScreenKeyboard
                 BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary,
                 Font = F_INPUT, FlatStyle = FlatStyle.Flat,
             };
-            _cmbFont.Items.AddRange(GetInstalledFonts().ToArray<object>());
+            _cmbFont.Items.AddRange(Fluent.InstalledFontNames());
             _cmbFont.SelectedIndexChanged += (s, e) => Refresh2();  // update live preview
             grpStyle.Controls.Add(_cmbFont); gy += ROW_H;
 
@@ -1005,20 +1005,8 @@ namespace OnScreenKeyboard
         /// <returns>The parsed colour, or <paramref name="fallback"/>.</returns>
         private static Color ParseColor(string hex, Color fallback) => SettingsManager.ParseColor(hex, fallback);
 
-        /// <summary>
-        /// Returns the names of every font family installed on the current
-        /// machine, sorted alphabetically (case-insensitive) so the user can
-        /// find fonts quickly in the combo box.
-        /// </summary>
-        /// <returns>Sorted list of font family names.</returns>
-        private static List<string> GetInstalledFonts()
-        {
-            var list = new List<string>();
-            using (var ifc = new InstalledFontCollection())
-                foreach (var ff in ifc.Families) list.Add(ff.Name);
-            list.Sort(StringComparer.OrdinalIgnoreCase);
-            return list;
-        }
+        // GetInstalledFonts removed — use Fluent.InstalledFontNames() which caches the
+        // result process-wide so the expensive GDI enumeration only runs once.
 
         // ════════════════════════════════════════════════════════════════
         // Helper class

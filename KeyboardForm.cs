@@ -96,8 +96,11 @@ namespace OnScreenKeyboard
         private bool     _keyPaintMode    = false;  // true = key-painter active; next click pastes key
 
         // ── Undo / Redo ───────────────────────────────────────────────
-        private readonly Stack<(GridLayout Layout, VisualTheme Theme, WindowState Window, LayoutMeta Meta)> _undoStack = new();
-        private readonly Stack<(GridLayout Layout, VisualTheme Theme, WindowState Window, LayoutMeta Meta)> _redoStack = new();
+        // LinkedList is used instead of Stack so we can drop the oldest entry in O(1)
+        // via RemoveLast() — Stack.ToArray+rebuild would be O(n) every 50 edits.
+        // Convention: newest snapshot is always at the front (First); oldest at the back (Last).
+        private readonly LinkedList<(GridLayout Layout, VisualTheme Theme, WindowState Window, LayoutMeta Meta)> _undoStack = new();
+        private readonly LinkedList<(GridLayout Layout, VisualTheme Theme, WindowState Window, LayoutMeta Meta)> _redoStack = new();
 
         private Button _gearBtn;
         private System.Windows.Forms.Timer _holdTimer;  // fires after 1 s when HoldToEdit is on
@@ -300,8 +303,11 @@ namespace OnScreenKeyboard
                 _lastGearFont?.Dispose();
                 foreach (var f in _fontCache.Values) f.Dispose();
                 _fontCache.Clear();
-                // Dispose all remaining buttons
-                foreach (var btn in _buttons.Values) btn.Dispose();
+                foreach (var f in _cornerFontCache.Values) f.Dispose();
+                _cornerFontCache.Clear();
+                _wpSizeCache.Clear();
+                // Dispose all remaining buttons (and their regions)
+                foreach (var btn in _buttons.Values) { btn.Region?.Dispose(); btn.Dispose(); }
                 _buttons.Clear();
             };
         }
@@ -363,7 +369,9 @@ namespace OnScreenKeyboard
                 Margin    = new Padding(0),
                 BackColor = _gearNormalBg,
                 ForeColor = _gearNormalFg,
-                Font      = new Font("Segoe UI", 10f),
+                // Use the cache so this Font is tracked and disposed with the rest.
+                // LayoutButtons() will immediately replace it with the correct size.
+                Font      = GetGearFont(10),
             };
             _gearBtn.FlatAppearance.BorderColor = Color.FromArgb(80, 80, 120);
             _gearBtn.FlatAppearance.BorderSize  = 1;
@@ -616,15 +624,18 @@ namespace OnScreenKeyboard
             _toolbarEdit.Controls.Add(_lblSelectedKey);
 
             // ── Grid action buttons (right) ────────────────────────────
-            _btnAddRowAbove = MakeBtn(FIcon.ArrowUp,    Lang.T("tb: Row"));
-            _btnAddRowBelow = MakeBtn(FIcon.ArrowDown,  Lang.T("tb: Row"));
-            _btnAddColLeft  = MakeBtn(FIcon.ArrowLeft,  Lang.T("tb: Col"));
-            _btnAddColRight = MakeBtn(FIcon.ArrowRight, Lang.T("tb: Col"));
-            _btnRemoveRow   = MakeBtn(FIcon.Remove,     Lang.T("tb: Del row"));
-            _btnRemoveCol   = MakeBtn(FIcon.Remove,     Lang.T("tb: Del col"));
-            _btnMergeRight  = MakeBtn(FIcon.Merge,      Lang.T("tb: Merge R"));
-            _btnMergeDown   = MakeBtn(FIcon.Merge,      Lang.T("tb: Merge D"));
-            _btnSplitCell   = MakeBtn(FIcon.Split,      Lang.T("tb: Split"));
+            // Combined icons: two MDL2 glyphs side-by-side in the icon area.
+            // + direction = insert;  trash alone = delete (different per row/col label);
+            // merge + direction arrow = merge that way;  split stays single.
+            _btnAddRowAbove = MakeBtn(FIcon.Add + FIcon.ArrowUp,     Lang.T("tb: Row ↑"));
+            _btnAddRowBelow = MakeBtn(FIcon.Add + FIcon.ArrowDown,   Lang.T("tb: Row ↓"));
+            _btnAddColLeft  = MakeBtn(FIcon.Add + FIcon.ArrowLeft,   Lang.T("tb: Col ←"));
+            _btnAddColRight = MakeBtn(FIcon.Add + FIcon.ArrowRight,  Lang.T("tb: Col →"));
+            _btnRemoveRow   = MakeBtn(FIcon.Delete,                   Lang.T("tb: Del ─"));
+            _btnRemoveCol   = MakeBtn(FIcon.Delete + FIcon.ArrowRight,Lang.T("tb: Del │"));
+            _btnMergeRight  = MakeBtn(FIcon.Merge + FIcon.ArrowRight, Lang.T("tb: Merge →"));
+            _btnMergeDown   = MakeBtn(FIcon.Merge + FIcon.ArrowDown,  Lang.T("tb: Merge ↓"));
+            _btnSplitCell   = MakeBtn(FIcon.Split,                    Lang.T("tb: Split"));
 
             // ── Wire key action handlers ───────────────────────────────
             _btnKeyEdit.Click += (s, e) =>
@@ -807,14 +818,14 @@ namespace OnScreenKeyboard
             if (_btnCopyKey   != null) _btnCopyKey.Text   = Lang.T("tb: Copy key");
 
             // Row 2 — grid actions
-            if (_btnAddRowAbove != null) _btnAddRowAbove.Text = Lang.T("tb: Row");
-            if (_btnAddRowBelow != null) _btnAddRowBelow.Text = Lang.T("tb: Row");
-            if (_btnAddColLeft  != null) _btnAddColLeft.Text  = Lang.T("tb: Col");
-            if (_btnAddColRight != null) _btnAddColRight.Text = Lang.T("tb: Col");
-            if (_btnRemoveRow   != null) _btnRemoveRow.Text   = Lang.T("tb: Del row");
-            if (_btnRemoveCol   != null) _btnRemoveCol.Text   = Lang.T("tb: Del col");
-            if (_btnMergeRight  != null) _btnMergeRight.Text  = Lang.T("tb: Merge R");
-            if (_btnMergeDown   != null) _btnMergeDown.Text   = Lang.T("tb: Merge D");
+            if (_btnAddRowAbove != null) _btnAddRowAbove.Text = Lang.T("tb: Row ↑");
+            if (_btnAddRowBelow != null) _btnAddRowBelow.Text = Lang.T("tb: Row ↓");
+            if (_btnAddColLeft  != null) _btnAddColLeft.Text  = Lang.T("tb: Col ←");
+            if (_btnAddColRight != null) _btnAddColRight.Text = Lang.T("tb: Col →");
+            if (_btnRemoveRow   != null) _btnRemoveRow.Text   = Lang.T("tb: Del ─");
+            if (_btnRemoveCol   != null) _btnRemoveCol.Text   = Lang.T("tb: Del │");
+            if (_btnMergeRight  != null) _btnMergeRight.Text  = Lang.T("tb: Merge →");
+            if (_btnMergeDown   != null) _btnMergeDown.Text   = Lang.T("tb: Merge ↓");
             if (_btnSplitCell   != null) _btnSplitCell.Text   = Lang.T("tb: Split");
 
             // Force repaint so new labels are visible immediately
@@ -882,9 +893,15 @@ namespace OnScreenKeyboard
             SuspendLayout();
             foreach (var btn in _buttons.Values) { Controls.Remove(btn); btn.Dispose(); }
             _buttons.Clear();
-            // Clear font cache when rebuilding — old layout may have used different fonts
+            // Clear font caches when rebuilding — old layout may have used different fonts/sizes.
             foreach (var f in _fontCache.Values) f.Dispose();
             _fontCache.Clear();
+            foreach (var f in _cornerFontCache.Values) f.Dispose();
+            _cornerFontCache.Clear();
+            // WP measurement cache is stale after a rebuild.
+            _wpSizeCache.Clear();
+            // Rebuild the O(1) group dictionary for the (possibly new) layout.
+            RebuildGroupDict();
             _latchedMods.RemoveWhere(c => !_layout.Cells.Contains(c));
             _lockedMods.RemoveWhere(c  => !_layout.Cells.Contains(c));
 
@@ -1257,8 +1274,7 @@ namespace OnScreenKeyboard
         /// visible gray placeholder in Edit mode.
         /// </summary>
         private bool IsEmptyKey(KeyProps p) =>
-            string.IsNullOrEmpty(p.Label) && string.IsNullOrEmpty(p.Send) &&
-            !KeyLayout.ModifierLabels.Contains(p.Label);
+            string.IsNullOrEmpty(p.Label) && string.IsNullOrEmpty(p.Send);
 
         private void ApplyEmptyKeyStyle(Button btn, KeyProps p)
         {
@@ -1353,7 +1369,13 @@ namespace OnScreenKeyboard
 
                     btn.SetBounds(x, y, w, h);
                     if (w > 8 && h > 8)
+                    {
+                        // Dispose the old Region before replacing — WinForms does not
+                        // automatically free it, so leaving it causes a GDI object leak.
+                        var oldRegion = btn.Region;
                         btn.Region = Fluent.RoundedRegion(w, h, 4);
+                        oldRegion?.Dispose();
+                    }
                     SetButtonFont(btn, cell.Props, h, w, shifted, altGr);
                     ApplyEmptyKeyStyle(btn, cell.Props);
                 }
@@ -1574,9 +1596,9 @@ namespace OnScreenKeyboard
             }
 
             // ── Corner labels (shift top-right, AltGr top-left) ──────
-            const int margin     = 2;
-            float     cornerSize = Math.Max(6f, btn.Font.Size * 0.55f);
-            using var cf = new Font(btn.Font.FontFamily, cornerSize);
+            const int margin = 2;
+            // GetCornerFont caches the result — no allocation per paint call.
+            var cf = GetCornerFont(btn.Font);
 
             if (!string.IsNullOrEmpty(sl))
             {
@@ -1616,11 +1638,46 @@ namespace OnScreenKeyboard
             return _lastGearFont;
         }
         private readonly Dictionary<(string,int),Font> _fontCache = new();
+        // Corner-label fonts are cached here to avoid allocating a new Font on every paint call.
+        private readonly Dictionary<(string,int),Font> _cornerFontCache = new();
+        // Group lookup dictionary — rebuilt whenever _layout.Groups changes.
+        // O(1) lookup replaces the O(n) List.Find used previously.
+        private Dictionary<string, KeyGroup> _groupDict = new();
+        // WP measurement cache: skip expensive MeasureText when prediction text and button
+        // size haven't changed since the last ApplyWPTags pass.
+        private readonly Dictionary<GridCell, (string pred, int w, int h)> _wpSizeCache = new();
 
         /// <summary>
         /// Returns a cached bold <see cref="Font"/> for key buttons at the given family name
         /// and point size. Falls back to Arial if the requested family cannot be loaded.
         /// </summary>
+        /// <summary>
+        /// Rebuilds the O(1) group-lookup dictionary from the current layout's group list.
+        /// Call whenever <c>_layout.Groups</c> is replaced or modified.
+        /// </summary>
+        private void RebuildGroupDict()
+        {
+            _groupDict = new Dictionary<string, KeyGroup>(_layout.Groups.Count, StringComparer.Ordinal);
+            foreach (var g in _layout.Groups)
+                if (!string.IsNullOrEmpty(g.Name))
+                    _groupDict[g.Name] = g;
+        }
+
+        /// <summary>
+        /// Returns a cached <see cref="Font"/> for corner labels at the given base font's
+        /// family and at 55% of its point size.  Avoids allocating a new Font on every
+        /// <see cref="OnButtonPaint"/> call (which fires for every key on every repaint).
+        /// </summary>
+        private Font GetCornerFont(Font baseFont)
+        {
+            // Round to integer to avoid nearly-identical float keys in the dictionary.
+            int cornerSize = Math.Max(6, (int)(baseFont.Size * 0.55f));
+            var key = (baseFont.FontFamily.Name, cornerSize);
+            if (!_cornerFontCache.TryGetValue(key, out var f))
+                _cornerFontCache[key] = f = new Font(baseFont.FontFamily, cornerSize);
+            return f;
+        }
+
         private Font GetButtonFont(string name, int size)
         {
             var key = (name ?? "Arial", size);
@@ -1729,9 +1786,10 @@ namespace OnScreenKeyboard
             !string.IsNullOrEmpty(groupFont) ? groupFont :
             _theme.FontName;
 
+        /// <summary>O(1) group lookup using the pre-built dictionary.</summary>
         private KeyGroup FindGroup(string groupName) =>
             string.IsNullOrEmpty(groupName) ? null :
-            _layout.Groups.Find(g => g.Name == groupName);
+            _groupDict.TryGetValue(groupName, out var g) ? g : null;
 
         /// <summary>
         /// Sets a button's background colour, foreground colour, and border colour/thickness
@@ -1955,6 +2013,13 @@ namespace OnScreenKeyboard
                 if (!_buttons.TryGetValue(cell, out var btn)) continue;
 
                 string pred = (_predictor != null && slot < _predictor.Predictions.Count) ? _predictor.Predictions[slot] : "";
+
+                // Fast path: if the prediction text and button dimensions haven't changed
+                // since the last pass, the tag is already correct — skip all MeasureText work.
+                var sizeKey = (pred, btn.Width, btn.Height);
+                if (_wpSizeCache.TryGetValue(cell, out var cachedSize) && cachedSize == sizeKey)
+                    continue;
+
                 var grpWP = FindGroup(cell.Props.GroupName);
                 Color fc = ResolveColor(cell.Props.FontColor, grpWP?.FontColor ?? Color.Empty, _theme.FontColor);
 
@@ -2030,6 +2095,7 @@ namespace OnScreenKeyboard
                 if (btn.Tag is (string ol, string _, string _, Color ofc, bool owp, int otl) &&
                     owp && ol == label && ofc == fc && otl == visibleTypedLen)
                     continue;   // nothing changed — skip Invalidate
+                _wpSizeCache[cell] = sizeKey;  // record that this (pred, w, h) is now rendered
                 btn.Tag = newTag;
                 btn.Invalidate();
             }
@@ -2231,9 +2297,8 @@ namespace OnScreenKeyboard
             _meta.GearRow = cell.Row;
             _meta.GearCol = cell.Col;
             _mode = Mode.Normal;
-            ApplyModeIndicators();          // ends with LayoutButtons()
+            ApplyModeIndicators();           // already calls LayoutButtons() internally
             RefreshAllButtons(skipFontCalc: true);
-            LayoutButtons();   // reposition gear button immediately
             AutoSave();
         }
 
@@ -2498,6 +2563,7 @@ namespace OnScreenKeyboard
             // references so any code that captured them — e.g. KeyEditorForm._ownerGlobal —
             // always sees the latest values without needing a fresh reference).
             _layout.Groups = dlg.ResultGroups;
+            RebuildGroupDict();
             _theme .CopyFrom(dlg.ResultTheme);
             _window.CopyFrom(dlg.ResultWindow);
             _meta  .CopyFrom(dlg.ResultMeta);
@@ -2640,15 +2706,11 @@ namespace OnScreenKeyboard
         /// </summary>
         private void PushUndo()
         {
-            _undoStack.Push((_layout.Clone(), _theme.Clone(), _window.Clone(), _meta.Clone()));
+            _undoStack.AddFirst((_layout.Clone(), _theme.Clone(), _window.Clone(), _meta.Clone()));
             _redoStack.Clear();
+            // Drop the oldest entry when the cap is exceeded — O(1) with LinkedList.
             if (_undoStack.Count > 50)
-            {
-                // Discard the oldest (bottom) entry — rebuild without it.
-                var arr = _undoStack.ToArray(); // [0] = top/newest
-                _undoStack.Clear();
-                for (int i = arr.Length - 2; i >= 0; i--) _undoStack.Push(arr[i]);
-            }
+                _undoStack.RemoveLast();
             RefreshUndoRedoState();
         }
 
@@ -2659,8 +2721,9 @@ namespace OnScreenKeyboard
         private void Undo()
         {
             if (_undoStack.Count == 0) return;
-            _redoStack.Push((_layout.Clone(), _theme.Clone(), _window.Clone(), _meta.Clone()));
-            var (layout, theme, window, meta) = _undoStack.Pop();
+            _redoStack.AddFirst((_layout.Clone(), _theme.Clone(), _window.Clone(), _meta.Clone()));
+            var (layout, theme, window, meta) = _undoStack.First.Value;
+            _undoStack.RemoveFirst();
             ApplySnapshot(layout, theme, window, meta);
             // RefreshUndoRedoState() is called inside ApplySnapshot via RebuildAllButtons chain,
             // but call it again here to be safe after the stack mutates.
@@ -2674,8 +2737,9 @@ namespace OnScreenKeyboard
         private void Redo()
         {
             if (_redoStack.Count == 0) return;
-            _undoStack.Push((_layout.Clone(), _theme.Clone(), _window.Clone(), _meta.Clone()));
-            var (layout, theme, window, meta) = _redoStack.Pop();
+            _undoStack.AddFirst((_layout.Clone(), _theme.Clone(), _window.Clone(), _meta.Clone()));
+            var (layout, theme, window, meta) = _redoStack.First.Value;
+            _redoStack.RemoveFirst();
             ApplySnapshot(layout, theme, window, meta);
             RefreshUndoRedoState();
         }

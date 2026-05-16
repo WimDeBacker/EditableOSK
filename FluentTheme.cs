@@ -236,6 +236,30 @@ namespace OnScreenKeyboard
         /// Checks whether a font family with the given name is installed on
         /// this computer.
         /// </summary>
+        // Cached array of installed font names — populated on first call, reused after that.
+        // Enumerating InstalledFontCollection is a GDI call that takes ~10–50 ms;
+        // caching avoids repeating that work every time a font picker dialog opens.
+        private static string[] _installedFontNames;
+
+        /// <summary>
+        /// Returns an alphabetically sorted array of all font family names installed on this
+        /// computer. The result is cached after the first call so subsequent calls return
+        /// instantly — safe to call every time a dialog opens.
+        /// </summary>
+        internal static string[] InstalledFontNames()
+        {
+            if (_installedFontNames != null) return _installedFontNames;
+            var list = new System.Collections.Generic.List<string>();
+            try
+            {
+                using var col = new InstalledFontCollection();
+                foreach (var f in col.Families) list.Add(f.Name);
+            }
+            catch { }
+            list.Sort(StringComparer.OrdinalIgnoreCase);
+            return _installedFontNames = list.ToArray();
+        }
+
         /// <param name="name">The font family name to look for (case-insensitive).</param>
         /// <returns><c>true</c> if the font is found; <c>false</c> otherwise.</returns>
         private static bool IsFontAvailable(string name)
