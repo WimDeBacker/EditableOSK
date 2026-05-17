@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -607,17 +608,22 @@ namespace OnScreenKeyboard
         /// <param name="accentColor">Colour of the vertical strip painted on the left edge.</param>
         /// <param name="hdrH">Height in pixels of the header area (title + divider line).</param>
         internal static void PaintCard(
-            Graphics g, int w, int h, string title, Color accentColor, int hdrH)
+            Graphics g, int w, int h, string title, Color accentColor, int hdrH,
+            bool dark = false)
         {
             g.SmoothingMode     = SmoothingMode.AntiAlias;
             g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
 
-            // Draw the white card background with a rounded outline.
+            Color cardFill   = dark ? Color.FromArgb(48, 48, 48)    : Fluent.BgCard;
+            Color cardBorder = dark ? Color.FromArgb(72, 72, 72)    : Fluent.BorderCard;
+            Color titleColor = dark ? Color.FromArgb(230, 230, 230) : Fluent.TextPrimary;
+
+            // Draw the card background with a rounded outline.
             var cardRect = new Rectangle(0, 0, w - 1, h - 1);
             using var cardPath = Fluent.RoundedRect(cardRect, Fluent.RadiusCard);
-            using (var br = new SolidBrush(Fluent.BgCard))
+            using (var br = new SolidBrush(cardFill))
                 g.FillPath(br, cardPath);
-            using (var pen = new Pen(Fluent.BorderCard))
+            using (var pen = new Pen(cardBorder))
                 g.DrawPath(pen, cardPath);
 
             // Draw the vertical accent bar on the left edge.
@@ -631,14 +637,95 @@ namespace OnScreenKeyboard
             // Draw the section title, indented to clear the accent bar (left=14).
             var titleRect = new Rectangle(14, 0, w - 18, hdrH);
             TextRenderer.DrawText(g, title, Fluent.FontTitle, titleRect,
-                Fluent.TextPrimary,
+                titleColor,
                 TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine |
                 TextFormatFlags.VerticalCenter);
 
             // Draw a thin horizontal divider line below the title row to separate
             // the header from the content area of the card.
-            using var divPen = new Pen(Fluent.BorderCard);
+            using var divPen = new Pen(cardBorder);
             g.DrawLine(divPen, 2, hdrH, w - 3, hdrH);
+        }
+
+        // ── Dialog dark/light theming ─────────────────────────────────
+
+        /// <summary>
+        /// Recursively applies a dark or light colour theme to every control in a dialog.
+        /// Call this after <c>BuildUI()</c> so initial colours set during construction are
+        /// overridden by the chosen theme.
+        ///
+        /// <para>Rules:
+        /// <list type="bullet">
+        ///   <item><see cref="FluentButton"/> instances paint themselves — left untouched.</item>
+        ///   <item>Controls whose <c>Tag</c> is the string <c>"notheme"</c> are skipped entirely
+        ///         (including their children), so preview panels keep their key colours.</item>
+        ///   <item>Colour-swatch panels (those whose <c>Tag</c> is a <see cref="System.Windows.Forms.TextBox"/>)
+        ///         keep their swatch <c>BackColor</c> but their children are still themed.</item>
+        ///   <item>Controls in <paramref name="skip"/> are skipped (and their children).</item>
+        /// </list></para>
+        /// </summary>
+        internal static void ApplyDialogTheme(Control root, bool dark, params Control[] skip)
+        {
+            var skipSet  = new HashSet<Control>(skip);
+            Color formBg  = dark ? Fluent.DarkBg                 : Fluent.BgPage;
+            Color cardBg  = dark ? Color.FromArgb(48, 48, 48)    : Fluent.BgCard;
+            Color inputBg = dark ? Color.FromArgb(58, 58, 58)    : Fluent.BgInput;
+            Color fg      = dark ? Color.FromArgb(230, 230, 230) : Fluent.TextPrimary;
+
+            root.BackColor = formBg;
+            ApplyThemeChildren(root, cardBg, inputBg, fg, skipSet);
+        }
+
+        /// <summary>Recursive worker for <see cref="ApplyDialogTheme"/>.</summary>
+        private static void ApplyThemeChildren(
+            Control parent, Color cardBg, Color inputBg, Color fg,
+            HashSet<Control> skip)
+        {
+            foreach (Control c in parent.Controls)
+            {
+                if (skip.Contains(c)) continue;
+                if (c is FluentButton) continue;
+                if (c.Tag is string t && t == "notheme") continue;
+
+                // Colour-swatch panels: keep the swatch colour, but still recurse into children.
+                bool isSwatch = c is Panel && c.Tag is TextBox;
+
+                if (!isSwatch)
+                {
+                    switch (c)
+                    {
+                        case Panel pnl:
+                            pnl.BackColor = cardBg;
+                            pnl.Invalidate();
+                            break;
+                        case Label lbl:
+                            lbl.ForeColor = fg;
+                            break;
+                        case TextBox txt:
+                            txt.BackColor = inputBg;
+                            txt.ForeColor = fg;
+                            break;
+                        case ComboBox cmb:
+                            cmb.BackColor = inputBg;
+                            cmb.ForeColor = fg;
+                            break;
+                        case NumericUpDown nud:
+                            nud.BackColor = inputBg;
+                            nud.ForeColor = fg;
+                            break;
+                        case CheckBox chk:
+                            chk.ForeColor = fg;
+                            break;
+                        case ListBox lst:
+                            lst.BackColor = inputBg;
+                            lst.ForeColor = fg;
+                            break;
+                    }
+                }
+
+                if (c.HasChildren)
+                    ApplyThemeChildren(c, cardBg, inputBg, fg, skip);
+            }
         }
 
         // ── Helper ────────────────────────────────────────────────────

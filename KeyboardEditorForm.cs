@@ -128,6 +128,9 @@ namespace OnScreenKeyboard
         private Button _btnSaveFile, _btnSaveAsFile, _btnLoadFile;
         private Button _btnManageGroups;
 
+        // True when the toolbar is currently in dark mode — dialogs follow the same theme.
+        private readonly bool _dark;
+
         // Live preview of the selected key style
         private Panel  _pnlPreview;
         private Label  _lblPreviewKey;
@@ -240,19 +243,29 @@ namespace OnScreenKeyboard
             _onLoad   = onLoad;
             _getGroups = getGroups;
 
+            // Follow the toolbar theme so dialogs match the overall colour mode.
+            _dark = !ToolbarButton.IsLightTheme;
+
             // Form chrome
+            AutoScaleMode       = AutoScaleMode.Dpi;
+            AutoScaleDimensions = new SizeF(96f, 96f);
+
             Text         = Lang.T("Edit Keyboard");
-            BackColor    = Fluent.BgPage;
+            BackColor    = _dark ? Fluent.DarkBg : Fluent.BgPage;
             FormBorderStyle = FormBorderStyle.FixedSingle;  // no resize handles
             MaximizeBox  = MinimizeBox = false;
             ShowIcon     = false;
             StartPosition = FormStartPosition.CenterParent;
-            Size         = new Size(840, 560);  // final height is adjusted in BuildUI()
+            Size         = new Size(940, 560);  // final height is adjusted in BuildUI()
             TopMost      = true;
             Font         = F_LABEL;
 
             BuildUI();
             PopulateFields(theme, window, meta);
+            // Apply dark/light theme to every control — after BuildUI so all controls exist,
+            // and after PopulateFields so preview colours are set before we skip the panel.
+            FluentPainter.ApplyDialogTheme(this, _dark, _pnlPreview);
+            ActiveControl = _cmbFont;  // start keyboard focus on the font selector
 
             // Subscribe to the global language-change event so every label
             // updates automatically when the user picks a different language.
@@ -386,7 +399,7 @@ namespace OnScreenKeyboard
             leftY += wndH + gap;
 
             // lx = label x, vx = value-control x, vw = value-control width
-            int lx = PAD, vx = 140, vw = colW - lx - vx - PAD;
+            int lx = PAD, vx = 195, vw = colW - lx - vx - PAD;
             int gy = HDR_H + PAD;  // running y position inside this card
 
             // Opacity trackbar — value 0 means fully opaque, value 80 means
@@ -495,6 +508,7 @@ namespace OnScreenKeyboard
                 using var dlg = new GroupEditorForm(_groups);
                 if (dlg.ShowDialog() == DialogResult.OK)
                     _groups = dlg.ResultGroups;
+                _btnManageGroups.Focus();  // return focus to the trigger button after the sub-dialog closes
             };
             grpGroups.Controls.Add(_btnManageGroups);
 
@@ -510,7 +524,7 @@ namespace OnScreenKeyboard
                                      Color.FromArgb(39, 174, 96));
             rightY += styleH + gap;
 
-            int slx = PAD, svx = 140, svw = rightW - slx - svx - PAD;
+            int slx = PAD, svx = 190, svw = rightW - slx - svx - PAD;
             gy = HDR_H + PAD;
 
             // Font family picker — lists every font installed on the system.
@@ -590,7 +604,7 @@ namespace OnScreenKeyboard
             _lblPreviewKey = new Label
             {
                 Text = "Abc", TextAlign = ContentAlignment.MiddleCenter,
-                Dock = DockStyle.Fill, Font = new Font("Arial", 13f, FontStyle.Bold),
+                Dock = DockStyle.Fill, Font = Fluent.FontPreviewKey,
                 ForeColor = ColorTranslator.FromHtml("#E0E0FF"),
                 BackColor = ColorTranslator.FromHtml("#2D2D4A"),
             };
@@ -644,6 +658,8 @@ namespace OnScreenKeyboard
 
             _btnApply.Click  += (s, e) => Apply();
             _btnCancel.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
+            AcceptButton = _btnApply;
+            CancelButton = _btnCancel;
 
             // Shrink-wrap the form height so there is no empty space at the bottom.
             ClientSize = new Size(ClientSize.Width, btnTop + 44 + margin);
@@ -672,12 +688,14 @@ namespace OnScreenKeyboard
         /// <returns>The panel that acts as the card's content container.</returns>
         private Panel AddGroup(Func<string> getTitle, int x, int y, int w, int h, Color accentColor)
         {
-            var pnl = new Panel { Left = x, Top = y, Width = w, Height = h, BackColor = Fluent.BgPage };
+            Color bg = _dark ? Color.FromArgb(48, 48, 48) : Fluent.BgCard;
+            var pnl = new Panel { Left = x, Top = y, Width = w, Height = h, BackColor = bg };
 
             // The Paint handler delegates all drawing to FluentPainter so the
             // card automatically uses the current Fluent theme colours.
+            bool dark = _dark;
             pnl.Paint += (s, e) =>
-                FluentPainter.PaintCard(e.Graphics, pnl.Width, pnl.Height, getTitle(), accentColor, HDR_H);
+                FluentPainter.PaintCard(e.Graphics, pnl.Width, pnl.Height, getTitle(), accentColor, HDR_H, dark);
 
             Controls.Add(pnl);
 
@@ -719,7 +737,7 @@ namespace OnScreenKeyboard
                 Left = x, Top = y, Width = totalW - sw - 5,
                 BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary,
                 BorderStyle = BorderStyle.FixedSingle,
-                Font = new Font("Courier New", 12f),  // monospace makes hex codes easier to read
+                Font = Fluent.FontCourier,  // monospace makes hex codes easier to read
             };
             var swatch = new Panel
             {
@@ -821,7 +839,8 @@ namespace OnScreenKeyboard
         /// <returns>The newly created button.</returns>
         private Button MakeActionBtn(string text, FluentButton.Variant style, int x, int y, int w, int h)
         {
-            var btn = new FluentButton { Text = text, Left = x, Top = y, Width = w, Height = h, Style = style };
+            var btn = new FluentButton { Text = text, Left = x, Top = y, Width = w, Height = h, Style = style,
+                                         TabStop = true };   // action buttons must be reachable by keyboard
             Controls.Add(btn);
             return btn;
         }

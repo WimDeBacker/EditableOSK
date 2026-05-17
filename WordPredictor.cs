@@ -497,24 +497,34 @@ namespace OnScreenKeyboard
             // If no word list has been loaded yet there is nothing to predict.
             if (!WordDatabase.IsLoaded) return;
 
-            // Fetch up to _slotCount predictions from the database.
-            // The database takes into account:
-            //   - _lastCompletedWord: for bigram (word-pair) frequency
-            //   - _wordBuffer:        to filter words that start with the typed prefix
-            //   - _atSentenceStart:   to auto-capitalise the first word of a sentence
-            //   - preferUpperCase:    to show proper nouns when Shift was pressed mid-sentence
-            var preds = WordDatabase.GetPredictions(
-                _lastCompletedWord,
-                _wordBuffer,
-                _atSentenceStart,
-                _slotCount,
-                preferUpperCase: shiftActive && !_atSentenceStart);
+            try
+            {
+                // Fetch up to _slotCount predictions from the database.
+                // The database takes into account:
+                //   - _lastCompletedWord: for bigram (word-pair) frequency
+                //   - _wordBuffer:        to filter words that start with the typed prefix
+                //   - _atSentenceStart:   to auto-capitalise the first word of a sentence
+                //   - preferUpperCase:    to show proper nouns when Shift was pressed mid-sentence
+                var preds = WordDatabase.GetPredictions(
+                    _lastCompletedWord,
+                    _wordBuffer,
+                    _atSentenceStart,
+                    _slotCount,
+                    preferUpperCase: shiftActive && !_atSentenceStart);
 
-            // Copy results into the fixed-length array.
-            // Slots beyond the returned list are cleared to "" so stale
-            // predictions from a previous state do not linger in the UI.
-            for (int i = 0; i < _predictions.Length; i++)
-                _predictions[i] = i < preds.Count ? (preds[i] ?? "") : "";
+                // Copy results into the fixed-length array.
+                // Slots beyond the returned list are cleared to "" so stale
+                // predictions from a previous state do not linger in the UI.
+                for (int i = 0; i < _predictions.Length; i++)
+                    _predictions[i] = i < preds.Count ? (preds[i] ?? "") : "";
+            }
+            catch
+            {
+                // An unexpected failure in the predictor must never crash the keyboard.
+                // Clear all slots so the prediction buttons go blank.
+                for (int i = 0; i < _predictions.Length; i++)
+                    _predictions[i] = "";
+            }
 
             PredictionsChanged?.Invoke();
         }

@@ -31,9 +31,18 @@ namespace OnScreenKeyboard
 
         /// <summary>
         /// Creates and attaches a new console window to this process.
-        /// Called when running in test mode so test output can be printed as text.
+        /// Used as a fallback in test mode when there is no parent console to attach to
+        /// (e.g. the exe is launched by double-clicking rather than from a terminal).
         /// </summary>
         [DllImport("kernel32.dll")] private static extern bool AllocConsole();
+
+        /// <summary>
+        /// Attaches this process to the console of another process.
+        /// Pass <c>uint.MaxValue</c> (= <c>ATTACH_PARENT_PROCESS</c>) to reuse the
+        /// console of the process that launched us (e.g. the <c>dotnet run</c> terminal),
+        /// so test output appears inline without opening a new window.
+        /// </summary>
+        [DllImport("kernel32.dll")] private static extern bool AttachConsole(uint dwProcessId);
 
         // ── Entry point ───────────────────────────────────────────────────────
 
@@ -57,16 +66,27 @@ namespace OnScreenKeyboard
             // Array.IndexOf returns -1 when the item is not found, so >= 0 means "found".
             if (Array.IndexOf(args, "--test") >= 0)
             {
-                // Test mode: open a console so we can print results as plain text.
-                AllocConsole();
+                // Test mode: write output to the console.
+                // With OutputType=WinExe the process has no console by default, so we must
+                // attach one explicitly.  Prefer reusing the parent process's console
+                // (e.g. the "dotnet run" terminal) so output appears inline without
+                // popping up a new window.  Fall back to AllocConsole only when there is
+                // no parent console to attach to (e.g. launched by double-click).
+                bool attachedToParent = AttachConsole(uint.MaxValue); // ATTACH_PARENT_PROCESS
+                if (!attachedToParent) AllocConsole();
 
                 // Run all tests and capture how many failed (0 = all passed).
                 int result = TestRunner.Run();
 
-                // Wait for the user to press a key before closing the console window,
-                // so they have time to read the test output.
-                Console.WriteLine("\nPress any key to exit...");
-                Console.ReadKey();
+                // When we opened our own console window (no parent terminal) pause so the
+                // user can read the results before the window closes.  When we attached to
+                // an existing terminal there is no need — the caller's prompt reappears
+                // immediately after the process exits.
+                if (!attachedToParent)
+                {
+                    Console.WriteLine("\nPress any key to exit...");
+                    Console.ReadKey();
+                }
 
                 // Return the failure count as the exit code.
                 // CI systems (like GitHub Actions) can inspect this value to know if tests passed.

@@ -147,6 +147,10 @@ namespace OnScreenKeyboard
         internal static readonly Font FontBtnSm   = new Font(_ff, 10.0f);              // small / secondary buttons
         internal static readonly Font FontHint    = new Font(_ff, 11.0f);              // placeholder text
 
+        // Fonts shared across dialogs — created once, never disposed (process lifetime).
+        internal static readonly Font FontCourier    = new Font("Courier New", 12f);             // hex-code text boxes in colour-picker rows
+        internal static readonly Font FontPreviewKey = new Font("Arial", 13f, FontStyle.Bold);   // default face for the preview key label
+
         // Fonts for the compact toolbar — intentionally smaller than dialog fonts.
         internal static readonly Font FontBtnTb   = new Font(_ff,  8.5f);              // text labels on toolbar buttons
 

@@ -80,7 +80,9 @@
   <String key="Layout"                      value="Lay-out" />
   <String key="Word prediction"             value="Woordvoorspelling" />
   <String key="Prediction cell"             value="Voorspellingstoets" />
-  <String key="WP slot already in use"      value="⚠ Slot al in gebruik door een andere toets" />
+  <String key="WP all slots full"           value="⚠ Alle 10 voorspellingsslots zijn al in gebruik — deze toets werkt niet" />
+  <String key="WP paste full msg"           value="Plakken niet mogelijk: er zijn al 10 woordvoorspellingstoetsen in deze indeling. Verwijder er eerst een voordat u er een plakt." />
+  <String key="WP paste full title"         value="Plakken geannuleerd" />
   <String key="Record key / shortcut"       value="Toets / sneltoets opnemen" />
   <String key="Press key now…"              value="Druk nu op uw toets of sneltoets…" />
   <String key="Press Escape to cancel"      value="Druk op Escape om te annuleren" />

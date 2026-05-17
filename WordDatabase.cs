@@ -227,6 +227,26 @@ namespace OnScreenKeyboard
         {
             if (!IsLoaded || count <= 0) return new List<string>();
 
+            try
+            {
+                return GetPredictionsCore(lastCompletedWord, currentPrefix, upperCase, count, preferUpperCase);
+            }
+            catch
+            {
+                // An unexpected error in the prediction engine must never crash the keyboard.
+                // Return an empty list so prediction cells go blank but the app keeps running.
+                return new List<string>();
+            }
+        }
+
+        // The actual prediction logic, separated so the public method can wrap it safely.
+        private static List<string> GetPredictionsCore(
+            string lastCompletedWord,
+            string currentPrefix,
+            bool   upperCase,
+            int    count,
+            bool   preferUpperCase)
+        {
             bool hasPrefix = !string.IsNullOrEmpty(currentPrefix);
 
             // sentenceStart = true means we are at the beginning of a sentence

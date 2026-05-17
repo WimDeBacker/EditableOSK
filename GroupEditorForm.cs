@@ -31,6 +31,9 @@ namespace OnScreenKeyboard
         // ── Theme (WinUI 3) ───────────────────────────────────────────
         // All colours and fonts are sourced from the static Fluent helper so that
         // every dialog in the application shares the same WinUI 3-inspired palette.
+        // True when the toolbar is in dark mode — dialogs follow the same theme.
+        private readonly bool _dark;
+
         private static Color C_BG       => Fluent.BgPage;
         private static Color C_PANEL_BG => Fluent.BgCard;
         private static Color C_BORDER   => Fluent.BorderCard;
@@ -79,6 +82,9 @@ namespace OnScreenKeyboard
         /// label when no colour is set for this group.
         /// </summary>
         private Panel         _pnlKeyColor, _pnlFontColor, _pnlBorderColor;
+        /// <summary>Hex text boxes paired with each colour swatch; kept as fields so
+        /// <see cref="SetDetailEnabled"/> can enable/disable them alongside the swatches.</summary>
+        private TextBox       _txtKeyColorHex, _txtFontColorHex, _txtBorderColorHex;
 
         /// <summary>
         /// Spinner for the border thickness in pixels.
@@ -128,8 +134,13 @@ namespace OnScreenKeyboard
             // Deep-clone so cancelling truly discards all changes.
             _groups = groups.Select(g => g.Clone()).ToList();
 
+            _dark = !ToolbarButton.IsLightTheme;
+
+            AutoScaleMode       = AutoScaleMode.Dpi;
+            AutoScaleDimensions = new SizeF(96f, 96f);
+
             Text            = Lang.T("Manage Groups");
-            BackColor       = C_BG;
+            BackColor       = _dark ? Fluent.DarkBg : Fluent.BgPage;
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = MinimizeBox = false;
             ShowIcon    = false;
@@ -139,8 +150,10 @@ namespace OnScreenKeyboard
             Font            = F_LABEL;
 
             BuildUI();
+            FluentPainter.ApplyDialogTheme(this, _dark);
             // Select the first group so the detail panel is populated from the start.
             RebuildList(0);
+            ActiveControl = _txtName;  // start keyboard focus on the group name field
         }
 
         // ── UI construction ───────────────────────────────────────────
@@ -208,6 +221,9 @@ namespace OnScreenKeyboard
             int lx = PAD, vx = 180, vw = detailW - lx - vx - PAD;
             int gy = 36 + PAD; // current vertical position, incremented by ROW after each field
 
+            // ── Field order matches the Appearance column in KeyEditorForm ──────────────
+            // Name → Font → Font size → Font color → Key color → Border color → Border thickness
+
             // Name field
             AddLabel(pnlDetail, Lang.T("Name"), lx, gy);
             _txtName = new TextBox
@@ -216,42 +232,21 @@ namespace OnScreenKeyboard
                 BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary,
                 Font = F_INPUT, BorderStyle = BorderStyle.FixedSingle,
             };
-            // Keep the list box label in sync as the user types the new name.
             _txtName.TextChanged += (s, e) => SaveCurrentName();
             pnlDetail.Controls.Add(_txtName); gy += ROW;
-
-            // Colour swatches — clicking opens a colour-picker, right-clicking resets to "inherit".
-            AddLabel(pnlDetail, Lang.T("Key color"), lx, gy);
-            _pnlKeyColor = AddColorSwatch(pnlDetail, vx, gy, vw); gy += ROW;
-
-            AddLabel(pnlDetail, Lang.T("Font color"), lx, gy);
-            _pnlFontColor = AddColorSwatch(pnlDetail, vx, gy, vw); gy += ROW;
-
-            AddLabel(pnlDetail, Lang.T("Border color"), lx, gy);
-            _pnlBorderColor = AddColorSwatch(pnlDetail, vx, gy, vw); gy += ROW;
-
-            // Border thickness: -1 is the sentinel for "inherit from global settings".
-            AddLabel(pnlDetail, Lang.T("Border thickness"), lx, gy);
-            _nudBorderThickness = new NumericUpDown
-            {
-                Left = vx, Top = gy, Width = 65, Minimum = -1, Maximum = 10,
-                BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary, Font = F_INPUT,
-            };
-            AddSmallHint(pnlDetail, Lang.T("-1 = inherit global"), vx + 71, gy);
-            pnlDetail.Controls.Add(_nudBorderThickness); gy += ROW;
 
             // Font family: index 0 is the special "(inherit global)" entry; real font names follow.
             AddLabel(pnlDetail, Lang.T("Font"), lx, gy);
             _cmbFont = new ComboBox
             {
                 Left = vx, Top = gy, Width = vw,
-                DropDownStyle = ComboBoxStyle.DropDownList, // prevent freeform text entry
+                DropDownStyle = ComboBoxStyle.DropDownList,
                 BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary,
                 Font = F_INPUT, FlatStyle = FlatStyle.Flat,
             };
             _cmbFont.Items.Add(Lang.T("(inherit global)"));
             foreach (var fn in GetInstalledFonts()) _cmbFont.Items.Add(fn);
-            _cmbFont.SelectedIndex = 0; // default to "inherit"
+            _cmbFont.SelectedIndex = 0;
             pnlDetail.Controls.Add(_cmbFont); gy += ROW;
 
             // Font size: 0 means "auto / inherit".
@@ -262,7 +257,28 @@ namespace OnScreenKeyboard
                 BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary, Font = F_INPUT,
             };
             AddSmallHint(pnlDetail, Lang.T("0 = auto / inherit"), vx + 71, gy);
-            pnlDetail.Controls.Add(_nudFontSize);
+            pnlDetail.Controls.Add(_nudFontSize); gy += ROW;
+
+            // Colour rows: hex text box + swatch button, matching KeyEditorForm's AddColorRow layout.
+            // Right-click the swatch to clear the colour (revert to "inherit global").
+            AddLabel(pnlDetail, Lang.T("Font color"), lx, gy);
+            (_pnlFontColor, _txtFontColorHex) = AddColorRow(pnlDetail, vx, gy, vw); gy += ROW;
+
+            AddLabel(pnlDetail, Lang.T("Key color"), lx, gy);
+            (_pnlKeyColor, _txtKeyColorHex) = AddColorRow(pnlDetail, vx, gy, vw); gy += ROW;
+
+            AddLabel(pnlDetail, Lang.T("Border color"), lx, gy);
+            (_pnlBorderColor, _txtBorderColorHex) = AddColorRow(pnlDetail, vx, gy, vw); gy += ROW;
+
+            // Border thickness: -1 is the sentinel for "inherit from global settings".
+            AddLabel(pnlDetail, Lang.T("Border thickness"), lx, gy);
+            _nudBorderThickness = new NumericUpDown
+            {
+                Left = vx, Top = gy, Width = 65, Minimum = -1, Maximum = 10,
+                BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary, Font = F_INPUT,
+            };
+            AddSmallHint(pnlDetail, Lang.T("-1 = inherit global"), vx + 71, gy);
+            pnlDetail.Controls.Add(_nudBorderThickness);
 
             // ── OK / Cancel ───────────────────────────────────────────
             int btnY2 = ClientSize.Height - PAD - 40;
@@ -279,6 +295,8 @@ namespace OnScreenKeyboard
                 DialogResult = DialogResult.OK;
                 Close();
             };
+            AcceptButton = _btnOK;
+            CancelButton = _btnCancel;
         }
 
         // ── List management ───────────────────────────────────────────
@@ -484,7 +502,8 @@ namespace OnScreenKeyboard
             // Only allow OK when there is some text — prevents empty group names.
             ok.Click += (s, e2) => { if (!string.IsNullOrWhiteSpace(txt.Text)) { dlg.DialogResult = DialogResult.OK; dlg.Close(); } };
             cn.Click += (s, e2) => { dlg.DialogResult = DialogResult.Cancel; dlg.Close(); };
-            dlg.AcceptButton = ok; // pressing Enter triggers OK
+            dlg.AcceptButton = ok;  // Enter triggers OK
+            dlg.CancelButton = cn;  // Escape closes the dialog
             dlg.Controls.AddRange(new Control[] { txt, ok, cn });
             return dlg.ShowDialog(this) == DialogResult.OK ? txt.Text.Trim() : null;
         }
@@ -508,56 +527,77 @@ namespace OnScreenKeyboard
         /// <param name="en"><c>true</c> to enable all detail controls; <c>false</c> to disable them.</param>
         private void SetDetailEnabled(bool en)
         {
-            _txtName.Enabled = _pnlKeyColor.Enabled = _pnlFontColor.Enabled =
-            _pnlBorderColor.Enabled = _nudBorderThickness.Enabled =
-            _cmbFont.Enabled = _nudFontSize.Enabled = en;
+            _txtName.Enabled =
+            _txtFontColorHex.Enabled = _pnlFontColor.Enabled =
+            _txtKeyColorHex.Enabled  = _pnlKeyColor.Enabled =
+            _txtBorderColorHex.Enabled = _pnlBorderColor.Enabled =
+            _nudBorderThickness.Enabled = _cmbFont.Enabled = _nudFontSize.Enabled = en;
         }
 
-        // ── Color swatch helpers ──────────────────────────────────────
+        // ── Color row helpers ─────────────────────────────────────────
 
         /// <summary>
-        /// Creates a clickable coloured panel (a "swatch") and adds it to
-        /// <paramref name="parent"/>. Left-clicking opens the system colour picker;
-        /// right-clicking shows a context menu with a "Clear (inherit global)" option.
-        ///
-        /// The chosen colour is stored in the panel's <see cref="Control.Tag"/> property
-        /// so it can be retrieved later with <see cref="GetSwatchColor"/>.
+        /// Creates a colour picker row consisting of a hex <see cref="TextBox"/> and a
+        /// clickable swatch <see cref="Panel"/>, matching the layout of
+        /// <c>KeyEditorForm.AddColorRow</c>.
+        /// <list type="bullet">
+        ///   <item>Left-clicking the swatch opens the system colour picker.</item>
+        ///   <item>Right-clicking the swatch shows "Clear (inherit global)".</item>
+        ///   <item>Typing a hex value in the text box updates the swatch live.</item>
+        ///   <item>Empty text box = no colour set = "inherit from global settings".</item>
+        /// </list>
+        /// The swatch's <see cref="Control.Tag"/> stores a reference to the text box so
+        /// <see cref="GetSwatchColor"/> and <see cref="SetSwatchColor"/> can reach it.
         /// </summary>
-        /// <param name="parent">The panel to add the swatch to.</param>
-        /// <param name="x">Left position inside <paramref name="parent"/>.</param>
-        /// <param name="y">Top position inside <paramref name="parent"/>.</param>
-        /// <param name="w">Maximum width (capped at 120 px to keep swatches compact).</param>
-        /// <returns>The newly created swatch panel.</returns>
-        private Panel AddColorSwatch(Panel parent, int x, int y, int w)
+        private (Panel swatch, TextBox hexBox) AddColorRow(Panel parent, int x, int y, int totalW)
         {
-            var pnl = new Panel
+            int sw = 32;  // swatch button width — matches KeyEditorForm
+            var txt = new TextBox
             {
-                Left = x, Top = y + 4, Width = Math.Min(w, 120), Height = 32,
+                Left = x, Top = y, Width = totalW - sw - 5,
+                BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary,
+                BorderStyle = BorderStyle.FixedSingle, Font = Fluent.FontCourier,
+            };
+            var swatch = new Panel
+            {
+                Left = x + totalW - sw, Top = y, Width = sw, Height = 26,
                 BorderStyle = BorderStyle.FixedSingle, Cursor = Cursors.Hand,
                 BackColor = Fluent.Neutral,
             };
-            // The label is only visible when no colour is set ("inherit" state).
-            var lbl = new Label
+            swatch.Tag = txt;  // link used by GetSwatchColor / SetSwatchColor
+
+            txt.TextChanged += (s, e) =>
             {
-                Text = Lang.T("(inherit)"), Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.MiddleCenter,
-                ForeColor = Fluent.TextHint, BackColor = Color.Transparent,
-                Font = Fluent.FontHint,
+                if (_loading) return;
+                Color c = TryParseHex(txt.Text);
+                swatch.BackColor = c.IsEmpty ? Fluent.Neutral : c;
             };
-            pnl.Controls.Add(lbl);
+            swatch.Click += (s, e) => PickColor(swatch);
 
-            // Both the panel and its label forward clicks to PickColor so the entire
-            // swatch area is a valid click target regardless of which child is hit.
-            pnl.Click += (s, e) => PickColor(pnl);
-            lbl.Click += (s, e) => PickColor(pnl);
-
-            // Right-click to clear (revert to "inherit")
             var ctxMenu = new ContextMenuStrip();
-            ctxMenu.Items.Add(Lang.T("Clear (inherit global)")).Click += (s, e2) => SetSwatchColor(pnl, Color.Empty);
-            pnl.ContextMenuStrip = lbl.ContextMenuStrip = ctxMenu;
+            ctxMenu.Items.Add(Lang.T("Clear (inherit global)")).Click +=
+                (s, e2) => SetSwatchColor(swatch, Color.Empty);
+            swatch.ContextMenuStrip = ctxMenu;
 
-            parent.Controls.Add(pnl);
-            return pnl;
+            parent.Controls.Add(txt);
+            parent.Controls.Add(swatch);
+            return (swatch, txt);
+        }
+
+        /// <summary>
+        /// Attempts to parse a hex colour string (<c>"#RRGGBB"</c> or <c>"RRGGBB"</c>).
+        /// Returns <see cref="Color.Empty"/> for empty or invalid input.
+        /// </summary>
+        private static Color TryParseHex(string hex)
+        {
+            if (string.IsNullOrWhiteSpace(hex)) return Color.Empty;
+            try
+            {
+                string h = hex.Trim();
+                if (!h.StartsWith("#")) h = "#" + h;
+                return ColorTranslator.FromHtml(h);
+            }
+            catch { return Color.Empty; }
         }
 
         /// <summary>
@@ -584,33 +624,29 @@ namespace OnScreenKeyboard
         /// <param name="c">
         /// The colour to display, or <see cref="Color.Empty"/> to revert to "inherit".
         /// </param>
-        private static void SetSwatchColor(Panel pnl, Color c)
+        /// <summary>
+        /// Sets a swatch panel and its paired hex text box to display <paramref name="c"/>.
+        /// <see cref="Color.Empty"/> reverts both to the "inherit" (no-colour) state.
+        /// Uses <see cref="_loading"/> to suppress the TextBox's <c>TextChanged</c> handler
+        /// while writing programmatically.
+        /// </summary>
+        private void SetSwatchColor(Panel pnl, Color c)
         {
-            var lbl = pnl.Controls.OfType<Label>().FirstOrDefault();
-            if (c.IsEmpty)
+            if (pnl.Tag is TextBox txt)
             {
-                // No colour chosen — show the neutral background and the "(inherit)" label.
-                pnl.BackColor = Fluent.Neutral;
-                if (lbl != null) { lbl.Visible = true; lbl.ForeColor = Fluent.TextHint; }
+                _loading = true;
+                txt.Text = c.IsEmpty ? "" : SettingsManager.Hex(c);
+                _loading = false;
             }
-            else
-            {
-                // A colour is chosen — paint the whole swatch and hide the text label.
-                pnl.BackColor = c;
-                if (lbl != null) lbl.Visible = false;
-            }
-            // Store or clear the colour in Tag. Null means "no colour set" (inherit).
-            pnl.Tag = c.IsEmpty ? null : (object)c;
+            pnl.BackColor = c.IsEmpty ? Fluent.Neutral : c;
         }
 
         /// <summary>
-        /// Retrieves the colour stored in a swatch panel, or <see cref="Color.Empty"/>
-        /// if no colour has been chosen (the swatch is in "inherit" state).
+        /// Retrieves the colour from the hex text box paired with <paramref name="pnl"/>,
+        /// or <see cref="Color.Empty"/> if the text box is empty or contains invalid hex.
         /// </summary>
-        /// <param name="pnl">The swatch panel to read.</param>
-        /// <returns>The stored <see cref="Color"/>, or <see cref="Color.Empty"/>.</returns>
         private static Color GetSwatchColor(Panel pnl) =>
-            pnl.Tag is Color c ? c : Color.Empty;
+            pnl.Tag is TextBox txt ? TryParseHex(txt.Text) : Color.Empty;
 
         // ── UI helpers ────────────────────────────────────────────────
 
@@ -628,15 +664,17 @@ namespace OnScreenKeyboard
         /// <returns>The newly created panel (not yet containing any child controls).</returns>
         private Panel AddPanel(int x, int y, int w, int h, string title, Color accentColor)
         {
+            Color bg = _dark ? Color.FromArgb(48, 48, 48) : Fluent.BgCard;
             var pnl = new Panel
             {
                 Left = x, Top = y, Width = w, Height = h,
-                BackColor = Fluent.BgPage,
+                BackColor = bg,
                 BorderStyle = BorderStyle.None,
             };
             // 36 is the height of the painted header strip at the top of the card.
+            bool dark = _dark;
             pnl.Paint += (s, e) =>
-                FluentPainter.PaintCard(e.Graphics, pnl.Width, pnl.Height, title, accentColor, 36);
+                FluentPainter.PaintCard(e.Graphics, pnl.Width, pnl.Height, title, accentColor, 36, dark);
             Controls.Add(pnl);
             return pnl;
         }
@@ -715,6 +753,7 @@ namespace OnScreenKeyboard
             {
                 Text = text, Left = x, Top = y, Width = w, Height = h,
                 Style = FluentButton.Variant.Neutral,
+                TabStop = true,   // action buttons must be reachable by keyboard
             };
             Controls.Add(b);
             return b;
@@ -942,6 +981,7 @@ namespace OnScreenKeyboard
             btnCancel3.Click += (s, ev) => { dlg.DialogResult = DialogResult.Cancel; dlg.Close(); };
             btnOK3.Click     += (s, ev) => { dlg.DialogResult = DialogResult.OK;     dlg.Close(); };
             dlg.AcceptButton = btnOK3;
+            dlg.CancelButton = btnCancel3;
             dlg.Controls.Add(btnCancel3);
             dlg.Controls.Add(btnOK3);
 

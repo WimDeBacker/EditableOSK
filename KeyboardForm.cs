@@ -251,6 +251,8 @@ namespace OnScreenKeyboard
         public KeyboardForm()
         {
             Text            = "On-Screen Keyboard";
+            string _icoPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "icons", "onscreenkeyboard.ico");
+            if (File.Exists(_icoPath)) Icon = new Icon(_icoPath);
             BackColor       = _theme.BackgroundColor;
             Opacity         = _theme.Opacity;
             TopMost         = true;
@@ -365,12 +367,11 @@ namespace OnScreenKeyboard
         {
             _gearBtn = new NoActivateButton
             {
-                Text      = "⚙",
+                Text      = "",              // owner-drawn via OnButtonPaint
                 FlatStyle = FlatStyle.Flat,
                 TabStop   = false,
                 Margin    = new Padding(0),
                 BackColor = _gearNormalBg,
-                ForeColor = _gearNormalFg,
                 // Use the cache so this Font is tracked and disposed with the rest.
                 // LayoutButtons() will immediately replace it with the correct size.
                 Font      = GetGearFont(10),
@@ -378,6 +379,10 @@ namespace OnScreenKeyboard
             _gearBtn.FlatAppearance.BorderColor = Color.FromArgb(80, 80, 120);
             _gearBtn.FlatAppearance.BorderSize  = 1;
             _gearBtn.AllowDrop = true;
+            // Tag encodes the glyph and foreground colour for OnButtonPaint,
+            // exactly like regular key buttons.
+            _gearBtn.Tag   = ("⚙", "", "", _gearNormalFg, false, 0);
+            _gearBtn.Paint += OnButtonPaint;
 
             // Left-click toggles edit mode (immediate), unless HoldToEdit is on —
             // in that case the Click event is suppressed and the timer handles it.
@@ -890,6 +895,22 @@ namespace OnScreenKeyboard
         /// </summary>
         private void RebuildAllButtons()
         {
+            // Renumber WP slots to 0, 1, 2, … on every rebuild so hand-edited XML
+            // with duplicate or out-of-order slots is silently corrected at load time.
+            NormaliseWPSlots();
+
+            // Warn (debug log) when more than 10 WP cells exist after renumbering.
+            // Slots ≥ 10 are silently ignored by the predictor and HandleKeyPress.
+            int wpCount = _layout.Cells.Count(c =>
+                c.Props.Send != null &&
+                c.Props.Send.StartsWith("wp:", StringComparison.Ordinal) &&
+                int.TryParse(c.Props.Send.Substring(3), out _));
+            if (wpCount > 10)
+                System.Diagnostics.Debug.WriteLine(
+                    $"[WP] Layout contains {wpCount} word-prediction cells; " +
+                    $"only the first 10 (slots 0–9) will function. " +
+                    $"The remaining {wpCount - 10} cell(s) are non-functional.");
+
             SuspendLayout();
             foreach (var btn in _buttons.Values) { Controls.Remove(btn); btn.Dispose(); }
             _buttons.Clear();
@@ -1011,6 +1032,30 @@ namespace OnScreenKeyboard
                     {
                         if (_copiedKey != null)
                         {
+                            // Guard: pasting a WP cell onto a non-WP cell when all 10 slots are taken
+                            bool copiedIsWP = _copiedKey.Send != null &&
+                                              _copiedKey.Send.StartsWith("wp:", StringComparison.Ordinal);
+                            bool targetIsWP = cell.Props.Send != null &&
+                                              cell.Props.Send.StartsWith("wp:", StringComparison.Ordinal);
+                            if (copiedIsWP && !targetIsWP)
+                            {
+                                int wpCount = _layout.Cells.Count(c =>
+                                    c != cell &&
+                                    c.Props.Send != null &&
+                                    c.Props.Send.StartsWith("wp:", StringComparison.Ordinal));
+                                if (wpCount >= 10)
+                                {
+                                    MessageBox.Show(
+                                        Lang.T("WP paste full msg"),
+                                        Lang.T("WP paste full title"),
+                                        MessageBoxButtons.OK,
+                                        MessageBoxIcon.Warning);
+                                    _keyPaintMode = false;
+                                    UpdateKeyPaintModeCursors();
+                                    RefreshToolbarEditState();
+                                    return;
+                                }
+                            }
                             PushUndo();
                             cell.Props = _copiedKey.Clone();
                             _latchedMods.Remove(cell); _lockedMods.Remove(cell);
@@ -1512,7 +1557,7 @@ namespace OnScreenKeyboard
             // is only needed when assigning to btn.Text, which we always set to "".
             string ml = p.GetDisplayLabel(shifted, altGr) ?? "";
             var grpTag = FindGroup(p.GroupName);
-            Color fc = ResolveColor(p.FontColor, grpTag?.FontColor ?? Color.Empty, _theme.FontColor);
+            Color fc = ResolveColor(p.FontColor, grpTag?.FontColor ?? Color.Empty, StdFontColor);
 
             // Skip Invalidate when nothing visible changed — avoids redundant GDI paint
             // passes on the ~40 buttons whose labels/colours are unchanged (e.g. selection
@@ -1665,7 +1710,7 @@ namespace OnScreenKeyboard
         // Fonts for the selected-key chip on the edit toolbar.
         // _chipFont      — small (9 pt): prefix labels ("Shift:") and send arrows.
         // _chipLabelFont — larger (12 pt): the key label drawn inside the chip itself.
-        private static readonly Font _chipFont      = new Font("Segoe UI", 10f);
+        private static readonly Font _chipFont      = new Font("Segoe UI", 11f);
         private static readonly Font _chipLabelFont = new Font("Segoe UI", 12f);
         // Group lookup dictionary — rebuilt whenever _layout.Groups changes.
         // O(1) lookup replaces the O(n) List.Find used previously.
@@ -1795,11 +1840,11 @@ namespace OnScreenKeyboard
 
         /// <summary>Resolve per-key properties against global defaults.</summary>
         private int ResolveThickness(int keyThickness) =>
-            keyThickness == -1 ? _theme.BorderThickness : keyThickness;
+            keyThickness == -1 ? StdBorderThickness : keyThickness;
         private int ResolveThickness(int keyThickness, int groupThickness) =>
             keyThickness  != -1 ? keyThickness  :
             groupThickness != -1 ? groupThickness :
-            _theme.BorderThickness;
+            StdBorderThickness;
         private Color ResolveColor(Color keyColor, Color globalColor) =>
             keyColor.IsEmpty ? globalColor : keyColor;
         private Color ResolveColor(Color keyColor, Color groupColor, Color globalColor) =>
@@ -1809,12 +1854,25 @@ namespace OnScreenKeyboard
         private string ResolveFontName(string keyFont, string groupFont = null) =>
             !string.IsNullOrEmpty(keyFont)  ? keyFont  :
             !string.IsNullOrEmpty(groupFont) ? groupFont :
-            _theme.FontName;
+            StdFontName;
 
         /// <summary>O(1) group lookup using the pre-built dictionary.</summary>
         private KeyGroup FindGroup(string groupName) =>
             string.IsNullOrEmpty(groupName) ? null :
             _groupDict.TryGetValue(groupName, out var g) ? g : null;
+
+        /// <summary>Returns the standard group, or null if somehow absent.</summary>
+        private KeyGroup StandardGroup =>
+            _groupDict.TryGetValue(SettingsManager.StandardGroupName, out var g) ? g : null;
+
+        // Resolved fallback values from the standard group, with _theme as last resort.
+        // These are the final step in the resolution chain: key → group → standard group.
+        private Color  StdFontColor       => ResolveColor(StandardGroup?.FontColor   ?? Color.Empty, _theme.FontColor);
+        private Color  StdKeyColor        => ResolveColor(StandardGroup?.KeyColor    ?? Color.Empty, _theme.KeyColor);
+        private Color  StdBorderColor     => ResolveColor(StandardGroup?.BorderColor ?? Color.Empty, _theme.BorderColor);
+        private int    StdBorderThickness => StandardGroup is { BorderThickness: >= 0 } sg ? sg.BorderThickness : _theme.BorderThickness;
+        private string StdFontName        => !string.IsNullOrEmpty(StandardGroup?.FontName) ? StandardGroup.FontName : _theme.FontName;
+        private int    StdFontSize        => StandardGroup is { FontSize: > 0 } sg ? sg.FontSize : _theme.FontSize;
 
         /// <summary>
         /// Sets a button's background colour, foreground colour, and border colour/thickness
@@ -1852,8 +1910,8 @@ namespace OnScreenKeyboard
             else if (latched)
             {
                 // Latched: moderate highlight — clears after next key
-                Color rKc = ResolveColor(p.KeyColor, gKc, _theme.KeyColor);
-                Color rFc = ResolveColor(p.FontColor, gFc, _theme.FontColor);
+                Color rKc = ResolveColor(p.KeyColor, gKc, StdKeyColor);
+                Color rFc = ResolveColor(p.FontColor, gFc, StdFontColor);
                 btn.BackColor = AdjustBrightness(rKc, IsLight(rKc) ? -60 : 60);
                 btn.ForeColor = AdjustBrightness(rFc, IsLight(rFc) ? -40 : 40);
                 btn.FlatAppearance.BorderColor = IsLight(rKc)
@@ -1862,9 +1920,9 @@ namespace OnScreenKeyboard
             }
             else
             {
-                btn.BackColor = ResolveColor(p.KeyColor,  gKc, _theme.KeyColor);
-                btn.ForeColor = ResolveColor(p.FontColor, gFc, _theme.FontColor);
-                btn.FlatAppearance.BorderColor = ResolveColor(p.BorderColor, gBc, _theme.BorderColor);
+                btn.BackColor = ResolveColor(p.KeyColor,  gKc, StdKeyColor);
+                btn.ForeColor = ResolveColor(p.FontColor, gFc, StdFontColor);
+                btn.FlatAppearance.BorderColor = ResolveColor(p.BorderColor, gBc, StdBorderColor);
                 btn.FlatAppearance.BorderSize  = ResolveThickness(p.BorderThickness, gBt);
             }
         }
@@ -2029,6 +2087,19 @@ namespace OnScreenKeyboard
         private void ApplyWPTags()
         {
             if (!WordDatabase.IsLoaded) return;
+            try
+            {
+                ApplyWPTagsCore();
+            }
+            catch
+            {
+                // Never let a prediction-rendering error crash the keyboard.
+                // The buttons simply keep showing their last state.
+            }
+        }
+
+        private void ApplyWPTagsCore()
+        {
             foreach (var cell in _layout.Cells)
             {
                 if (cell.Props.Send == null) continue;
@@ -2049,7 +2120,7 @@ namespace OnScreenKeyboard
                 // the fragility for the small number of WP buttons involved.
 
                 var grpWP = FindGroup(cell.Props.GroupName);
-                Color fc = ResolveColor(cell.Props.FontColor, grpWP?.FontColor ?? Color.Empty, _theme.FontColor);
+                Color fc = ResolveColor(cell.Props.FontColor, grpWP?.FontColor ?? Color.Empty, StdFontColor);
 
                 // ── Font: 80 % of auto-sized height, idempotent (from btn.Height) ─────
                 const float charH   = 1.35f;
@@ -2280,12 +2351,23 @@ namespace OnScreenKeyboard
                 AbsorbCoveredCells(cell);
             }
 
-            if (_buttons.TryGetValue(cell, out var btn))
+            if (dlg.ResultGroupsChanged)
+            {
+                // One or more groups were modified — repaint every button so that all
+                // keys belonging to the changed group(s) pick up the new colours.
+                LayoutButtons();
+                RefreshAllButtons(skipFontCalc: true);
+            }
+            else if (_buttons.TryGetValue(cell, out var btn))
             {
                 ApplyPropsToButton(btn, cell.Props, false);
                 UpdateCornerTag(btn, cell.Props, ShiftActive, AltGrActive);
+                LayoutButtons();
             }
-            LayoutButtons();
+            else
+            {
+                LayoutButtons();
+            }
             SyncPredictorSlotCount();
             AutoSave();
         }
@@ -2299,6 +2381,15 @@ namespace OnScreenKeyboard
             if (newMode != Mode.Edit) { _selectedCell = null; UpdateSelectedKeyLabel(); }
             if (newMode != Mode.Edit && _fmtPaintMode)  { _fmtPaintMode  = false; UpdatePaintModeCursors();    }
             if (newMode != Mode.Edit && _keyPaintMode)  { _keyPaintMode  = false; UpdateKeyPaintModeCursors(); }
+
+            // Entering edit mode: release Shift (both latched and locked) so the layout
+            // is always shown in its default unshifted state when the user starts editing.
+            if (newMode == Mode.Edit)
+            {
+                _latchedMods.RemoveWhere(c => c.Props.Label == "Shift");
+                _lockedMods .RemoveWhere(c => c.Props.Label == "Shift");
+            }
+
             _mode = newMode;
             ApplyModeIndicators();          // ends with LayoutButtons()
             RefreshAllButtons(skipFontCalc: true);
@@ -2344,24 +2435,24 @@ namespace OnScreenKeyboard
                     _editStrip.BackColor = _stripEditColor;
                     _editStrip.Visible   = true;
                     _toolbar.Visible     = true;
-                    _gearBtn.Text        = "✏";
                     _gearBtn.BackColor   = _gearEditBg;
-                    _gearBtn.ForeColor   = Color.White;
+                    _gearBtn.Tag         = ("✏", "", "", Color.White, false, 0);
+                    _gearBtn.Invalidate();
                     break;
                 case Mode.GearPlacement:
                     _editStrip.BackColor = Color.FromArgb(80, 80, 200);
                     _editStrip.Visible   = true;
                     _toolbar.Visible     = false;
-                    _gearBtn.Text        = "📌";
                     _gearBtn.BackColor   = Color.FromArgb(60, 60, 180);
-                    _gearBtn.ForeColor   = Color.White;
+                    _gearBtn.Tag         = ("📌", "", "", Color.White, false, 0);
+                    _gearBtn.Invalidate();
                     break;
                 default:
                     _editStrip.Visible   = false;
                     _toolbar.Visible     = false;
-                    _gearBtn.Text        = "⚙";
                     _gearBtn.BackColor   = _gearNormalBg;
-                    _gearBtn.ForeColor   = _gearNormalFg;
+                    _gearBtn.Tag         = ("⚙", "", "", _gearNormalFg, false, 0);
+                    _gearBtn.Invalidate();
                     break;
             }
 
@@ -2469,36 +2560,45 @@ namespace OnScreenKeyboard
             var p   = _selectedCell.Props;
             var grp = FindGroup(p.GroupName);
 
-            // Resolve key colors through cell → group → theme fallback chain.
-            Color keyBg  = ResolveColor(p.KeyColor,    grp?.KeyColor    ?? Color.Empty, _theme.KeyColor);
-            Color keyFg  = ResolveColor(p.FontColor,   grp?.FontColor   ?? Color.Empty, _theme.FontColor);
-            Color keyBdr = ResolveColor(p.BorderColor, grp?.BorderColor ?? Color.Empty, _theme.BorderColor);
+            // Resolve key colors through cell → group → standard group fallback chain.
+            Color keyBg  = ResolveColor(p.KeyColor,    grp?.KeyColor    ?? Color.Empty, StdKeyColor);
+            Color keyFg  = ResolveColor(p.FontColor,   grp?.FontColor   ?? Color.Empty, StdFontColor);
+            Color keyBdr = ResolveColor(p.BorderColor, grp?.BorderColor ?? Color.Empty, StdBorderColor);
 
             // Keep both raw and stripped send values:
-            //   raw   — compared against the raw label to decide whether to show the arrow.
-            //           {(} differs from (, so the arrow IS shown even though they mean the same char.
+            //   raw     — used for the visibility decision (rawSend ≠ label triggers the arrow).
             //   display — outer { } stripped so "{(}" shows as "(" and "{Enter}" shows as "Enter".
-            string label       = p.Label      ?? "";
-            string rawSend     = p.Send       ?? "";
-            string sendDisplay = StripSendBraces(rawSend);
-            string shiftLbl    = p.ShiftLabel ?? "";
-            string rawShiftSnd = p.ShiftSend  ?? "";
-            string shiftSndDisplay = StripSendBraces(rawShiftSnd);
+            string label          = p.Label      ?? "";
+            string rawSend        = p.Send        ?? "";
+            string sendDisplay    = StripSendBraces(rawSend);
+            string shiftLbl       = p.ShiftLabel  ?? "";
+            string rawShiftSnd    = p.ShiftSend   ?? "";
+            string shiftSndDisp   = StripSendBraces(rawShiftSnd);
+            string altGrLbl       = p.AltGrLabel  ?? "";
+            string rawAltGrSnd    = p.AltGrSend   ?? "";
+            string altGrSndDisp   = StripSendBraces(rawAltGrSnd);
 
             bool hasShift = !string.IsNullOrEmpty(shiftLbl);
+            bool hasAltGr = !string.IsNullOrEmpty(altGrLbl);
+
+            // Lay out as 1, 2, or 3 equal-width sections side by side so every chip
+            // gets the full toolbar height regardless of how many variants exist.
+            int sections = 1 + (hasShift ? 1 : 0) + (hasAltGr ? 1 : 0);
+            int secW     = W / sections;
+            int sx       = 0;
+
+            DrawChipSection(g, sx, secW, H, "",       label,    sendDisplay,  rawSend,     keyBg, keyFg, keyBdr, fgSecondary);
+            sx += secW;
 
             if (hasShift)
             {
-                // Side by side: normal chip on the left half, Shift chip on the right half.
-                // This keeps the full toolbar height available for each chip so both can
-                // use the larger font without squashing.
-                int halfW = W / 2;
-                DrawChipSection(g, 0,     halfW, H, "",       label,    sendDisplay,    rawSend,     keyBg, keyFg, keyBdr, fgSecondary);
-                DrawChipSection(g, halfW, halfW, H, "Shift:", shiftLbl, shiftSndDisplay, rawShiftSnd, keyBg, keyFg, keyBdr, fgSecondary);
+                DrawChipSection(g, sx, secW, H, "Shift:",  shiftLbl,  shiftSndDisp, rawShiftSnd,  keyBg, keyFg, keyBdr, fgSecondary);
+                sx += secW;
             }
-            else
+
+            if (hasAltGr)
             {
-                DrawChipSection(g, 0, W, H, "", label, sendDisplay, rawSend, keyBg, keyFg, keyBdr, fgSecondary);
+                DrawChipSection(g, sx, secW, H, "AltGr:", altGrLbl, altGrSndDisp, rawAltGrSnd, keyBg, keyFg, keyBdr, fgSecondary);
             }
         }
 
@@ -2592,7 +2692,11 @@ namespace OnScreenKeyboard
         private static string StripSendBraces(string s)
         {
             if (s.Length >= 3 && s[0] == '{' && s[s.Length - 1] == '}')
-                return s.Substring(1, s.Length - 2);
+                s = s.Substring(1, s.Length - 2);
+            // Whitespace-only sends (e.g. a plain space " ") are invisible when drawn.
+            // Replace with the open-box symbol ␣ so the user can see what is sent.
+            if (s.Length > 0 && string.IsNullOrWhiteSpace(s))
+                return "␣";
             return s;
         }
 
@@ -2733,11 +2837,11 @@ namespace OnScreenKeyboard
                 {
                     if (IsEmptyKey(cell.Props)) continue;  // spacers: skip bake-in
                     var p = cell.Props;
-                    if (chg.FontName   && string.IsNullOrEmpty(p.FontName))  p.FontName   = _theme.FontName;
-                    if (chg.FontColor  && p.FontColor.IsEmpty)                p.FontColor  = _theme.FontColor;
-                    if (chg.KeyColor   && p.KeyColor.IsEmpty)                 p.KeyColor   = _theme.KeyColor;
-                    if (chg.BorderColor && p.BorderColor.IsEmpty)             p.BorderColor = _theme.BorderColor;
-                    if (chg.BorderThickness && p.BorderThickness == -1)       p.BorderThickness = _theme.BorderThickness;
+                    if (chg.FontName   && string.IsNullOrEmpty(p.FontName))  p.FontName   = StdFontName;
+                    if (chg.FontColor  && p.FontColor.IsEmpty)                p.FontColor  = StdFontColor;
+                    if (chg.KeyColor   && p.KeyColor.IsEmpty)                 p.KeyColor   = StdKeyColor;
+                    if (chg.BorderColor && p.BorderColor.IsEmpty)             p.BorderColor = StdBorderColor;
+                    if (chg.BorderThickness && p.BorderThickness == -1)       p.BorderThickness = StdBorderThickness;
                 }
             }
 

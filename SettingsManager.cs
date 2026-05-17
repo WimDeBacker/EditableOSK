@@ -298,6 +298,14 @@ namespace OnScreenKeyboard
     public static class SettingsManager
     {
         /// <summary>
+        /// The reserved name of the built-in "standard" group.
+        /// This group is always present in every layout and serves as the root
+        /// of the style resolution chain (key → group → standard group).
+        /// It cannot be deleted, renamed, or created by the user.
+        /// </summary>
+        public const string StandardGroupName = "standard";
+
+        /// <summary>
         /// The default path where <c>settings.xml</c> is read from and
         /// written to: the same folder as the running executable.
         /// </summary>
@@ -321,21 +329,45 @@ namespace OnScreenKeyboard
                                         VisualTheme theme, WindowState window, LayoutMeta meta,
                                         string path)
         {
-            // Keep a rolling backup so accidental Apply/overwrite is always recoverable.
-            // To restore: rename  filename.xml.bak  →  filename.xml
-            if (File.Exists(path))
-                File.Copy(path, path + ".bak", overwrite: true);
+            // Validate before touching any file — an invalid layout must never overwrite
+            // a good file on disk, even if the caller forgot to check.
+            if (!layout.IsValid())
+                throw new InvalidOperationException(
+                    "Cannot save: the layout contains overlapping or missing cells.");
 
-            // XmlWriterSettings.Indent = true produces nicely indented XML,
-            // making the file human-readable and easy to diff in version control.
-            var xs = new XmlWriterSettings { Indent = true };
-            using var writer = XmlWriter.Create(path, xs);
-            writer.WriteStartDocument();
-            writer.WriteStartElement("OnScreenKeyboard");
-            WriteTheme(writer, theme, layout);
-            WriteLayout(writer, window, meta, layout);
-            writer.WriteEndElement();
-            writer.WriteEndDocument();
+            // Write to a temp file first so a crash mid-write never corrupts the real file.
+            // Only once the temp file is fully and correctly written do we swap it into place.
+            string tmp = path + ".tmp";
+
+            try
+            {
+                var xs = new XmlWriterSettings { Indent = true };
+                using (var writer = XmlWriter.Create(tmp, xs))
+                {
+                    writer.WriteStartDocument();
+                    writer.WriteStartElement("OnScreenKeyboard");
+                    WriteTheme(writer, theme, layout);
+                    WriteLayout(writer, window, meta, layout);
+                    writer.WriteEndElement();
+                    writer.WriteEndDocument();
+                }
+
+                // Atomically swap the temp file over the real file.
+                // File.Replace also creates/overwrites the .bak in one OS-level operation,
+                // so the real file is never in a partially-written state.
+                // On first save (no existing file) Replace is unavailable — use Move instead.
+                if (File.Exists(path))
+                    File.Replace(tmp, path, path + ".bak");
+                else
+                    File.Move(tmp, path);
+            }
+            catch
+            {
+                // Clean up the temp file so a failed save never leaves debris on disk.
+                // Suppress secondary errors — the original exception is what the caller needs.
+                try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+                throw;
+            }
         }
 
         /// <summary>
@@ -710,6 +742,24 @@ namespace OnScreenKeyboard
                 for (int c = 0; c < gridCols; c++)
                     if (layout.CellAt(r, c) == null)
                         layout.Cells.Add(new GridCell(r, c, new KeyProps("", ""), 1, 1));
+
+            // Ensure the standard group always exists. Older files (and hand-edited XML)
+            // may not have it; create one from the Theme appearance values so colours are
+            // preserved exactly. Files that already contain an explicit standard group
+            // keep their own values unchanged.
+            if (!layout.Groups.Exists(g => g.Name == StandardGroupName))
+            {
+                layout.Groups.Insert(0, new KeyGroup
+                {
+                    Name            = StandardGroupName,
+                    FontName        = theme.FontName,
+                    FontSize        = theme.FontSize,
+                    FontColor       = theme.FontColor,
+                    KeyColor        = theme.KeyColor,
+                    BorderColor     = theme.BorderColor,
+                    BorderThickness = theme.BorderThickness,
+                });
+            }
 
             return layout;
         }

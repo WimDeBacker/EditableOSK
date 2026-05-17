@@ -1,6 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <OnScreenKeyboard>
   <Theme BackgroundColor="1A1A2E" Opacity="1.00" FontName="Arial" FontSize="0" FontColor="E0E0FF" KeyColor="2D2D4A" BorderColor="3C3C5A" BorderThickness="1">
+    <Group Name="standard" FontName="Arial" FontSize="0" FontColor="E0E0FF" KeyColor="2D2D4A" BorderColor="3C3C5A" BorderThickness="1" />
     <Group Name="Rekenkunde" FontName="" FontSize="0" FontColor="FFB347" KeyColor="4A3010" BorderColor="" BorderThickness="-1" />
     <Group Name="Vergelijkingen" FontName="" FontSize="0" FontColor="B8E060" KeyColor="2A3A10" BorderColor="" BorderThickness="-1" />
     <Group Name="Besturing" FontName="" FontSize="0" FontColor="FF6060" KeyColor="3A1010" BorderColor="" BorderThickness="-1" />
@@ -20,18 +21,18 @@
     <Group Name="Medeklinkers" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="1A4E8A" BorderColor="00FF00" BorderThickness="1" />
     <Group Name="Leestekens" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="C86A00" BorderColor="00FF00" BorderThickness="1" />
   </Theme>
-  <Layout Language="nl" GridRows="7" GridCols="22" GearRow="0" GearCol="-1" WindowWidth="1400" WindowHeight="462" HideTitlebar="0" StickyModifiers="0" HoldToEdit="0" AlwaysOnTop="1" LastFile="C:\keyboard\0420\math.xml">
-    <Key Row="0" Col="0" RowSpan="1" ColSpan="1" GroupName="" Label="1" Send="1" ShiftLabel="¹" ShiftSend="¹" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
-    <Key Row="0" Col="1" RowSpan="1" ColSpan="1" GroupName="" Label="2" Send="2" ShiftLabel="²" ShiftSend="²" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
-    <Key Row="0" Col="2" RowSpan="1" ColSpan="1" GroupName="" Label="3" Send="3" ShiftLabel="³" ShiftSend="³" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
-    <Key Row="0" Col="3" RowSpan="1" ColSpan="1" GroupName="" Label="4" Send="4" ShiftLabel="⁴" ShiftSend="⁴" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
-    <Key Row="0" Col="4" RowSpan="1" ColSpan="1" GroupName="" Label="5" Send="5" ShiftLabel="⁵" ShiftSend="⁵" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
-    <Key Row="0" Col="5" RowSpan="1" ColSpan="1" GroupName="" Label="6" Send="6" ShiftLabel="⁶" ShiftSend="⁶" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
-    <Key Row="0" Col="6" RowSpan="1" ColSpan="1" GroupName="" Label="7" Send="7" ShiftLabel="⁷" ShiftSend="⁷" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
-    <Key Row="0" Col="7" RowSpan="1" ColSpan="1" GroupName="" Label="8" Send="8" ShiftLabel="⁸" ShiftSend="⁸" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
-    <Key Row="0" Col="8" RowSpan="1" ColSpan="1" GroupName="" Label="9" Send="9" ShiftLabel="⁹" ShiftSend="⁹" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
-    <Key Row="0" Col="9" RowSpan="1" ColSpan="1" GroupName="" Label="0" Send="0" ShiftLabel="⁰" ShiftSend="⁰" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
-    <Key Row="0" Col="10" RowSpan="1" ColSpan="1" GroupName="" Label="." Send="." ShiftLabel="," ShiftSend="," AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+  <Layout Language="nl" GridRows="7" GridCols="22" GearRow="0" GearCol="-1" WindowWidth="1400" WindowHeight="462" HideTitlebar="0" StickyModifiers="0" HoldToEdit="0" AlwaysOnTop="1" LastFile="C:\keyboard\0420\math.xml" ToolbarTheme="Dark">
+    <Key Row="0" Col="0" RowSpan="1" ColSpan="1" GroupName="Cijfers" Label="1" Send="1" ShiftLabel="¹" ShiftSend="¹" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="0" Col="1" RowSpan="1" ColSpan="1" GroupName="Cijfers" Label="2" Send="2" ShiftLabel="²" ShiftSend="²" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="0" Col="2" RowSpan="1" ColSpan="1" GroupName="Cijfers" Label="3" Send="3" ShiftLabel="³" ShiftSend="³" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="0" Col="3" RowSpan="1" ColSpan="1" GroupName="Cijfers" Label="4" Send="4" ShiftLabel="⁴" ShiftSend="⁴" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="0" Col="4" RowSpan="1" ColSpan="1" GroupName="Cijfers" Label="5" Send="5" ShiftLabel="⁵" ShiftSend="⁵" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="0" Col="5" RowSpan="1" ColSpan="1" GroupName="Cijfers" Label="6" Send="6" ShiftLabel="⁶" ShiftSend="⁶" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="0" Col="6" RowSpan="1" ColSpan="1" GroupName="Cijfers" Label="7" Send="7" ShiftLabel="⁷" ShiftSend="⁷" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="0" Col="7" RowSpan="1" ColSpan="1" GroupName="Cijfers" Label="8" Send="8" ShiftLabel="⁸" ShiftSend="⁸" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="0" Col="8" RowSpan="1" ColSpan="1" GroupName="Cijfers" Label="9" Send="9" ShiftLabel="⁹" ShiftSend="⁹" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="0" Col="9" RowSpan="1" ColSpan="1" GroupName="Cijfers" Label="0" Send="0" ShiftLabel="⁰" ShiftSend="⁰" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="0" Col="10" RowSpan="1" ColSpan="1" GroupName="Navigatie" Label="." Send="." ShiftLabel="," ShiftSend="," AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="0" Col="11" RowSpan="1" ColSpan="1" GroupName="Rekenkunde" Label="+" Send="+" ShiftLabel="±" ShiftSend="±" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="0" Col="12" RowSpan="1" ColSpan="1" GroupName="Rekenkunde" Label="−" Send="−" ShiftLabel="∓" ShiftSend="∓" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="0" Col="13" RowSpan="1" ColSpan="1" GroupName="Rekenkunde" Label="×" Send="×" ShiftLabel="·" ShiftSend="·" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
@@ -80,8 +81,8 @@
     <Key Row="3" Col="3" RowSpan="1" ColSpan="1" GroupName="Analyse" Label="∮" Send="∮" ShiftLabel="∯" ShiftSend="∯" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="3" Col="4" RowSpan="1" ColSpan="1" GroupName="Rekenkunde" Label="n!" Send="n!" ShiftLabel="nPr" ShiftSend="nPr" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="3" Col="5" RowSpan="1" ColSpan="1" GroupName="Rekenkunde" Label="nCr" Send="nCr" ShiftLabel="(nk)" ShiftSend="(nk)" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
-    <Key Row="3" Col="6" RowSpan="1" ColSpan="1" GroupName="" Label="½" Send="½" ShiftLabel="⅓" ShiftSend="⅓" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
-    <Key Row="3" Col="7" RowSpan="1" ColSpan="1" GroupName="" Label="¼" Send="¼" ShiftLabel="¾" ShiftSend="¾" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="3" Col="6" RowSpan="1" ColSpan="1" GroupName="Cijfers" Label="½" Send="½" ShiftLabel="⅓" ShiftSend="⅓" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="3" Col="7" RowSpan="1" ColSpan="1" GroupName="Cijfers" Label="¼" Send="¼" ShiftLabel="¾" ShiftSend="¾" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="3" Col="8" RowSpan="1" ColSpan="1" GroupName="Haakjes" Label="⌊⌋" Send="⌊" ShiftLabel="⌈⌉" ShiftSend="⌈" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="3" Col="9" RowSpan="1" ColSpan="1" GroupName="Haakjes" Label="|x|" Send="|" ShiftLabel="‖x‖" ShiftSend="‖" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="3" Col="10" RowSpan="1" ColSpan="1" GroupName="Constanten" Label="π" Send="π" ShiftLabel="τ" ShiftSend="τ" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
@@ -138,11 +139,11 @@
     <Key Row="6" Col="6" RowSpan="1" ColSpan="2" GroupName="Bewerken" Label="Copy" Send="^c" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="6" Col="8" RowSpan="1" ColSpan="2" GroupName="Bewerken" Label="Paste" Send="^v" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="6" Col="10" RowSpan="1" ColSpan="2" GroupName="Bewerken" Label="Undo" Send="^z" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
-    <Key Row="6" Col="12" RowSpan="1" ColSpan="6" GroupName="" Label="Space" Send=" " ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="6" Col="12" RowSpan="1" ColSpan="6" GroupName="Besturing" Label="Space" Send=" " ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="6" Col="18" RowSpan="1" ColSpan="1" GroupName="Navigatie" Label="←" Send="{LEFT}" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="6" Col="19" RowSpan="1" ColSpan="1" GroupName="Navigatie" Label="↑" Send="{UP}" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="6" Col="20" RowSpan="1" ColSpan="1" GroupName="Navigatie" Label="↓" Send="{DOWN}" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="6" Col="21" RowSpan="1" ColSpan="1" GroupName="Navigatie" Label="→" Send="{RIGHT}" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
-    <Key Row="1" Col="21" RowSpan="1" ColSpan="1" GroupName="" Label="azerty" Send="layout:azertycolor.xml" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="1" Col="21" RowSpan="1" ColSpan="1" GroupName="Navigatie" Label="azerty" Send="layout:azertycolor.xml" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
   </Layout>
 </OnScreenKeyboard>

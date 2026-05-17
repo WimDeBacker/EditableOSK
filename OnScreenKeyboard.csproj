@@ -1,15 +1,20 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
+    <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <AssemblyName>OnScreenKeyboard</AssemblyName>
     <RootNamespace>OnScreenKeyboard</RootNamespace>
     <Nullable>disable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
-    <ApplicationIcon></ApplicationIcon>
+    <ApplicationIcon>icons\onscreenkeyboard.ico</ApplicationIcon>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- One-off ICO assembly script — not part of the app build -->
+    <Compile Remove="MakeIco.cs" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Svg" Version="3.4.6" />

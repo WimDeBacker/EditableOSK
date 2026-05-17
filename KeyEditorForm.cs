@@ -30,6 +30,13 @@ namespace OnScreenKeyboard
         /// <summary>How many grid rows tall the key should be (minimum 1).</summary>
         public int     ResultRowSpan { get; private set; } = 1;
 
+        /// <summary>
+        /// True when the user modified one or more groups via the inline + button.
+        /// The caller should refresh all key buttons so group colour changes are reflected
+        /// across every key that belongs to the modified group(s).
+        /// </summary>
+        public bool ResultGroupsChanged { get; private set; }
+
         // The column/row span values the key had when the dialog opened.
         // These are used as initial values for the span spinners.
         private int    _initColSpan, _initRowSpan, _maxRows;
@@ -41,7 +48,7 @@ namespace OnScreenKeyboard
                               _txtAltGrLabel, _txtAltGrSend;
         private NumericUpDown _nudColSpan, _nudRowSpan, _nudWPSlot;
         private Label         _lblSendFieldName;   // "Send" or "Prediction cell" depending on mode
-        private Label         _lblWPDuplicate;     // warning when slot already in use
+        private Label         _lblWPFull;          // warning shown when all 10 WP slots are taken
         private HashSet<int>  _usedWpSlots;        // slots used by OTHER keys in this layout
         private ComboBox      _cmbFont;
         private NumericUpDown _nudFontSize;
@@ -50,8 +57,15 @@ namespace OnScreenKeyboard
         private NumericUpDown _nudBorderThickness;
         private Panel         _pnlPreview;
         private Label         _lblPreviewKey;
+        private Font          _previewFont;   // current dynamic preview font; disposed before each replacement and on FormClosed
         private Button        _btnApply, _btnCancel;
         private ComboBox      _cmbGroup;
+        private FluentButton  _btnGroupEdit;
+
+        // True while we are programmatically clearing _cmbGroup because the user edited an
+        // appearance field.  Tells SelectedIndexChanged to skip RefreshAppearanceFromGroup so
+        // the freshly-typed values are not overwritten.
+        private bool _detachingFromGroup;
 
         // The key state at the moment the dialog was opened, kept for reference
         // (e.g. the form title shows the original label even if the user edits it).
@@ -60,6 +74,14 @@ namespace OnScreenKeyboard
         // The global border color is used as a fallback when a key has no per-key border override.
         // Stored once at construction because it may be needed before ShowDialog() wires up Owner.
         private readonly Color          _globalBorderColor;
+
+        // Effective (resolved) values that were loaded into the Appearance controls at
+        // PopulateFields / RefreshAppearanceFromGroup time.  Apply() compares the current
+        // control values against these to decide whether to write the inherit sentinels
+        // (Color.Empty / "" / -1) or an explicit per-key override.
+        private Color  _loadedFontColor, _loadedKeyColor, _loadedBorderColor;
+        private string _loadedFontName  = "";
+        private int    _loadedFontSize, _loadedBorderThickness;
 
         // The keyboard window's current theme settings (font, colors, etc.).
         // Cached at construction time because the Owner property is null until ShowDialog().
@@ -76,6 +98,9 @@ namespace OnScreenKeyboard
         // ── Fluent/WinUI 3 theme colors and fonts ─────────────────────
         // These properties pull values from the static Fluent palette so the
         // editor always matches the rest of the application's visual style.
+        // True when the toolbar is in dark mode — dialogs follow the same theme.
+        private readonly bool _dark;
+
         private static Color C_BG        => Fluent.BgPage;
         private static Color C_PANEL_BG  => Fluent.BgCard;
         private static Color C_BORDER    => Fluent.BorderCard;
@@ -258,6 +283,160 @@ namespace OnScreenKeyboard
         };
         // ── OPTION 3 END: enum and field declarations ─────────────────
 
+        // ── Helpers ───────────────────────────────────────────────────
+
+        /// <summary>
+        /// Returns a title-bar-safe version of a key label: surrogate pairs
+        /// (emoji U+10000+) and BMP symbol/emoji blocks are stripped so the
+        /// Windows title bar never shows replacement boxes.
+        /// </summary>
+        private static string TitleSafeLabel(string label)
+        {
+            if (string.IsNullOrEmpty(label)) return "";
+            var sb = new System.Text.StringBuilder(label.Length);
+            for (int i = 0; i < label.Length; i++)
+            {
+                char c = label[i];
+                if (char.IsHighSurrogate(c)) { i++; continue; }   // skip emoji surrogate pair (U+10000+)
+                if (char.IsLowSurrogate(c))        continue;
+                if (c >= 0x2600 && c <= 0x27BF)    continue;       // Misc Symbols + Dingbats  (⚙ ✏ ✔ etc.)
+                if (c >= 0x2B00 && c <= 0x2BFF)    continue;       // Misc Symbols Extended
+                sb.Append(c);
+            }
+            return sb.ToString().Trim();
+        }
+
+        private string BuildTitle(string label)
+        {
+            string safe = TitleSafeLabel(label);
+            return string.IsNullOrEmpty(safe)
+                ? Lang.T("Edit Key")
+                : $"{Lang.T("Edit Key")}  [{safe}]";
+        }
+
+        /// <summary>
+        /// Rebuilds the group dropdown after the group list changes (e.g. via the inline
+        /// GroupEditorForm). Tries to restore <paramref name="previousSelection"/> by name;
+        /// falls back to "(no group)" if it no longer exists.
+        /// </summary>
+        private void RebuildGroupCombo(string previousSelection)
+        {
+            _cmbGroup.Items.Clear();
+            _cmbGroup.Items.Add(Lang.T("(no group)"));
+            foreach (var g in _groups) _cmbGroup.Items.Add(g.Name);
+            int idx = 0;
+            if (previousSelection != null)
+                for (int i = 1; i < _cmbGroup.Items.Count; i++)
+                    if (_cmbGroup.Items[i]?.ToString() == previousSelection) { idx = i; break; }
+            _cmbGroup.SelectedIndex = idx;
+        }
+
+        /// <summary>
+        /// Resolves every Appearance-panel control value through the chain
+        /// <b>per-key → currently selected group → global</b>, updates the controls,
+        /// and caches the resolved values in the <c>_loaded*</c> fields so that
+        /// <see cref="Apply"/> can tell whether the user actually changed a field.
+        /// Called from <see cref="PopulateFields"/> and from the group dropdown's
+        /// <c>SelectedIndexChanged</c> handler so the controls stay in sync whenever
+        /// the group selection changes.
+        /// </summary>
+        private void RefreshAppearanceFromGroup()
+        {
+            if (_original == null || _pnlFontColor == null) return;  // guard: called before UI is ready
+
+            // Suppress the DetachFromGroup() calls that fire from control value-change handlers
+            // while we are programmatically populating the appearance fields.
+            bool wasInit = _initialising;
+            _initialising = true;
+            try { RefreshAppearanceFromGroupCore(); }
+            finally { _initialising = wasInit; }
+        }
+
+        private void RefreshAppearanceFromGroupCore()
+        {
+            var ownerG = _ownerGlobal;
+            Color gFc  = ownerG?.FontColor   ?? ColorTranslator.FromHtml("#E0E0FF");
+            Color gKc  = ownerG?.KeyColor    ?? ColorTranslator.FromHtml("#2D2D4A");
+            Color gBc  = ownerG?.BorderColor ?? _globalBorderColor;
+            int   gBt  = ownerG?.BorderThickness ?? 1;
+            string gFn = ownerG?.FontName ?? "Arial";
+
+            // Find the currently selected group (null when "(no group)" is selected)
+            KeyGroup grp = null;
+            if (_cmbGroup != null && _cmbGroup.SelectedIndex > 0)
+            {
+                string gName = _cmbGroup.SelectedItem?.ToString();
+                grp = _groups.FirstOrDefault(g => g.Name == gName);
+            }
+
+            bool isEmptyKey = string.IsNullOrEmpty(_original.Label) &&
+                              string.IsNullOrEmpty(_original.Send);
+
+            // Local helper: per-key → group → global
+            static Color Rc(Color pk, Color grpC, Color global) =>
+                !pk.IsEmpty   ? pk   :
+                !grpC.IsEmpty ? grpC :
+                global;
+
+            // ── Colors ────────────────────────────────────────────────
+            Color pfc = isEmptyKey ? Color.Empty : _original.FontColor;
+            Color pkc = isEmptyKey ? Color.Empty : _original.KeyColor;
+            Color pbc = isEmptyKey ? Color.Empty : _original.BorderColor;
+
+            _loadedFontColor   = Rc(pfc, grp?.FontColor   ?? Color.Empty, gFc);
+            _loadedKeyColor    = Rc(pkc, grp?.KeyColor    ?? Color.Empty, gKc);
+            _loadedBorderColor = Rc(pbc, grp?.BorderColor ?? Color.Empty, gBc);
+
+            SetSwatchHex(_pnlFontColor,   SettingsManager.Hex(_loadedFontColor));
+            SetSwatchHex(_pnlKeyColor,    SettingsManager.Hex(_loadedKeyColor));
+            SetSwatchHex(_pnlBorderColor, SettingsManager.Hex(_loadedBorderColor));
+
+            // ── Font name ──────────────────────────────────────────────
+            string pFn   = isEmptyKey ? "" : (_original.FontName ?? "");
+            string grpFn = grp?.FontName ?? "";
+            _loadedFontName = !string.IsNullOrEmpty(pFn)  ? pFn  :
+                              !string.IsNullOrEmpty(grpFn) ? grpFn :
+                              gFn;
+            int fi = _cmbFont.Items.IndexOf(_loadedFontName);
+            _cmbFont.SelectedIndex = fi >= 0 ? fi : (_cmbFont.Items.Count > 0 ? 0 : -1);
+
+            // ── Font size ──────────────────────────────────────────────
+            int pFs   = isEmptyKey ? 0 : _original.FontSize;
+            int grpFs = grp?.FontSize ?? 0;
+            _loadedFontSize = pFs > 0 ? pFs : (grpFs > 0 ? grpFs : 0);
+            int clampedSize = Math.Clamp(_loadedFontSize, 0, (int)_nudFontSize.Maximum);
+            if (clampedSize > 0)
+            { _nudFontSize.Value = clampedSize; _chkAutoSize.Checked = false; _nudFontSize.Enabled = true; }
+            else
+            { _nudFontSize.Value = 0; _chkAutoSize.Checked = true; _nudFontSize.Enabled = false; }
+
+            // ── Border thickness ───────────────────────────────────────
+            int pBt   = isEmptyKey ? -1 : _original.BorderThickness;
+            int grpBt = grp?.BorderThickness ?? -1;
+            _loadedBorderThickness = pBt  != -1 ? pBt  :
+                                     grpBt != -1 ? grpBt :
+                                     gBt;
+            _nudBorderThickness.Value = Math.Clamp(_loadedBorderThickness, -1,
+                                                   (int)_nudBorderThickness.Maximum);
+        }
+
+        /// <summary>
+        /// Clears the group selection when the user edits an appearance field directly.
+        /// The key transitions from group-member to individual: the currently displayed
+        /// appearance values become the starting point for per-key overrides, and the key
+        /// is no longer associated with any group.
+        /// No-ops when already in individual mode, during initialisation, or during a
+        /// programmatic appearance refresh.
+        /// </summary>
+        private void DetachFromGroup()
+        {
+            if (_initialising || _detachingFromGroup) return;
+            if (_cmbGroup == null || _cmbGroup.SelectedIndex == 0) return;
+            _detachingFromGroup = true;
+            _cmbGroup.SelectedIndex = 0;
+            _detachingFromGroup = false;
+        }
+
         // ── Constructor ───────────────────────────────────────────────
 
         /// <summary>
@@ -304,18 +483,24 @@ namespace OnScreenKeyboard
             _initRowSpan  = ResultRowSpan;
             _maxRows      = Math.Max(1, maxRows);
 
+            _dark = !ToolbarButton.IsLightTheme;
+
             // Standard WinForms form setup
-            Text         = $"{Lang.T("Edit Key")}  [{props.Label}]";
-            BackColor    = C_BG;
+            AutoScaleMode       = AutoScaleMode.Dpi;
+            AutoScaleDimensions = new SizeF(96f, 96f);
+
+            Text         = BuildTitle(props.Label);
+            BackColor    = _dark ? Fluent.DarkBg : Fluent.BgPage;
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox  = MinimizeBox = false;
             ShowIcon     = false;
             StartPosition = FormStartPosition.CenterParent;
-            Size         = new Size(980, 560);
+            Size         = new Size(1080, 560);
             TopMost      = true;   // stay on top of the keyboard window
             Font         = F_LABEL;
 
             BuildUI(props);
+            FluentPainter.ApplyDialogTheme(this, _dark, _pnlPreview);
 
             // Subscribe to language-change events so translated text updates live
             Lang.LanguageChanged += OnLanguageChanged;
@@ -331,6 +516,16 @@ namespace OnScreenKeyboard
                     UnhookWindowsHookEx(_hookHandle);
                     _hookHandle = IntPtr.Zero;
                 }
+                // Dispose the last dynamic preview-key font (the shared FontPreviewKey
+                // initial value must NOT be disposed, so only dispose if we replaced it).
+                _previewFont?.Dispose();
+            };
+
+            // Stop recording if the user switches to another window while the hook is live.
+            // Without this the hook stays active system-wide until the form is closed.
+            Deactivate += (s, e) =>
+            {
+                if (_recording) StopRecording(cancelled: true);
             };
         }
 
@@ -340,7 +535,7 @@ namespace OnScreenKeyboard
         /// </summary>
         private void OnLanguageChanged()
         {
-            Text = $"{Lang.T("Edit Key")}  [{_original.Label}]";
+            Text = BuildTitle(_original.Label);
             _btnApply.Text         = Lang.T("Apply");
             _btnCancel.Text        = Lang.T("Cancel");
             _chkAutoSize.Text      = Lang.T("Auto");
@@ -370,7 +565,7 @@ namespace OnScreenKeyboard
         {
             int margin  = 18;
             int gap     = 14;
-            int leftW   = 510;   // Key Content column width in pixels
+            int leftW   = 580;   // Key Content column width in pixels
             int rightW  = ClientSize.Width - margin * 2 - gap - leftW;  // Appearance column width
             int leftX   = margin;
             int rightX  = margin + leftW + gap;
@@ -388,7 +583,7 @@ namespace OnScreenKeyboard
                                    Color.FromArgb(41, 128, 185));
 
             // lx = label column x, vx = value/control column x, vw = value column width
-            int lx = PAD, vx = 175, vw = colW - lx - vx - PAD;
+            int lx = PAD, vx = 220, vw = colW - lx - vx - PAD;
             int gy = HDR_H + PAD;   // current vertical position within the group panel
 
             AddFieldLabel(grpKey, () => Lang.T("Label"), lx, gy);
@@ -416,17 +611,19 @@ namespace OnScreenKeyboard
                 BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary,
                 Font = F_INPUT, Visible = false,
             };
-            _nudWPSlot.ValueChanged += (s, e) => { Refresh2(); CheckWPDuplicate(); };
+            _nudWPSlot.ValueChanged += (s, e) => Refresh2();
             grpKey.Controls.Add(_nudWPSlot);
 
-            // Duplicate slot warning label (shown below the NUD when the chosen slot is taken)
-            _lblWPDuplicate = new Label
+            // Warning label shown when the user switches to WP mode but all 10 slots are
+            // already taken by other keys — this key would be non-functional.
+            _lblWPFull = new Label
             {
                 Left = vx, Top = gy + 24, Width = vw, Height = 18,
                 ForeColor = Fluent.Danger, BackColor = Color.Transparent,
-                Font = Fluent.FontHint, Visible = false, Text = "",
+                Font = Fluent.FontHint, Visible = false,
+                Text = Lang.T("WP all slots full"),
             };
-            grpKey.Controls.Add(_lblWPDuplicate);
+            grpKey.Controls.Add(_lblWPFull);
             gy += ROW_H;
 
             // ── OPTION 3 BEGIN: picker row (key sequence / modifier / layout) ──
@@ -478,7 +675,7 @@ namespace OnScreenKeyboard
             rightY += styleH + gap;
 
             // Same lx/vx/vw pattern as the left column, but narrower
-            int slx = PAD, svx = 140, svw = rightW - slx - svx - PAD;
+            int slx = PAD, svx = 190, svw = rightW - slx - svx - PAD;
             gy = HDR_H + PAD;
 
             // Font family selector (populated with all installed system fonts)
@@ -491,7 +688,7 @@ namespace OnScreenKeyboard
                 Font = F_INPUT, FlatStyle = FlatStyle.Flat,
             };
             _cmbFont.Items.AddRange(Fluent.InstalledFontNames());
-            _cmbFont.SelectedIndexChanged += (s, e) => Refresh2();
+            _cmbFont.SelectedIndexChanged += (s, e) => { DetachFromGroup(); Refresh2(); };
             grpStyle.Controls.Add(_cmbFont); gy += ROW_H;
 
             // Font size: a numeric spinner plus an "Auto" checkbox.
@@ -503,7 +700,7 @@ namespace OnScreenKeyboard
                 Minimum = 0, Maximum = 72,
                 BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary, Font = F_INPUT,
             };
-            _nudFontSize.ValueChanged += (s, e) => Refresh2();
+            _nudFontSize.ValueChanged += (s, e) => { DetachFromGroup(); Refresh2(); };
             grpStyle.Controls.Add(_nudFontSize);
             _chkAutoSize = new CheckBox
             {
@@ -514,6 +711,7 @@ namespace OnScreenKeyboard
             {
                 // Disable the numeric spinner when auto-sizing is active
                 _nudFontSize.Enabled = !_chkAutoSize.Checked;
+                DetachFromGroup();
                 Refresh2();
             };
             grpStyle.Controls.Add(_chkAutoSize); gy += ROW_H;
@@ -535,15 +733,19 @@ namespace OnScreenKeyboard
                 Left = svx, Top = gy, Width = 65, Minimum = -1, Maximum = 10,
                 BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary, Font = F_INPUT,
             };
-            _nudBorderThickness.ValueChanged += (s, e) => Refresh2();
+            _nudBorderThickness.ValueChanged += (s, e) => { DetachFromGroup(); Refresh2(); };
             grpStyle.Controls.Add(_nudBorderThickness);
             gy += ROW_H;
 
-            // Group selector: index 0 = "(no group)", indices 1+ = named groups from the layout
+            // Group selector: index 0 = "(no group)", indices 1+ = named groups from the layout.
+            // A "+" button to the right opens GroupEditorForm inline, aligned with the color
+            // swatch buttons above (same Left = svx + svw - 32, same Width = 32).
             AddFieldLabel(grpStyle, () => Lang.T("Group"), slx, gy);
+            int cmbGrpW = svw - 32 - 5;   // mirror of color-row: totalW - swatchW - gap
+            int btnGrpX = svx + svw - 32;  // same X as color swatch buttons above
             _cmbGroup = new ComboBox
             {
-                Left = svx, Top = gy, Width = svw,
+                Left = svx, Top = gy, Width = cmbGrpW,
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary,
                 Font = F_INPUT, FlatStyle = FlatStyle.Flat,
@@ -551,8 +753,38 @@ namespace OnScreenKeyboard
             _cmbGroup.Items.Add(Lang.T("(no group)"));
             foreach (var g in _groups) _cmbGroup.Items.Add(g.Name);
             _cmbGroup.SelectedIndex = 0;
-            _cmbGroup.SelectedIndexChanged += (s, e) => Refresh2();
-            grpStyle.Controls.Add(_cmbGroup); gy += ROW_H;
+            _cmbGroup.SelectedIndexChanged += (s, e) =>
+            {
+                // When DetachFromGroup() clears the combo, we keep the fields as-is so the
+                // user's freshly-typed value is not overwritten.  Only refresh when the user
+                // is genuinely picking a different group from the dropdown.
+                if (_detachingFromGroup) return;
+                RefreshAppearanceFromGroup();
+                Refresh2();
+            };
+            grpStyle.Controls.Add(_cmbGroup);
+
+            _btnGroupEdit = new FluentButton
+            {
+                Text = "+", Left = btnGrpX, Top = gy, Width = 32, Height = 26,
+                Style = FluentButton.Variant.Neutral,
+            };
+            new ToolTip().SetToolTip(_btnGroupEdit, Lang.T("Manage Groups…"));
+            _btnGroupEdit.Click += (s, e) =>
+            {
+                // Remember the currently selected group name so we can re-select it after editing
+                string prev = _cmbGroup.SelectedIndex > 0 ? _cmbGroup.SelectedItem?.ToString() : null;
+                using var dlg = new GroupEditorForm(_groups);
+                if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                _groups.Clear();
+                _groups.AddRange(dlg.ResultGroups);
+                ResultGroupsChanged = true;
+                RebuildGroupCombo(prev);
+                Refresh2();
+                _cmbGroup.Focus();  // return focus to the group dropdown after the sub-dialog closes
+            };
+            grpStyle.Controls.Add(_btnGroupEdit);
+            gy += ROW_H;
 
             // Live preview: a small key-shaped panel that reflects the current settings
             AddFieldLabel(grpStyle, () => Lang.T("Preview"), slx, gy);
@@ -569,7 +801,7 @@ namespace OnScreenKeyboard
                 Dock = DockStyle.Fill,
                 ForeColor = ColorTranslator.FromHtml("#E0E0FF"),
                 BackColor = ColorTranslator.FromHtml("#2D2D4A"),
-                Font = new Font("Arial", 13f, FontStyle.Bold),
+                Font = Fluent.FontPreviewKey,
             };
             _pnlPreview.Controls.Add(_lblPreviewKey);
 
@@ -580,12 +812,15 @@ namespace OnScreenKeyboard
             _btnApply  = MakeActionBtn(Lang.T("Apply"),  margin+bw+gap, btnTop, bw, 44);
             _btnApply.Click  += (s, e) => Apply();
             _btnCancel.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
+            AcceptButton = _btnApply;
+            CancelButton = _btnCancel;
 
             // Adjust the form height to fit all controls with a bottom margin
             ClientSize = new Size(ClientSize.Width, btnTop + 44 + margin);
 
             SetupLayoutFocusTracking();
             PopulateFields(p);
+            ActiveControl = _txtLabel;  // start keyboard focus on the label field
         }
 
         // ══════════════════════════════════════════════════════════════
@@ -892,15 +1127,19 @@ namespace OnScreenKeyboard
                 _lblSendFieldName.Text = isWP     ? Lang.T("Prediction cell")
                                        : isLayout ? Lang.T("Layout file")
                                        : Lang.T("Send");
-            if (_lblWPDuplicate != null) _lblWPDuplicate.Visible = false;
+            // Hide the "all slots full" warning whenever a non-WP mode is active.
+            if (_lblWPFull != null) _lblWPFull.Visible = false;
 
             if (isWP)
             {
                 // Auto-assign the next free slot so the user doesn't have to think about it.
-                // Slots range from 0-9; if all are taken we leave it at 9.
+                // Find the first slot not used by any other key; if all 0–9 are taken,
+                // leave it at 9 (the key will be non-functional — the warning label below
+                // tells the user why).
                 int next = 0;
                 while (_usedWpSlots.Contains(next) && next < 9) next++;
                 _nudWPSlot.Value = Math.Min(9, next);
+                UpdateWPFullWarning();
             }
 
             // When the user actively clicks a mode button, pre-fill the Send field appropriately
@@ -938,6 +1177,14 @@ namespace OnScreenKeyboard
             _hookProc   = LowLevelHookCallback;
             _hookHandle = SetWindowsHookEx(WH_KEYBOARD_LL, _hookProc,
                               GetModuleHandle(null), 0);
+
+            // If the hook failed to install (e.g. insufficient privileges), abort
+            // immediately rather than leaving the UI in a "recording" state with no hook.
+            if (_hookHandle == IntPtr.Zero)
+            {
+                StopRecording(cancelled: true);
+                _lblRecordHint.Text = "Hook failed — try running as administrator";
+            }
         }
 
         /// <summary>
@@ -1238,16 +1485,15 @@ namespace OnScreenKeyboard
         }
 
         /// <summary>
-        /// Checks whether the currently selected word-prediction slot is already used
-        /// by another key in the layout, and shows or hides the warning label accordingly.
+        /// Shows or hides the "all slots full" warning label.
+        /// All 10 word-prediction slots (0–9) are occupied by other keys, so this key
+        /// would receive a non-functional slot if saved as a WP cell.
         /// </summary>
-        private void CheckWPDuplicate()
+        private void UpdateWPFullWarning()
         {
-            if (_lblWPDuplicate == null) return;
-            int slot = (int)_nudWPSlot.Value;
-            bool isDuplicate = _usedWpSlots.Contains(slot);
-            _lblWPDuplicate.Text    = isDuplicate ? Lang.T("WP slot already in use") : "";
-            _lblWPDuplicate.Visible = isDuplicate;
+            if (_lblWPFull == null) return;
+            bool allFull = Enumerable.Range(0, 10).All(i => _usedWpSlots.Contains(i));
+            _lblWPFull.Visible = allFull;
         }
 
         /// <summary>
@@ -1293,9 +1539,11 @@ namespace OnScreenKeyboard
         /// <returns>The new panel, already added to the form's Controls.</returns>
         private Panel AddGroup(Func<string> getTitle, int x, int y, int w, int h, Color accentColor)
         {
-            var pnl = new Panel { Left = x, Top = y, Width = w, Height = h, BackColor = Fluent.BgPage };
+            Color bg = _dark ? Color.FromArgb(48, 48, 48) : Fluent.BgCard;
+            var pnl = new Panel { Left = x, Top = y, Width = w, Height = h, BackColor = bg };
+            bool dark = _dark;
             pnl.Paint += (s, e) =>
-                FluentPainter.PaintCard(e.Graphics, pnl.Width, pnl.Height, getTitle(), accentColor, HDR_H);
+                FluentPainter.PaintCard(e.Graphics, pnl.Width, pnl.Height, getTitle(), accentColor, HDR_H, dark);
             Controls.Add(pnl);
             _transGroups.Add((pnl, getTitle));
             return pnl;
@@ -1322,14 +1570,14 @@ namespace OnScreenKeyboard
             {
                 Left = x, Top = y, Width = totalW - sw - 5,
                 BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary,
-                BorderStyle = BorderStyle.FixedSingle, Font = new Font("Courier New", 12f),
+                BorderStyle = BorderStyle.FixedSingle, Font = Fluent.FontCourier,
             };
             var swatch = new Panel
             {
                 Left = x + totalW - sw, Top = y, Width = sw, Height = 26,
                 BorderStyle = BorderStyle.FixedSingle, Cursor = Cursors.Hand, BackColor = Color.Gray,
             };
-            txtHex.TextChanged += (s, e) => { swatch.BackColor = ParseColor(txtHex.Text, swatch.BackColor); Refresh2(); };
+            txtHex.TextChanged += (s, e) => { swatch.BackColor = ParseColor(txtHex.Text, swatch.BackColor); DetachFromGroup(); Refresh2(); };
             swatch.Click += (s, e) =>
             {
                 using var dlg = new ColorDialog { Color = swatch.BackColor };
@@ -1416,6 +1664,7 @@ namespace OnScreenKeyboard
             {
                 Text = text, Left = x, Top = y, Width = w, Height = h,
                 Style = FluentButton.Variant.Neutral,
+                TabStop = true,   // action buttons must be reachable by keyboard
             };
             Controls.Add(btn);
             return btn;
@@ -1460,53 +1709,18 @@ namespace OnScreenKeyboard
             _nudColSpan.Value = Math.Max(1, Math.Min(_maxCols, _initColSpan));
             _nudRowSpan.Value = Math.Max(1, Math.Min(_maxRows, _initRowSpan));
 
-            // Resolve global appearance settings once (Owner is null at this point —
-            // the form hasn't been shown via ShowDialog yet — so we use _ownerGlobal
-            // that was cached in the constructor).
-            var ownerG = _ownerGlobal;
-            Color gFontColor   = ownerG?.FontColor   ?? ColorTranslator.FromHtml("#E0E0FF");
-            Color gKeyColor    = ownerG?.KeyColor    ?? ColorTranslator.FromHtml("#2D2D4A");
-
-            // If the key has no custom font, fall back to the global font
-            string resolvedFont = string.IsNullOrEmpty(p.FontName)
-                ? (ownerG?.FontName ?? "Arial") : p.FontName;
-            int fi = _cmbFont.Items.IndexOf(resolvedFont);
-            _cmbFont.SelectedIndex = fi >= 0 ? fi : (_cmbFont.Items.Count > 0 ? 0 : -1);
-
-            // FontSize = 0 means "auto-size"; any positive value is an explicit size
-            int clampedSize = Math.Clamp(p.FontSize, 0, (int)_nudFontSize.Maximum);
-            if (clampedSize > 0)
-            { _nudFontSize.Value = clampedSize; _chkAutoSize.Checked = false; _nudFontSize.Enabled = true; }
-            else
-            { _nudFontSize.Value = 0; _chkAutoSize.Checked = true; _nudFontSize.Enabled = false; }
-
-            // For empty spacer keys (no label, no send) always show the current global values.
-            // Spacer keys often have per-key styles set to match the background, but we want
-            // the editor to reflect what they would look like with the current global settings.
-            bool isEmptyKey = string.IsNullOrEmpty(p.Label) && string.IsNullOrEmpty(p.Send);
-
-            // BorderThickness = -1 is the sentinel for "inherit from global"
-            int globalBt = ownerG?.BorderThickness ?? 1;
-            _nudBorderThickness.Value = Math.Clamp(
-                (isEmptyKey || p.BorderThickness == -1) ? globalBt : p.BorderThickness,
-                -1, (int)_nudBorderThickness.Maximum);
-
-            // For each color: if the key has no per-key override (or is a spacer), show the global value
-            SetSwatchHex(_pnlFontColor,   SettingsManager.Hex(
-                (isEmptyKey || p.FontColor.IsEmpty)   ? gFontColor         : p.FontColor));
-            SetSwatchHex(_pnlKeyColor,    SettingsManager.Hex(
-                (isEmptyKey || p.KeyColor.IsEmpty)    ? gKeyColor          : p.KeyColor));
-            SetSwatchHex(_pnlBorderColor, SettingsManager.Hex(
-                (isEmptyKey || p.BorderColor.IsEmpty) ? _globalBorderColor : p.BorderColor));
-
-            // Group selector: index 0 = no group. Find the group by name if one is set.
+            // Set the group selector first — RefreshAppearanceFromGroup() resolves the full
+            // per-key → group → global chain and populates font, size, colors and border thickness.
             if (_cmbGroup != null)
             {
                 int gi = string.IsNullOrEmpty(p.GroupName)
                     ? 0
                     : _cmbGroup.Items.IndexOf(p.GroupName);
                 _cmbGroup.SelectedIndex = gi >= 0 ? gi : 0;
+                // SelectedIndexChanged fires RefreshAppearanceFromGroup automatically,
+                // but call it explicitly here too in case the index didn't actually change.
             }
+            RefreshAppearanceFromGroup();
 
             // ── OPTION 3 BEGIN: detect and set initial send mode ──────
             // _initialising suppresses ApplyModChoice() while combo boxes are being populated.
@@ -1515,7 +1729,7 @@ namespace OnScreenKeyboard
             _initialising = true;
             var detectedMode = DetectSendMode(p.Send ?? "", p.Label ?? "");
             SetSendMode(detectedMode, applyPicker: false);
-            if (detectedMode == SendMode.WordPrediction) CheckWPDuplicate();
+            if (detectedMode == SendMode.WordPrediction) UpdateWPFullWarning();
 
             // Sync picker controls to match the actual key data
             if (detectedMode == SendMode.Modifier)
@@ -1581,13 +1795,9 @@ namespace OnScreenKeyboard
             try
             {
                 var newFont = new Font(fn, fs, FontStyle.Bold);
-                // Dispose the old font only if it is a dynamically created instance,
-                // not one of the shared static fonts (which must not be disposed).
-                var oldFont = _lblPreviewKey.Font;
-                _lblPreviewKey.Font = newFont;
-                if (oldFont != null && oldFont != F_LABEL && oldFont != F_INPUT &&
-                    oldFont != F_HEADER && oldFont != F_BTN && oldFont != F_HINT)
-                    oldFont.Dispose();
+                _previewFont?.Dispose();   // free the previous dynamic font before replacing it
+                _previewFont = newFont;
+                _lblPreviewKey.Font = _previewFont;
             }
             catch { }  // ignore invalid font names — the preview just keeps its current font
         }
@@ -1606,18 +1816,47 @@ namespace OnScreenKeyboard
             // Use the cached owner theme (consistent with PopulateFields and Refresh2)
             var ownerGl = _ownerGlobal;
 
-            // For each color: store Color.Empty when the chosen color matches the global value.
-            // Color.Empty is the sentinel meaning "inherit from global" — this way, changing
-            // the global color later will cascade to this key automatically.
-            string fcHex = GetSwatchHex(_pnlFontColor).Trim();
-            string kcHex = GetSwatchHex(_pnlKeyColor).Trim();
-            string bcStr = GetSwatchHex(_pnlBorderColor).Trim();
-            Color fc = HexMatchesGlobal(fcHex, ownerGl?.FontColor)
-                ? Color.Empty : ParseColor(fcHex, Color.Empty);
-            Color kc = HexMatchesGlobal(kcHex, ownerGl?.KeyColor)
-                ? Color.Empty : ParseColor(kcHex, Color.Empty);
-            Color bc = HexMatchesGlobal(bcStr, ownerGl?.BorderColor) || bcStr == ""
-                ? Color.Empty : ParseColor(bcStr, Color.Empty);
+            // Index 0 in _cmbGroup = "(no group)" → store empty string
+            string groupName = (_cmbGroup != null && _cmbGroup.SelectedIndex > 0)
+                ? _cmbGroup.SelectedItem?.ToString() ?? ""
+                : "";
+
+            Color fc, kc, bc;
+            string fontName;
+            int fontSize, borderThickness;
+
+            if (!string.IsNullOrEmpty(groupName))
+            {
+                // ── Group mode ─────────────────────────────────────────────
+                // The key's appearance is fully governed by the group.
+                // Clear every per-key override so the group (and global behind it) take effect.
+                fc = kc = bc = Color.Empty;
+                fontName       = "";
+                fontSize       = 0;
+                borderThickness = -1;
+            }
+            else
+            {
+                // ── Individual mode ────────────────────────────────────────
+                // The key owns its appearance.  Store Color.Empty only when the chosen color
+                // exactly matches the global setting, so a later global change still cascades.
+                // For everything else, write the explicit value.
+                string fcHex = GetSwatchHex(_pnlFontColor).Trim();
+                string kcHex = GetSwatchHex(_pnlKeyColor).Trim();
+                string bcStr = GetSwatchHex(_pnlBorderColor).Trim();
+                fc = HexMatchesGlobal(fcHex, ownerGl?.FontColor)  ? Color.Empty : ParseColor(fcHex, Color.Empty);
+                kc = HexMatchesGlobal(kcHex, ownerGl?.KeyColor)   ? Color.Empty : ParseColor(kcHex, Color.Empty);
+                bc = (HexMatchesGlobal(bcStr, ownerGl?.BorderColor) || bcStr == "") ? Color.Empty : ParseColor(bcStr, Color.Empty);
+
+                fontName = _cmbFont.SelectedItem?.ToString() ?? "";
+                if (_cmbFont.SelectedIndex <= 0 || fontName == (ownerGl?.FontName ?? "Arial"))
+                    fontName = "";
+
+                fontSize = (_chkAutoSize.Checked || _nudFontSize.Value == 0) ? 0 : (int)_nudFontSize.Value;
+
+                int rawBt = (int)_nudBorderThickness.Value;
+                borderThickness = (rawBt == -1 || rawBt == (ownerGl?.BorderThickness ?? 1)) ? -1 : rawBt;
+            }
 
             // ── OPTION 3 BEGIN: convert human-readable Send back to internal format ──
             // Each mode produces a different internal Send string format.
@@ -1661,19 +1900,6 @@ namespace OnScreenKeyboard
             ResultColSpan = (int)_nudColSpan.Value;
             ResultRowSpan = (int)_nudRowSpan.Value;
 
-            string fontName = _cmbFont.SelectedItem?.ToString() ?? "";
-            // Store "" (meaning "use global") when the chosen font matches the global font
-            if (fontName == (ownerGl?.FontName ?? "Arial")) fontName = "";
-
-            // 0 = auto-size (store when the checkbox is checked or size is 0)
-            int fontSize = (_chkAutoSize.Checked || _nudFontSize.Value == 0)
-                ? 0 : (int)_nudFontSize.Value;
-
-            // Index 0 in _cmbGroup = "(no group)" → store empty string
-            string groupName = (_cmbGroup != null && _cmbGroup.SelectedIndex > 0)
-                ? _cmbGroup.SelectedItem?.ToString() ?? ""
-                : "";
-
             // Re-add "layout:" prefix to Shift/AltGr sends when the field was displaying a stripped path
             string shiftSend = _txtShiftSend.Text ?? "";
             if (_shiftSendIsLayout && !string.IsNullOrEmpty(shiftSend))
@@ -1692,11 +1918,7 @@ namespace OnScreenKeyboard
                 FontName        = fontName,
                 FontSize        = fontSize,
                 FontColor       = fc, KeyColor = kc, BorderColor = bc,
-                // Store -1 (inherit from global) when the value equals the global setting,
-                // mirroring the same "inherit sentinel" logic used for colors above.
-                BorderThickness = ((int)_nudBorderThickness.Value == -1 ||
-                                   (int)_nudBorderThickness.Value == (ownerGl?.BorderThickness ?? 1))
-                                  ? -1 : (int)_nudBorderThickness.Value,
+                BorderThickness = borderThickness,
                 GroupName       = groupName,
             };
             DialogResult = DialogResult.OK;

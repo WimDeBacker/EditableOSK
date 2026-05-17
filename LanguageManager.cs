@@ -274,6 +274,65 @@ namespace OnScreenKeyboard
         /// </summary>
         private static Dictionary<string, string> _overrides = new Dictionary<string, string>();
 
+        // Maximum size of a lang file accepted from any source.  512 KB is far more
+        // than any real translation file will ever need (the current Dutch file is ~18 KB).
+        // The limit prevents memory exhaustion if a large or malicious file is ever loaded.
+        private const long MaxLangFileBytes = 512 * 1024;
+
+        // ── Safe XML loader ───────────────────────────────────────────────────
+
+        /// <summary>
+        /// Loads a language XML file with hardened parser settings suitable for files
+        /// that may originate from untrusted sources (e.g. a download server).
+        ///
+        /// <para>Protections applied:</para>
+        /// <list type="bullet">
+        ///   <item>File-size check before parsing — rejects files larger than
+        ///     <see cref="MaxLangFileBytes"/> to prevent memory exhaustion.</item>
+        ///   <item><c>DtdProcessing.Prohibit</c> — any DOCTYPE declaration causes an
+        ///     immediate <see cref="XmlException"/>, which blocks both the
+        ///     billion-laughs entity-expansion attack and external-entity (XXE) reads.</item>
+        ///   <item><c>XmlResolver = null</c> on both the reader and the document —
+        ///     belt-and-suspenders: no external resource is ever fetched.</item>
+        ///   <item>Root-element name check — rejects files whose root is not
+        ///     <c>&lt;Language&gt;</c> so garbage never reaches <c>_overrides</c>.</item>
+        /// </list>
+        ///
+        /// <para>Throws on any failure so callers can decide whether to silently skip
+        /// or report the error.</para>
+        /// </summary>
+        /// <exception cref="InvalidDataException">File too large or wrong root element.</exception>
+        /// <exception cref="XmlException">Malformed XML or DOCTYPE present.</exception>
+        private static XmlDocument LoadLangXml(string path)
+        {
+            // ── Size gate ────────────────────────────────────────────────────
+            long fileSize = new FileInfo(path).Length;
+            if (fileSize > MaxLangFileBytes)
+                throw new InvalidDataException(
+                    $"Language file exceeds the {MaxLangFileBytes / 1024} KB size limit " +
+                    $"({fileSize / 1024} KB): {Path.GetFileName(path)}");
+
+            // ── Parse with DTD prohibited ────────────────────────────────────
+            // DtdProcessing.Prohibit throws XmlException immediately if a DOCTYPE
+            // declaration is present — no entity expansion ever takes place.
+            var settings = new XmlReaderSettings
+            {
+                DtdProcessing = DtdProcessing.Prohibit,
+                XmlResolver   = null,
+            };
+            var doc = new XmlDocument { XmlResolver = null };
+            using (var reader = XmlReader.Create(path, settings))
+                doc.Load(reader);
+
+            // ── Structure gate ───────────────────────────────────────────────
+            if (doc.DocumentElement?.Name != "Language")
+                throw new InvalidDataException(
+                    $"Language file root element must be <Language> " +
+                    $"(found <{doc.DocumentElement?.Name ?? "none"}>): {Path.GetFileName(path)}");
+
+            return doc;
+        }
+
         // ── Public API ────────────────────────────────────────────────────────
 
         /// <summary>
@@ -316,8 +375,11 @@ namespace OnScreenKeyboard
             // Silently do nothing if the file does not exist — the app keeps showing English.
             if (!File.Exists(path)) return;
 
-            var doc = new XmlDocument();
-            doc.Load(path);
+            // Load with hardened settings — silently keep English on any failure
+            // (oversized file, malformed XML, wrong root element, etc.).
+            XmlDocument doc;
+            try   { doc = LoadLangXml(path); }
+            catch { return; }
             var root = doc.DocumentElement;
 
             // Read the canonical code and display name from the XML root element's attributes,
@@ -394,8 +456,7 @@ namespace OnScreenKeyboard
             {
                 try
                 {
-                    var doc  = new XmlDocument();
-                    doc.Load(file);
+                    var doc  = LoadLangXml(file);   // throws on oversized / DTD / wrong root
                     string code = doc.DocumentElement?.GetAttribute("code") ?? "";
                     string name = doc.DocumentElement?.GetAttribute("name") ?? code;
 

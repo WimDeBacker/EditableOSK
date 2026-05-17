@@ -1,6 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <OnScreenKeyboard>
   <Theme BackgroundColor="1A1A2E" Opacity="1.00" FontName="Arial" FontSize="0" FontColor="E0E0FF" KeyColor="2D2D4A" BorderColor="3C3C5A" BorderThickness="1">
+    <Group Name="standard" FontName="Arial" FontSize="0" FontColor="E0E0FF" KeyColor="2D2D4A" BorderColor="3C3C5A" BorderThickness="1" />
     <Group Name="Functietoetsen" FontName="" FontSize="0" FontColor="B8C8FF" KeyColor="252550" BorderColor="353570" BorderThickness="-1" />
     <Group Name="Cijfers" FontName="" FontSize="0" FontColor="C0D0FF" KeyColor="202048" BorderColor="303068" BorderThickness="-1" />
     <Group Name="Klinkers" FontName="" FontSize="0" FontColor="E8DEFF" KeyColor="3A2870" BorderColor="4A3880" BorderThickness="-1" />
@@ -8,7 +9,7 @@
     <Group Name="Leestekens" FontName="" FontSize="0" FontColor="DDD0FF" KeyColor="3C2A60" BorderColor="4C3A70" BorderThickness="-1" />
     <Group Name="Besturing" FontName="" FontSize="0" FontColor="9898D8" KeyColor="1A1A38" BorderColor="2A2A50" BorderThickness="-1" />
   </Theme>
-  <Layout Language="en" GridRows="6" GridCols="14" GearRow="0" GearCol="13" WindowWidth="1200" WindowHeight="468" HideTitlebar="0" StickyModifiers="1" HoldToEdit="0" AlwaysOnTop="1" LastFile="C:\keyboard\0420\qwerty.xml">
+  <Layout Language="en" GridRows="6" GridCols="14" GearRow="0" GearCol="13" WindowWidth="1200" WindowHeight="468" HideTitlebar="0" StickyModifiers="1" HoldToEdit="0" AlwaysOnTop="1" LastFile="C:\keyboard\0420\qwerty.xml" ToolbarTheme="Dark">
     <Key Row="0" Col="0" RowSpan="1" ColSpan="1" GroupName="Functietoetsen" Label="Esc" Send="{ESC}" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="Consolas" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="0" Col="1" RowSpan="1" ColSpan="1" GroupName="Functietoetsen" Label="F1" Send="{F1}" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="Consolas" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="0" Col="2" RowSpan="1" ColSpan="1" GroupName="Functietoetsen" Label="F2" Send="{F2}" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="Consolas" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
