@@ -96,6 +96,12 @@ namespace OnScreenKeyboard
         private ToolTip _tip;
 
         /// <summary>
+        /// Shared ErrorProvider — shows a field-level error icon and announces
+        /// the error to screen readers when a hex colour field contains invalid text.
+        /// </summary>
+        private ErrorProvider _err;
+
+        /// <summary>
         /// (Control, factory) pairs registered by <see cref="SetTip"/> so that
         /// <see cref="OnLanguageChanged"/> can push refreshed tooltip strings on language switch.
         /// </summary>
@@ -524,6 +530,7 @@ namespace OnScreenKeyboard
             Font         = F_LABEL;
 
             _tip = new ToolTip { InitialDelay = 400, AutoPopDelay = 10000, ShowAlways = true };
+            _err = new ErrorProvider { ContainerControl = this, BlinkStyle = ErrorBlinkStyle.BlinkIfDifferentError };
 
             BuildUI(props);
             FluentPainter.ApplyDialogTheme(this, _dark, _pnlPreview);
@@ -545,6 +552,7 @@ namespace OnScreenKeyboard
                 // Dispose the last dynamic preview-key font (the shared FontPreviewKey
                 // initial value must NOT be disposed, so only dispose if we replaced it).
                 _previewFont?.Dispose();
+                _err?.Dispose();
             };
 
             // Stop recording if the user switches to another window while the hook is live.
@@ -1714,7 +1722,14 @@ namespace OnScreenKeyboard
             }
             SetTip(txtHex, () => Lang.T("tip: Hex color"));
             SetTip(swatch, () => Lang.T("tip: Color swatch"));
-            txtHex.TextChanged += (s, e) => { swatch.BackColor = ParseColor(txtHex.Text, swatch.BackColor); Refresh2(); };
+            txtHex.TextChanged += (s, e) =>
+            {
+                swatch.BackColor = ParseColor(txtHex.Text, swatch.BackColor);
+                Refresh2();
+                bool bad = !string.IsNullOrWhiteSpace(txtHex.Text)
+                           && ParseColor(txtHex.Text, Color.Empty).IsEmpty;
+                _err.SetError(txtHex, bad ? Lang.T("err: invalid hex") : "");
+            };
             swatch.Click += (s, e) =>
             {
                 using var dlg = new ColorDialog { Color = swatch.BackColor };

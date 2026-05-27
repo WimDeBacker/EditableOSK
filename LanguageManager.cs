@@ -107,6 +107,9 @@ namespace OnScreenKeyboard
             ["tip: Language"]              = "Select the interface language",
             ["tip: WP slot"]               = "Word prediction slot number (0–9)",
 
+            // ── Validation error messages ────────────────────────────
+            ["err: invalid hex"]           = "Enter a valid hex colour (#RRGGBB)",
+
             // ── Toolbar row 1 buttons ────────────────────────────────
             ["📂 Load"]               = "📂 Load",
             ["↩ Undo"]               = "↩ Undo",

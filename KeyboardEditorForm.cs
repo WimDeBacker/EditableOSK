@@ -114,6 +114,12 @@ namespace OnScreenKeyboard
         private ToolTip _tip;
 
         /// <summary>
+        /// Shared ErrorProvider — shows a field-level error icon and announces
+        /// the error to screen readers when a hex colour field contains invalid text.
+        /// </summary>
+        private ErrorProvider _err;
+
+        /// <summary>
         /// (Control, factory) pairs registered by <see cref="SetTip"/> so that
         /// <see cref="RelabelUI"/> can push refreshed tooltip strings on language switch.
         /// </summary>
@@ -231,6 +237,7 @@ namespace OnScreenKeyboard
             Font         = F_LABEL;
 
             _tip = new ToolTip { InitialDelay = 400, AutoPopDelay = 10000, ShowAlways = true };
+            _err = new ErrorProvider { ContainerControl = this, BlinkStyle = ErrorBlinkStyle.BlinkIfDifferentError };
 
             BuildUI();
             PopulateFields(theme, window, meta);
@@ -243,7 +250,7 @@ namespace OnScreenKeyboard
             Lang.LanguageChanged += RelabelUI;
 
             // Unsubscribe when the form closes.
-            FormClosed += (s, e) => Lang.LanguageChanged -= RelabelUI;
+            FormClosed += (s, e) => { Lang.LanguageChanged -= RelabelUI; _err?.Dispose(); };
         }
 
         // ════════════════════════════════════════════════════════════════
@@ -615,7 +622,13 @@ namespace OnScreenKeyboard
             // Keep the swatch colour in sync as the user types a hex value.
             // ParseColor uses the current swatch colour as fallback so the
             // swatch does not flash to black on a partially typed hex string.
-            txtHex.TextChanged += (s, e) => { swatch.BackColor = ParseColor(txtHex.Text, swatch.BackColor); };
+            txtHex.TextChanged += (s, e) =>
+            {
+                swatch.BackColor = ParseColor(txtHex.Text, swatch.BackColor);
+                bool bad = !string.IsNullOrWhiteSpace(txtHex.Text)
+                           && ParseColor(txtHex.Text, Color.Empty).IsEmpty;
+                _err.SetError(txtHex, bad ? Lang.T("err: invalid hex") : "");
+            };
 
             // Clicking (or pressing Space/Enter) the swatch opens the system colour picker.
             swatch.Click += (s, e) =>

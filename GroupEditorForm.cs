@@ -161,6 +161,12 @@ namespace OnScreenKeyboard
         private ToolTip _tip;
 
         /// <summary>
+        /// Shared ErrorProvider — shows a field-level error icon and announces
+        /// the error to screen readers when a hex colour field contains invalid text.
+        /// </summary>
+        private ErrorProvider _err;
+
+        /// <summary>
         /// Set by <see cref="AddLabel"/> and consumed by the next <see cref="AddColorRow"/> call
         /// so the colour row controls automatically receive the correct <see cref="Control.AccessibleName"/>.
         /// </summary>
@@ -213,6 +219,7 @@ namespace OnScreenKeyboard
             Font            = F_LABEL;
 
             _tip = new ToolTip { InitialDelay = 400, AutoPopDelay = 10000, ShowAlways = true };
+            _err = new ErrorProvider { ContainerControl = this, BlinkStyle = ErrorBlinkStyle.BlinkIfDifferentError };
 
             BuildUI();
             FluentPainter.ApplyDialogTheme(this, _dark);
@@ -226,6 +233,7 @@ namespace OnScreenKeyboard
                 (_ctxClearFontColor?.Owner   as ContextMenuStrip)?.Dispose();
                 (_ctxClearKeyColor?.Owner    as ContextMenuStrip)?.Dispose();
                 (_ctxClearBorderColor?.Owner as ContextMenuStrip)?.Dispose();
+                _err?.Dispose();
             };
             // Select the first group so the detail panel is populated from the start.
             // If a specific group was requested, jump to it instead.
@@ -879,6 +887,8 @@ namespace OnScreenKeyboard
                 if (_loading) return;
                 Color c = TryParseHex(txt.Text);
                 swatch.BackColor = c.IsEmpty ? Fluent.Neutral : c;
+                bool bad = !string.IsNullOrWhiteSpace(txt.Text) && c.IsEmpty;
+                _err.SetError(txt, bad ? Lang.T("err: invalid hex") : "");
             };
             swatch.Click += (s, e) => PickColor(swatch);
 

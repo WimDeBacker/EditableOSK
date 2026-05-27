@@ -50,6 +50,9 @@
   <String key="tip: Language"              value="De interfacetaal selecteren" />
   <String key="tip: WP slot"               value="Woordvoorspellingsslot nummer (0–9)" />
 
+  <!-- Validation error messages -->
+  <String key="err: invalid hex"           value="Voer een geldige hexkleur in (#RRGGBB)" />
+
   <!-- Toolbar button labels -->
   <String key="tb: Load"      value="Laden" />
   <String key="tb: Save"      value="Opslaan" />

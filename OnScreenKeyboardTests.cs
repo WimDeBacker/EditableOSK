@@ -1531,6 +1531,28 @@ namespace OnScreenKeyboard
             Assert(Lang.T("tip: Language")              == "Select the interface language",      "tip EN: Language");
             Assert(Lang.T("tip: WP slot")               .Contains("0–9"),                        "tip EN: WP slot");
 
+            Section("Priority 5 — ErrorProvider hex validation lang keys");
+
+            // Error message key exists in English and contains the format hint
+            Assert(!string.IsNullOrEmpty(Lang.T("err: invalid hex")),
+                "err: invalid hex key defined");
+            Assert(Lang.T("err: invalid hex").Contains("#RRGGBB"),
+                "err: invalid hex message contains format hint");
+
+            // Dutch translation exists and differs from the English key fallback
+            {
+                string nlPath2 = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "lang_nl.xml");
+                if (File.Exists(nlPath2))
+                {
+                    Lang.Load("nl");
+                    Assert(Lang.T("err: invalid hex") != "err: invalid hex",
+                        "err: invalid hex has Dutch translation");
+                    Assert(Lang.T("err: invalid hex").Contains("#RRGGBB"),
+                        "Dutch err: invalid hex message retains format hint");
+                    Lang.Load("en");
+                }
+            }
+
             Section("StyleGroups — standard group name immutable through round-trip");
 
             {
