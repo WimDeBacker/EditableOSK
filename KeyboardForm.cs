@@ -156,10 +156,6 @@ namespace OnScreenKeyboard
         // 2-D map [row, col] → the GridCell whose bounds cover that grid square.
         // Rebuilt in RebuildCellMap() whenever the layout structure changes.
         private GridCell[,]   _cellMap = null;
-        // True after any arrow-key move; cleared when a key is selected with the mouse.
-        // Controls whether RefreshAllButtons draws the accent ring (keyboard) or the
-        // plain white border (mouse selection).
-        private bool          _keyNavActive = false;
         // The ToolbarButton that currently holds the visual keyboard-focus ring inside
         // _toolbarEdit.  null = toolbar is not in keyboard-navigation mode.
         private ToolbarButton _focusedToolbarBtn = null;
@@ -1066,8 +1062,6 @@ namespace OnScreenKeyboard
                 if (_mode == Mode.Edit)
                 {
                     _selectedCell = cell;
-                    // Mouse click — switch from keyboard-nav highlight to mouse-selection highlight.
-                    _keyNavActive = false;
                     if (_focusedToolbarBtn != null)
                     {
                         _focusedToolbarBtn.HasNavFocus = false;
@@ -1656,6 +1650,28 @@ namespace OnScreenKeyboard
         private void OnButtonPaint(object sender, PaintEventArgs e)
         {
             if (sender is not Button btn) return;
+
+            // ── Selection ring ────────────────────────────────────────
+            // Checked before the tag guard so WP keys (whose Tag may be null until
+            // ApplyWPTags fires) still get the ring painted.
+            // Drawn first here so text content renders on top of the inner dark frame.
+            bool isSelectedKey = _mode == Mode.Edit
+                && _selectedCell != null
+                && _buttons.TryGetValue(_selectedCell, out var _chkSelBtn)
+                && ReferenceEquals(_chkSelBtn, btn);
+            if (isSelectedKey)
+            {
+                // "Sandwich" ring: dark outer → white middle → dark inner.
+                // Contrasting dark lines make the white ring visible on both
+                // dark-coloured keys (e.g. blue) and pale/white keys.
+                using (var p1 = new Pen(Color.FromArgb(180, 0, 0, 0), 1f))
+                    e.Graphics.DrawRectangle(p1, 0, 0, btn.Width - 1, btn.Height - 1);
+                using (var p2 = new Pen(Color.White, 2f))
+                    e.Graphics.DrawRectangle(p2, 2, 2, btn.Width - 5, btn.Height - 5);
+                using (var p3 = new Pen(Color.FromArgb(180, 0, 0, 0), 1f))
+                    e.Graphics.DrawRectangle(p3, 4, 4, btn.Width - 9, btn.Height - 9);
+            }
+
             if (btn.Tag is not (string ml, string sl, string al, Color fc, bool isWP, int typedLen)) return;
 
             // ── Main label ────────────────────────────────────────────
@@ -1743,6 +1759,7 @@ namespace OnScreenKeyboard
                     Color.FromArgb(130, fc),
                     TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine);
             }
+
         }
 
         // ── Font cache ────────────────────────────────────────────────
@@ -1825,7 +1842,6 @@ namespace OnScreenKeyboard
             {
                 _selectedCell = _cellMap[0, 0];
                 if (_selectedCell == null) return;
-                _keyNavActive = true;
                 UpdateSelectedKeyLabel();
                 RefreshToolbarEditState();
                 RefreshAllButtons(skipFontCalc: true);
@@ -1851,7 +1867,6 @@ namespace OnScreenKeyboard
             if (next == null) return;   // boundary — stay put
 
             _selectedCell = next;
-            _keyNavActive = true;
             UpdateSelectedKeyLabel();
             RefreshToolbarEditState();
             RefreshAllButtons(skipFontCalc: true);
@@ -1863,10 +1878,20 @@ namespace OnScreenKeyboard
 
         /// <summary>
         /// Returns the visible, enabled <see cref="ToolbarButton"/> controls in
-        /// <c>_toolbarEdit</c> ordered left-to-right, for use by keyboard navigation.
+        /// <c>_toolbarEdit</c> (row 2 — key/grid actions) ordered left-to-right.
         /// </summary>
         private List<ToolbarButton> GetToolbarEditButtons() =>
             _toolbarEdit.Controls.OfType<ToolbarButton>()
+                .Where(b => b.Visible && b.Enabled)
+                .OrderBy(b => b.Left)
+                .ToList();
+
+        /// <summary>
+        /// Returns the visible, enabled <see cref="ToolbarButton"/> controls in
+        /// <c>_toolbar</c> (row 1 — Load, Save, Undo, Redo, …) ordered left-to-right.
+        /// </summary>
+        private List<ToolbarButton> GetToolbar1Buttons() =>
+            _toolbar.Controls.OfType<ToolbarButton>()
                 .Where(b => b.Visible && b.Enabled)
                 .OrderBy(b => b.Left)
                 .ToList();
@@ -1952,14 +1977,19 @@ namespace OnScreenKeyboard
                             SetButtonFont(btn, p, btn.Height, btn.Width, shifted, altGr);
                         }
                         ApplyEmptyKeyStyle(btn, p);
-                        // Selection highlight — drawn over whatever style is applied.
-                        // Keyboard navigation uses the accent colour and a thicker border
-                        // so the focus is clearly distinguishable from a mouse selection.
+                        // Selection highlight — the ring is painted entirely in OnButtonPaint
+                        // (a dark→white→dark sandwich ring, visible on any key colour).
+                        // Set BorderSize = 0 so WinForms doesn't overdraw our ring.
                         if (_mode == Mode.Edit && cell == _selectedCell)
-                        {
-                            btn.FlatAppearance.BorderColor = _keyNavActive ? Fluent.Accent : Color.White;
-                            btn.FlatAppearance.BorderSize  = _keyNavActive ? 3 : 2;
-                        }
+                            btn.FlatAppearance.BorderSize = 0;
+
+                        // WP buttons need an explicit Invalidate() when skipFontCalc is
+                        // true: UpdateCornerTag AND ApplyWPTags are both skipped in that
+                        // path, so there is no other repaint trigger.  Without this the
+                        // selection ring can get stuck (BorderSize was already 0, setter
+                        // detects no change, skips its internal Invalidate).
+                        if (_mode == Mode.Edit && isWP && skipFontCalc)
+                            btn.Invalidate();
                     }
                 }
             }
@@ -2681,7 +2711,6 @@ namespace OnScreenKeyboard
                 // Entering Edit mode — remove WS_EX_NOACTIVATE so the form can receive
                 // keyboard focus, then activate it.  The style is restored when leaving
                 // Edit mode so Normal-mode clicks never steal focus from the target app.
-                _keyNavActive = false;
                 SetNoActivate(false);
                 if (IsHandleCreated) Activate();
             }
@@ -2689,7 +2718,6 @@ namespace OnScreenKeyboard
             {
                 // Leaving Edit mode — restore WS_EX_NOACTIVATE and clear nav state.
                 SetNoActivate(true);
-                _keyNavActive = false;
                 if (_focusedToolbarBtn != null)
                 {
                     _focusedToolbarBtn.HasNavFocus = false;
@@ -3034,7 +3062,10 @@ namespace OnScreenKeyboard
                 {
                     if (key == Keys.Left || key == Keys.Right)
                     {
-                        var btns = GetToolbarEditButtons();
+                        // Navigate within whichever toolbar row is currently active.
+                        var btns = _toolbarEdit.Controls.Contains(_focusedToolbarBtn)
+                            ? GetToolbarEditButtons()
+                            : GetToolbar1Buttons();
                         if (btns.Count > 0)
                         {
                             int cur = btns.IndexOf(_focusedToolbarBtn);
@@ -3065,16 +3096,31 @@ namespace OnScreenKeyboard
                     }
                     // Up/Down: suppress so they don't move OS focus while in toolbar mode.
                     if (key == Keys.Up || key == Keys.Down) return true;
-                    // Tab: fall through to key-grid Tab handling below.
+                    // Tab: fall through to the three-stop Tab cycle below.
                 }
 
                 // ── Key-grid navigation and global Edit shortcuts ────────────────────
                 if (key == Keys.Tab)
                 {
-                    // Toggle between key-grid and toolbar.
+                    // Three-stop cycle: key grid → toolbar row 2 → toolbar row 1 → key grid.
                     if (_focusedToolbarBtn == null)
                     {
+                        // Key grid → row 2 (edit/grid actions).
                         var btns = GetToolbarEditButtons();
+                        if (btns.Count > 0)
+                        {
+                            _focusedToolbarBtn = btns[0];
+                            _focusedToolbarBtn.HasNavFocus = true;
+                            _focusedToolbarBtn.Invalidate();
+                        }
+                    }
+                    else if (_toolbarEdit.Controls.Contains(_focusedToolbarBtn))
+                    {
+                        // Row 2 → row 1 (file/mode actions).
+                        _focusedToolbarBtn.HasNavFocus = false;
+                        _focusedToolbarBtn.Invalidate();
+                        _focusedToolbarBtn = null;
+                        var btns = GetToolbar1Buttons();
                         if (btns.Count > 0)
                         {
                             _focusedToolbarBtn = btns[0];
@@ -3084,6 +3130,7 @@ namespace OnScreenKeyboard
                     }
                     else
                     {
+                        // Row 1 → back to key grid.
                         _focusedToolbarBtn.HasNavFocus = false;
                         _focusedToolbarBtn.Invalidate();
                         _focusedToolbarBtn = null;
