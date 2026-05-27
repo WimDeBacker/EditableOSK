@@ -45,6 +45,33 @@ namespace OnScreenKeyboard
         private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter,
             int x, int y, int cx, int cy, uint uFlags);
 
+        // Used to toggle WS_EX_NOACTIVATE at runtime so Edit mode can receive
+        // keyboard focus while Normal mode never steals focus from the target app.
+        [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+        private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+        [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+        private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+        private const int GWL_EXSTYLE = -20;
+
+        /// <summary>
+        /// Adds or removes <c>WS_EX_NOACTIVATE</c> from the window's extended style.
+        /// <para>
+        /// In Normal mode the flag is present so clicking keys never steals focus from
+        /// the target application.  In Edit mode it is removed so the form can be
+        /// activated normally and receive keyboard input for grid/toolbar navigation.
+        /// </para>
+        /// </summary>
+        private void SetNoActivate(bool enable)
+        {
+            if (!IsHandleCreated) return;
+            int style = GetWindowLong(Handle, GWL_EXSTYLE);
+            if (enable)
+                style |=  WS_EX_NOACTIVATE;
+            else
+                style &= ~WS_EX_NOACTIVATE;
+            SetWindowLong(Handle, GWL_EXSTYLE, style);
+        }
+
         /// <summary>
         /// Tells Windows to keep this window above all other windows (or removes
         /// that guarantee) depending on the <see cref="WindowState.AlwaysOnTop"/> setting.
@@ -77,11 +104,15 @@ namespace OnScreenKeyboard
         private enum Mode { Normal, Edit, GearPlacement }
 
         // Gear button appearance per mode
-        private static readonly Color _gearNormalBg  = ColorTranslator.FromHtml("#2A2A4A");
-        private static readonly Color _gearNormalFg  = ColorTranslator.FromHtml("#CCCCFF");
+        // Normal-mode colors come from the standard group (StdKeyColor / StdFontColor)
+        // so editing the standard group also updates the gear's look.
         private static readonly Color _gearEditBg    = Color.FromArgb(200, 100, 0);   // amber
         private static readonly Color _stripEditColor = Color.FromArgb(220, 120, 0);  // orange
         private Mode _mode = Mode.Normal;
+        // Set to true during a programmatic Height change in mode transitions so the
+        // SizeChanged handler skips its LayoutButtons() call.  ApplyModeIndicators()
+        // calls LayoutButtons() once everything (height + toolbar visibility) is correct.
+        private bool _inModeTransition = false;
 
         // ── Drag-to-swap (Edit mode) ──────────────────────────────────
         private GridCell _dragCandidate = null;   // cell under mousedown; set before threshold
@@ -120,6 +151,19 @@ namespace OnScreenKeyboard
 
         // ── Selection (Edit mode) ─────────────────────────────────────
         private GridCell      _selectedCell = null;
+
+        // ── Keyboard navigation in Edit mode ──────────────────────────
+        // 2-D map [row, col] → the GridCell whose bounds cover that grid square.
+        // Rebuilt in RebuildCellMap() whenever the layout structure changes.
+        private GridCell[,]   _cellMap = null;
+        // True after any arrow-key move; cleared when a key is selected with the mouse.
+        // Controls whether RefreshAllButtons draws the accent ring (keyboard) or the
+        // plain white border (mouse selection).
+        private bool          _keyNavActive = false;
+        // The ToolbarButton that currently holds the visual keyboard-focus ring inside
+        // _toolbarEdit.  null = toolbar is not in keyboard-navigation mode.
+        private ToolbarButton _focusedToolbarBtn = null;
+
         private ToolbarButton _btnKeyEdit;    // toolbar2: open key editor
         private ToolbarButton _btnKeyRemove;  // toolbar2: clear key
         private ToolbarButton _btnCopyFmt;    // toolbar2: copy formatting + enter paint mode
@@ -291,10 +335,10 @@ namespace OnScreenKeyboard
             ResizeEnd   += (s, e) =>
             {
                 _window.WindowWidth  = Width;
-                _window.WindowHeight = Height;
+                _window.WindowHeight = Height - ToolbarHeightForMode(_mode);
                 AutoSave();
             };
-            SizeChanged += (s, e) => LayoutButtons();
+            SizeChanged += (s, e) => { if (!_inModeTransition) LayoutButtons(); };
             Shown       += (s, e) => { LayoutButtons(); ForceTopMost(); _gearBtn.BringToFront(); _predictor.OnSentenceStart(); };
             Activated   += (s, e) => ForceTopMost();
             KeyDown     += OnFormKeyDown;
@@ -304,6 +348,8 @@ namespace OnScreenKeyboard
                 Lang.LanguageChanged -= onLangChanged;
                 if (_hookHandle != IntPtr.Zero) { UnhookWinEvent(_hookHandle); _hookHandle = IntPtr.Zero; }
                 _toolTip?.Dispose();
+                _window.WindowWidth  = Width;
+                _window.WindowHeight = Height - ToolbarHeightForMode(_mode);
                 AutoSave();
                 _lastGearFont?.Dispose();
                 foreach (var f in _fontCache.Values) f.Dispose();
@@ -371,7 +417,7 @@ namespace OnScreenKeyboard
                 FlatStyle = FlatStyle.Flat,
                 TabStop   = false,
                 Margin    = new Padding(0),
-                BackColor = _gearNormalBg,
+                BackColor = StdKeyColor,
                 // Use the cache so this Font is tracked and disposed with the rest.
                 // LayoutButtons() will immediately replace it with the correct size.
                 Font      = GetGearFont(10),
@@ -381,7 +427,7 @@ namespace OnScreenKeyboard
             _gearBtn.AllowDrop = true;
             // Tag encodes the glyph and foreground colour for OnButtonPaint,
             // exactly like regular key buttons.
-            _gearBtn.Tag   = ("⚙", "", "", _gearNormalFg, false, 0);
+            _gearBtn.Tag   = ("⚙", "", "", StdFontColor, false, 0);
             _gearBtn.Paint += OnButtonPaint;
 
             // Left-click toggles edit mode (immediate), unless HoldToEdit is on —
@@ -398,7 +444,7 @@ namespace OnScreenKeyboard
             _holdTimer.Tick += (s, e) =>
             {
                 _holdTimer.Stop();
-                _gearBtn.BackColor = _mode == Mode.Edit ? _gearEditBg : _gearNormalBg; // restore colour
+                _gearBtn.BackColor = _mode == Mode.Edit ? _gearEditBg : StdKeyColor; // restore colour
                 SetMode(_mode == Mode.Edit ? Mode.Normal : Mode.Edit);
             };
 
@@ -428,7 +474,7 @@ namespace OnScreenKeyboard
                     Math.Abs(cur.Y - gearDownScr.Y) < 4) return;
                 gearArming = false;
                 _holdTimer.Stop();                              // cancel hold if user dragged
-                _gearBtn.BackColor = _mode == Mode.Edit ? _gearEditBg : _gearNormalBg;
+                _gearBtn.BackColor = _mode == Mode.Edit ? _gearEditBg : StdKeyColor;
                 if (_mode == Mode.Edit)
                 {
                     // Reposition gear by dragging — dropped cell becomes new gear home.
@@ -447,7 +493,7 @@ namespace OnScreenKeyboard
                 if (_holdTimer.Enabled)                        // released before 1 s — cancel
                 {
                     _holdTimer.Stop();
-                    _gearBtn.BackColor = _mode == Mode.Edit ? _gearEditBg : _gearNormalBg;
+                    _gearBtn.BackColor = _mode == Mode.Edit ? _gearEditBg : StdKeyColor;
                 }
             };
 
@@ -939,6 +985,9 @@ namespace OnScreenKeyboard
             ResumeLayout();
             if (IsHandleCreated) LayoutButtons();
 
+            // Rebuild the 2-D grid-navigation map to match the (possibly new) cell structure.
+            RebuildCellMap();
+
             // Tell the predictor how many slots this layout actually uses so it
             // generates enough predictions (max slot index + 1, capped at 10).
             SyncPredictorSlotCount();
@@ -1017,6 +1066,14 @@ namespace OnScreenKeyboard
                 if (_mode == Mode.Edit)
                 {
                     _selectedCell = cell;
+                    // Mouse click — switch from keyboard-nav highlight to mouse-selection highlight.
+                    _keyNavActive = false;
+                    if (_focusedToolbarBtn != null)
+                    {
+                        _focusedToolbarBtn.HasNavFocus = false;
+                        _focusedToolbarBtn.Invalidate();
+                        _focusedToolbarBtn = null;
+                    }
                     UpdateSelectedKeyLabel();
 
                     if (_fmtPaintMode)
@@ -1734,6 +1791,87 @@ namespace OnScreenKeyboard
         }
 
         /// <summary>
+        /// Builds the 2-D [row, col] → <see cref="GridCell"/> lookup table used by
+        /// keyboard navigation in Edit mode.  Every grid square points to the cell
+        /// whose top-left corner covers it; merged cells (ColSpan or RowSpan &gt; 1)
+        /// fill all the squares they span with a reference to the same cell.
+        /// Called at the end of <see cref="RebuildAllButtons"/> so it always matches
+        /// the current layout structure.
+        /// </summary>
+        private void RebuildCellMap()
+        {
+            _cellMap = new GridCell[_layout.Rows, _layout.Cols];
+            foreach (var cell in _layout.Cells)
+                for (int r = cell.Row; r < cell.Row + cell.RowSpan; r++)
+                    for (int c = cell.Col; c < cell.Col + cell.ColSpan; c++)
+                        _cellMap[r, c] = cell;
+        }
+
+        /// <summary>
+        /// Moves <see cref="_selectedCell"/> one step in the direction indicated by
+        /// <paramref name="key"/> (Up, Down, Left, or Right).
+        /// <para>
+        /// Skips over span squares that belong to the same merged cell and stops at
+        /// the grid boundary without wrapping.  If nothing is selected yet, the
+        /// top-left cell is chosen as the starting point.
+        /// </para>
+        /// </summary>
+        private void MoveSelection(Keys key)
+        {
+            if (_cellMap == null) return;
+
+            // Nothing selected yet — jump to the top-left cell.
+            if (_selectedCell == null)
+            {
+                _selectedCell = _cellMap[0, 0];
+                if (_selectedCell == null) return;
+                _keyNavActive = true;
+                UpdateSelectedKeyLabel();
+                RefreshToolbarEditState();
+                RefreshAllButtons(skipFontCalc: true);
+                return;
+            }
+
+            int dr = (key == Keys.Down)  ?  1 : (key == Keys.Up)    ? -1 : 0;
+            int dc = (key == Keys.Right) ?  1 : (key == Keys.Left)  ? -1 : 0;
+
+            // Step one square at a time from the current cell's anchor until we land
+            // on a *different* cell or reach the grid boundary.
+            int nr = _selectedCell.Row + dr;
+            int nc = _selectedCell.Col + dc;
+            GridCell next = null;
+            while (nr >= 0 && nr < _layout.Rows && nc >= 0 && nc < _layout.Cols)
+            {
+                var candidate = _cellMap[nr, nc];
+                if (candidate != null && candidate != _selectedCell) { next = candidate; break; }
+                nr += dr;
+                nc += dc;
+            }
+
+            if (next == null) return;   // boundary — stay put
+
+            _selectedCell = next;
+            _keyNavActive = true;
+            UpdateSelectedKeyLabel();
+            RefreshToolbarEditState();
+            RefreshAllButtons(skipFontCalc: true);
+
+            // Keep the button visible when the key grid is scrollable.
+            if (_buttons.TryGetValue(_selectedCell, out var btn))
+                ScrollControlIntoView(btn);
+        }
+
+        /// <summary>
+        /// Returns the visible, enabled <see cref="ToolbarButton"/> controls in
+        /// <c>_toolbarEdit</c> ordered left-to-right, for use by keyboard navigation.
+        /// </summary>
+        private List<ToolbarButton> GetToolbarEditButtons() =>
+            _toolbarEdit.Controls.OfType<ToolbarButton>()
+                .Where(b => b.Visible && b.Enabled)
+                .OrderBy(b => b.Left)
+                .ToList();
+
+        /// <summary>
         /// Returns a cached <see cref="Font"/> for corner labels at the given base font's
         /// family and at 55% of its point size.  Avoids allocating a new Font on every
         /// <see cref="OnButtonPaint"/> call (which fires for every key on every repaint).
@@ -1814,11 +1952,13 @@ namespace OnScreenKeyboard
                             SetButtonFont(btn, p, btn.Height, btn.Width, shifted, altGr);
                         }
                         ApplyEmptyKeyStyle(btn, p);
-                        // Selection highlight — white border over whatever style is applied
+                        // Selection highlight — drawn over whatever style is applied.
+                        // Keyboard navigation uses the accent colour and a thicker border
+                        // so the focus is clearly distinguishable from a mouse selection.
                         if (_mode == Mode.Edit && cell == _selectedCell)
                         {
-                            btn.FlatAppearance.BorderColor = Color.White;
-                            btn.FlatAppearance.BorderSize  = 2;
+                            btn.FlatAppearance.BorderColor = _keyNavActive ? Fluent.Accent : Color.White;
+                            btn.FlatAppearance.BorderSize  = _keyNavActive ? 3 : 2;
                         }
                     }
                 }
@@ -2328,7 +2468,20 @@ namespace OnScreenKeyboard
                 groups:       _layout.Groups,
                 layoutDir:    _currentFilePath != null
                               ? System.IO.Path.GetDirectoryName(_currentFilePath) : null);
-            if (dlg.ShowDialog(this) != DialogResult.OK) return;
+            if (dlg.ShowDialog(this) != DialogResult.OK)
+            {
+                // The user cancelled the key edit, but any group changes made via the
+                // "Manage Groups…" button inside the editor take effect immediately
+                // (groups are a shared resource, not per-key state).  Rebuild the display
+                // so the keyboard reflects the updated group colours even though no key
+                // props were changed and no undo snapshot was pushed.
+                if (dlg.ResultGroupsChanged)
+                {
+                    RebuildGroupDict();
+                    RefreshAllButtons(skipFontCalc: true);
+                }
+                return;
+            }
             PushUndo();
             cell.Props = dlg.Result;
             NormaliseWPSlots();
@@ -2353,8 +2506,11 @@ namespace OnScreenKeyboard
 
             if (dlg.ResultGroupsChanged)
             {
-                // One or more groups were modified — repaint every button so that all
-                // keys belonging to the changed group(s) pick up the new colours.
+                // The + button replaced _layout.Groups entries with fresh clones from
+                // GroupEditorForm, so _groupDict still maps names to the OLD objects.
+                // Rebuild before repainting so all resolution (FindGroup, StandardGroup,
+                // Std* helpers) pick up the new colours.
+                RebuildGroupDict();
                 LayoutButtons();
                 RefreshAllButtons(skipFontCalc: true);
             }
@@ -2373,8 +2529,37 @@ namespace OnScreenKeyboard
         }
 
         /// <summary>
+        /// Returns the combined pixel height of all toolbar panels that are visible in
+        /// <paramref name="mode"/>. Used to compute the window-height delta when switching
+        /// between modes so the key-grid size stays constant (the window grows or shrinks to
+        /// absorb the newly shown or hidden toolbar area).
+        /// </summary>
+        /// <remarks>
+        /// Mirrors the <c>th</c> calculation in <see cref="LayoutButtons"/>:
+        /// <list type="bullet">
+        ///   <item><see cref="Mode.Edit"/>: <c>_toolbar</c> (row 1) + <c>_toolbarEdit</c> (row 2)</item>
+        ///   <item><see cref="Mode.Normal"/> / <see cref="Mode.GearPlacement"/>: 0 (no toolbars visible)</item>
+        /// </list>
+        /// </remarks>
+        private int ToolbarHeightForMode(Mode mode)
+        {
+            if (mode != Mode.Edit) return 0;
+            return (_toolbar?.Height ?? 0) + (_toolbarEdit?.Height ?? 0);
+        }
+
+        /// <summary>
         /// Transitions to a new application mode, updating all visual indicators and
         /// toolbar visibility, then reflowing the button layout.
+        /// The window height is adjusted by the toolbar-height delta so that key sizes
+        /// remain constant across mode switches.
+        /// <para>
+        /// <see cref="_inModeTransition"/> suppresses the <c>SizeChanged</c>-triggered
+        /// <see cref="LayoutButtons"/> call during the programmatic <see cref="Form.Height"/>
+        /// change, so that only one layout pass runs — the one inside
+        /// <see cref="ApplyModeIndicators"/> — by which point both the new height and the
+        /// new toolbar visibility are already set.  This prevents any intermediate visual
+        /// state from being painted.
+        /// </para>
         /// </summary>
         private void SetMode(Mode newMode)
         {
@@ -2390,32 +2575,49 @@ namespace OnScreenKeyboard
                 _lockedMods .RemoveWhere(c => c.Props.Label == "Shift");
             }
 
+            // Grow / shrink the window first, suppressing the intermediate SizeChanged
+            // layout so the single LayoutButtons() call inside ApplyModeIndicators sees
+            // the correct Height and the correct toolbar visibility simultaneously.
+            int heightDelta = ToolbarHeightForMode(newMode) - ToolbarHeightForMode(_mode);
             _mode = newMode;
-            ApplyModeIndicators();          // ends with LayoutButtons()
+            _inModeTransition = true;
+            try   { if (heightDelta != 0) Height += heightDelta; }
+            finally { _inModeTransition = false; }
+            ApplyModeIndicators();          // sets toolbar visibility + LayoutButtons()
             RefreshAllButtons(skipFontCalc: true);
         }
 
         /// <summary>
         /// Enters GearPlacement mode: all keys are highlighted in blue so the user can
         /// click one to become the new gear button home cell.
+        /// The window height is adjusted to keep the key-grid size constant.
         /// </summary>
         private void StartGearPlacement()
         {
+            int heightDelta = ToolbarHeightForMode(Mode.GearPlacement) - ToolbarHeightForMode(_mode);
             _mode = Mode.GearPlacement;
-            ApplyModeIndicators();          // ends with LayoutButtons()
+            _inModeTransition = true;
+            try   { if (heightDelta != 0) Height += heightDelta; }
+            finally { _inModeTransition = false; }
+            ApplyModeIndicators();          // sets toolbar visibility + LayoutButtons()
             RefreshAllButtons(skipFontCalc: true);
         }
 
         /// <summary>
         /// Completes GearPlacement mode by recording the chosen cell's row/column as the
         /// gear button's new home, then returning to Normal mode.
+        /// The window height is adjusted to keep the key-grid size constant.
         /// </summary>
         private void FinishGearPlacement(GridCell cell)
         {
             _meta.GearRow = cell.Row;
             _meta.GearCol = cell.Col;
+            int heightDelta = ToolbarHeightForMode(Mode.Normal) - ToolbarHeightForMode(_mode);
             _mode = Mode.Normal;
-            ApplyModeIndicators();           // already calls LayoutButtons() internally
+            _inModeTransition = true;
+            try   { if (heightDelta != 0) Height += heightDelta; }
+            finally { _inModeTransition = false; }
+            ApplyModeIndicators();           // sets toolbar visibility + LayoutButtons()
             RefreshAllButtons(skipFontCalc: true);
             AutoSave();
         }
@@ -2436,7 +2638,10 @@ namespace OnScreenKeyboard
                     _editStrip.Visible   = true;
                     _toolbar.Visible     = true;
                     _gearBtn.BackColor   = _gearEditBg;
-                    _gearBtn.Tag         = ("✏", "", "", Color.White, false, 0);
+                    // Use the same stopEditing icon as the toolbar exit button (20 px, white tint).
+                    // Set Tag to empty text so OnButtonPaint draws nothing — WinForms renders the image.
+                    _gearBtn.Image       = SvgIconLoader.Load("stopEditing.svg", Color.White, 30);
+                    _gearBtn.Tag         = ("", "", "", Color.White, false, 0);
                     _gearBtn.Invalidate();
                     break;
                 case Mode.GearPlacement:
@@ -2444,14 +2649,16 @@ namespace OnScreenKeyboard
                     _editStrip.Visible   = true;
                     _toolbar.Visible     = false;
                     _gearBtn.BackColor   = Color.FromArgb(60, 60, 180);
+                    _gearBtn.Image       = null;
                     _gearBtn.Tag         = ("📌", "", "", Color.White, false, 0);
                     _gearBtn.Invalidate();
                     break;
                 default:
                     _editStrip.Visible   = false;
                     _toolbar.Visible     = false;
-                    _gearBtn.BackColor   = _gearNormalBg;
-                    _gearBtn.Tag         = ("⚙", "", "", _gearNormalFg, false, 0);
+                    _gearBtn.BackColor   = StdKeyColor;
+                    _gearBtn.Image       = null;
+                    _gearBtn.Tag         = ("⚙", "", "", StdFontColor, false, 0);
                     _gearBtn.Invalidate();
                     break;
             }
@@ -2468,6 +2675,28 @@ namespace OnScreenKeyboard
             RefreshToolbarEditState();
             RefreshUndoRedoState();
             LayoutButtons();   // reflow keys to match toolbar visibility
+
+            if (_mode == Mode.Edit)
+            {
+                // Entering Edit mode — remove WS_EX_NOACTIVATE so the form can receive
+                // keyboard focus, then activate it.  The style is restored when leaving
+                // Edit mode so Normal-mode clicks never steal focus from the target app.
+                _keyNavActive = false;
+                SetNoActivate(false);
+                if (IsHandleCreated) Activate();
+            }
+            else
+            {
+                // Leaving Edit mode — restore WS_EX_NOACTIVATE and clear nav state.
+                SetNoActivate(true);
+                _keyNavActive = false;
+                if (_focusedToolbarBtn != null)
+                {
+                    _focusedToolbarBtn.HasNavFocus = false;
+                    _focusedToolbarBtn.Invalidate();
+                    _focusedToolbarBtn = null;
+                }
+            }
         }
 
         // ── Destructive-action helpers ────────────────────────────────
@@ -2780,6 +3009,113 @@ namespace OnScreenKeyboard
         /// Handles keyboard shortcuts for the keyboard form itself (not for typing through).
         /// Currently: Escape cancels format-paint mode, key-paint mode, and gear-placement mode.
         /// </summary>
+
+        /// <summary>
+        /// Central keyboard handler for Edit-mode navigation.
+        /// <para>
+        /// <c>ProcessDialogKey</c> runs before <c>KeyDown</c> is raised — even for keys
+        /// like Tab, Enter, and arrows that WinForms would otherwise use for focus
+        /// traversal.  Handling everything here guarantees reliable interception
+        /// regardless of which control (if any) currently holds Windows focus.
+        /// </para>
+        /// <para>
+        /// Escape for paint/gear modes is left in <see cref="OnFormKeyDown"/> because
+        /// those modes are active in Normal/Placement mode where we do NOT intercept keys.
+        /// </para>
+        /// </summary>
+        protected override bool ProcessDialogKey(Keys keyData)
+        {
+            if (_mode == Mode.Edit)
+            {
+                var key = keyData & Keys.KeyCode;
+
+                // ── Toolbar navigation (when a toolbar button has the nav ring) ──────
+                if (_focusedToolbarBtn != null)
+                {
+                    if (key == Keys.Left || key == Keys.Right)
+                    {
+                        var btns = GetToolbarEditButtons();
+                        if (btns.Count > 0)
+                        {
+                            int cur = btns.IndexOf(_focusedToolbarBtn);
+                            if (cur < 0) cur = 0;
+                            _focusedToolbarBtn.HasNavFocus = false;
+                            _focusedToolbarBtn.Invalidate();
+                            int next = key == Keys.Right
+                                ? (cur + 1) % btns.Count
+                                : (cur - 1 + btns.Count) % btns.Count;
+                            _focusedToolbarBtn = btns[next];
+                            _focusedToolbarBtn.HasNavFocus = true;
+                            _focusedToolbarBtn.Invalidate();
+                        }
+                        return true;
+                    }
+                    if (key == Keys.Return || key == Keys.Space)
+                    {
+                        _focusedToolbarBtn.PerformClick();
+                        return true;
+                    }
+                    if (key == Keys.Escape)
+                    {
+                        // Leave toolbar → return to key-grid mode.
+                        _focusedToolbarBtn.HasNavFocus = false;
+                        _focusedToolbarBtn.Invalidate();
+                        _focusedToolbarBtn = null;
+                        return true;
+                    }
+                    // Up/Down: suppress so they don't move OS focus while in toolbar mode.
+                    if (key == Keys.Up || key == Keys.Down) return true;
+                    // Tab: fall through to key-grid Tab handling below.
+                }
+
+                // ── Key-grid navigation and global Edit shortcuts ────────────────────
+                if (key == Keys.Tab)
+                {
+                    // Toggle between key-grid and toolbar.
+                    if (_focusedToolbarBtn == null)
+                    {
+                        var btns = GetToolbarEditButtons();
+                        if (btns.Count > 0)
+                        {
+                            _focusedToolbarBtn = btns[0];
+                            _focusedToolbarBtn.HasNavFocus = true;
+                            _focusedToolbarBtn.Invalidate();
+                        }
+                    }
+                    else
+                    {
+                        _focusedToolbarBtn.HasNavFocus = false;
+                        _focusedToolbarBtn.Invalidate();
+                        _focusedToolbarBtn = null;
+                    }
+                    return true;   // consumed — never let Tab escape to another window
+                }
+                if (key == Keys.Left || key == Keys.Right ||
+                    key == Keys.Up   || key == Keys.Down)
+                {
+                    MoveSelection(key);
+                    return true;
+                }
+                if (key == Keys.Return || key == Keys.F2)
+                {
+                    if (_selectedCell != null) OpenEditor(_selectedCell);
+                    return true;
+                }
+                if (key == Keys.Delete)
+                {
+                    _btnKeyRemove.PerformClick();
+                    return true;
+                }
+            }
+            return base.ProcessDialogKey(keyData);
+        }
+
+        /// <summary>
+        /// Handles keyboard shortcuts for the keyboard form itself (not for typing through).
+        /// Edit-mode navigation is handled in <see cref="ProcessDialogKey"/> which runs
+        /// earlier in the message pipeline. This handler covers only the Escape shortcuts
+        /// that apply in paint modes and gear-placement mode.
+        /// </summary>
         private void OnFormKeyDown(object sender, KeyEventArgs e)
         {
             if ((_fmtPaintMode || _keyPaintMode) && e.KeyCode == Keys.Escape)
@@ -2804,12 +3140,14 @@ namespace OnScreenKeyboard
 
         /// <summary>
         /// Opens the <see cref="KeyboardEditorForm"/> dialog for global keyboard settings
-        /// (theme, window, language, groups).
+        /// (window style, language, accessibility, groups).
         /// <para>
-        /// If the user did NOT tick "Apply to all keys", currently-inheriting keys are frozen
-        /// at the old global values so the global change doesn't silently restyle them.
-        /// If the user DID tick it, per-key overrides for changed fields are cleared so all
-        /// keys immediately adopt the new global style.
+        /// Key style (font, colours, border) is now managed through the standard group
+        /// via the "Edit standard group style…" button inside the dialog.
+        /// The standard group is the resolution root: all regular keys inherit from it
+        /// unless they have an explicit per-key or named-group override.  The dialog
+        /// never modifies the standard group directly — that happens only inside
+        /// <see cref="GroupEditorForm"/>.
         /// </para>
         /// </summary>
         private void OpenKeyboardEditor()
@@ -2823,31 +3161,11 @@ namespace OnScreenKeyboard
             if (dlg.ShowDialog(this) != DialogResult.OK) return;
             PushUndo();
 
-            var chg = dlg.ChangedFields;
-
-            if (!dlg.ApplyToKeys)
-            {
-                // "Apply style to all keys" was NOT ticked.
-                // Freeze every currently-inheriting key at the current (old) global value so the
-                // global change doesn't silently affect keys the user hasn't explicitly styled.
-                // Explicitly-set per-key values are untouched.
-                // (Empty spacer keys are excluded: they have no visible appearance in Normal mode
-                //  and the key editor will always show global colours for them regardless.)
-                foreach (var cell in _layout.Cells)
-                {
-                    if (IsEmptyKey(cell.Props)) continue;  // spacers: skip bake-in
-                    var p = cell.Props;
-                    if (chg.FontName   && string.IsNullOrEmpty(p.FontName))  p.FontName   = StdFontName;
-                    if (chg.FontColor  && p.FontColor.IsEmpty)                p.FontColor  = StdFontColor;
-                    if (chg.KeyColor   && p.KeyColor.IsEmpty)                 p.KeyColor   = StdKeyColor;
-                    if (chg.BorderColor && p.BorderColor.IsEmpty)             p.BorderColor = StdBorderColor;
-                    if (chg.BorderThickness && p.BorderThickness == -1)       p.BorderThickness = StdBorderThickness;
-                }
-            }
-
             // Copy new values into the existing objects (keeps _theme/_window/_meta as stable
             // references so any code that captured them — e.g. KeyEditorForm._ownerGlobal —
             // always sees the latest values without needing a fresh reference).
+            // Note: ResultTheme passes style fields through unchanged (only BackgroundColor
+            // and Opacity are edited in KeyboardEditorForm); groups carry the real style data.
             _layout.Groups = dlg.ResultGroups;
             RebuildGroupDict();
             _theme .CopyFrom(dlg.ResultTheme);
@@ -2857,21 +3175,6 @@ namespace OnScreenKeyboard
             ForceTopMost();  // re-apply always-on-top setting immediately
             BackColor = _theme.BackgroundColor; Opacity = _theme.Opacity;
             ApplyToolbarTheme();
-            if (dlg.ApplyToKeys)
-            {
-                // "Apply style to all keys" WAS ticked: clear per-key style overrides for every
-                // changed field so all keys immediately adopt the new global values.
-                foreach (var cell in _layout.Cells)
-                {
-                    var p = cell.Props;
-                    if (chg.FontName)        p.FontName        = "";
-                    if (chg.FontSize)        p.FontSize        = _theme.FontSize;
-                    if (chg.FontColor)       p.FontColor       = Color.Empty;
-                    if (chg.KeyColor)        p.KeyColor        = Color.Empty;
-                    if (chg.BorderColor)     p.BorderColor     = Color.Empty;
-                    if (chg.BorderThickness) p.BorderThickness = -1;
-                }
-            }
             RefreshAllButtons();
             AutoSave();
         }

@@ -16,7 +16,7 @@
     <Group Name="Modifier" FontName="" FontSize="0" FontColor="B090E0" KeyColor="251A35" BorderColor="" BorderThickness="-1" />
     <Group Name="Navigatie" FontName="" FontSize="0" FontColor="8090C0" KeyColor="1A1A35" BorderColor="" BorderThickness="-1" />
     <Group Name="Woord" FontName="" FontSize="0" FontColor="E8D4FF" KeyColor="5B3080" BorderColor="00FF00" BorderThickness="1" />
-    <Group Name="Cijfers" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="B52535" BorderColor="00FF00" BorderThickness="1" />
+    <Group Name="Cijfers" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="008040" BorderColor="00FF00" BorderThickness="1" />
     <Group Name="Klinkers" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="4A8FD4" BorderColor="00FF00" BorderThickness="1" />
     <Group Name="Medeklinkers" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="1A4E8A" BorderColor="00FF00" BorderThickness="1" />
     <Group Name="Leestekens" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="C86A00" BorderColor="00FF00" BorderThickness="1" />
@@ -94,7 +94,7 @@
     <Key Row="4" Col="2" RowSpan="1" ColSpan="1" GroupName="Grieks" Label="γ" Send="γ" ShiftLabel="Γ" ShiftSend="Γ" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="4" Col="3" RowSpan="1" ColSpan="1" GroupName="Grieks" Label="δ" Send="δ" ShiftLabel="Δ" ShiftSend="Δ" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="4" Col="4" RowSpan="1" ColSpan="1" GroupName="Grieks" Label="ε" Send="ε" ShiftLabel="Ε" ShiftSend="Ε" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
-    <Key Row="4" Col="5" RowSpan="1" ColSpan="1" GroupName="Medeklinkers" Label="ζ" Send="ζ" ShiftLabel="Ζ" ShiftSend="Ζ" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="4" Col="5" RowSpan="1" ColSpan="1" GroupName="Grieks" Label="ζ" Send="ζ" ShiftLabel="Ζ" ShiftSend="Ζ" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="4" Col="6" RowSpan="1" ColSpan="1" GroupName="Grieks" Label="η" Send="η" ShiftLabel="Η" ShiftSend="Η" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="4" Col="7" RowSpan="1" ColSpan="1" GroupName="Grieks" Label="θ" Send="θ" ShiftLabel="Θ" ShiftSend="Θ" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="4" Col="8" RowSpan="1" ColSpan="1" GroupName="Grieks" Label="ι" Send="ι" ShiftLabel="Ι" ShiftSend="Ι" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />

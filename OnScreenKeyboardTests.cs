@@ -51,6 +51,7 @@ namespace OnScreenKeyboard
             T_UndoRedo();
             T_SendKeysStripping();
             T_AutoScaleMode_Dialogs();
+            T_GrowWindowOnEditMode();
             T_PaintHandlerAudit();
             T_StyleGroups();
             T_XmlRobustness();
@@ -738,11 +739,11 @@ namespace OnScreenKeyboard
             Assert(Lang.T("Edit Key")       == "Edit Key",      "English: Edit Key");
             Assert(Lang.T("Preview")        == "Preview",       "English: Preview");
             Assert(Lang.T("Key width")     == "Key width","English: Width (columns)");
-            Assert(Lang.T("Key height")    == "Key height", "English: Height (rows)");
+            Assert(Lang.T("Key height")    == "Key &height", "English: Height (rows)");
             Assert(Lang.T("Accessibility")  == "Accessibility", "English: Accessibility");
-            Assert(Lang.T("Sticky modifiers")== "Sticky modifiers","English: Sticky modifiers");
+            Assert(Lang.T("Sticky modifiers")== "Stic&ky modifiers","English: Sticky modifiers");
             Assert(Lang.T("Always on top")  == "Always on top", "English: Always on top");
-            Assert(Lang.T("Hide title bar") == "Hide title bar","English: Hide title bar");
+            Assert(Lang.T("Hide title bar") == "H&ide title bar","English: Hide title bar");
             Assert(Lang.T("Language")       == "Language",      "English: Language");
             Assert(Lang.T("Layout file")    == "Layout file",   "English: Layout file");
             Assert(Lang.T("Invalid file title") == "Unable to Open File",
@@ -782,16 +783,16 @@ namespace OnScreenKeyboard
                 Lang.Load("nl");
                 Assert(Lang.CurrentCode == "nl",                    "Dutch code");
                 Assert(Lang.T("Save")        == "Opslaan",           "Dutch: Save");
-                Assert(Lang.T("Cancel")      == "Annuleren",         "Dutch: Cancel");
+                Assert(Lang.T("Cancel")      == "Ann&uleren",        "Dutch: Cancel");
                 Assert(Lang.T("Preview")     == "Voorbeeld",        "Dutch: Preview");
                 Assert(Lang.T("Language")    == "Taal",             "Dutch: Language");
                 Assert(Lang.T("Layout file") == "Lay-outbestand",   "Dutch: Layout file");
                 Assert(Lang.T("Accessibility")== "Toegankelijkheid","Dutch: Accessibility");
-                Assert(Lang.T("Sticky modifiers")=="Plaktoetsen (Sticky Keys)","Dutch: Sticky modifiers");
+                Assert(Lang.T("Sticky modifiers")=="&Plaktoetsen (Sticky Keys)","Dutch: Sticky modifiers");
                 Assert(Lang.T("Always on top")=="Altijd bovenaan",  "Dutch: Always on top");
-                Assert(Lang.T("Hide title bar")=="Titelbalk verbergen","Dutch: Hide title bar");
+                Assert(Lang.T("Hide title bar")=="Titelbalk &verbergen","Dutch: Hide title bar");
                 Assert(Lang.T("Key width")=="Toets breedte","Dutch: Key width");
-                Assert(Lang.T("Key height")=="Toets hoogte",   "Dutch: Key height");
+                Assert(Lang.T("Key height")=="Toets &hoogte",   "Dutch: Key height");
                 // Removed keys must NOT be in Dutch file
                 Assert(Lang.T("nonexistent_key_xyz") == "nonexistent_key_xyz",
                     "Dutch: missing key returns key");
@@ -1387,8 +1388,9 @@ namespace OnScreenKeyboard
 
                 var cell0 = loaded.CellAt(0, 0);
                 var cell1 = loaded.CellAt(0, 1);
-                Assert(cell0?.Props.GroupName == "Arithmetic",  "Groups round-trip: key GroupName preserved");
-                Assert(string.IsNullOrEmpty(cell1?.Props.GroupName), "Groups round-trip: ungrouped key has empty GroupName");
+                Assert(cell0?.Props.GroupName == "Arithmetic",              "Groups round-trip: key GroupName preserved");
+                Assert(cell1?.Props.GroupName == SettingsManager.StandardGroupName,
+                    "Groups round-trip: ungrouped key assigned to standard group on load");
             }
             finally { if (File.Exists(tmp)) File.Delete(tmp); }
 
@@ -1397,7 +1399,7 @@ namespace OnScreenKeyboard
             Assert(SettingsManager.StandardGroupName == "standard",
                 "StandardGroupName value is 'standard'");
 
-            Section("StyleGroups — standard group auto-created from theme when missing");
+            Section("StyleGroups — standard group auto-created with neutral defaults when missing");
 
             {
                 string f = Path.Combine(Path.GetTempPath(), $"osk_std_{Guid.NewGuid()}.xml");
@@ -1406,37 +1408,17 @@ namespace OnScreenKeyboard
                     // Write a file with no standard group
                     var noStdLayout = new GridLayout(1, 1);
                     noStdLayout.Cells.Add(new GridCell(0, 0, new KeyProps("a", "a")));
-                    var srcTheme = new VisualTheme
-                    {
-                        FontName        = "Courier New",
-                        FontSize        = 14,
-                        FontColor       = Color.FromArgb(255, 10, 20, 30),
-                        KeyColor        = Color.FromArgb(255, 40, 50, 60),
-                        BorderColor     = Color.FromArgb(255, 70, 80, 90),
-                        BorderThickness = 2,
-                    };
-                    SettingsManager.SaveSettings(noStdLayout, srcTheme, new WindowState(), new LayoutMeta(), f);
+                    SettingsManager.SaveSettings(noStdLayout, new VisualTheme(), new WindowState(), new LayoutMeta(), f);
 
-                    // Load: standard group must be auto-created from theme values
-                    var dstTheme = new VisualTheme
-                    {
-                        FontName        = srcTheme.FontName,
-                        FontSize        = srcTheme.FontSize,
-                        FontColor       = srcTheme.FontColor,
-                        KeyColor        = srcTheme.KeyColor,
-                        BorderColor     = srcTheme.BorderColor,
-                        BorderThickness = srcTheme.BorderThickness,
-                    };
-                    var lout = SettingsManager.LoadSettings(dstTheme, new WindowState(), new LayoutMeta(), f);
+                    // Load: standard group must be auto-created with neutral defaults (not from theme)
+                    var lout = SettingsManager.LoadSettings(new VisualTheme(), new WindowState(), new LayoutMeta(), f);
                     Assert(lout != null, "Standard auto-create: file loads");
                     var std = lout.Groups.Find(g => g.Name == SettingsManager.StandardGroupName);
-                    Assert(std != null,                             "Standard auto-create: group exists");
-                    Assert(std.FontName == "Courier New",           "Standard auto-create: FontName from theme");
-                    Assert(std.FontSize == 14,                      "Standard auto-create: FontSize from theme");
-                    Assert(std.FontColor == srcTheme.FontColor,     "Standard auto-create: FontColor from theme");
-                    Assert(std.KeyColor  == srcTheme.KeyColor,      "Standard auto-create: KeyColor from theme");
-                    Assert(std.BorderColor == srcTheme.BorderColor, "Standard auto-create: BorderColor from theme");
-                    Assert(std.BorderThickness == 2,                "Standard auto-create: BorderThickness from theme");
+                    Assert(std != null,                                                      "Standard auto-create: group exists");
+                    Assert(std.FontColor    == Color.FromArgb(255,   0,   0,   0),          "Standard auto-create: FontColor is black (#000000)");
+                    Assert(std.KeyColor     == Color.FromArgb(255, 255, 255, 255),          "Standard auto-create: KeyColor is white (#FFFFFF)");
+                    Assert(std.BorderColor  == Color.FromArgb(255,   0,   0,   0),          "Standard auto-create: BorderColor is black (#000000)");
+                    Assert(std.BorderThickness == 0,                                        "Standard auto-create: BorderThickness is 0");
                     // Standard group must be first in the list
                     Assert(lout.Groups[0].Name == SettingsManager.StandardGroupName,
                         "Standard auto-create: standard group is first");
@@ -1504,6 +1486,281 @@ namespace OnScreenKeyboard
                 }
                 finally { if (File.Exists(f)) File.Delete(f); }
             }
+
+            Section("StyleGroups — Step 4 lang keys registered");
+
+            Assert(Lang.T("(inherit standard)")      == "(inherit standard)",
+                "Lang key: (inherit standard)");
+            Assert(Lang.T("-1 = inherit standard")   == "-1 = inherit standard",
+                "Lang key: -1 = inherit standard");
+            Assert(Lang.T("Clear (inherit standard)")== "Clear (inherit standard)",
+                "Lang key: Clear (inherit standard)");
+            Assert(Lang.T("(none / auto)")           == "(none / auto)",
+                "Lang key: (none / auto)");
+            Assert(Lang.T("Clear")                   == "Clear",
+                "Lang key: Clear");
+
+            Section("Priority 4 — tip: keys and StripMnemonic");
+
+            // StripMnemonic removes & without changing other characters
+            Assert(Lang.StripMnemonic("&Cancel")          == "Cancel",   "StripMnemonic: leading &");
+            Assert(Lang.StripMnemonic("Sa&ve As…")        == "Save As…", "StripMnemonic: mid-word &");
+            Assert(Lang.StripMnemonic("No ampersand")     == "No ampersand", "StripMnemonic: no &");
+            Assert(Lang.StripMnemonic("")                 == "",         "StripMnemonic: empty string");
+            Assert(Lang.StripMnemonic(null)               == "",         "StripMnemonic: null returns empty");
+
+            // Spot-check a selection of new dialog tooltip keys in English
+            Assert(Lang.T("tip: Color swatch")         == "Click to open the colour picker",   "tip EN: Color swatch");
+            Assert(Lang.T("tip: Hex color")             == "Type a hex colour (#RRGGBB)",        "tip EN: Hex color");
+            Assert(Lang.T("tip: Font size")             == "0 = auto-size to fit the key",       "tip EN: Font size");
+            Assert(Lang.T("tip: Border thickness")      .Contains("standard group"),             "tip EN: Border thickness mentions standard group");
+            Assert(Lang.T("tip: Key width")             .Contains("1.5"),                        "tip EN: Key width has example");
+            Assert(Lang.T("tip: Row span")              .Contains("double height"),              "tip EN: Row span");
+            Assert(Lang.T("tip: Record")                == "Record a keystroke or shortcut",     "tip EN: Record");
+            Assert(Lang.T("tip: Browse layout")         == "Browse for a layout file",           "tip EN: Browse layout");
+            Assert(Lang.T("tip: Mode Text")             == "The key types text characters",      "tip EN: Mode Text");
+            Assert(Lang.T("tip: Mode Key")              .Contains("shortcut"),                   "tip EN: Mode Key");
+            Assert(Lang.T("tip: Mode Modifier")         .Contains("modifier"),                   "tip EN: Mode Modifier");
+            Assert(Lang.T("tip: Mode Word prediction")  .Contains("prediction"),                 "tip EN: Mode Word prediction");
+            Assert(Lang.T("tip: Mode Layout")           .Contains("layout"),                     "tip EN: Mode Layout");
+            Assert(Lang.T("tip: Add group")             == "Create a new style group",           "tip EN: Add group");
+            Assert(Lang.T("tip: Delete group")          == "Delete the selected group",          "tip EN: Delete group");
+            Assert(Lang.T("tip: Import groups")         == "Import groups from another layout file", "tip EN: Import groups");
+            Assert(Lang.T("tip: Opacity")               .Contains("opaque"),                     "tip EN: Opacity");
+            Assert(Lang.T("tip: Manage Groups")         == "Open the group editor",              "tip EN: Manage Groups");
+            Assert(Lang.T("tip: Language")              == "Select the interface language",      "tip EN: Language");
+            Assert(Lang.T("tip: WP slot")               .Contains("0–9"),                        "tip EN: WP slot");
+
+            Section("StyleGroups — standard group name immutable through round-trip");
+
+            {
+                string f2 = Path.Combine(Path.GetTempPath(), $"stdname_{Guid.NewGuid()}.xml");
+                try
+                {
+                    var stdLayout = new GridLayout(1, 1);
+                    stdLayout.Cells.Add(new GridCell(0, 0, new KeyProps("x", "x")));
+                    stdLayout.Groups.Add(new KeyGroup { Name = SettingsManager.StandardGroupName, FontName = "Arial" });
+                    SettingsManager.SaveSettings(stdLayout, new VisualTheme(), new WindowState(), new LayoutMeta(), f2);
+
+                    var stdLoaded = SettingsManager.LoadSettings(new VisualTheme(), new WindowState(), new LayoutMeta(), f2);
+                    var std2 = stdLoaded.Groups.Find(g => g.Name == SettingsManager.StandardGroupName);
+                    Assert(std2 != null,                    "Standard round-trip name: group present after load");
+                    Assert(std2.Name == "standard",         "Standard round-trip name: name is 'standard' after load");
+                    Assert(std2.FontName == "Arial",        "Standard round-trip name: style preserved");
+                }
+                finally { if (File.Exists(f2)) File.Delete(f2); }
+            }
+
+            Section("StyleGroups — GroupEditorForm pre-selects initial group by name");
+
+            {
+                // Build a group list with three entries in a known order.
+                var groups5 = new List<KeyGroup>
+                {
+                    new KeyGroup { Name = SettingsManager.StandardGroupName, FontName = "Arial" },
+                    new KeyGroup { Name = "Alpha", FontName = "Courier" },
+                    new KeyGroup { Name = "Beta",  FontName = "Verdana" },
+                };
+
+                // When no initialGroupName is given, index 0 (standard) is selected.
+                using var dlgDefault = new GroupEditorForm(groups5);
+                Assert(dlgDefault.SelectedGroupName == SettingsManager.StandardGroupName,
+                    "GroupEditorForm default: selects first (standard) group");
+
+                // When "Beta" is requested, the dialog should pre-select "Beta".
+                using var dlgBeta = new GroupEditorForm(groups5, initialGroupName: "Beta");
+                Assert(dlgBeta.SelectedGroupName == "Beta",
+                    "GroupEditorForm initialGroupName: selects 'Beta'");
+
+                // When a non-existent name is given, fall back to index 0.
+                using var dlgMiss = new GroupEditorForm(groups5, initialGroupName: "NonExistent");
+                Assert(dlgMiss.SelectedGroupName == SettingsManager.StandardGroupName,
+                    "GroupEditorForm initialGroupName: unknown name falls back to first group");
+            }
+
+            Section("StyleGroups — standard group values not affected by per-key cell iteration");
+
+            {
+                // Verify the invariant: iterating _layout.Cells and clearing per-key
+                // style overrides (the old "Apply to all keys" operation) does NOT
+                // overwrite the standard group stored in _layout.Groups.
+                var layout5 = new GridLayout(1, 2);
+                layout5.Cells.Add(new GridCell(0, 0, new KeyProps("A", "a")
+                {
+                    FontColor = Color.Red, KeyColor = Color.Blue,
+                    BorderColor = Color.Green, BorderThickness = 2,
+                    FontName = "Courier",
+                }));
+                layout5.Cells.Add(new GridCell(0, 1, new KeyProps("⚙", "")));
+                var stdGroup5 = new KeyGroup
+                {
+                    Name = SettingsManager.StandardGroupName,
+                    FontColor = Color.FromArgb(0, 0, 0),
+                    KeyColor  = Color.FromArgb(255, 255, 0),
+                    BorderColor = Color.FromArgb(255, 128, 0),
+                    BorderThickness = 3,
+                };
+                layout5.Groups.Add(stdGroup5);
+
+                // Simulate "Apply to all keys": clear per-key overrides on every cell.
+                // This must leave _layout.Groups unchanged — groups are never touched.
+                foreach (var cell in layout5.Cells)
+                {
+                    cell.Props.FontName        = "";
+                    cell.Props.FontColor       = Color.Empty;
+                    cell.Props.KeyColor        = Color.Empty;
+                    cell.Props.BorderColor     = Color.Empty;
+                    cell.Props.BorderThickness = -1;
+                }
+
+                // Standard group values must be unmodified.
+                var std5 = layout5.Groups.Find(g => g.Name == SettingsManager.StandardGroupName);
+                Assert(std5 != null,                                "Apply-to-all: standard group still present");
+                Assert(std5.KeyColor   == Color.FromArgb(255, 255, 0), "Apply-to-all: standard group KeyColor unchanged");
+                Assert(std5.BorderThickness == 3,                   "Apply-to-all: standard group BorderThickness unchanged");
+            }
+
+            Section("StyleGroups — Step 6 lang keys registered");
+
+            Assert(Lang.T("Name 'standard' is reserved.") == "Name 'standard' is reserved.",
+                "Lang key: Name 'standard' is reserved.");
+            Assert(Lang.T("Update standard group style") == "Update standard group style",
+                "Lang key: Update standard group style");
+            Assert(Lang.T("Protected") == "Protected",
+                "Lang key: Protected");
+
+            Section("StyleGroups — Step 6 reserved name enforcement: add blocked");
+
+            {
+                var groups6 = new List<KeyGroup>
+                {
+                    new KeyGroup { Name = SettingsManager.StandardGroupName,
+                                   KeyColor = Color.White, FontColor = Color.Black },
+                    new KeyGroup { Name = "Alpha" },
+                };
+                using var form6 = new GroupEditorForm(groups6);
+
+                // Adding a group named "standard" (exact case) must be rejected.
+                bool addedExact = form6.TryAddGroup("standard");
+                Assert(!addedExact, "Step 6 add: 'standard' (exact) is rejected");
+
+                // Case-insensitive: "Standard" and "STANDARD" must also be rejected.
+                bool addedTitle = form6.TryAddGroup("Standard");
+                Assert(!addedTitle, "Step 6 add: 'Standard' (title-case) is rejected");
+
+                bool addedUpper = form6.TryAddGroup("STANDARD");
+                Assert(!addedUpper, "Step 6 add: 'STANDARD' (upper-case) is rejected");
+
+                // A legitimate name must still be accepted.
+                bool addedLeg = form6.TryAddGroup("Beta");
+                Assert(addedLeg, "Step 6 add: legitimate name 'Beta' is accepted");
+
+                // Group count: started with 2, only "Beta" was added → should be 3.
+                form6.CommitToResult();
+                Assert(form6.ResultGroups != null, "Step 6 add: ResultGroups set after OK");
+                Assert(form6.ResultGroups.Count == 3, "Step 6 add: only the legitimate group was added");
+                Assert(!form6.ResultGroups.Exists(g => g.Name == "Beta" && g.Name == SettingsManager.StandardGroupName),
+                    "Step 6 add: 'Beta' is distinct from 'standard'");
+            }
+
+            Section("StyleGroups — Step 6 reserved name enforcement: rename blocked");
+
+            {
+                var groups7 = new List<KeyGroup>
+                {
+                    new KeyGroup { Name = SettingsManager.StandardGroupName },
+                    new KeyGroup { Name = "Gamma" },
+                };
+                using var form7 = new GroupEditorForm(groups7, initialGroupName: "Gamma");
+
+                // Renaming a non-standard group TO "standard" must be rejected.
+                bool renamedToStd = form7.TryRenameCurrentGroup("standard");
+                Assert(!renamedToStd, "Step 6 rename: renaming to 'standard' is rejected");
+
+                bool renamedToStdUpper = form7.TryRenameCurrentGroup("STANDARD");
+                Assert(!renamedToStdUpper, "Step 6 rename: renaming to 'STANDARD' is rejected");
+
+                // Renaming the standard group to anything is blocked (source protection).
+                using var form7b = new GroupEditorForm(groups7, initialGroupName: SettingsManager.StandardGroupName);
+                bool renamedFromStd = form7b.TryRenameCurrentGroup("NewName");
+                Assert(!renamedFromStd, "Step 6 rename: renaming 'standard' to something else is rejected");
+
+                // Renaming to a non-reserved name must be accepted.
+                bool renamedOK = form7.TryRenameCurrentGroup("Delta");
+                Assert(renamedOK, "Step 6 rename: legitimate rename to 'Delta' is accepted");
+                Assert(form7.SelectedGroupName == "Delta", "Step 6 rename: group is now named 'Delta'");
+            }
+
+            Section("StyleGroups — Step 6 import: UpdateStandard replaces standard group");
+
+            {
+                var stdGroup8 = new KeyGroup
+                {
+                    Name            = SettingsManager.StandardGroupName,
+                    KeyColor        = Color.FromArgb(255, 10, 20, 30),
+                    FontColor       = Color.FromArgb(255, 40, 50, 60),
+                    BorderColor     = Color.FromArgb(255, 70, 80, 90),
+                    BorderThickness = 5,
+                };
+                var groups8 = new List<KeyGroup>
+                {
+                    new KeyGroup { Name = SettingsManager.StandardGroupName,
+                                   KeyColor = Color.White, FontColor = Color.Black,
+                                   BorderColor = Color.Black, BorderThickness = 0 },
+                    new KeyGroup { Name = "Regular" },
+                };
+                using var form8 = new GroupEditorForm(groups8);
+
+                // Apply UpdateStandard decision — replaces the local standard group.
+                form8.ApplyImportDecisions(new[]
+                {
+                    (stdGroup8, GroupEditorForm.ImportAction.UpdateStandard),
+                });
+
+                form8.CommitToResult();
+                var result8Std = form8.ResultGroups?.Find(g => g.Name == SettingsManager.StandardGroupName);
+                Assert(result8Std != null,
+                    "Step 6 import UpdateStandard: standard group still present after import");
+                Assert(result8Std.KeyColor == Color.FromArgb(255, 10, 20, 30),
+                    "Step 6 import UpdateStandard: KeyColor updated");
+                Assert(result8Std.FontColor == Color.FromArgb(255, 40, 50, 60),
+                    "Step 6 import UpdateStandard: FontColor updated");
+                Assert(result8Std.BorderThickness == 5,
+                    "Step 6 import UpdateStandard: BorderThickness updated");
+            }
+
+            Section("StyleGroups — Step 6 import: Skip leaves standard group unchanged");
+
+            {
+                var importedStd9 = new KeyGroup
+                {
+                    Name      = SettingsManager.StandardGroupName,
+                    KeyColor  = Color.FromArgb(255, 99, 88, 77),
+                    BorderThickness = 9,
+                };
+                var localStd9 = new KeyGroup
+                {
+                    Name            = SettingsManager.StandardGroupName,
+                    KeyColor        = Color.FromArgb(255, 255, 255, 255),
+                    BorderThickness = 1,
+                };
+                using var form9 = new GroupEditorForm(new List<KeyGroup> { localStd9 });
+
+                // Skip decision — local standard group must be untouched.
+                form9.ApplyImportDecisions(new[]
+                {
+                    (importedStd9, GroupEditorForm.ImportAction.Skip),
+                });
+
+                form9.CommitToResult();
+                var result9Std = form9.ResultGroups?.Find(g => g.Name == SettingsManager.StandardGroupName);
+                Assert(result9Std != null,
+                    "Step 6 import Skip: standard group still present");
+                Assert(result9Std.KeyColor == Color.FromArgb(255, 255, 255, 255),
+                    "Step 6 import Skip: KeyColor unchanged (Skip was chosen)");
+                Assert(result9Std.BorderThickness == 1,
+                    "Step 6 import Skip: BorderThickness unchanged (Skip was chosen)");
+            }
         }
 
         // Inline helpers mirroring KeyboardForm private methods for test isolation
@@ -1522,7 +1779,7 @@ namespace OnScreenKeyboard
             var p = cell.Props;
             return string.IsNullOrEmpty(p.Label)
                 && string.IsNullOrEmpty(p.Send)
-                && string.IsNullOrEmpty(p.GroupName)
+                && (string.IsNullOrEmpty(p.GroupName) || p.GroupName == SettingsManager.StandardGroupName)
                 && string.IsNullOrEmpty(p.FontName)
                 && p.FontSize        == 0
                 && p.FontColor.IsEmpty
@@ -3038,6 +3295,56 @@ namespace OnScreenKeyboard
             {
                 Assert(false, $"KeyEditorForm: instantiation failed — {ex.Message}");
             }
+        }
+
+        // ════════════════════════════════════════════════════════════════
+        // Grow window height when entering Edit mode
+        // ════════════════════════════════════════════════════════════════
+        private static void T_GrowWindowOnEditMode()
+        {
+            Section("Grow window on Edit mode entry");
+
+            // KeyboardForm.ToolbarHeightForMode mirrors the 'th' calculation in LayoutButtons:
+            //   Mode.Edit          → _toolbar.Height + _toolbarEdit.Height  = 54 + 54 = 108
+            //   Mode.Normal        → 0  (no toolbars visible)
+            //   Mode.GearPlacement → 0  (no toolbars visible)
+            const int ToolbarH     = 54;   // KeyboardForm._toolbar.Height
+            const int ToolbarEditH = 54;   // KeyboardForm._toolbarEdit.Height
+            const int ThEdit   = ToolbarH + ToolbarEditH;  // 108
+            const int ThNormal = 0;
+            const int ThGear   = 0;
+
+            Assert(ThEdit == 108, "GrowWindow: Edit mode toolbar height = 108 px (54 + 54)");
+
+            // Per-transition height deltas (SetMode / StartGearPlacement / FinishGearPlacement
+            // apply: Height += ToolbarHeightForMode(newMode) - ToolbarHeightForMode(oldMode))
+            Assert(ThEdit   - ThNormal ==  108, "GrowWindow: Normal → Edit  grows window by 108 px");
+            Assert(ThNormal - ThEdit   == -108, "GrowWindow: Edit → Normal  shrinks window by 108 px");
+            Assert(ThGear   - ThEdit   == -108, "GrowWindow: Edit → GearPlacement  shrinks window by 108 px");
+            Assert(ThEdit   - ThGear   ==  108, "GrowWindow: GearPlacement → Edit  grows window by 108 px");
+            Assert(ThNormal - ThGear   ==    0, "GrowWindow: Normal → GearPlacement  delta is 0 px");
+            Assert(ThGear   - ThNormal ==    0, "GrowWindow: GearPlacement → Normal  delta is 0 px");
+
+            // usableH invariant: after the mode switch the key-grid area is unchanged.
+            // usableH = ClientSize.Height - th - Pad*2 - Gap*(rows-1)
+            // After:  (ClientSize.Height + delta) - th_new = ClientSize.Height - th_old
+            //   ↔  delta = th_new - th_old  ✓  (which is exactly what we add to Height)
+            const int Ch   = 290;  // representative ClientSize.Height
+            const int Pad  = 8;
+            const int Gap  = 4;
+            const int Rows = 4;
+            int baseH = Ch - Pad * 2 - Gap * (Rows - 1);  // without any toolbar
+
+            int usableNormal = baseH - ThNormal;
+            int usableEdit   = baseH - ThEdit;
+
+            // After Normal→Edit: ClientSize grows by (ThEdit - ThNormal), new usableH must equal usableNormal
+            int usableEditAfterGrow = (Ch + (ThEdit - ThNormal)) - ThEdit - Pad * 2 - Gap * (Rows - 1);
+            Assert(usableEditAfterGrow == usableNormal, "GrowWindow: usableH invariant — Normal→Edit key rows unchanged");
+
+            // After Edit→Normal: ClientSize shrinks by (ThEdit - ThNormal), new usableH must equal usableEdit
+            int usableNormalAfterShrink = (Ch - (ThEdit - ThNormal)) - ThNormal - Pad * 2 - Gap * (Rows - 1);
+            Assert(usableNormalAfterShrink == usableEdit, "GrowWindow: usableH invariant — Edit→Normal key rows unchanged");
         }
 
         // ════════════════════════════════════════════════════════════════

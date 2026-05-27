@@ -85,6 +85,28 @@ namespace OnScreenKeyboard
             ["tip: Merge down"]        = "Merge selected cell with cell below",
             ["tip: Split cell"]        = "Split merged cell back into single cells",
 
+            // ── Dialog control tooltips ──────────────────────────────
+            ["tip: Color swatch"]          = "Click to open the colour picker",
+            ["tip: Hex color"]             = "Type a hex colour (#RRGGBB)",
+            ["tip: Font size"]             = "0 = auto-size to fit the key",
+            ["tip: Border thickness"]      = "−1 = use the standard group thickness  |  0 = no border",
+            ["tip: Key width"]             = "Relative width  (e.g. 1 = normal,  1.5 = 50% wider)",
+            ["tip: Row span"]              = "1 = normal height  |  2 = double height (last key in column only)",
+            ["tip: Record"]                = "Record a keystroke or shortcut",
+            ["tip: Browse layout"]         = "Browse for a layout file",
+            ["tip: Mode Text"]             = "The key types text characters",
+            ["tip: Mode Key"]              = "The key sends a keyboard shortcut or special key",
+            ["tip: Mode Modifier"]         = "The key acts as a Shift, Ctrl, Alt or other modifier toggle",
+            ["tip: Mode Word prediction"]  = "The key shows a word prediction suggestion",
+            ["tip: Mode Layout"]           = "The key switches to a different keyboard layout",
+            ["tip: Add group"]             = "Create a new style group",
+            ["tip: Delete group"]          = "Delete the selected group",
+            ["tip: Import groups"]         = "Import groups from another layout file",
+            ["tip: Opacity"]               = "Keyboard window transparency  (0 = fully opaque,  80 = nearly transparent)",
+            ["tip: Manage Groups"]         = "Open the group editor",
+            ["tip: Language"]              = "Select the interface language",
+            ["tip: WP slot"]               = "Word prediction slot number (0–9)",
+
             // ── Toolbar row 1 buttons ────────────────────────────────
             ["📂 Load"]               = "📂 Load",
             ["↩ Undo"]               = "↩ Undo",
@@ -124,8 +146,8 @@ namespace OnScreenKeyboard
             ["Key Content"]          = "Key Content",
             ["Label"]                = "Label",
             ["Send"]                 = "Send",
-            ["Shift label"]          = "Shift label",
-            ["Shift send"]           = "Shift send",
+            ["Shift label"]          = "Shi&ft label",
+            ["Shift send"]           = "Shift sen&d",
             ["AltGr label"]          = "AltGr label",
             ["AltGr send"]           = "AltGr send",
             ["Width"]                = "Width",
@@ -135,9 +157,9 @@ namespace OnScreenKeyboard
             ["Auto-escape"]          = "Auto-escape SendKeys special characters",
             ["Appearance"]           = "Appearance",
             ["Font"]                 = "Font",
-            ["Font size"]            = "Font size",
+            ["Font size"]            = "Font &size",
             ["Auto"]                 = "Auto",
-            ["Font color"]           = "Font color",
+            ["Font color"]           = "Font c&olor",
             ["Key color"]            = "Key color",
             ["Border"]               = "Border",
             ["Border color"]         = "Border color",
@@ -147,10 +169,10 @@ namespace OnScreenKeyboard
             ["✔ Apply"]              = "✔  Apply",
             ["✖ Cancel"]             = "✖  Cancel",
             // Clean keys (no emoji) — these are the ones code actually calls
-            ["Apply"]                = "Apply",
-            ["Cancel"]               = "Cancel",
+            ["Apply"]                = "A&pply",
+            ["Cancel"]               = "&Cancel",
             ["Save"]                 = "Save",
-            ["Save As…"]             = "Save As…",
+            ["Save As…"]             = "Sa&ve As…",
             ["Load…"]                = "Load…",
             ["Import"]               = "Import",
             // ── Toolbar button text labels ───────────────────────────────
@@ -210,11 +232,11 @@ namespace OnScreenKeyboard
             ["Invalid file detail"]  = "Technical details:",
             // ── New UI strings ─────────────────────────────────────────────
             ["Language"]             = "Language",
-            ["Hide title bar"]       = "Hide title bar",
+            ["Hide title bar"]       = "H&ide title bar",
             ["Always on top"]        = "Always on top",
-            ["Sticky modifiers"]     = "Sticky modifiers",
-            ["Hold to edit"]         = "Hold to enter edit mode",
-            ["Toolbar theme"]        = "Toolbar theme",
+            ["Sticky modifiers"]     = "Stic&ky modifiers",
+            ["Hold to edit"]         = "H&old to enter edit mode",
+            ["Toolbar theme"]        = "T&oolbar theme",
             ["Dark"]                 = "Dark",
             ["Light"]                = "Light",
             ["System default"]       = "System default",
@@ -222,15 +244,15 @@ namespace OnScreenKeyboard
             ["Layout file"]          = "Layout file",
             ["Key width"]            = "Key width",
             ["Key width hint"]       = "1 = one key wide,  2 = two keys wide,  ...",
-            ["Key height"]           = "Key height",
+            ["Key height"]           = "Key &height",
             ["Key height hint"]      = "1 = one key tall,  2 = two keys tall,  ...",
             ["-1 = global default  |  0 = no border  |  1-10 = px"]
                                      = "-1 = global default  |  0 = no border  |  1-10 = px",
             ["📌 Move gear button…"] = "📌 Move gear button…",
             ["Send mode"]            = "Send mode",
             ["Text"]                 = "Text",
-            ["Key/Shortcut"]         = "Key/Shortcut",
-            ["Modifier"]             = "Modifier",
+            ["Key/Shortcut"]         = "&Key/Shortcut",
+            ["Modifier"]             = "M&odifier",
             ["🗂 Layout"]                = "🗂 Layout",
             ["📂 Browse (Send)"]         = "📂 Browse (Send)",
             ["📂 Browse (Shift-send)"]   = "📂 Browse (Shift-send)",
@@ -245,23 +267,28 @@ namespace OnScreenKeyboard
 
             // ── Group editor ─────────────────────────────────────────────
             ["Key Groups"]              = "Key Groups",
-            ["Manage Groups…"]          = "Manage Groups…",
+            ["Manage Groups…"]          = "&Manage Groups…",
             ["Group"]                   = "Group",
             ["(no group)"]              = "(no group)",
             ["Manage Groups"]           = "Manage Groups",
             ["Groups"]                  = "Groups",
             ["Style"]                   = "Style",
-            ["+ Add group"]             = "+ Add",
-            ["− Delete group"]          = "− Delete",
+            ["+ Add group"]             = "+ &Add",
+            ["− Delete group"]          = "− &Delete",
             ["Name"]                    = "Name",
-            ["(inherit global)"]        = "(inherit global)",
             ["(inherit)"]               = "(inherit)",
-            ["-1 = inherit global"]     = "-1 = inherit global",
             ["0 = auto / inherit"]      = "0 = auto / inherit",
-            ["Clear (inherit global)"]  = "Clear (inherit global)",
+            ["(inherit standard)"]      = "(inherit standard)",
+            ["-1 = inherit standard"]   = "-1 = inherit standard",
+            ["Clear (inherit standard)"]= "Clear (inherit standard)",
+            ["(none / auto)"]           = "(none / auto)",
+            ["Clear"]                   = "Clear",
             ["Delete Group"]            = "Delete Group",
             ["Delete group msg"]        = "Delete group \"{0}\"?\n\nKeys assigned to this group will revert to global style.",
             ["New Group"]               = "New Group",
+            ["Name 'standard' is reserved."] = "Name 'standard' is reserved.",
+            ["Update standard group style"]  = "Update standard group style",
+            ["Protected"]               = "Protected",
         };
 
         // ── Active overrides for the selected non-English language ────────────
@@ -433,6 +460,15 @@ namespace OnScreenKeyboard
             // this guarantees the UI always shows something human-readable.
             return key;
         }
+
+        /// <summary>
+        /// Strips the WinForms mnemonic marker (<c>&amp;</c>) from a text string so it
+        /// can be used as a control's <see cref="System.Windows.Forms.Control.AccessibleName"/>
+        /// without confusing screen readers with a literal ampersand.
+        /// </summary>
+        /// <param name="text">The text to strip, e.g. <c>"&amp;Cancel"</c>.</param>
+        /// <returns>The text with every <c>&amp;</c> character removed, e.g. <c>"Cancel"</c>.</returns>
+        public static string StripMnemonic(string text) => text?.Replace("&", "") ?? "";
 
         /// <summary>
         /// Scans the application folder for all installed language files and returns them

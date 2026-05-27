@@ -53,7 +53,7 @@ namespace OnScreenKeyboard
         private ComboBox      _cmbFont;
         private NumericUpDown _nudFontSize;
         private CheckBox      _chkAutoSize;
-        private Panel         _pnlFontColor, _pnlKeyColor, _pnlBorderColor;
+        private Button        _pnlFontColor, _pnlKeyColor, _pnlBorderColor;
         private NumericUpDown _nudBorderThickness;
         private Panel         _pnlPreview;
         private Label         _lblPreviewKey;
@@ -62,10 +62,6 @@ namespace OnScreenKeyboard
         private ComboBox      _cmbGroup;
         private FluentButton  _btnGroupEdit;
 
-        // True while we are programmatically clearing _cmbGroup because the user edited an
-        // appearance field.  Tells SelectedIndexChanged to skip RefreshAppearanceFromGroup so
-        // the freshly-typed values are not overwritten.
-        private bool _detachingFromGroup;
 
         // The key state at the moment the dialog was opened, kept for reference
         // (e.g. the form title shows the original label even if the user edits it).
@@ -94,6 +90,24 @@ namespace OnScreenKeyboard
             = new List<(Label, Func<string>)>();
         private readonly List<(Panel Pnl, Func<string> GetTitle)> _transGroups
             = new List<(Panel, Func<string>)>();
+
+        // ── Tooltip / accessibility helpers ───────────────────────────
+        /// <summary>Shared ToolTip component — one instance per form (WinForms best practice).</summary>
+        private ToolTip _tip;
+
+        /// <summary>
+        /// (Control, factory) pairs registered by <see cref="SetTip"/> so that
+        /// <see cref="OnLanguageChanged"/> can push refreshed tooltip strings on language switch.
+        /// </summary>
+        private readonly List<(Control Ctrl, Func<string> GetTip)> _transTooltips
+            = new List<(Control, Func<string>)>();
+
+        /// <summary>
+        /// Set by <see cref="AddFieldLabel"/> and consumed by the next <see cref="AddInput"/>
+        /// or <see cref="AddColorRow"/> call so those helpers can automatically assign
+        /// <see cref="Control.AccessibleName"/> without needing to repeat the label text.
+        /// </summary>
+        private string _pendingAccessibleName;
 
         // ── Fluent/WinUI 3 theme colors and fonts ─────────────────────
         // These properties pull values from the static Fluent palette so the
@@ -306,6 +320,13 @@ namespace OnScreenKeyboard
             return sb.ToString().Trim();
         }
 
+        /// <summary>
+        /// Builds the dialog title string for a key with the given label.
+        /// Unsafe characters (emoji, high-Unicode symbols) are stripped by
+        /// <see cref="TitleSafeLabel"/> so they do not render as replacement boxes
+        /// in the WinForms title bar.  Returns the bare "Edit Key" title when
+        /// nothing printable remains after stripping.
+        /// </summary>
         private string BuildTitle(string label)
         {
             string safe = TitleSafeLabel(label);
@@ -322,13 +343,12 @@ namespace OnScreenKeyboard
         private void RebuildGroupCombo(string previousSelection)
         {
             _cmbGroup.Items.Clear();
-            _cmbGroup.Items.Add(Lang.T("(no group)"));
             foreach (var g in _groups) _cmbGroup.Items.Add(g.Name);
-            int idx = 0;
+            int idx = 0;  // fall back to standard (always index 0)
             if (previousSelection != null)
-                for (int i = 1; i < _cmbGroup.Items.Count; i++)
+                for (int i = 0; i < _cmbGroup.Items.Count; i++)
                     if (_cmbGroup.Items[i]?.ToString() == previousSelection) { idx = i; break; }
-            _cmbGroup.SelectedIndex = idx;
+            _cmbGroup.SelectedIndex = _cmbGroup.Items.Count > 0 ? idx : -1;
         }
 
         /// <summary>
@@ -344,26 +364,47 @@ namespace OnScreenKeyboard
         {
             if (_original == null || _pnlFontColor == null) return;  // guard: called before UI is ready
 
-            // Suppress the DetachFromGroup() calls that fire from control value-change handlers
-            // while we are programmatically populating the appearance fields.
+            // Suppress SelectedIndexChanged on the group combo while we are programmatically
+            // populating the appearance fields.
             bool wasInit = _initialising;
             _initialising = true;
             try { RefreshAppearanceFromGroupCore(); }
             finally { _initialising = wasInit; }
         }
 
+        /// <summary>
+        /// Inner implementation of <see cref="RefreshAppearanceFromGroup"/>.
+        /// Walks the three-level resolution chain — per-key override → selected group →
+        /// standard group (root) — to compute the effective font, colours, and border
+        /// thickness for the key currently being edited, then writes those values into
+        /// every Appearance-panel control and caches them in the <c>_loaded*</c> fields.
+        /// <para>
+        /// Must only be called while <c>_initialising = true</c> is in effect so that
+        /// the group-combo <c>SelectedIndexChanged</c> handler does not re-enter.
+        /// </para>
+        /// </summary>
         private void RefreshAppearanceFromGroupCore()
         {
+            // Standard group is the resolution root (Step 2 of gear-button styling).
+            // Fall back to _ownerGlobal only for layouts that pre-date the standard group
+            // (kept as a safety net; should not occur in practice after auto-creation).
+            var std    = _groups.FirstOrDefault(g => g.Name == SettingsManager.StandardGroupName);
             var ownerG = _ownerGlobal;
-            Color gFc  = ownerG?.FontColor   ?? ColorTranslator.FromHtml("#E0E0FF");
-            Color gKc  = ownerG?.KeyColor    ?? ColorTranslator.FromHtml("#2D2D4A");
-            Color gBc  = ownerG?.BorderColor ?? _globalBorderColor;
-            int   gBt  = ownerG?.BorderThickness ?? 1;
-            string gFn = ownerG?.FontName ?? "Arial";
 
-            // Find the currently selected group (null when "(no group)" is selected)
+            Color gFc  = (std != null && !std.FontColor.IsEmpty)   ? std.FontColor
+                       : ownerG?.FontColor   ?? ColorTranslator.FromHtml("#E0E0FF");
+            Color gKc  = (std != null && !std.KeyColor.IsEmpty)    ? std.KeyColor
+                       : ownerG?.KeyColor    ?? ColorTranslator.FromHtml("#2D2D4A");
+            Color gBc  = (std != null && !std.BorderColor.IsEmpty) ? std.BorderColor
+                       : ownerG?.BorderColor ?? _globalBorderColor;
+            int   gBt  = (std != null && std.BorderThickness >= 0) ? std.BorderThickness
+                       : ownerG?.BorderThickness ?? 1;
+            string gFn = (std != null && !string.IsNullOrEmpty(std.FontName)) ? std.FontName
+                       : ownerG?.FontName ?? "Arial";
+
+            // Find the currently selected group.
             KeyGroup grp = null;
-            if (_cmbGroup != null && _cmbGroup.SelectedIndex > 0)
+            if (_cmbGroup != null && _cmbGroup.SelectedIndex >= 0)
             {
                 string gName = _cmbGroup.SelectedItem?.ToString();
                 grp = _groups.FirstOrDefault(g => g.Name == gName);
@@ -418,23 +459,6 @@ namespace OnScreenKeyboard
                                      gBt;
             _nudBorderThickness.Value = Math.Clamp(_loadedBorderThickness, -1,
                                                    (int)_nudBorderThickness.Maximum);
-        }
-
-        /// <summary>
-        /// Clears the group selection when the user edits an appearance field directly.
-        /// The key transitions from group-member to individual: the currently displayed
-        /// appearance values become the starting point for per-key overrides, and the key
-        /// is no longer associated with any group.
-        /// No-ops when already in individual mode, during initialisation, or during a
-        /// programmatic appearance refresh.
-        /// </summary>
-        private void DetachFromGroup()
-        {
-            if (_initialising || _detachingFromGroup) return;
-            if (_cmbGroup == null || _cmbGroup.SelectedIndex == 0) return;
-            _detachingFromGroup = true;
-            _cmbGroup.SelectedIndex = 0;
-            _detachingFromGroup = false;
         }
 
         // ── Constructor ───────────────────────────────────────────────
@@ -499,6 +523,8 @@ namespace OnScreenKeyboard
             TopMost      = true;   // stay on top of the keyboard window
             Font         = F_LABEL;
 
+            _tip = new ToolTip { InitialDelay = 400, AutoPopDelay = 10000, ShowAlways = true };
+
             BuildUI(props);
             FluentPainter.ApplyDialogTheme(this, _dark, _pnlPreview);
 
@@ -539,7 +565,12 @@ namespace OnScreenKeyboard
             _btnApply.Text         = Lang.T("Apply");
             _btnCancel.Text        = Lang.T("Cancel");
             _chkAutoSize.Text      = Lang.T("Auto");
-            _btnModeLayout.Text    = Lang.T("Layout");
+            _btnModeText.Text      = "&" + Lang.T("Text");
+            _btnModeKey.Text       = Lang.T("Key/Shortcut");
+            _btnModeMod.Text       = Lang.T("Modifier");
+            _btnModeWP.Text        = "&" + Lang.T("Word prediction");
+            _btnModeLayout.Text    = "&" + Lang.T("Layout");
+            _btnGroupEdit.Text     = Lang.T("Manage Groups…");
             UpdateBrowseLabel();
 
             // Update all labels registered during BuildUI() via AddFieldLabel()
@@ -548,6 +579,10 @@ namespace OnScreenKeyboard
             // Trigger a repaint of group panels — their headers are drawn in the Paint event,
             // not in a Label control, so Invalidate() is needed to refresh the translated title.
             foreach (var (pnl,  _)       in _transGroups) pnl.Invalidate();
+
+            // Refresh all tooltips registered via SetTip() so they use the new language.
+            foreach (var (ctrl, getTip)  in _transTooltips) _tip.SetToolTip(ctrl, getTip());
+
             Invalidate(true);
         }
 
@@ -581,27 +616,37 @@ namespace OnScreenKeyboard
             // AddGroup() creates a rounded card panel with a colored header strip
             var grpKey  = AddGroup(() => Lang.T("Key Content"), leftX, margin, colW, keyH,
                                    Color.FromArgb(41, 128, 185));
+            grpKey.TabIndex = 0;  // left panel first in form-level tab order
 
             // lx = label column x, vx = value/control column x, vw = value column width
             int lx = PAD, vx = 220, vw = colW - lx - vx - PAD;
             int gy = HDR_H + PAD;   // current vertical position within the group panel
 
-            AddFieldLabel(grpKey, () => Lang.T("Label"), lx, gy);
-            _txtLabel = AddInput(grpKey, vx, gy, vw); gy += ROW_H;
+            // ti = TabIndex counter within grpKey; label.TabIndex must be buddy.TabIndex − 1
+            // so that Alt+mnemonic jumps focus from the label to its input (WCAG 2.1 AA §2.4.7).
+            int ti = 0;
+
+            AddFieldLabel(grpKey, () => "&" + Lang.T("Label"), lx, gy).TabIndex = ti++;
+            _txtLabel = AddInput(grpKey, vx, gy, vw); _txtLabel.TabIndex = ti++;
+            gy += ROW_H;
 
             // ── OPTION 3 BEGIN: mode selector row ─────────────────────
             // Adds three rows of mode-selector buttons that control what the Send field does.
-            AddOption3ModeSelector(grpKey, lx, vx, vw, ref gy);
+            AddOption3ModeSelector(grpKey, lx, vx, vw, ref gy, ref ti);
             // ── OPTION 3 END ──────────────────────────────────────────
 
-            // The Send field label changes depending on the selected mode (e.g. "Prediction cell")
+            // The Send field label changes depending on the selected mode (e.g. "Prediction cell");
+            // the "&" prefix gives it Alt+S as an accelerator when the mode is plain "Send".
             _lblSendFieldName = new Label
             {
-                Text = Lang.T("Send"), Left = lx, Top = gy + 4, AutoSize = true,
+                Text = "&" + Lang.T("Send"), Left = lx, Top = gy + 4, AutoSize = true,
                 ForeColor = C_LBL, BackColor = Color.Transparent, Font = F_LABEL,
+                TabIndex = ti++,
             };
             grpKey.Controls.Add(_lblSendFieldName);
-            _txtSend = AddInput(grpKey, vx, gy, vw);
+            _txtSend = AddInput(grpKey, vx, gy, vw); _txtSend.TabIndex = ti++;
+            // Send field has a dynamic label — set initial accessible name here; SetSendMode updates it.
+            _txtSend.AccessibleName = Lang.StripMnemonic(Lang.T("Send"));
 
             // Word-prediction slot spinner — overlays Send field, visible only in WP mode.
             // The slot number (0-9) determines which prediction suggestion this key displays.
@@ -610,8 +655,11 @@ namespace OnScreenKeyboard
                 Left = vx, Top = gy, Width = 65, Minimum = 0, Maximum = 9,
                 BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary,
                 Font = F_INPUT, Visible = false,
+                TabIndex = ti++,
+                AccessibleName = Lang.StripMnemonic(Lang.T("Prediction cell")),
             };
             _nudWPSlot.ValueChanged += (s, e) => Refresh2();
+            SetTip(_nudWPSlot, () => Lang.T("tip: WP slot"));
             grpKey.Controls.Add(_nudWPSlot);
 
             // Warning label shown when the user switches to WP mode but all 10 slots are
@@ -628,39 +676,49 @@ namespace OnScreenKeyboard
 
             // ── OPTION 3 BEGIN: picker row (key sequence / modifier / layout) ──
             // Adds the contextual panel that appears below the Send field depending on the mode.
-            AddOption3PickerRow(grpKey, lx, vx, vw, ref gy);
+            AddOption3PickerRow(grpKey, lx, vx, vw, ref gy, ref ti);
             // ── OPTION 3 END ──────────────────────────────────────────
 
             // Shift and AltGr fields: optional alternative labels/actions for modified key states
-            AddFieldLabel(grpKey, () => Lang.T("Shift label"), lx, gy);
-            _txtShiftLabel = AddInput(grpKey, vx, gy, vw); gy += ROW_H;
+            AddFieldLabel(grpKey, () => Lang.T("Shift label"), lx, gy).TabIndex = ti++;
+            _txtShiftLabel = AddInput(grpKey, vx, gy, vw); _txtShiftLabel.TabIndex = ti++;
+            gy += ROW_H;
 
-            AddFieldLabel(grpKey, () => Lang.T("Shift send"), lx, gy);
-            _txtShiftSend = AddInput(grpKey, vx, gy, vw); gy += ROW_H;
+            AddFieldLabel(grpKey, () => Lang.T("Shift send"), lx, gy).TabIndex = ti++;
+            _txtShiftSend = AddInput(grpKey, vx, gy, vw); _txtShiftSend.TabIndex = ti++;
+            gy += ROW_H;
 
-            AddFieldLabel(grpKey, () => Lang.T("AltGr label"), lx, gy);
-            _txtAltGrLabel = AddInput(grpKey, vx, gy, vw); gy += ROW_H;
+            AddFieldLabel(grpKey, () => "&" + Lang.T("AltGr label"), lx, gy).TabIndex = ti++;
+            _txtAltGrLabel = AddInput(grpKey, vx, gy, vw); _txtAltGrLabel.TabIndex = ti++;
+            gy += ROW_H;
 
-            AddFieldLabel(grpKey, () => Lang.T("AltGr send"), lx, gy);
-            _txtAltGrSend = AddInput(grpKey, vx, gy, vw); gy += ROW_H;
+            AddFieldLabel(grpKey, () => Lang.T("AltGr send"), lx, gy).TabIndex = ti++;
+            _txtAltGrSend = AddInput(grpKey, vx, gy, vw); _txtAltGrSend.TabIndex = ti++;
+            gy += ROW_H;
 
             // ColSpan: how many grid columns the key occupies (1 = normal width)
-            AddFieldLabel(grpKey, () => Lang.T("Key width"), lx, gy);
+            AddFieldLabel(grpKey, () => "&" + Lang.T("Key width"), lx, gy).TabIndex = ti++;
             _nudColSpan = new NumericUpDown
             {
                 Left = vx, Top = gy, Width = 65, Minimum = 1, Maximum = _maxCols,
                 BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary, Font = F_INPUT,
+                TabIndex = ti++,
+                AccessibleName = Lang.StripMnemonic(Lang.T("Key width")),
             };
+            SetTip(_nudColSpan, () => Lang.T("tip: Key width"));
             grpKey.Controls.Add(_nudColSpan);
             gy += ROW_H;
 
             // RowSpan: how many grid rows the key occupies (1 = normal height)
-            AddFieldLabel(grpKey, () => Lang.T("Key height"), lx, gy);
+            AddFieldLabel(grpKey, () => Lang.T("Key height"), lx, gy).TabIndex = ti++;
             _nudRowSpan = new NumericUpDown
             {
                 Left = vx, Top = gy, Width = 65, Minimum = 1, Maximum = _maxRows,
                 BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary, Font = F_INPUT,
+                TabIndex = ti++,
+                AccessibleName = Lang.StripMnemonic(Lang.T("Key height")),
             };
+            SetTip(_nudRowSpan, () => Lang.T("tip: Row span"));
             grpKey.Controls.Add(_nudRowSpan);
             gy += ROW_H;
 
@@ -669,125 +727,140 @@ namespace OnScreenKeyboard
             // ── RIGHT COLUMN: Appearance ───────────────────────────────
             int rightY = margin;
             int styleRows = 8;  // font+size+fontcolor+keycolor+bordercolor+borderthickness+group+preview
-            int styleH    = HDR_H + PAD + styleRows * ROW_H + 28 + PAD;
+            // +28 for the extra sub-row of the group row (the "Manage Groups…" button)
+            int styleH    = HDR_H + PAD + styleRows * ROW_H + 28 + 28 + PAD;
             var grpStyle  = AddGroup(() => Lang.T("Appearance"), rightX, rightY, rightW, styleH,
                                      Color.FromArgb(39, 174, 96));
+            grpStyle.TabIndex = 1;  // right panel second in form-level tab order
             rightY += styleH + gap;
 
             // Same lx/vx/vw pattern as the left column, but narrower
             int slx = PAD, svx = 190, svw = rightW - slx - svx - PAD;
             gy = HDR_H + PAD;
 
+            // ti = TabIndex counter within grpStyle (reset from grpKey's counter).
+            ti = 0;
+
             // Font family selector (populated with all installed system fonts)
-            AddFieldLabel(grpStyle, () => Lang.T("Font"), slx, gy);
+            AddFieldLabel(grpStyle, () => "&" + Lang.T("Font"), slx, gy).TabIndex = ti++;
             _cmbFont = new ComboBox
             {
                 Left = svx, Top = gy, Width = svw,
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary,
                 Font = F_INPUT, FlatStyle = FlatStyle.Flat,
+                TabIndex = ti++,
+                AccessibleName = Lang.StripMnemonic(Lang.T("Font")),
             };
             _cmbFont.Items.AddRange(Fluent.InstalledFontNames());
-            _cmbFont.SelectedIndexChanged += (s, e) => { DetachFromGroup(); Refresh2(); };
+            _cmbFont.SelectedIndexChanged += (s, e) => Refresh2();
             grpStyle.Controls.Add(_cmbFont); gy += ROW_H;
 
             // Font size: a numeric spinner plus an "Auto" checkbox.
             // When Auto is checked the font size is determined at render time to fit the key.
-            AddFieldLabel(grpStyle, () => Lang.T("Font size"), slx, gy);
+            AddFieldLabel(grpStyle, () => Lang.T("Font size"), slx, gy).TabIndex = ti++;
             _nudFontSize = new NumericUpDown
             {
                 Left = svx, Top = gy, Width = 65,
                 Minimum = 0, Maximum = 72,
                 BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary, Font = F_INPUT,
+                TabIndex = ti++,
+                AccessibleName        = Lang.StripMnemonic(Lang.T("Font size")),
+                AccessibleDescription = Lang.T("0 = auto / inherit"),
             };
-            _nudFontSize.ValueChanged += (s, e) => { DetachFromGroup(); Refresh2(); };
+            _nudFontSize.ValueChanged += (s, e) => Refresh2();
+            SetTip(_nudFontSize, () => Lang.T("tip: Font size"));
             grpStyle.Controls.Add(_nudFontSize);
             _chkAutoSize = new CheckBox
             {
                 Text = Lang.T("Auto"), Left = svx + 71, Top = gy + 5,
                 AutoSize = true, ForeColor = C_LBL, BackColor = Color.Transparent, Font = F_LABEL,
+                TabIndex = ti++,
             };
             _chkAutoSize.CheckedChanged += (s, e) =>
             {
                 // Disable the numeric spinner when auto-sizing is active
                 _nudFontSize.Enabled = !_chkAutoSize.Checked;
-                DetachFromGroup();
                 Refresh2();
             };
             grpStyle.Controls.Add(_chkAutoSize); gy += ROW_H;
 
             // Color rows: each AddColorRow() creates a hex text box + a color swatch button
-            AddFieldLabel(grpStyle, () => Lang.T("Font color"), slx, gy);
-            _pnlFontColor = AddColorRow(grpStyle, svx, gy, svw); gy += ROW_H;
+            AddFieldLabel(grpStyle, () => Lang.T("Font color"), slx, gy).TabIndex = ti++;
+            _pnlFontColor = AddColorRow(grpStyle, svx, gy, svw, ref ti); gy += ROW_H;
 
-            AddFieldLabel(grpStyle, () => Lang.T("Key color"), slx, gy);
-            _pnlKeyColor = AddColorRow(grpStyle, svx, gy, svw); gy += ROW_H;
+            AddFieldLabel(grpStyle, () => "&" + Lang.T("Key color"), slx, gy).TabIndex = ti++;
+            _pnlKeyColor = AddColorRow(grpStyle, svx, gy, svw, ref ti); gy += ROW_H;
 
-            AddFieldLabel(grpStyle, () => Lang.T("Border color"), slx, gy);
-            _pnlBorderColor = AddColorRow(grpStyle, svx, gy, svw); gy += ROW_H;
+            AddFieldLabel(grpStyle, () => "&" + Lang.T("Border color"), slx, gy).TabIndex = ti++;
+            _pnlBorderColor = AddColorRow(grpStyle, svx, gy, svw, ref ti); gy += ROW_H;
 
-            // Border thickness: -1 means "use global setting", 0 means no border
-            AddFieldLabel(grpStyle, () => Lang.T("Border thickness"), slx, gy);
+            // Border thickness: -1 means "inherit from standard group", 0 means no border
+            AddFieldLabel(grpStyle, () => "&" + Lang.T("Border thickness"), slx, gy).TabIndex = ti++;
             _nudBorderThickness = new NumericUpDown
             {
                 Left = svx, Top = gy, Width = 65, Minimum = -1, Maximum = 10,
                 BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary, Font = F_INPUT,
+                TabIndex = ti++,
+                AccessibleName        = Lang.StripMnemonic(Lang.T("Border thickness")),
+                AccessibleDescription = Lang.T("-1 = inherit standard"),
             };
-            _nudBorderThickness.ValueChanged += (s, e) => { DetachFromGroup(); Refresh2(); };
+            _nudBorderThickness.ValueChanged += (s, e) => Refresh2();
+            SetTip(_nudBorderThickness, () => Lang.T("tip: Border thickness"));
             grpStyle.Controls.Add(_nudBorderThickness);
             gy += ROW_H;
 
             // Group selector: index 0 = "(no group)", indices 1+ = named groups from the layout.
-            // A "+" button to the right opens GroupEditorForm inline, aligned with the color
-            // swatch buttons above (same Left = svx + svw - 32, same Width = 32).
-            AddFieldLabel(grpStyle, () => Lang.T("Group"), slx, gy);
-            int cmbGrpW = svw - 32 - 5;   // mirror of color-row: totalW - swatchW - gap
-            int btnGrpX = svx + svw - 32;  // same X as color swatch buttons above
+            // A "Manage Groups…" button below the combo opens GroupEditorForm, pre-selecting
+            // the group that is currently active in the dropdown.
+            AddFieldLabel(grpStyle, () => "&" + Lang.T("Group"), slx, gy).TabIndex = ti++;
             _cmbGroup = new ComboBox
             {
-                Left = svx, Top = gy, Width = cmbGrpW,
+                Left = svx, Top = gy, Width = svw,
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary,
                 Font = F_INPUT, FlatStyle = FlatStyle.Flat,
+                TabIndex = ti++,
+                AccessibleName = Lang.StripMnemonic(Lang.T("Group")),
             };
-            _cmbGroup.Items.Add(Lang.T("(no group)"));
             foreach (var g in _groups) _cmbGroup.Items.Add(g.Name);
-            _cmbGroup.SelectedIndex = 0;
+            if (_cmbGroup.Items.Count > 0) _cmbGroup.SelectedIndex = 0;
             _cmbGroup.SelectedIndexChanged += (s, e) =>
             {
-                // When DetachFromGroup() clears the combo, we keep the fields as-is so the
-                // user's freshly-typed value is not overwritten.  Only refresh when the user
-                // is genuinely picking a different group from the dropdown.
-                if (_detachingFromGroup) return;
                 RefreshAppearanceFromGroup();
                 Refresh2();
             };
             grpStyle.Controls.Add(_cmbGroup);
 
+            // "Manage Groups…" button sits just below the combo and pre-selects whichever
+            // group is currently chosen so the user can edit it straight away.
             _btnGroupEdit = new FluentButton
             {
-                Text = "+", Left = btnGrpX, Top = gy, Width = 32, Height = 26,
+                Text = Lang.T("Manage Groups…"),
+                Left = svx, Top = gy + 30, Width = svw, Height = 24,
                 Style = FluentButton.Variant.Neutral,
+                TabStop = true,
+                TabIndex = ti++,
             };
-            new ToolTip().SetToolTip(_btnGroupEdit, Lang.T("Manage Groups…"));
             _btnGroupEdit.Click += (s, e) =>
             {
-                // Remember the currently selected group name so we can re-select it after editing
-                string prev = _cmbGroup.SelectedIndex > 0 ? _cmbGroup.SelectedItem?.ToString() : null;
-                using var dlg = new GroupEditorForm(_groups);
+                // Pre-select whichever group is currently active in the combo.
+                string current = _cmbGroup.SelectedItem?.ToString();
+                using var dlg = new GroupEditorForm(_groups, initialGroupName: current);
                 if (dlg.ShowDialog(this) != DialogResult.OK) return;
                 _groups.Clear();
                 _groups.AddRange(dlg.ResultGroups);
                 ResultGroupsChanged = true;
-                RebuildGroupCombo(prev);
+                RebuildGroupCombo(current);
                 Refresh2();
                 _cmbGroup.Focus();  // return focus to the group dropdown after the sub-dialog closes
             };
             grpStyle.Controls.Add(_btnGroupEdit);
-            gy += ROW_H;
+            SetTip(_btnGroupEdit, () => Lang.T("tip: Manage Groups"));
+            gy += ROW_H + 28;  // extra 28 px for the "Manage Groups…" button row
 
             // Live preview: a small key-shaped panel that reflects the current settings
-            AddFieldLabel(grpStyle, () => Lang.T("Preview"), slx, gy);
+            AddFieldLabel(grpStyle, () => Lang.T("Preview"), slx, gy).TabIndex = ti++;
             int keyBtnW = 80, keyBtnH = 46;
             _pnlPreview = new Panel
             {
@@ -808,8 +881,8 @@ namespace OnScreenKeyboard
             // Apply/Cancel buttons: placed below whichever column is taller
             int btnTop = Math.Max(margin + keyH, rightY) + gap;
             int bw     = (leftW + gap + rightW - gap) / 2;
-            _btnCancel = MakeActionBtn(Lang.T("Cancel"), margin,        btnTop, bw, 44);
-            _btnApply  = MakeActionBtn(Lang.T("Apply"),  margin+bw+gap, btnTop, bw, 44);
+            _btnCancel = MakeActionBtn(Lang.T("Cancel"), margin,        btnTop, bw, 44); _btnCancel.TabIndex = 2;
+            _btnApply  = MakeActionBtn(Lang.T("Apply"),  margin+bw+gap, btnTop, bw, 44); _btnApply.TabIndex  = 3;
             _btnApply.Click  += (s, e) => Apply();
             _btnCancel.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
             AcceptButton = _btnApply;
@@ -844,7 +917,7 @@ namespace OnScreenKeyboard
         /// <param name="vx">Value column start x.</param>
         /// <param name="vw">Value column width.</param>
         /// <param name="gy">Current vertical position; incremented by the rows added.</param>
-        private void AddOption3ModeSelector(Panel parent, int lx, int vx, int vw, ref int gy)
+        private void AddOption3ModeSelector(Panel parent, int lx, int vx, int vw, ref int gy, ref int ti)
         {
             // Buttons span the full panel width (lx → right edge) so translated labels always fit.
             // 2×2 grid + full-width row:
@@ -853,11 +926,11 @@ namespace OnScreenKeyboard
             //   row 3 = Layout switch (full width)
             int fullW = vx + vw - lx;   // from lx to the same right edge as value fields
             int bw    = (fullW - 4) / 2;
-            _btnModeText   = MakeModeBtn(parent, Lang.T("Text"),            lx,          gy,             bw);
-            _btnModeKey    = MakeModeBtn(parent, Lang.T("Key/Shortcut"),    lx + bw + 4, gy,             bw);
-            _btnModeMod    = MakeModeBtn(parent, Lang.T("Modifier"),        lx,          gy + ROW_H,     bw);
-            _btnModeWP     = MakeModeBtn(parent, Lang.T("Word prediction"), lx + bw + 4, gy + ROW_H,     bw);
-            _btnModeLayout = MakeModeBtn(parent, Lang.T("Layout"),          lx,          gy + ROW_H * 2, fullW);
+            _btnModeText   = MakeModeBtn(parent, "&" + Lang.T("Text"),            lx,          gy,             bw);
+            _btnModeKey    = MakeModeBtn(parent, Lang.T("Key/Shortcut"),          lx + bw + 4, gy,             bw);
+            _btnModeMod    = MakeModeBtn(parent, Lang.T("Modifier"),              lx,          gy + ROW_H,     bw);
+            _btnModeWP     = MakeModeBtn(parent, "&" + Lang.T("Word prediction"), lx + bw + 4, gy + ROW_H,     bw);
+            _btnModeLayout = MakeModeBtn(parent, "&" + Lang.T("Layout"),          lx,          gy + ROW_H * 2, fullW);
 
             // Wire each button to switch the editor into its corresponding mode
             _btnModeText.Click   += (s, e) => SetSendMode(SendMode.Text,           applyPicker: true);
@@ -865,6 +938,41 @@ namespace OnScreenKeyboard
             _btnModeMod.Click    += (s, e) => SetSendMode(SendMode.Modifier,       applyPicker: true);
             _btnModeWP.Click     += (s, e) => SetSendMode(SendMode.WordPrediction, applyPicker: true);
             _btnModeLayout.Click += (s, e) => SetSendMode(SendMode.Layout,         applyPicker: true);
+
+            // Left/Right arrow keys cycle through the mode buttons, matching the standard
+            // radio-group keyboard pattern (ARIA radiogroup / WinForms radio-button behaviour).
+            var modeBtns = new[] { _btnModeText, _btnModeKey, _btnModeMod, _btnModeWP, _btnModeLayout };
+            var modeVals = new SendMode[] { SendMode.Text, SendMode.KeySequence, SendMode.Modifier,
+                                            SendMode.WordPrediction, SendMode.Layout };
+            for (int i = 0; i < modeBtns.Length; i++)
+            {
+                int ci = i;   // capture loop variable
+                modeBtns[ci].KeyDown += (s, e) =>
+                {
+                    int next = -1;
+                    if (e.KeyCode == Keys.Left)  next = (ci + modeBtns.Length - 1) % modeBtns.Length;
+                    if (e.KeyCode == Keys.Right) next = (ci + 1)                   % modeBtns.Length;
+                    if (next < 0) return;
+                    SetSendMode(modeVals[next], applyPicker: true);
+                    modeBtns[next].Focus();
+                    e.Handled = true;
+                    e.SuppressKeyPress = true;
+                };
+            }
+
+            // Assign TabIndex so keyboard Tab order matches visual reading order.
+            _btnModeText.TabIndex   = ti++;
+            _btnModeKey.TabIndex    = ti++;
+            _btnModeMod.TabIndex    = ti++;
+            _btnModeWP.TabIndex     = ti++;
+            _btnModeLayout.TabIndex = ti++;
+
+            // Tooltips describing what each send mode does.
+            SetTip(_btnModeText,   () => Lang.T("tip: Mode Text"));
+            SetTip(_btnModeKey,    () => Lang.T("tip: Mode Key"));
+            SetTip(_btnModeMod,    () => Lang.T("tip: Mode Modifier"));
+            SetTip(_btnModeWP,     () => Lang.T("tip: Mode Word prediction"));
+            SetTip(_btnModeLayout, () => Lang.T("tip: Mode Layout"));
 
             gy += ROW_H * 3;  // three rows of buttons
         }
@@ -879,7 +987,7 @@ namespace OnScreenKeyboard
         /// <param name="vx">Value column start x.</param>
         /// <param name="vw">Value column width.</param>
         /// <param name="gy">Current vertical position; incremented by one row.</param>
-        private void AddOption3PickerRow(Panel parent, int lx, int vx, int vw, ref int gy)
+        private void AddOption3PickerRow(Panel parent, int lx, int vx, int vw, ref int gy, ref int ti)
         {
             // pickerVx: x position of controls inside the picker panels.
             // The panels start at lx so the controls shift right by vx-lx to align with value fields.
@@ -899,9 +1007,10 @@ namespace OnScreenKeyboard
             {
                 Text = Lang.T("Record key / shortcut"),
                 Left = pickerVx, Top = 0, Width = vw, Height = ROW_H - 8,
-                Style = FluentButton.Variant.Neutral, TabStop = false,
+                Style = FluentButton.Variant.Neutral, TabStop = true,
             };
             _btnRecord.Click += (s, e) => StartRecording();
+            SetTip(_btnRecord, () => Lang.T("tip: Record"));
             _pnlKeyPicker.Controls.Add(_btnRecord);
 
             _lblRecordHint = new Label
@@ -925,7 +1034,7 @@ namespace OnScreenKeyboard
             {
                 Text = Lang.T("Browse (Send)"),
                 Left = pickerVx, Top = 0, Width = vw, Height = ROW_H - 8,
-                Style = FluentButton.Variant.Neutral, TabStop = false,
+                Style = FluentButton.Variant.Neutral, TabStop = true,
             };
             _btnBrowseLayout.Click += (s, e) =>
             {
@@ -952,6 +1061,7 @@ namespace OnScreenKeyboard
                 else if (target == _txtAltGrSend)  SetAltGrSendText(selected, isLayout: true);
                 else                               target.Text = selected;
             };
+            SetTip(_btnBrowseLayout, () => Lang.T("tip: Browse layout"));
             _pnlLayoutPicker.Controls.Add(_btnBrowseLayout);
 
             // ── Modifier picker ───────────────────────────────────────
@@ -976,12 +1086,18 @@ namespace OnScreenKeyboard
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary,
                 Font = F_INPUT, FlatStyle = FlatStyle.Flat,
+                AccessibleName = Lang.StripMnemonic(Lang.T("Modifier")),
             };
             // Add the display name of each modifier; the internal label is looked up by index
             foreach (var (_, display) in _modifiers) _cmbModChoice.Items.Add(display);
             _cmbModChoice.SelectedIndex = 0;
             _cmbModChoice.SelectedIndexChanged += (s, e) => ApplyModChoice();
             _pnlModPicker.Controls.Add(_cmbModChoice);
+
+            // Assign TabIndex so the three pickers sit consecutively in the grpKey tab order.
+            _pnlKeyPicker.TabIndex    = ti++;
+            _pnlLayoutPicker.TabIndex = ti++;
+            _pnlModPicker.TabIndex    = ti++;
 
             gy += ROW_H;
         }
@@ -1073,7 +1189,7 @@ namespace OnScreenKeyboard
             var btn = new FluentButton
             {
                 Text = text, Left = x, Top = y, Width = w, Height = ROW_H - 6,
-                Style = FluentButton.Variant.Neutral, TabStop = false,
+                Style = FluentButton.Variant.Neutral, TabStop = true,
             };
             parent.Controls.Add(btn);
             return btn;
@@ -1126,7 +1242,13 @@ namespace OnScreenKeyboard
             if (_lblSendFieldName != null)
                 _lblSendFieldName.Text = isWP     ? Lang.T("Prediction cell")
                                        : isLayout ? Lang.T("Layout file")
-                                       : Lang.T("Send");
+                                       : "&" + Lang.T("Send");  // "&" gives Alt+S accelerator in Text/KeySequence/Modifier modes
+            // Keep the text box's accessible name in sync so screen readers announce the
+            // correct label regardless of the currently active send mode.
+            if (_txtSend != null)
+                _txtSend.AccessibleName = isWP     ? Lang.StripMnemonic(Lang.T("Prediction cell"))
+                                        : isLayout ? Lang.StripMnemonic(Lang.T("Layout file"))
+                                        : Lang.StripMnemonic(Lang.T("Send"));
             // Hide the "all slots full" warning whenever a non-WP mode is active.
             if (_lblWPFull != null) _lblWPFull.Visible = false;
 
@@ -1562,22 +1684,37 @@ namespace OnScreenKeyboard
         /// <param name="x">Left position of the hex text box within the parent.</param>
         /// <param name="y">Top position.</param>
         /// <param name="totalW">Total width for both controls combined.</param>
-        /// <returns>The swatch panel (use with GetSwatchHex/SetSwatchHex to read/write the color).</returns>
-        private Panel AddColorRow(Panel parent, int x, int y, int totalW)
+        /// <returns>The swatch button (use with GetSwatchHex/SetSwatchHex to read/write the color).</returns>
+        private Button AddColorRow(Panel parent, int x, int y, int totalW, ref int ti)
         {
-            int sw = 32;  // swatch button width
+            int sw = 32;  // swatch width
             var txtHex = new TextBox
             {
                 Left = x, Top = y, Width = totalW - sw - 5,
                 BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary,
                 BorderStyle = BorderStyle.FixedSingle, Font = Fluent.FontCourier,
+                TabIndex = ti++,
             };
-            var swatch = new Panel
+            // ColorSwatchButton participates in Tab order and responds to Space/Enter natively
+            // (WCAG 2.1 A §2.1.1). It also draws a two-tone focus ring visible on any colour
+            // (WCAG 2.1 AA §2.4.7).
+            var swatch = new ColorSwatchButton
             {
                 Left = x + totalW - sw, Top = y, Width = sw, Height = 26,
-                BorderStyle = BorderStyle.FixedSingle, Cursor = Cursors.Hand, BackColor = Color.Gray,
+                BackColor = Color.Gray,
+                TabIndex = ti++,
             };
-            txtHex.TextChanged += (s, e) => { swatch.BackColor = ParseColor(txtHex.Text, swatch.BackColor); DetachFromGroup(); Refresh2(); };
+            // Consume the name queued by the preceding AddFieldLabel call.
+            string colorName = _pendingAccessibleName;
+            _pendingAccessibleName = null;
+            if (colorName != null)
+            {
+                txtHex.AccessibleName  = colorName + " hex";
+                swatch.AccessibleName  = colorName + " swatch";
+            }
+            SetTip(txtHex, () => Lang.T("tip: Hex color"));
+            SetTip(swatch, () => Lang.T("tip: Color swatch"));
+            txtHex.TextChanged += (s, e) => { swatch.BackColor = ParseColor(txtHex.Text, swatch.BackColor); Refresh2(); };
             swatch.Click += (s, e) =>
             {
                 using var dlg = new ColorDialog { Color = swatch.BackColor };
@@ -1591,15 +1728,15 @@ namespace OnScreenKeyboard
 
         /// <summary>
         /// Returns the hex color string currently displayed in the text box that belongs to
-        /// the given swatch panel. Returns an empty string if the swatch is not set up correctly.
+        /// the given swatch button. Returns an empty string if the swatch is not set up correctly.
         /// </summary>
-        private string GetSwatchHex(Panel s) => (s.Tag is TextBox t) ? t.Text : "";
+        private string GetSwatchHex(Button s) => (s.Tag is TextBox t) ? t.Text : "";
 
         /// <summary>
         /// Sets the hex color string in the text box that belongs to the given swatch panel,
         /// and updates the swatch's background color to match.
         /// </summary>
-        private void SetSwatchHex(Panel s, string hex)
+        private void SetSwatchHex(Button s, string hex)
         {
             if (s.Tag is TextBox t) { t.Text = hex; s.BackColor = ParseColor(hex, s.BackColor); }
         }
@@ -1612,7 +1749,7 @@ namespace OnScreenKeyboard
         /// <param name="getText">Lambda that returns the (possibly translated) label text.</param>
         /// <param name="x">Left position within the panel.</param>
         /// <param name="y">Top position of the row (the label is offset down by 4 px to align with input controls).</param>
-        private void AddFieldLabel(Panel parent, Func<string> getText, int x, int y)
+        private Label AddFieldLabel(Panel parent, Func<string> getText, int x, int y)
         {
             var lbl = new Label
             {
@@ -1621,6 +1758,10 @@ namespace OnScreenKeyboard
             };
             parent.Controls.Add(lbl);
             _transLabels.Add((lbl, getText));
+            // Store the stripped label text so the next AddInput / AddColorRow call can
+            // pick it up as the sibling control's AccessibleName.
+            _pendingAccessibleName = Lang.StripMnemonic(getText());
+            return lbl;
         }
 
         /// <summary>
@@ -1640,6 +1781,16 @@ namespace OnScreenKeyboard
         }
 
         /// <summary>
+        /// Registers a tooltip on <paramref name="ctrl"/> and adds it to
+        /// <see cref="_transTooltips"/> so <see cref="OnLanguageChanged"/> can refresh it.
+        /// </summary>
+        private void SetTip(Control ctrl, Func<string> getTip)
+        {
+            _tip.SetToolTip(ctrl, getTip());
+            _transTooltips.Add((ctrl, getTip));
+        }
+
+        /// <summary>
         /// Creates a styled single-line text input box and adds it to <paramref name="parent"/>.
         /// </summary>
         private TextBox AddInput(Panel parent, int x, int y, int w)
@@ -1650,6 +1801,12 @@ namespace OnScreenKeyboard
                 BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary,
                 BorderStyle = BorderStyle.FixedSingle, Font = F_INPUT,
             };
+            // Consume the name queued by the preceding AddFieldLabel call.
+            if (_pendingAccessibleName != null)
+            {
+                tb.AccessibleName = _pendingAccessibleName;
+                _pendingAccessibleName = null;
+            }
             parent.Controls.Add(tb);
             return tb;
         }
@@ -1713,10 +1870,15 @@ namespace OnScreenKeyboard
             // per-key → group → global chain and populates font, size, colors and border thickness.
             if (_cmbGroup != null)
             {
-                int gi = string.IsNullOrEmpty(p.GroupName)
-                    ? 0
-                    : _cmbGroup.Items.IndexOf(p.GroupName);
-                _cmbGroup.SelectedIndex = gi >= 0 ? gi : 0;
+                // GroupName is always non-empty for real keys after SettingsManager assigns
+                // "standard" to ungrouped keys on load.  Fall back to "standard" (index 0)
+                // for spacers or any edge case where GroupName is still empty.
+                string gn = !string.IsNullOrEmpty(p.GroupName)
+                    ? p.GroupName
+                    : SettingsManager.StandardGroupName;
+                int gi = _cmbGroup.Items.IndexOf(gn);
+                if (_cmbGroup.Items.Count > 0)
+                    _cmbGroup.SelectedIndex = gi >= 0 ? gi : 0;
                 // SelectedIndexChanged fires RefreshAppearanceFromGroup automatically,
                 // but call it explicitly here too in case the index didn't actually change.
             }
@@ -1816,10 +1978,9 @@ namespace OnScreenKeyboard
             // Use the cached owner theme (consistent with PopulateFields and Refresh2)
             var ownerGl = _ownerGlobal;
 
-            // Index 0 in _cmbGroup = "(no group)" → store empty string
-            string groupName = (_cmbGroup != null && _cmbGroup.SelectedIndex > 0)
-                ? _cmbGroup.SelectedItem?.ToString() ?? ""
-                : "";
+            // The combo always shows a named group; fall back to standard if somehow empty.
+            string groupName = _cmbGroup?.SelectedItem?.ToString()
+                ?? SettingsManager.StandardGroupName;
 
             Color fc, kc, bc;
             string fontName;

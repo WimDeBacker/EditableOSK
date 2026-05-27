@@ -32,8 +32,8 @@ namespace OnScreenKeyboard
         public Color  BorderColor     { get; set; } = Color.Empty;
 
         /// <summary>Width of the key border in pixels.
-        /// <c>-1</c> is the sentinel meaning "not set — inherit from global theme".</summary>
-        public int    BorderThickness { get; set; } = -1;   // -1 = inherit global
+        /// <c>-1</c> is the sentinel meaning "not set — inherit from the standard group".</summary>
+        public int    BorderThickness { get; set; } = -1;   // -1 = inherit standard
 
         /// <summary>Font family name (e.g. "Segoe UI"). Empty string = inherit.</summary>
         public string FontName        { get; set; } = "";

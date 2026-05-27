@@ -2,169 +2,67 @@
 
 ---
 
+## Completed — bug fixes
+
+- [x] **Window size inflated after closing in Edit mode** — `ResizeEnd` and `FormClosing` now both save `Height - ToolbarHeightForMode(_mode)` to `WindowState.WindowHeight`, so the stored value is always the Normal-mode equivalent regardless of which mode is active when the user resizes or closes. ✓
+
+---
+
 ## Pending — UI / UX improvements
 
-- [x] **Group editor — hex fields and field order** — `GroupEditorForm` colour rows previously showed only a wide swatch (no hex input). Replaced `AddColorSwatch` with `AddColorRow` returning `(Panel swatch, TextBox hexBox)`: 32 px swatch + `vw - 37 px` hex box, matching `KeyEditorForm.AddColorRow`. `SetSwatchColor` now writes the hex box and sets `BackColor`; `GetSwatchColor` reads back via `TryParseHex`. `_loading` flag suppresses circular `TextChanged` updates during `LoadDetail`. Field order rewritten to match `KeyEditorForm` Appearance column: Name → Font → Font size → Font color → Key color → Border color → Border thickness. ✓
+---
 
-- [x] **Emoji in dialog title bars** — Root cause: `KeyEditorForm` title includes `[{props.Label}]`, and when the key label is an emoji (⚙, 📌, …) the title bar showed a replacement box. `KeyboardEditorForm` and `GroupEditorForm` titles contain no user content and were already clean. Fix: `TitleSafeLabel` helper strips surrogate pairs (U+10000+ emoji) and BMP symbol blocks (U+2600–U+27BF, U+2B00–U+2BFF); `BuildTitle` omits the brackets entirely if nothing printable remains. ✓
+## Pending — accessibility improvements
 
-- [x] **"+" button next to group dropdown in key editor** — `FluentButton` (Neutral, 32×26 px) added to the right of `_cmbGroup` in `KeyEditorForm`. Combo width narrowed from `svw` → `svw - 37` to mirror the color-row text-box/swatch ratio, keeping all labels unclipped. Button `Left` = `svx + svw - 32`, exactly matching the color swatch column above. Click opens `GroupEditorForm`; on OK, `_groups` is updated in-place (`.Clear()` + `.AddRange()`), `_cmbGroup` is rebuilt via `RebuildGroupCombo` which restores the previous selection by name. ✓
+  #### Priority 1 — Keyboard reachability (WCAG 2.1 A §2.1.1) ✓
+  - [x] **13. Mode selector buttons (KeyEditorForm) keyboard-inaccessible** — `TabStop = true` set in `MakeModeBtn`; Left/Right arrow key handler wired to all five buttons in `AddOption3ModeSelector` (radio-group keyboard pattern). ✓
+  - [x] **14. Record key button not keyboard-reachable** — `TabStop = true` set on `_btnRecord`. ✓
+  - [x] **15. Browse / file-picker buttons not keyboard-reachable** — `TabStop = true` set on `_btnBrowseLayout` (KeyEditorForm) and in `MakeFileBtn` (KeyboardEditorForm). ✓
+  - [x] **16. GroupEditorForm list-action buttons not keyboard-reachable** — `TabStop = true` set in `MakeSmallBtn` (covers Add, Delete, Import). `KeyDown` handler on `_lstGroups`: Delete removes the selected group; F2 moves focus to `_txtName` with SelectAll for inline rename. ✓
+  - [x] **11. Colour swatch panels are mouse-only** — All three `AddColorRow` helpers (KeyEditorForm, GroupEditorForm, KeyboardEditorForm) now create a `Button` (`FlatStyle.Flat`, `TabStop = true`) instead of a `Panel`. `Button` participates in Tab order and activates the colour picker on Space/Enter natively. Field types and helper method signatures updated to `Button`/`Control` accordingly. ✓
 
-- [ ] **Windows accessibility** — Full audit and implementation across all three editor dialogs (`KeyEditorForm`, `KeyboardEditorForm`, `GroupEditorForm`) and the shared `FluentButton` control. Items grouped by effort.
+  #### Priority 2 — Focus visibility (WCAG 2.1 AA §2.4.7) ✓
+  - [x] **3. Focus ring on FluentButton** — `OnGotFocus`/`OnLostFocus` added to trigger repaints. `OnPaint` now draws a 2 px solid focus ring after `PaintLight`: accent blue on Neutral (grey) buttons, white on coloured variants (Primary/Danger/Success) — matches WinUI 3 focus style. `ShowFocusCues` gates it so the ring only appears during Tab/keyboard navigation, never on mouse click. New `ColorSwatchButton` class added to `FluentButton.cs`: replaces the plain `Button` in all three `AddColorRow` helpers; draws a two-tone white-outer/dark-inner ring visible against any swatch colour. `ApplyDialogTheme` swatch-detection updated to `ColorSwatchButton`. ✓
 
-  #### Quick wins (trivial — 1–3 lines each)
-  - [x] **1. AcceptButton / CancelButton on main forms** — `AcceptButton = _btnApply; CancelButton = _btnCancel` on `KeyEditorForm` and `KeyboardEditorForm`; `AcceptButton = _btnOK; CancelButton = _btnCancel` on `GroupEditorForm`. Enter and Escape currently do nothing on all three forms. ✓
-  - [x] **2. TabStop on action buttons** — `FluentButton` constructor sets `TabStop = false` globally. Added `TabStop = true` in `MakeActionBtn` (KeyEditorForm, KeyboardEditorForm) and `MakeBigBtn` (GroupEditorForm) so Apply, Cancel, and OK are reachable by Tab. ✓
-  - [x] **12. CancelButton on sub-dialogs** — Added `dlg.CancelButton = cn` to `GroupEditorForm.GetNewName` and `dlg.CancelButton = btnCancel3` to the import-resolution dialog. Escape now closes both. ✓
-  - [x] **18. Focus restoration after sub-dialog closes** — `_cmbGroup.Focus()` after `GroupEditorForm` closes from the `+` button in `KeyEditorForm`; `_btnManageGroups.Focus()` after `GroupEditorForm` closes from `KeyboardEditorForm`. ✓
-  - [x] **19. Initial focus on dialog open** — `ActiveControl = _txtLabel` (KeyEditorForm), `ActiveControl = _cmbFont` (KeyboardEditorForm), `ActiveControl = _txtName` (GroupEditorForm). ✓
+  #### Priority 3 — Tab order + keyboard accelerators ✓
+  - [x] **6. Explicit TabIndex in logical reading order** — `AddFieldLabel` now returns `Label`; `AddColorRow` accepts `ref int ti`; `AddOption3ModeSelector` and `AddOption3PickerRow` accept `ref int ti`. All three forms (KeyEditorForm, GroupEditorForm, KeyboardEditorForm) assign sequential `TabIndex` values in `BuildUI()` in top-to-bottom, left-to-right order. Card panels get form-level TabIndex (left before right); action buttons come last. ✓
+  - [x] **7. Keyboard accelerators (& labels)** — Key labels updated with `&` mnemonics throughout all three forms. KeyEditorForm: `&Label` (L), `&Send` (S), `&AltGr label` (A), `&Key width` (K), `Key h&eight` (E), `&Font` (F), `Font &size` (S), `Font c&olor` (O), `&Key color` (K), `&Border color` (B), `Border &thickness` (T), `&Group` (G). GroupEditorForm: `&Name`, `&Font`, `Font si&ze`, `Font c&olor`, `&Key color`, `&Border color`, `Border &thickness`. KeyboardEditorForm: `&Opacity`, `&Background`, `&Always on top`, `H&ide title bar`, `&Toolbar theme`, `&Save`, `Save &As…`, `&Load…`, `&Sticky modifiers`, `H&old to edit`. ✓
 
-  #### Screen reader basics
-  - [ ] **3. Focus ring on FluentButton** — `FlatAppearance.BorderSize = 0` suppresses the default focus rectangle and nothing replaces it. In `FluentButton.OnPaint`, after all painting: `if (Focused && ShowFocusCues) ControlPaint.DrawFocusRectangle(e.Graphics, new Rectangle(3, 3, Width-7, Height-7));`. `ShowFocusCues` returns false for mouse users so the ring only appears during keyboard navigation.
-  - [ ] **4. AccessibleName on every interactive control** — Every `TextBox`, `ComboBox`, `NumericUpDown`, `CheckBox`, and `Panel` used as input needs `AccessibleName` set to the text of its visible label (wrapped in `Lang.T(...)`). Controls currently have no name so Narrator announces them as "edit" or "combo box" with no context.
-  - [ ] **9. Preview panel not described** — `_pnlPreview` changes label, colour, and font as the user edits. Set `AccessibleName` and `AccessibleDescription` on the panel, or add a hidden read-only text field that mirrors the preview state in words ("Preview: key 'A', blue background, Arial 14 pt") updated alongside `Refresh2()`.
-  - [ ] **24. Tooltips on nearly all controls** — Only one `ToolTip` exists in the entire codebase. Every non-obvious control needs one: colour swatches ("Click to pick colour; type hex directly in the field"), `+` group button ("Add or edit groups"), Record button, Browse button, mode selector buttons, span spinners, border-thickness spinner. Screen readers expose tooltip text as `HelpText`, announced when the control receives focus.
-  - [ ] **25. Sentinel values in AccessibleDescription** — The meaning of `-1 = inherit global` (border-thickness) and `0 = auto / inherit` (font size) is conveyed only by small adjacent hint labels. Add the same explanation to each spinner's `AccessibleDescription` so screen readers announce it on focus: `_nudBorderThickness.AccessibleDescription = "-1 inherits the global border thickness"`.
+  #### Priority 4 — Screen-reader annotations ✓
+  - [x] **4. AccessibleName on every interactive control** — `FluentButton.Text` setter override auto-syncs `AccessibleName` (strips `&`). `AddFieldLabel` sets `_pendingAccessibleName`; `AddInput` and `AddColorRow` consume it automatically. All remaining inline controls (`ComboBox`, `NumericUpDown`, `TrackBar`, `ListBox`, `TextBox`) receive explicit `AccessibleName` at construction. `_txtSend.AccessibleName` is kept in sync with its dynamic label in `SetSendMode`. ✓
+  - [x] **24. Tooltips on nearly all controls** — `ToolTip _tip` added to all three editor forms; `SetTip(ctrl, lambda)` helper registers and refreshes on language change. New `tip:` lang keys added for: colour swatches, hex boxes, font-size / border-thickness / key-width / row-span spinners, Record button, Browse layout button, all five mode buttons, Add/Delete/Import group buttons, Opacity trackbar, Manage Groups button, Language combo, WP slot spinner. Dutch translations added to `lang_nl.xml`. ✓
+  - [x] **25. Sentinel values in AccessibleDescription** — `_nudFontSize.AccessibleDescription = Lang.T("0 = auto / inherit")` and `_nudBorderThickness.AccessibleDescription = Lang.T("-1 = inherit standard")` set in both `KeyEditorForm` and `GroupEditorForm`. Screen readers now announce the sentinel meaning when the spinner receives focus. ✓
+
+  #### Priority 5 — Error announcements
   - [ ] **26. Field-level validation feedback** — Entering an invalid hex colour results in the swatch keeping its old colour silently. Add an `ErrorProvider` to each form; call `errorProvider.SetError(txtHex, "Enter a valid hex colour (#RRGGBB)")` when parsing fails and clear it when valid. This provides a visual error icon and an accessible error announcement.
 
-  #### Keyboard completeness
-  - [ ] **7. Keyboard accelerators (& labels)** — No `Label` uses `&` prefixes. Add them to the most-used field labels so Alt+letter moves focus to the associated input (requires `TabIndex` on labels to be one less than the input). Example: `"&Label"`, `"&Send"`, `"F&ont"`, `"Font &size"`, `"Font c&olor"`, `"&Key color"`, `"G&roup"`.
-  - [ ] **11. Colour swatch panels are mouse-only** — `Panel` controls with `Click` handlers cannot receive keyboard focus or be activated from the keyboard. Replace or wrap each swatch `Panel` with a `Button` subclass (or `FluentButton`) so it participates in Tab order and responds to Space/Enter. The adjacent hex TextBox already allows direct colour entry; the picker button just needs to be keyboard-reachable.
-  - [ ] **13. Mode selector buttons (KeyEditorForm) keyboard-inaccessible** — The five send-mode buttons (Text, Key sequence, Modifier, Word prediction, Layout) all have `TabStop = false`. Add `TabStop = true` and a `KeyDown` handler that moves selection with Left/Right arrow keys, matching the standard radio-group keyboard pattern.
-  - [ ] **14. Record key button not keyboard-reachable** — `_btnRecord` has `TabStop = false`. Set `TabStop = true`.
-  - [ ] **15. Browse / file-picker buttons not keyboard-reachable** — `_btnBrowseLayout` and similar buttons have `TabStop = false`. Set `TabStop = true`.
-  - [ ] **16. GroupEditorForm list-action buttons not keyboard-reachable** — Add Group, Delete, Rename, Import buttons all have `TabStop = false`. Set `TabStop = true`. Also consider keyboard shortcuts: Delete key removes the selected group, F2 renames it.
-
-  #### High-contrast mode
-  - [ ] **5. High-contrast support — dialogs** — `SystemInformation.HighContrast` is never checked. When true, set `BackColor = SystemColors.Control` and `ForeColor = SystemColors.ControlText` in the form constructors; standard child controls (`TextBox`, `ComboBox`, `NumericUpDown`, `CheckBox`) handle themselves automatically in high-contrast.
+  #### Priority 6 — Colour contrast & high-contrast mode
+  *One audit pass (items 20, 21) identifies failures; one code pass fixes dialogs (item 5) and custom-drawn controls (FluentButton/FluentPainter).*
   - [ ] **20. WCAG 2.1 AA colour contrast audit** — Several Fluent palette combinations likely fail the 4.5 : 1 normal-text ratio: `Fluent.TextHint` (`#888`) on `Fluent.BgPage` (`#F3F3F3`) is approximately 3.5 : 1 (fails); the red `_lblWPDuplicate` text on the card background may also fail. Audit every text/background pair and adjust the palette where needed.
   - [ ] **21. Disabled state contrast** — `FluentButton` disabled state applies a white 39%-opacity wash that can nearly erase Neutral-variant button labels. Verify `#ABABAB` on white and `#868686` on dark meet the 3 : 1 minimum for UI components and adjust if needed.
+  - [ ] **5. High-contrast support — dialogs** — `SystemInformation.HighContrast` is never checked. When true, set `BackColor = SystemColors.Control` and `ForeColor = SystemColors.ControlText` in the form constructors; standard child controls (`TextBox`, `ComboBox`, `NumericUpDown`, `CheckBox`) handle themselves automatically in high-contrast.
   - [ ] **High-contrast support — FluentButton / FluentPainter** — `PaintLight` and `PaintDark` use entirely hardcoded colours. When `SystemInformation.HighContrast` is true both methods should take an early-exit path: fill with `SystemColors.Control`, draw a `SystemColors.ControlText` border via `ControlPaint.DrawBorder`, render text in `SystemColors.ControlText`, and draw a focus rectangle when focused. Subscribe to `SystemEvents.UserPreferenceChanged` to repaint open dialogs if the user switches high-contrast mode while they are open.
 
-  #### Tab order and focus
-  - [ ] **6. Explicit TabIndex in logical reading order** — No form sets `TabIndex` explicitly; WinForms uses control-creation order which does not match visual reading order. Assign sequential `TabIndex` values in `BuildUI()` in top-to-bottom, left-to-right order for each form. Required before accelerator keys (item 7) can work, since `Label` + buddy control must be consecutive in tab order.
+  #### Priority 7 — Rich widget descriptions
+  - [ ] **9. Preview panel not described** — `_pnlPreview` changes label, colour, and font as the user edits. Set `AccessibleName` and `AccessibleDescription` on the panel, or add a hidden read-only text field that mirrors the preview state in words ("Preview: key 'A', blue background, Arial 14 pt") updated alongside `Refresh2()`.
+  - [ ] **27. Group dropdown: no way to preview group appearance** — The group combo shows raw names ("Red", "Blue"). A screen reader user cannot discover what a group looks like without selecting it. Consider adding a read-only summary label below the combo that updates on selection ("Red group: key #CC2222, font white, Arial 12 pt"), or set `AccessibleDescription` on the combo with a summary of the currently selected group.
+  - [ ] **28. DataGridView row descriptions in import dialog** — The DataGridView in `GroupEditorForm`'s import dialog has a Status column ("Conflict" / "New"), which is good. However, row-level `AccessibleObject.Name` is not overridden, so screen readers announce raw cell values. Override `DataGridView.Rows[i].AccessibleObject.Name` to produce a full sentence: "Group Arrows: Conflict — choose Overwrite, Add as new, or Skip".
 
-  #### Scaling and resize
+  #### Priority 8 — DPI scaling
+  *Item 22 is the fix; item 23 is the test protocol. Do together.*
   - [ ] **22. Fixed-size forms clip at high DPI / large fonts** — All three forms use `FormBorderStyle.FixedSingle` with no scroll. If DPI scaling or large system fonts cause controls to overflow their hardcoded positions, the clipped content is unreachable. Either make forms resizable (`FormBorderStyle.Sizable` with minimum size) or wrap each content column in a `Panel` with `AutoScroll = true`.
   - [ ] **23. Validate layout at 125%, 150%, 200% DPI** — `AutoScaleMode.Dpi` scales control sizes proportionally, but the form-height calculations in `BuildUI()` use hardcoded pixel arithmetic. Test at non-100% DPI settings and fix any controls that overlap or get clipped.
 
-  #### Informational / future
+  #### Future / informational
   - [ ] **10. Form UI culture for screen reader voice selection** — Screen readers switch speech voice based on the current UI language. Set `Thread.CurrentThread.CurrentUICulture` on startup when a non-English language file is loaded (e.g. `new CultureInfo("nl")` for Dutch) so Narrator selects the correct voice.
-  - [ ] **27. Group dropdown: no way to preview group appearance** — The group combo shows raw names ("Red", "Blue"). A screen reader user cannot discover what a group looks like without selecting it. Consider adding a read-only summary label below the combo that updates on selection ("Red group: key #CC2222, font white, Arial 12 pt"), or set `AccessibleDescription` on the combo with a summary of the currently selected group.
-  - [ ] **28. DataGridView row descriptions in import dialog** — The DataGridView in `GroupEditorForm`'s import dialog has a Status column ("Conflict" / "New"), which is good. However, row-level `AccessibleObject.Name` is not overridden, so screen readers announce raw cell values. Override `DataGridView.Rows[i].AccessibleObject.Name` to produce a full sentence: "Group Arrows: Conflict — choose Overwrite, Add as new, or Skip".
   - [ ] **29. Touch target sizes** — The `+` group-edit button and colour swatches are 32 × 26 px. Windows and WCAG 2.5.5 recommend 44 × 44 px minimum for touch targets. Not a current concern (mouse/keyboard app), but worth noting if the app is ever used on a tablet.
   - [ ] **30. Right-to-left layout** — `RightToLeft` is not set on any form. The absolute-positioned layouts would mirror incorrectly if RTL translations (Arabic, Hebrew) were ever added. Document this constraint so it is considered before adding new languages.
 
-## Pending — gear button styling (Option D + standard group)
+---
 
-Make the gear button's appearance fully editable by merging the "Default Key Style"
-into a protected "standard" group that is the root of the resolution chain.
-The gear button always belongs to the standard group; editing it styles the gear.
+## Pending — code quality
 
-### Step 1 — Introduce the standard group in the data model and layout files
-- Add constant `StandardGroupName = "standard"` to the codebase
-- On load: if no group named "standard" exists, create one from the Theme appearance
-  fields (FontName, FontSize, FontColor, KeyColor, BorderColor, BorderThickness)
-- On save: always write the standard group as a regular `<Group Name="standard" …/>` element
-- Migrate all four layout files to include an explicit standard group (values from
-  current `<Theme>` style attributes); auto-creation on load becomes a safety net only
-- Theme element keeps BackgroundColor and Opacity; its appearance attributes remain
-  for backward compatibility but are no longer the source of truth
-- **Translations:** no new UI strings in this step; verify existing group-related keys still resolve correctly
-- **Tests:** add round-trip tests: load file without standard group → standard group created from Theme values;
-  load file with standard group → values preserved; save → standard group written; delete deprecated
-  tests that rely on `_theme` appearance fields as the final fallback
-- **Run tests:** `dotnet run -- --test`
-- **Manual check:** open each of the four layout files; confirm they load without errors and all keys
-  look identical to before; save each file and verify a `<Group Name="standard" …/>` element appears in the XML
-
-### Step 2 — Standard group replaces VisualTheme as the resolution root
-- Change `ResolveColor`, `ResolveThickness`, and `ApplyPropsToButton` so the final
-  fallback is the standard group instead of `_theme` appearance fields
-- Keys with `GroupName = ""` fall through to the standard group (same as keys
-  explicitly assigned to it)
-- Named groups with "inherit" fields resolve to the standard group, not to `_theme`
-- Strip appearance fields from `_theme` / `VisualTheme`; it becomes a pure
-  window-settings object (BackgroundColor, Opacity, layout metadata only)
-- **Translations:** the hint label "(inherit global)" in `GroupEditorForm` stays unchanged for now
-  (updated in Step 4); no new strings
-- **Tests:** add resolution-chain tests: no-group key resolves to standard group colors; named-group key
-  with empty fields resolves through group then standard group; per-key override wins over group and
-  standard group; delete or update tests that referenced `_theme.FontColor` / `_theme.KeyColor` etc.
-  as the expected fallback value
-- **Run tests:** `dotnet run -- --test`
-- **Manual check:** open azerty.xml and azertycolor.xml; compare that all keys still show the same
-  colors as before this step; open "Edit Keyboard" and confirm the keyboard background color and
-  opacity fields still work correctly (those stay in `_theme`)
-
-### Step 3 — Gear button styled by the standard group
-- Remove hardcoded `_gearNormalBg` / `_gearNormalFg` color constants
-- `ApplyModeIndicators` resolves gear normal-mode colors from the standard group
-  (KeyColor → BackColor, FontColor → Tag foreground) via the same path as any key
-- Font name taken from standard group; font size stays auto-calculated from cell
-  height (fits the overlay cell) until the gear is made fully editable later
-- **Translations:** no new strings; verify existing mode-indicator strings (✏, 📌) still display correctly
-- **Tests:** add tests that verify the gear Tag foreground color matches the standard group's FontColor
-  after `ApplyModeIndicators`; verify that changing the standard group's KeyColor changes the gear's
-  BackColor; delete tests that asserted the old hardcoded `_gearNormalBg` / `_gearNormalFg` values
-- **Run tests:** `dotnet run -- --test`
-- **Manual check:** load azerty.xml (dark teal theme) — gear button should match the teal key color
-  instead of the old dark blue-purple; load azertycolor.xml (light grey theme) — gear should match
-  the grey background keys; switch to Edit mode and confirm the amber/pencil indicator still appears
-
-### Step 4 — GroupEditorForm: protect standard group and update inherit labels
-- Standard group always shown first in the group list (visual indicator, e.g. lock)
-- Delete button disabled when standard group is selected
-- Rename field disabled / hidden when standard group is selected
-- All "inherit" options hidden or disabled for standard group fields (it is the
-  root — nothing above it to inherit from)
-- "(inherit global)" label changed to "(inherit standard)" for all other groups
-- **Translations:** add Dutch translation for any new label or tooltip (e.g. lock indicator tooltip,
-  updated "(inherit standard)" hint text); update `lang_nl.xml`
-- **Tests:** add tests that verify the standard group cannot be deleted (delete action is blocked);
-  verify the standard group cannot be renamed; verify that a non-standard group's "inherit" fields
-  resolve to the standard group's values (covered by Step 2 tests, but confirm here with UI-level
-  assertions if possible)
-- **Run tests:** `dotnet run -- --test`
-- **Manual check:** open "Manage Groups" in the keyboard editor; confirm "standard" appears at the top
-  with a visual lock indicator; confirm the Delete and Rename buttons are greyed out or hidden when
-  "standard" is selected; confirm you can still edit all color and font fields for "standard"; confirm
-  that for another group (e.g. "Besturing") the "(inherit standard)" hint appears next to empty fields
-
-### Step 5 — KeyboardEditorForm: retire the "Default Key Style" section
-- Remove the "Default Key Style" group box from the keyboard editor
-- Add a clearly labelled button "Edit standard group style…" (or repurpose
-  "Manage Groups…") that opens `GroupEditorForm` with the standard group pre-selected
-- Confirm that "Apply to all keys" iterates `_layout.Cells` only and never touches
-  the gear; add a comment to document the exclusion
-- **Translations:** add Dutch translations for any new button label or tooltip introduced;
-  remove Dutch translations for labels that are removed; update `lang_nl.xml`
-- **Tests:** add a test that verifies "Apply to all keys" does not change the gear button's
-  appearance (i.e. the standard group's values are not overwritten by the per-key apply action);
-  delete tests that referenced the old "Default Key Style" controls directly if any existed
-- **Run tests:** `dotnet run -- --test`
-- **Manual check:** open "Edit Keyboard"; confirm the old "Default Key Style" section is gone;
-  click the new "Edit standard group style…" button and confirm `GroupEditorForm` opens with
-  "standard" already selected; change a color in the standard group, click OK, and verify the
-  gear button and all ungrouped keys update immediately
-
-### Step 6 — Reserved name enforcement and import handling
-- Creating a new group: block the name "standard" with an error message
-- Renaming: block "standard" as both source and target
-- Import: if the imported file contains a group named "standard", offer it as
-  "Update standard group style" with its own conflict option, separate from the
-  normal new / conflict / skip flow for regular groups
-- **Translations:** add Dutch translations for the new error message (name blocked) and the
-  import conflict option ("Update standard group style"); update `lang_nl.xml`
-- **Tests:** add tests for: creating a group named "standard" is rejected; renaming any group
-  to "standard" is rejected; renaming "standard" to anything else is rejected; importing a file
-  with a group named "standard" presents the special update option and applies it correctly
-- **Run tests:** `dotnet run -- --test`
-- **Manual check:** open "Manage Groups"; try to add a new group named "standard" — confirm the
-  error message appears and no group is added; try to rename an existing group to "standard" —
-  confirm it is blocked; open a second layout file that has a custom "standard" group with
-  different colors, use Import Groups, and confirm the special "Update standard group style"
-  option appears and works correctly when selected
+- [ ] **Audit duplicate code across the three editor forms** — `KeyEditorForm`, `GroupEditorForm`, and `KeyboardEditorForm` each contain their own copies of `AddColorRow`, `AddFieldLabel` / `AddLabel`, `SetTip`, `_pendingAccessibleName`, `_transLabels`, `_transTooltips`, `ParseColor` / `TryParseHex`, `AddGroup` / `AddPanel`, `MakeActionBtn` / `MakeBigBtn` / `MakeSmallBtn` / `MakeFileBtn`, and `FluentPainter.ApplyDialogTheme` calls. Some of these are near-identical (all three `AddColorRow` implementations differ only in minor details). Consider extracting shared logic into a base class `FluentDialogBase` or a static `DialogBuilder` helper, so future accessibility or styling changes only need to be made in one place.
 
 ---
 
@@ -186,6 +84,23 @@ The gear button always belongs to the standard group; editing it styles the gear
 
 ## Completed
 
+### Gear button styling (Option D + standard group) ✓
+
+- [x] **Step 1** — Standard group introduced in data model and layout files; `StandardGroupName = "standard"` constant; auto-created with neutral defaults on load if missing; written as `<Group Name="standard" …/>` on save; all four layout files migrated. ✓
+- [x] **Step 2** — Standard group replaces VisualTheme as resolution root; `ResolveColor`, `ResolveThickness`, `ResolveFontName` fall back to standard group via `Std*` helpers; `VisualTheme` stripped to window-settings only. ✓
+- [x] **Step 3** — Gear button styled by standard group; hardcoded `_gearNormalBg`/`_gearNormalFg` removed; `ApplyModeIndicators` reads `StdKeyColor`/`StdFontColor`; stopEditing.svg icon (30 px) used in Edit mode. ✓
+- [x] **Step 4** — GroupEditorForm protects standard group: 🔒 prefix in listbox, name field and delete button locked, border Minimum=0, hint hidden, font item 0 = "(none / auto)", colour clear menus = "Clear"; non-standard groups show "(inherit standard)" throughout. Dutch translations added. ✓
+- [x] **Step 5** — KeyboardEditorForm: Default Key Style section removed; Key Groups card removed entirely (groups are a per-key concern, not keyboard-level); layout reorganized to Left=Language+Window, Right=Layout file+Accessibility; KeyEditorForm: `+` button replaced with full-width "Manage Groups…" button below the group combo (pre-selects the active group, opens GroupEditorForm); 6 new tests, 1314/1314 passing. ✓
+- [x] **Step 6** — Reserved name enforcement: "standard" blocked in Add (inline error label in New Group dialog) and Rename (live inline error label below Name field; `CommitTo` safety net; `SaveCurrentName` deferred-write fix so partial typing never corrupts the data model); import gets a special light-blue "Protected" row with "Update standard group style" / "Skip" options; `ApplyImportDecisions` internal method; `CommitToResult`, `TryAddGroup`, `TryRenameCurrentGroup` test-seam methods; Dutch translations; 22 new tests, 1334/1334 passing. ✓
+- [x] **Code review & fixes** — Three `ContextMenuStrip` instances in `GroupEditorForm` now disposed in `FormClosed`; group edits made via "Manage Groups…" inside `KeyEditorForm` now correctly repaint the keyboard even when the key edit is cancelled (`RebuildGroupDict` + `RefreshAllButtons` on cancel if `ResultGroupsChanged`); XML doc comments added to `BuildTitle`, `RefreshAppearanceFromGroupCore` (KeyEditorForm). ✓
+
+### UI / UX improvements ✓
+
+- [x] **Grow window height when entering edit mode** — `ToolbarHeightForMode()` computes the toolbar-height delta per mode transition; `Height += delta` is applied before `ApplyModeIndicators()`. A `_inModeTransition` flag suppresses the spurious `SizeChanged → LayoutButtons()` call during the programmatic resize so only one layout pass runs — the one inside `ApplyModeIndicators()` — at which point both the new height and the new toolbar visibility are already set. Result: key sizes stay constant; transition is a single-frame jump with no intermediate paint. 9 tests added, 1343/1343 passing. ✓
+- [x] **Group editor — hex fields and field order** — `GroupEditorForm` colour rows now show a 32 px swatch + hex text box, matching `KeyEditorForm`. `SetSwatchColor` writes the hex box; `GetSwatchColor` reads back via `TryParseHex`. Field order: Name → Font → Font size → Font color → Key color → Border color → Border thickness. ✓
+- [x] **Emoji in dialog title bars** — `TitleSafeLabel` helper strips surrogate pairs and BMP symbol blocks; `BuildTitle` omits brackets when nothing printable remains. ✓
+- [x] **"+" button → "Manage Groups…" button in key editor** — Full-width button below the group combo replaces the small `+`; pre-selects the active group when opening `GroupEditorForm`. ✓
+
 ### Robustness / code quality ✓
 
 - [x] **Keyboard hook not always uninstalled** — Added `Deactivate` handler that calls `StopRecording()` if the user switches away while recording. Added hook-install failure check in `StartRecording()` — aborts cleanly with a message instead of leaving the UI stuck in "recording" state. `FormClosed` safety net was already in place. ✓
@@ -202,6 +117,14 @@ The gear button always belongs to the standard group; editing it styles the gear
 ### UI / UX improvements ✓
 
 - [x] **Application icon** — `icons/onscreenkeyboard.svg` exported to a PNG-in-ICO at 16/32/48/256 px using Inkscape CLI + a Python ICO assembler. Set as `<ApplicationIcon>` in the `.csproj` (embedded in the assembly) and loaded at runtime via `Form.Icon` in `KeyboardForm`. Icon appears in the title bar, taskbar, Alt+Tab switcher, and Windows Explorer. ✓
+
+### Accessibility quick wins ✓
+
+- [x] **1. AcceptButton / CancelButton on main forms** — `AcceptButton = _btnApply; CancelButton = _btnCancel` on `KeyEditorForm` and `KeyboardEditorForm`; `AcceptButton = _btnOK; CancelButton = _btnCancel` on `GroupEditorForm`. Enter and Escape now work on all three forms. ✓
+- [x] **2. TabStop on action buttons** — `FluentButton` constructor sets `TabStop = false` globally. Added `TabStop = true` in `MakeActionBtn` (KeyEditorForm, KeyboardEditorForm) and `MakeBigBtn` (GroupEditorForm) so Apply, Cancel, and OK are reachable by Tab. ✓
+- [x] **12. CancelButton on sub-dialogs** — Added `dlg.CancelButton = cn` to `GroupEditorForm.GetNewName` and `dlg.CancelButton = btnCancel3` to the import-resolution dialog. Escape now closes both. ✓
+- [x] **18. Focus restoration after sub-dialog closes** — `_cmbGroup.Focus()` after `GroupEditorForm` closes from the `+` button in `KeyEditorForm`; `_btnManageGroups.Focus()` after `GroupEditorForm` closes from `KeyboardEditorForm`. ✓
+- [x] **19. Initial focus on dialog open** — `ActiveControl = _txtLabel` (KeyEditorForm), `ActiveControl = _cmbFont` (KeyboardEditorForm), `ActiveControl = _txtName` (GroupEditorForm). ✓
 
 ### Fluent Design / UI overhaul ✓
 
@@ -220,7 +143,7 @@ The gear button always belongs to the standard group; editing it styles the gear
 - [x] **Dialog button keys fixed** — `Lang.T("Apply")`, `Lang.T("Cancel")`, `Lang.T("Save")`, `Lang.T("Save As…")`, `Lang.T("Load…")`, `Lang.T("Import")` added as clean entries to `_en` dict in `LanguageManager.cs`; previously code called clean keys but dict only had emoji-prefixed versions (`"✔ Apply"`, `"💾 Save"`, etc.). ✓
 - [x] **`lang_nl.xml` cleaned up** — 33 deprecated entries removed (old emoji-keyed toolbar labels, old emoji Apply/Cancel, hint text lines, removed grid context menu, old Import buttons, duplicate `"Preview"`). 8 missing translations added (`"Layout"`, `"Record key / shortcut"`, `"Press key now…"`, `"Browse (Send/Shift-send/AltGr-send)"`, `"Press Record to …"`). ✓
 
-### UI / UX improvements
+### UI / UX improvements ✓
 
 - [x] **Better cursor in format-painter mode** — Windows hand cursor (`Cursors.Hand`) used for both format-painter and key-copy paint modes. ✓
 - [x] **Gear button: open toolbar, not dropdown** — Left-click toggles Edit mode; right-click shows minimal menu with "Move gear button…" only. Edit Keyboard moved to toolbar. ✓
@@ -230,7 +153,7 @@ The gear button always belongs to the standard group; editing it styles the gear
 - [x] **Format-painter copy-paste (click-to-apply, no extra button)** — "Paste fmt" button removed; "Copy fmt" enters paint mode (blue highlight, crosshair cursor); clicking any key applies formatting; Escape or second click cancels. ✓
 - [x] **Redraw performance — eliminate slow/hesitant repaints** — Four fixes: `WS_EX_COMPOSITED` batches child-window paints; `SuspendLayout`/`ResumeLayout` in `LayoutButtons` and `RefreshAllButtons`; `skipFontCalc` parameter skips redundant `TextRenderer.MeasureText` pass when fonts were already set by the preceding `LayoutButtons()` call; `UpdateCornerTag` deduplication removes double `Invalidate` per button. ✓
 
-### Structural improvements
+### Structural improvements ✓
 
 #### Word prediction slots ✓
 - [x] **Word prediction slot — auto-assign next free number** — When adding a prediction cell, instead of warning that a slot number is already in use, automatically assign the next available slot number. Slot NUD hidden; no manual choice needed. ✓
@@ -239,7 +162,7 @@ The gear button always belongs to the standard group; editing it styles the gear
 #### Layout switching from a key ✓
 - [x] New "Layout" send mode in key editor. Primary/Shift/AltGr sends each independently load a file (`layout:math.xml`). Path resolved relative to current layout dir, then app dir, then absolute. Flash red on missing file. Undo stack cleared on switch. ✓
 
-### Security / robustness
+### Security / robustness ✓
 
 #### XML file tampering ✓
 - ~~Negative or zero GridRows/GridCols~~ — clamped ≥1, default 2, max 50 ✓
@@ -257,8 +180,6 @@ The gear button always belongs to the standard group; editing it styles the gear
 - ~~`doc.Load()` not wrapped in try/catch~~ — all callers already wrap in try/catch ✓
 - ~~`Send` field intentionally unsanitized~~ — documented in README (EN + NL) ✓
 - ~~Safe mode load flag~~ — decided against; README advises manual inspection instead ✓
-
-### Structural improvements
 
 #### E. Import groups from another layout ✓
 - [x] `Import...` button added to `GroupEditorForm` list panel
@@ -298,7 +219,7 @@ Inheritance chain: Global → Group → Per-key.
 - [x] 26 unit tests added
 - [x] Groups added to all layout files: azerty.xml, azertycolor.xml, qwerty.xml, math.xml
 
-### Toolbar implementation
+### Toolbar implementation ✓
 
 - [x] **Step 1** — Toolbar shell (Panel docked top, visible in Edit/QuickEdit only, keys reflow)
 - [x] **Step 2** — Mode toggle buttons (Edit, Quick, Exit)
@@ -311,7 +232,7 @@ Inheritance chain: Global → Group → Per-key.
 - [x] **Step 9** — Full key copy/paste (content + formatting)
 - [x] **Step 10** — Zoom presets (not needed)
 
-### Bug fixes
+### Bug fixes ✓
 - [x] Fix dead cells after span shrink in SwapCells (drag)
 - [x] Fix dead cells when resizing a cell via key editor
 - [x] Fix dead cells when expanding a cell span (AbsorbCoveredCells)

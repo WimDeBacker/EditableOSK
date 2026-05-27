@@ -28,6 +28,28 @@
   <String key="tip: Merge down"         value="Samenvoegen met cel eronder" />
   <String key="tip: Split cell"         value="Samengevoegde cel splitsen" />
 
+  <!-- Dialog control tooltips -->
+  <String key="tip: Color swatch"          value="Klik om de kleurenkiezer te openen" />
+  <String key="tip: Hex color"             value="Typ een hexkleur (#RRGGBB)" />
+  <String key="tip: Font size"             value="0 = automatisch aanpassen aan de toets" />
+  <String key="tip: Border thickness"      value="−1 = gebruik de dikte van de standaardgroep  |  0 = geen rand" />
+  <String key="tip: Key width"             value="Relatieve breedte  (bijv. 1 = normaal,  1,5 = 50% breder)" />
+  <String key="tip: Row span"              value="1 = normale hoogte  |  2 = dubbele hoogte (alleen laatste toets in kolom)" />
+  <String key="tip: Record"                value="Een toets of sneltoets opnemen" />
+  <String key="tip: Browse layout"         value="Bladeren naar een lay-outbestand" />
+  <String key="tip: Mode Text"             value="De toets typt tekst" />
+  <String key="tip: Mode Key"              value="De toets verstuurt een sneltoets of speciale toets" />
+  <String key="tip: Mode Modifier"         value="De toets werkt als Shift-, Ctrl-, Alt- of andere modifierschakelaar" />
+  <String key="tip: Mode Word prediction"  value="De toets toont een woordvoorspelling" />
+  <String key="tip: Mode Layout"           value="De toets schakelt naar een ander toetsenbordlay-out" />
+  <String key="tip: Add group"             value="Een nieuwe stijlgroep aanmaken" />
+  <String key="tip: Delete group"          value="De geselecteerde groep verwijderen" />
+  <String key="tip: Import groups"         value="Groepen importeren uit een ander lay-outbestand" />
+  <String key="tip: Opacity"               value="Transparantie van het venster  (0 = volledig zichtbaar,  80 = bijna onzichtbaar)" />
+  <String key="tip: Manage Groups"         value="De groepeditor openen" />
+  <String key="tip: Language"              value="De interfacetaal selecteren" />
+  <String key="tip: WP slot"               value="Woordvoorspellingsslot nummer (0–9)" />
+
   <!-- Toolbar button labels -->
   <String key="tb: Load"      value="Laden" />
   <String key="tb: Save"      value="Opslaan" />
@@ -54,10 +76,10 @@
   <String key="📌 Move gear button…" value="📌 Tandwielknop verplaatsen…" />
 
   <!-- Dialog buttons (clean keys, no emoji) -->
-  <String key="Apply"      value="Toepassen" />
-  <String key="Cancel"     value="Annuleren" />
+  <String key="Apply"      value="To&amp;epassen" />
+  <String key="Cancel"     value="Ann&amp;uleren" />
   <String key="Save"       value="Opslaan" />
-  <String key="Save As…"   value="Opslaan als…" />
+  <String key="Save As…"   value="Op&amp;slaan als…" />
   <String key="Load…"      value="Laden…" />
   <String key="Import"     value="Importeren" />
 
@@ -66,17 +88,17 @@
   <String key="Key Content"   value="Toetsinhoud" />
   <String key="Label"         value="Label" />
   <String key="Send"          value="Verzenden" />
-  <String key="Shift label"   value="Shift-label" />
-  <String key="Shift send"    value="Shift-verzenden" />
+  <String key="Shift label"   value="Shi&amp;ft-label" />
+  <String key="Shift send"    value="Shift-verzen&amp;den" />
   <String key="AltGr label"   value="AltGr-label" />
   <String key="AltGr send"    value="AltGr-verzenden" />
   <String key="Key width"     value="Toets breedte" />
-  <String key="Key height"    value="Toets hoogte" />
+  <String key="Key height"    value="Toets &amp;hoogte" />
 
   <!-- Key editor — Send mode -->
   <String key="Text"                        value="Tekst" />
-  <String key="Key/Shortcut"                value="Toets/Sneltoets" />
-  <String key="Modifier"                    value="Modifier" />
+  <String key="Key/Shortcut"                value="Toets/&amp;Sneltoets" />
+  <String key="Modifier"                    value="M&amp;odifier" />
   <String key="Layout"                      value="Lay-out" />
   <String key="Word prediction"             value="Woordvoorspelling" />
   <String key="Prediction cell"             value="Voorspellingstoets" />
@@ -97,9 +119,9 @@
   <!-- Key editor — Appearance group -->
   <String key="Appearance"        value="Uiterlijk" />
   <String key="Font"              value="Lettertype" />
-  <String key="Font size"         value="Lettergrootte" />
+  <String key="Font size"         value="Lettergr&amp;ootte" />
   <String key="Auto"              value="Auto" />
-  <String key="Font color"        value="Letterkleur" />
+  <String key="Font color"        value="L&amp;etterkleur" />
   <String key="Key color"         value="Toetskleur" />
   <String key="Border color"      value="Randkleur" />
   <String key="Border thickness"  value="Dikte (px)" />
@@ -115,31 +137,33 @@
   <String key="Default Key Style"  value="Standaard toetsstijl" />
   <String key="Apply to all keys"  value="Stijl nu op alle toetsen toepassen" />
   <String key="Always on top"      value="Altijd bovenaan" />
-  <String key="Hide title bar"     value="Titelbalk verbergen" />
+  <String key="Hide title bar"     value="Titelbalk &amp;verbergen" />
   <String key="Accessibility"      value="Toegankelijkheid" />
-  <String key="Sticky modifiers"   value="Plaktoetsen (Sticky Keys)" />
-  <String key="Hold to edit"       value="Ingedrukt houden voor bewerkingsmodus" />
-  <String key="Toolbar theme"      value="Werkbalkthema" />
+  <String key="Sticky modifiers"   value="&amp;Plaktoetsen (Sticky Keys)" />
+  <String key="Hold to edit"       value="&amp;Ingedrukt houden voor bewerkingsmodus" />
+  <String key="Toolbar theme"      value="&amp;Werkbalkthema" />
   <String key="Dark"               value="Donker" />
   <String key="Light"              value="Licht" />
   <String key="System default"     value="Systeemstandaard" />
 
   <!-- Group editor -->
   <String key="Key Groups"             value="Toetsgroepen" />
-  <String key="Manage Groups…"         value="Groepen beheren…" />
+  <String key="Manage Groups…"         value="&amp;Groepen beheren…" />
   <String key="Group"                  value="Groep" />
   <String key="(no group)"             value="(geen groep)" />
   <String key="Manage Groups"          value="Groepen beheren" />
   <String key="Groups"                 value="Groepen" />
   <String key="Style"                  value="Stijl" />
-  <String key="+ Add group"            value="+ Toevoegen" />
-  <String key="− Delete group"         value="− Verwijderen" />
+  <String key="+ Add group"            value="+ &amp;Toevoegen" />
+  <String key="− Delete group"         value="− &amp;Verwijderen" />
   <String key="Name"                   value="Naam" />
-  <String key="(inherit global)"       value="(globaal)" />
   <String key="(inherit)"              value="(overnemen)" />
-  <String key="-1 = inherit global"    value="-1 = globaal overnemen" />
   <String key="0 = auto / inherit"     value="0 = auto / overnemen" />
-  <String key="Clear (inherit global)" value="Wissen (globaal overnemen)" />
+  <String key="(inherit standard)"     value="(standaard)" />
+  <String key="-1 = inherit standard"  value="-1 = standaard overnemen" />
+  <String key="Clear (inherit standard)" value="Wissen (standaard overnemen)" />
+  <String key="(none / auto)"          value="(geen / auto)" />
+  <String key="Clear"                  value="Wissen" />
   <String key="Delete Group"           value="Groep verwijderen" />
   <String key="Delete group msg"       value="Groep &quot;{0}&quot; verwijderen?&#10;&#10;Toetsen die aan deze groep zijn toegewezen, keren terug naar de globale stijl." />
   <String key="New Group"              value="Nieuwe groep" />
@@ -156,6 +180,9 @@
   <String key="Add as new"             value="Toevoegen als nieuw" />
   <String key="Skip"                   value="Overslaan" />
   <String key="Add"                    value="Toevoegen" />
+  <String key="Name 'standard' is reserved." value="De naam 'standard' is gereserveerd." />
+  <String key="Update standard group style"  value="Standaardgroepstijl bijwerken" />
+  <String key="Protected"              value="Beveiligd" />
 
   <!-- Errors -->
   <String key="Save failed"         value="Opslaan mislukt:" />

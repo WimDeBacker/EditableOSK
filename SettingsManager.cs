@@ -464,7 +464,7 @@ namespace OnScreenKeyboard
             var p = cell.Props;
             return string.IsNullOrEmpty(p.Label)
                 && string.IsNullOrEmpty(p.Send)
-                && string.IsNullOrEmpty(p.GroupName)
+                && (string.IsNullOrEmpty(p.GroupName) || p.GroupName == StandardGroupName)
                 && string.IsNullOrEmpty(p.FontName)
                 && p.FontSize        == 0
                 && p.FontColor.IsEmpty        // Color.Empty means "no override"
@@ -744,22 +744,28 @@ namespace OnScreenKeyboard
                         layout.Cells.Add(new GridCell(r, c, new KeyProps("", ""), 1, 1));
 
             // Ensure the standard group always exists. Older files (and hand-edited XML)
-            // may not have it; create one from the Theme appearance values so colours are
-            // preserved exactly. Files that already contain an explicit standard group
-            // keep their own values unchanged.
+            // may not have it; create one with neutral readable defaults.
+            // Files that already contain an explicit standard group keep their values unchanged.
             if (!layout.Groups.Exists(g => g.Name == StandardGroupName))
             {
                 layout.Groups.Insert(0, new KeyGroup
                 {
                     Name            = StandardGroupName,
-                    FontName        = theme.FontName,
-                    FontSize        = theme.FontSize,
-                    FontColor       = theme.FontColor,
-                    KeyColor        = theme.KeyColor,
-                    BorderColor     = theme.BorderColor,
-                    BorderThickness = theme.BorderThickness,
+                    FontColor       = ColorTranslator.FromHtml("#000000"),  // black text
+                    KeyColor        = ColorTranslator.FromHtml("#FFFFFF"),  // white background
+                    BorderColor     = ColorTranslator.FromHtml("#000000"),  // black border
+                    BorderThickness = 0,                                    // no visible border
                 });
             }
+
+            // Assign every ungrouped key to the standard group so the key editor
+            // always shows a named group.  Spacers (empty label + empty send) are
+            // left as "" and handled as "effectively standard" in IsPureSpacer so
+            // the sparse-XML optimisation continues to work.
+            foreach (var cell in layout.Cells)
+                if (string.IsNullOrEmpty(cell.Props.GroupName) &&
+                    (!string.IsNullOrEmpty(cell.Props.Label) || !string.IsNullOrEmpty(cell.Props.Send)))
+                    cell.Props.GroupName = StandardGroupName;
 
             return layout;
         }

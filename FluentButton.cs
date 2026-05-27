@@ -76,6 +76,25 @@ namespace OnScreenKeyboard
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public int     CornerRadius { get; set; } = Fluent.RadiusBtn;
 
+        /// <summary>
+        /// Overrides the base <see cref="System.Windows.Forms.Control.Text"/> setter to keep
+        /// <see cref="System.Windows.Forms.Control.AccessibleName"/> in sync automatically.
+        /// WinForms reads <c>AccessibleName</c> as the label Narrator announces when the
+        /// button receives focus; without this, owner-drawn buttons have no accessible name
+        /// because the base class text is not surfaced to the accessibility tree.
+        /// The mnemonic marker (<c>&amp;</c>) is stripped so screen readers hear
+        /// "Cancel" rather than "&amp;Cancel".
+        /// </summary>
+        public override string Text
+        {
+            get => base.Text;
+            set
+            {
+                base.Text = value;
+                AccessibleName = Lang.StripMnemonic(value);
+            }
+        }
+
         // Private state flags that drive the visual feedback.
         // We track these ourselves because WinForms does not expose a reliable
         // "currently hovered" property on the base Button class.
@@ -122,6 +141,12 @@ namespace OnScreenKeyboard
         /// <summary>Clears the hovered state and triggers a repaint when the mouse leaves the button.</summary>
         protected override void OnMouseLeave(EventArgs e) { _hovered = false; Invalidate(); base.OnMouseLeave(e); }
 
+        /// <summary>Triggers a repaint when the button gains keyboard focus so the focus ring appears.</summary>
+        protected override void OnGotFocus(EventArgs e)  { Invalidate(); base.OnGotFocus(e); }
+
+        /// <summary>Triggers a repaint when the button loses keyboard focus so the focus ring disappears.</summary>
+        protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
+
         /// <summary>Sets the pressed state on left-button down and triggers a repaint for the "pushed" look.</summary>
         protected override void OnMouseDown(MouseEventArgs e)
         {
@@ -131,6 +156,19 @@ namespace OnScreenKeyboard
 
         /// <summary>Clears the pressed state on mouse release and repaints to return to the normal/hovered look.</summary>
         protected override void OnMouseUp(MouseEventArgs e) { _pressed = false; Invalidate(); base.OnMouseUp(e); }
+
+        // WM_UPDATEUISTATE (0x0128) is broadcast to every control when the user
+        // presses Alt, toggling the system's "show keyboard cues" state.
+        // The base Control class updates ShowKeyboardCues in response, but it only
+        // calls Invalidate() for non-UserPaint controls.  For owner-drawn controls
+        // we must trigger the repaint ourselves so PaintLight can switch between
+        // HidePrefix (cues off) and no-prefix (cues on, underline visible).
+        private const int WM_UPDATEUISTATE = 0x0128;
+        protected override void WndProc(ref Message m)
+        {
+            base.WndProc(ref m);
+            if (m.Msg == WM_UPDATEUISTATE) Invalidate();
+        }
 
         /// <summary>
         /// Paints the button by delegating to <see cref="FluentPainter.PaintLight"/>.
@@ -145,8 +183,26 @@ namespace OnScreenKeyboard
         {
             // Resolve the parent background so rounded corners blend in correctly.
             Color parentBg = Parent?.BackColor ?? Fluent.BgPage;
+            // ShowKeyboardCues is true when Alt is held or the accessibility setting
+            // "Always show keyboard shortcuts" is on — pass it so PaintLight can
+            // show/hide the mnemonic underline at the right moment.
             FluentPainter.PaintLight(e.Graphics, ClientRectangle, Text, IconGlyph,
-                Font, Style, _hovered, _pressed, Enabled, CornerRadius, parentBg);
+                Font, Style, _hovered, _pressed, Enabled, CornerRadius, parentBg,
+                ShowKeyboardCues);
+
+            // Focus ring — drawn whenever the button has focus, regardless of how focus was acquired.
+            // WCAG 2.1 AA §2.4.7: keyboard focus must be visible.
+            // The older WinForms convention of gating this on ShowFocusCues (hiding the ring on
+            // mouse-click) caused a first-focus race: ShowFocusCues starts false when a new dialog
+            // opens, so the ring never appeared on the very first Tab press.  WinUI 3 / Windows 11
+            // always show the focus ring when the control has focus — we follow that behaviour.
+            // Ring colour: accent blue on Neutral (grey) buttons, white on coloured variants.
+            if (Focused)
+            {
+                var ringColor = (Style == Variant.Neutral) ? Fluent.Accent : Color.White;
+                using var pen = new Pen(ringColor, 2f);
+                e.Graphics.DrawRectangle(pen, new Rectangle(2, 2, Width - 5, Height - 5));
+            }
         }
     }
 
@@ -207,6 +263,14 @@ namespace OnScreenKeyboard
         public string SvgFile { get; set; } = "";
 
         /// <summary>
+        /// When <c>true</c> the button draws an accent-coloured focus ring — used by
+        /// the keyboard-navigation layer in Edit mode to show which toolbar button
+        /// would be activated by pressing Enter or Space.
+        /// </summary>
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public bool HasNavFocus { get; set; } = false;
+
+        /// <summary>
         /// When <c>true</c> all <see cref="ToolbarButton"/> instances paint in light-theme
         /// mode (dark icons on a light background).  Set this before calling
         /// <see cref="Control.Invalidate"/> on all toolbar buttons to switch themes at runtime.
@@ -261,6 +325,14 @@ namespace OnScreenKeyboard
             FluentPainter.PaintDark(e.Graphics, ClientRectangle, Text, IconGlyph, IconImage,
                 Font, IsActive, _hovered, _pressed, Enabled, Fluent.RadiusBtn, parentBg,
                 IsLightTheme);
+
+            // Keyboard-navigation focus ring — drawn when this button is the current
+            // keyboard-nav target inside the toolbar (HasNavFocus is set by KeyboardForm).
+            if (HasNavFocus)
+            {
+                using var pen = new Pen(Fluent.Accent, 2f);
+                e.Graphics.DrawRectangle(pen, new Rectangle(2, 2, Width - 5, Height - 5));
+            }
         }
     }
 
@@ -317,7 +389,7 @@ namespace OnScreenKeyboard
             Graphics g, Rectangle r, string text, string icon,
             Font font, FluentButton.Variant style,
             bool hovered, bool pressed, bool enabled, int radius,
-            Color parentBg = default)
+            Color parentBg = default, bool showKeyboardCues = false)
         {
             // Quality settings for crisp anti-aliased shapes and ClearType text.
             g.SmoothingMode     = SmoothingMode.AntiAlias;
@@ -384,12 +456,17 @@ namespace OnScreenKeyboard
                 : (enabled ? Color.White : Color.FromArgb(160, 255, 255, 255));
 
             // Step 7: draw icon glyph + label, or label alone.
+            // Prefix flag for mnemonic underline rendering:
+            //   HidePrefix — '&' stripped from display, underline hidden (cues off)
+            //   (no flag)  — '&' stripped from display, underline always shown (cues on)
+            var prefixFlag = showKeyboardCues ? TextFormatFlags.Default : TextFormatFlags.HidePrefix;
+
             if (!string.IsNullOrEmpty(icon))
             {
                 // When an icon is present we need to lay out icon and text side-by-side,
                 // so we measure each piece individually and compute a starting X that
                 // centres the combined icon+gap+text block inside the button.
-                var mf  = TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine | TextFormatFlags.VerticalCenter;
+                var mf  = prefixFlag | TextFormatFlags.SingleLine | TextFormatFlags.VerticalCenter;
                 var inf = new Size(int.MaxValue, int.MaxValue);   // "no size limit" for measuring
 
                 int iw  = TextRenderer.MeasureText(icon, Fluent.FontIconSm, inf, mf).Width;
@@ -407,8 +484,8 @@ namespace OnScreenKeyboard
             }
             else
             {
-                // Text-only button: let TextRenderer centre it for us.
-                var flags = TextFormatFlags.NoPrefix | TextFormatFlags.HorizontalCenter |
+                // Text-only button: centre and apply the resolved prefix flag.
+                var flags = prefixFlag | TextFormatFlags.HorizontalCenter |
                             TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine;
                 TextRenderer.DrawText(g, text, font, r, fg, flags);
             }
@@ -687,8 +764,8 @@ namespace OnScreenKeyboard
                 if (c is FluentButton) continue;
                 if (c.Tag is string t && t == "notheme") continue;
 
-                // Colour-swatch panels: keep the swatch colour, but still recurse into children.
-                bool isSwatch = c is Panel && c.Tag is TextBox;
+                // Colour-swatch buttons: keep the swatch colour, but still recurse into children.
+                bool isSwatch = c is ColorSwatchButton && c.Tag is TextBox;
 
                 if (!isSwatch)
                 {
@@ -751,6 +828,68 @@ namespace OnScreenKeyboard
             int g = Math.Max(0, (int)(c.G * (1f - amount)));
             int b = Math.Max(0, (int)(c.B * (1f - amount)));
             return Color.FromArgb(c.A, r, g, b);
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    //  ColorSwatchButton — keyboard-reachable colour swatch.
+    //
+    //  A minimal Button subclass used as a colour swatch in AddColorRow().
+    //  It replaces the plain Panel that was mouse-only, so it participates
+    //  in the Tab order and opens the colour picker on Space/Enter natively.
+    //
+    //  Focus indicator: a two-tone ring (white outer + dark inner) that is
+    //  visible against any swatch colour, satisfying WCAG 2.1 AA §2.4.7.
+    // ════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// A flat <see cref="Button"/> used as a colour swatch in colour-row controls.
+    /// Participates in Tab order (<c>TabStop = true</c>) and opens the colour
+    /// picker on Space or Enter via the standard <c>Button.Click</c> event.
+    ///
+    /// <para>A two-tone focus ring (white outer / dark inner) is painted over the
+    /// swatch colour when the button has keyboard focus, satisfying WCAG 2.1 AA
+    /// §2.4.7 on any background colour.</para>
+    /// </summary>
+    public class ColorSwatchButton : Button
+    {
+        /// <summary>
+        /// Initialises the swatch with a flat appearance and keyboard accessibility.
+        /// </summary>
+        public ColorSwatchButton()
+        {
+            FlatStyle = FlatStyle.Flat;
+            FlatAppearance.BorderSize = 1;
+            TabStop = true;
+            Cursor  = Cursors.Hand;
+            Text    = "";   // pure colour display — no label
+        }
+
+        /// <summary>Triggers a repaint when focus is gained so the focus ring appears.</summary>
+        protected override void OnGotFocus(EventArgs e)  { Invalidate(); base.OnGotFocus(e); }
+
+        /// <summary>Triggers a repaint when focus is lost so the focus ring disappears.</summary>
+        protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
+
+        /// <summary>
+        /// Paints the swatch and, when focused via keyboard, overlays a two-tone focus
+        /// ring that is visible against any swatch colour.
+        /// </summary>
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);   // draws BackColor fill + FlatStyle border
+
+            // Two-tone focus ring: white outer ring + dark inner ring.
+            // White is visible against dark swatches; the dark ring is visible against light ones.
+            // ShowFocusCues is false for mouse clicks, so this only appears during Tab navigation.
+            if (Focused && ShowFocusCues)
+            {
+                var g = e.Graphics;
+                using var wpen = new Pen(Color.White, 2f);
+                g.DrawRectangle(wpen, new Rectangle(2, 2, Width - 5, Height - 5));
+                using var dpen = new Pen(Color.FromArgb(30, 30, 30), 1f);
+                g.DrawRectangle(dpen, new Rectangle(4, 4, Width - 9, Height - 9));
+            }
         }
     }
 
