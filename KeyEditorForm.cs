@@ -73,11 +73,17 @@ namespace OnScreenKeyboard
 
         // Effective (resolved) values that were loaded into the Appearance controls at
         // PopulateFields / RefreshAppearanceFromGroup time.  Apply() compares the current
-        // control values against these to decide whether to write the inherit sentinels
-        // (Color.Empty / "" / -1) or an explicit per-key override.
+        // control values against these to detect changes.
         private Color  _loadedFontColor, _loadedKeyColor, _loadedBorderColor;
         private string _loadedFontName  = "";
         private int    _loadedFontSize, _loadedBorderThickness;
+
+        // Group-resolved values — what the currently selected group provides, ignoring
+        // any existing per-key overrides.  Apply() compares against these to decide
+        // whether the user changed a field away from the group default.
+        private Color  _groupFontColor, _groupKeyColor, _groupBorderColor;
+        private string _groupFontName  = "";
+        private int    _groupFontSize, _groupBorderThickness;
 
         // The keyboard window's current theme settings (font, colors, etc.).
         // Cached at construction time because the Owner property is null until ShowDialog().
@@ -349,10 +355,13 @@ namespace OnScreenKeyboard
         private void RebuildGroupCombo(string previousSelection)
         {
             _cmbGroup.Items.Clear();
+            _cmbGroup.Items.Add(Lang.T("(no group)"));  // index 0 always
             foreach (var g in _groups) _cmbGroup.Items.Add(g.Name);
-            int idx = 0;  // fall back to standard (always index 0)
-            if (previousSelection != null)
-                for (int i = 0; i < _cmbGroup.Items.Count; i++)
+            // If previousSelection is "" (was no-group) → stay at 0.
+            // Otherwise find the named group; fall back to 0 if it was deleted.
+            int idx = 0;
+            if (!string.IsNullOrEmpty(previousSelection))
+                for (int i = 1; i < _cmbGroup.Items.Count; i++)
                     if (_cmbGroup.Items[i]?.ToString() == previousSelection) { idx = i; break; }
             _cmbGroup.SelectedIndex = _cmbGroup.Items.Count > 0 ? idx : -1;
         }
@@ -465,6 +474,20 @@ namespace OnScreenKeyboard
                                      gBt;
             _nudBorderThickness.Value = Math.Clamp(_loadedBorderThickness, -1,
                                                    (int)_nudBorderThickness.Maximum);
+
+            // ── Group-resolved values (no per-key layer) ───────────────
+            // These are the effective values the selected group provides on its own.
+            // Apply() uses them to detect whether the user changed a field away from
+            // the group default, which triggers an automatic switch to (no group).
+            _groupFontColor   = Rc(Color.Empty, grp?.FontColor   ?? Color.Empty, gFc);
+            _groupKeyColor    = Rc(Color.Empty, grp?.KeyColor    ?? Color.Empty, gKc);
+            _groupBorderColor = Rc(Color.Empty, grp?.BorderColor ?? Color.Empty, gBc);
+            string grpFnG = grp?.FontName ?? "";
+            _groupFontName = !string.IsNullOrEmpty(grpFnG) ? grpFnG : gFn;
+            int grpFsG = grp?.FontSize ?? 0;
+            _groupFontSize = grpFsG > 0 ? grpFsG : 0;
+            int grpBtG = grp?.BorderThickness ?? -1;
+            _groupBorderThickness = grpBtG >= 0 ? grpBtG : gBt;
         }
 
         // ── Constructor ───────────────────────────────────────────────
@@ -831,8 +854,9 @@ namespace OnScreenKeyboard
                 TabIndex = ti++,
                 AccessibleName = Lang.StripMnemonic(Lang.T("Group")),
             };
+            _cmbGroup.Items.Add(Lang.T("(no group)"));  // index 0 — key has per-key appearance
             foreach (var g in _groups) _cmbGroup.Items.Add(g.Name);
-            if (_cmbGroup.Items.Count > 0) _cmbGroup.SelectedIndex = 0;
+            _cmbGroup.SelectedIndex = 0;
             _cmbGroup.SelectedIndexChanged += (s, e) =>
             {
                 RefreshAppearanceFromGroup();
@@ -853,13 +877,15 @@ namespace OnScreenKeyboard
             _btnGroupEdit.Click += (s, e) =>
             {
                 // Pre-select whichever group is currently active in the combo.
-                string current = _cmbGroup.SelectedItem?.ToString();
+                // Index 0 is "(no group)" — pass null so GroupEditorForm shows the first real group.
+                string current = _cmbGroup.SelectedIndex == 0
+                    ? null : _cmbGroup.SelectedItem?.ToString();
                 using var dlg = new GroupEditorForm(_groups, initialGroupName: current);
                 if (dlg.ShowDialog(this) != DialogResult.OK) return;
                 _groups.Clear();
                 _groups.AddRange(dlg.ResultGroups);
                 ResultGroupsChanged = true;
-                RebuildGroupCombo(current);
+                RebuildGroupCombo(current ?? "");
                 Refresh2();
                 _cmbGroup.Focus();  // return focus to the group dropdown after the sub-dialog closes
             };
@@ -1885,15 +1911,17 @@ namespace OnScreenKeyboard
             // per-key → group → global chain and populates font, size, colors and border thickness.
             if (_cmbGroup != null)
             {
-                // GroupName is always non-empty for real keys after SettingsManager assigns
-                // "standard" to ungrouped keys on load.  Fall back to "standard" (index 0)
-                // for spacers or any edge case where GroupName is still empty.
-                string gn = !string.IsNullOrEmpty(p.GroupName)
-                    ? p.GroupName
-                    : SettingsManager.StandardGroupName;
-                int gi = _cmbGroup.Items.IndexOf(gn);
-                if (_cmbGroup.Items.Count > 0)
+                // Empty GroupName → key has no group → select index 0 "(no group)".
+                // Non-empty GroupName → find the named group; fall back to 0 if not found.
+                if (string.IsNullOrEmpty(p.GroupName))
+                {
+                    _cmbGroup.SelectedIndex = 0;  // (no group)
+                }
+                else
+                {
+                    int gi = _cmbGroup.Items.IndexOf(p.GroupName);
                     _cmbGroup.SelectedIndex = gi >= 0 ? gi : 0;
+                }
                 // SelectedIndexChanged fires RefreshAppearanceFromGroup automatically,
                 // but call it explicitly here too in case the index didn't actually change.
             }
@@ -1994,44 +2022,65 @@ namespace OnScreenKeyboard
             var ownerGl = _ownerGlobal;
 
             // The combo always shows a named group; fall back to standard if somehow empty.
-            string groupName = _cmbGroup?.SelectedItem?.ToString()
-                ?? SettingsManager.StandardGroupName;
+            // index 0 in the group combo is always "(no group)".
+            bool isNoGroup = (_cmbGroup?.SelectedIndex == 0);
+            string groupName = isNoGroup ? "" : (_cmbGroup?.SelectedItem?.ToString() ?? "");
+
+            // Read current appearance UI values once — used in both branches below.
+            string fcHex = GetSwatchHex(_pnlFontColor).Trim();
+            string kcHex = GetSwatchHex(_pnlKeyColor).Trim();
+            string bcStr = GetSwatchHex(_pnlBorderColor).Trim();
+            Color parsedFc = ParseColor(fcHex, Color.Empty);
+            Color parsedKc = ParseColor(kcHex, Color.Empty);
+            Color parsedBc = ParseColor(bcStr, Color.Empty);
+            string curFont = _cmbFont.SelectedItem?.ToString() ?? "";
+            int rawFs = (_chkAutoSize.Checked || _nudFontSize.Value == 0) ? 0 : (int)_nudFontSize.Value;
+            int rawBt = (int)_nudBorderThickness.Value;
+
+            // ── Auto-switch to (no group) ──────────────────────────────
+            // When a group is selected but any appearance field was changed away
+            // from what the group provides, automatically detach the key from the
+            // group so the explicit values are preserved.
+            if (!isNoGroup)
+            {
+                bool anyChanged =
+                    (!parsedFc.IsEmpty && !ColorsMatchRgb(parsedFc, _groupFontColor))   ||
+                    (!parsedKc.IsEmpty && !ColorsMatchRgb(parsedKc, _groupKeyColor))    ||
+                    (!parsedBc.IsEmpty && !ColorsMatchRgb(parsedBc, _groupBorderColor)) ||
+                    (!string.IsNullOrEmpty(curFont) && curFont != _groupFontName)       ||
+                    rawFs != _groupFontSize                                              ||
+                    rawBt != _groupBorderThickness;
+
+                if (anyChanged) { isNoGroup = true; groupName = ""; }
+            }
 
             Color fc, kc, bc;
             string fontName;
             int fontSize, borderThickness;
 
-            if (!string.IsNullOrEmpty(groupName))
+            if (isNoGroup)
             {
-                // ── Group mode ─────────────────────────────────────────────
-                // The key's appearance is fully governed by the group.
-                // Clear every per-key override so the group (and global behind it) take effect.
-                fc = kc = bc = Color.Empty;
-                fontName       = "";
-                fontSize       = 0;
-                borderThickness = -1;
+                // ── Individual mode ────────────────────────────────────────
+                // Key owns all its appearance.  Save every field explicitly so
+                // the key continues to look exactly the same even without a group.
+                // For invalid / empty hex, fall back to the loaded (resolved) value
+                // so a half-typed entry never silently changes the colour.
+                fc       = !parsedFc.IsEmpty ? parsedFc : _loadedFontColor;
+                kc       = !parsedKc.IsEmpty ? parsedKc : _loadedKeyColor;
+                bc       = !parsedBc.IsEmpty ? parsedBc : _loadedBorderColor;
+                fontName = !string.IsNullOrEmpty(curFont) ? curFont : _loadedFontName;
+                fontSize = rawFs != 0 ? rawFs
+                         : _loadedFontSize > 0 ? _loadedFontSize
+                         : 0;
+                borderThickness = rawBt >= 0 ? rawBt : _loadedBorderThickness;
             }
             else
             {
-                // ── Individual mode ────────────────────────────────────────
-                // The key owns its appearance.  Store Color.Empty only when the chosen color
-                // exactly matches the global setting, so a later global change still cascades.
-                // For everything else, write the explicit value.
-                string fcHex = GetSwatchHex(_pnlFontColor).Trim();
-                string kcHex = GetSwatchHex(_pnlKeyColor).Trim();
-                string bcStr = GetSwatchHex(_pnlBorderColor).Trim();
-                fc = HexMatchesGlobal(fcHex, ownerGl?.FontColor)  ? Color.Empty : ParseColor(fcHex, Color.Empty);
-                kc = HexMatchesGlobal(kcHex, ownerGl?.KeyColor)   ? Color.Empty : ParseColor(kcHex, Color.Empty);
-                bc = (HexMatchesGlobal(bcStr, ownerGl?.BorderColor) || bcStr == "") ? Color.Empty : ParseColor(bcStr, Color.Empty);
-
-                fontName = _cmbFont.SelectedItem?.ToString() ?? "";
-                if (_cmbFont.SelectedIndex <= 0 || fontName == (ownerGl?.FontName ?? "Arial"))
-                    fontName = "";
-
-                fontSize = (_chkAutoSize.Checked || _nudFontSize.Value == 0) ? 0 : (int)_nudFontSize.Value;
-
-                int rawBt = (int)_nudBorderThickness.Value;
-                borderThickness = (rawBt == -1 || rawBt == (ownerGl?.BorderThickness ?? 1)) ? -1 : rawBt;
+                // ── Group mode unchanged ───────────────────────────────────
+                // No appearance field was changed; the group governs everything.
+                // Clear all per-key overrides so future group edits still cascade.
+                fc = kc = bc = Color.Empty;
+                fontName = ""; fontSize = 0; borderThickness = -1;
             }
 
             // ── OPTION 3 BEGIN: convert human-readable Send back to internal format ──
@@ -2107,6 +2156,13 @@ namespace OnScreenKeyboard
         /// Returns <paramref name="fallback"/> if the string is invalid.
         /// </summary>
         private static Color ParseColor(string hex, Color fallback) => SettingsManager.ParseColor(hex, fallback);
+
+        /// <summary>
+        /// Returns true when both colours are non-empty and have identical R/G/B components.
+        /// Used in <see cref="Apply"/> to detect whether a colour field changed from its loaded value.
+        /// </summary>
+        private static bool ColorsMatchRgb(Color a, Color b) =>
+            !a.IsEmpty && !b.IsEmpty && a.R == b.R && a.G == b.G && a.B == b.B;
 
         /// <summary>
         /// Returns true when the hex color string represents the same RGB color as the global value.
