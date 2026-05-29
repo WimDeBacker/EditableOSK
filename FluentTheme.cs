@@ -62,8 +62,9 @@ namespace OnScreenKeyboard
         // Medium grey for supporting text (labels, descriptions).
         internal static readonly Color TextSecondary = Color.FromArgb(96,  94,  92);
 
-        // Light grey for placeholder / hint text inside empty input fields.
-        internal static readonly Color TextHint      = Color.FromArgb(160, 160, 160);
+        // Grey for placeholder / hint text inside empty input fields.
+        // #646464 gives 5.9 : 1 on BgCard (white) and 5.3 : 1 on BgPage (#F3F3F3) — passes WCAG AA.
+        internal static readonly Color TextHint      = Color.FromArgb(100, 100, 100);
 
         // Microsoft's standard blue — used for primary action buttons and focused borders.
         internal static readonly Color Accent        = Color.FromArgb(0,   120, 212);

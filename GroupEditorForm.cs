@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using Microsoft.Win32;
 
 namespace OnScreenKeyboard
 {
@@ -166,6 +167,9 @@ namespace OnScreenKeyboard
         /// </summary>
         private ErrorProvider _err;
 
+        // Stored so it can be unsubscribed in FormClosed.
+        private UserPreferenceChangedEventHandler _onPrefChanged;
+
         /// <summary>
         /// Set by <see cref="AddLabel"/> and consumed by the next <see cref="AddColorRow"/> call
         /// so the colour row controls automatically receive the correct <see cref="Control.AccessibleName"/>.
@@ -210,7 +214,7 @@ namespace OnScreenKeyboard
 
             Text            = Lang.T("Manage Groups");
             BackColor       = _dark ? Fluent.DarkBg : Fluent.BgPage;
-            FormBorderStyle = FormBorderStyle.FixedSingle;
+            FormBorderStyle = FormBorderStyle.Sizable;
             MaximizeBox = MinimizeBox = false;
             ShowIcon    = false;
             StartPosition   = FormStartPosition.CenterParent;
@@ -223,6 +227,25 @@ namespace OnScreenKeyboard
 
             BuildUI();
             FluentPainter.ApplyDialogTheme(this, _dark);
+
+            Load += (s, e) =>
+            {
+                var wa = Screen.FromControl(this).WorkingArea;
+                if (Width > wa.Width - 10 || Height > wa.Height - 10)
+                {
+                    Width  = Math.Min(Width,  wa.Width  - 10);
+                    Height = Math.Min(Height, wa.Height - 10);
+                }
+                MinimumSize = new Size(Math.Min(Width, 480), Math.Min(Height, 320));
+            };
+
+            _onPrefChanged = (s, e) =>
+            {
+                if (e.Category == UserPreferenceCategory.Accessibility && IsHandleCreated && !IsDisposed)
+                    BeginInvoke((Action)(() => FluentPainter.ApplyDialogTheme(this, _dark)));
+            };
+            SystemEvents.UserPreferenceChanged += _onPrefChanged;
+
             // The three ContextMenuStrip instances created in AddColorRow are not owned by
             // any component container, so they must be explicitly disposed on close.
             // We reach them through the ToolStripMenuItem.Owner back-reference, which is
@@ -230,6 +253,7 @@ namespace OnScreenKeyboard
             // parent menus) alive for the lifetime of this form.
             FormClosed += (s, e) =>
             {
+                SystemEvents.UserPreferenceChanged -= _onPrefChanged;
                 (_ctxClearFontColor?.Owner   as ContextMenuStrip)?.Dispose();
                 (_ctxClearKeyColor?.Owner    as ContextMenuStrip)?.Dispose();
                 (_ctxClearBorderColor?.Owner as ContextMenuStrip)?.Dispose();
@@ -437,14 +461,12 @@ namespace OnScreenKeyboard
 
             // ── OK / Cancel ───────────────────────────────────────────
             int btnY2 = ClientSize.Height - PAD - 40;
-            int bw    = (formW - PAD) / 2; // each button takes roughly half the form width
+            int bw    = (formW - PAD) / 2;
             _btnCancel = MakeBigBtn(Lang.T("Cancel"), PAD,            btnY2, bw, 40); _btnCancel.TabIndex = 2;
             _btnOK     = MakeBigBtn(Lang.T("Apply"),  PAD + bw + PAD, btnY2, bw, 40); _btnOK.TabIndex     = 3;
             _btnCancel.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
             _btnOK.Click     += (s, e) =>
             {
-                // Make sure the currently displayed group's UI values are saved before
-                // exposing the list to the caller.
                 CommitCurrent();
                 ResultGroups = _groups;
                 DialogResult = DialogResult.OK;
@@ -452,6 +474,23 @@ namespace OnScreenKeyboard
             };
             AcceptButton = _btnOK;
             CancelButton = _btnCancel;
+
+            var scrollPanel = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = _dark ? Fluent.DarkBg : Fluent.BgPage,
+                AutoScroll = true,
+                AutoScrollMinSize = new Size(ClientSize.Width, ClientSize.Height),
+            };
+            Controls.Remove(pnlList);
+            Controls.Remove(pnlDetail);
+            Controls.Remove(_btnCancel);
+            Controls.Remove(_btnOK);
+            scrollPanel.Controls.Add(pnlList);
+            scrollPanel.Controls.Add(pnlDetail);
+            scrollPanel.Controls.Add(_btnCancel);
+            scrollPanel.Controls.Add(_btnOK);
+            Controls.Add(scrollPanel);
         }
 
         // ── List management ───────────────────────────────────────────
@@ -1298,7 +1337,7 @@ namespace OnScreenKeyboard
                                                 StringComparison.OrdinalIgnoreCase);
                 bool conflict = !isStdGroup && existing.Contains(g.Name);
 
-                var row = new DataGridViewRow();
+                var row = new DescribedRow();
                 row.CreateCells(dgv);
                 row.Cells[0].Value = g.Name;
                 // Store the KeyGroup object on the row so we can recover it when reading results.
@@ -1314,6 +1353,8 @@ namespace OnScreenKeyboard
                     cb.Items.AddRange(new[] { actUpdateStd, actSkip });
                     cb.Value = actSkip;
                     row.DefaultCellStyle.BackColor = Color.FromArgb(220, 235, 255); // light blue = protected
+                    row.AccessibleRowName = string.Format(
+                        Lang.T("import row: {0}: Protected — choose Update or Skip"), g.Name);
                 }
                 else if (conflict)
                 {
@@ -1323,6 +1364,8 @@ namespace OnScreenKeyboard
                     cb.Items.AddRange(new[] { actOverwrite, actAddNew, actSkip });
                     cb.Value = actSkip;
                     row.DefaultCellStyle.BackColor = Color.FromArgb(255, 243, 228); // warm amber = warning
+                    row.AccessibleRowName = string.Format(
+                        Lang.T("import row: {0}: Conflict — choose Overwrite, Add as new, or Skip"), g.Name);
                 }
                 else
                 {
@@ -1331,6 +1374,8 @@ namespace OnScreenKeyboard
                     cb.Items.Add(actAdd);
                     cb.Value = actAdd;
                     row.DefaultCellStyle.BackColor = Color.FromArgb(235, 252, 240); // light green = safe
+                    row.AccessibleRowName = string.Format(
+                        Lang.T("import row: {0}: New — will be added"), g.Name);
                 }
                 dgv.Rows.Add(row);
             }
@@ -1445,6 +1490,46 @@ namespace OnScreenKeyboard
             _lstGroups.Items[idx] = name;
             _loading = false;
             return true;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  DescribedRow — DataGridViewRow with a screen-reader-friendly name.
+    //
+    //  The default DataGridView accessible implementation announces each
+    //  cell value separately with no context.  DescribedRow overrides
+    //  CreateAccessibilityInstance() so screen readers hear a single
+    //  complete sentence when the row is selected:
+    //
+    //    "Group Arrows: Conflict — choose Overwrite, Add as new, or Skip"
+    //
+    //  Usage: create a DescribedRow instead of DataGridViewRow, set its
+    //  AccessibleRowName before adding it to the grid.
+    // ═══════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// A <see cref="DataGridViewRow"/> that exposes a human-readable accessible name
+    /// for the entire row, giving screen-reader users context that the default cell-by-cell
+    /// announcement does not provide.
+    /// </summary>
+    internal sealed class DescribedRow : DataGridViewRow
+    {
+        /// <summary>
+        /// The full sentence announced by the screen reader when this row receives focus,
+        /// e.g. <c>"Group Arrows: Conflict — choose Overwrite, Add as new, or Skip"</c>.
+        /// Set this after the row is created and before adding it to the grid.
+        /// </summary>
+        public string AccessibleRowName { get; set; } = "";
+
+        /// <inheritdoc/>
+        protected override AccessibleObject CreateAccessibilityInstance() =>
+            new RowAccessibleObject(this);
+
+        private sealed class RowAccessibleObject : DataGridViewRow.DataGridViewRowAccessibleObject
+        {
+            private readonly DescribedRow _row;
+            public RowAccessibleObject(DescribedRow row) : base(row) => _row = row;
+            public override string Name => _row.AccessibleRowName;
         }
     }
 }

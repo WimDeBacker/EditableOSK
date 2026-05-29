@@ -5,6 +5,7 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using System.Windows.Forms;
+using Microsoft.Win32;
 
 namespace OnScreenKeyboard
 {
@@ -100,6 +101,9 @@ namespace OnScreenKeyboard
         // "currently hovered" property on the base Button class.
         private bool _hovered, _pressed;
 
+        // Handler stored so it can be unsubscribed in Dispose — prevents memory leaks.
+        private readonly UserPreferenceChangedEventHandler _prefChanged;
+
         /// <summary>
         /// Initialises the button with the settings required for owner-draw painting.
         /// </summary>
@@ -117,6 +121,23 @@ namespace OnScreenKeyboard
             TabStop = false;                         // exclude from Tab-key navigation (dialogs use Enter/Escape instead)
             Cursor  = Cursors.Hand;                  // pointer cursor signals "clickable"
             Font    = Fluent.FontBtnLg;              // use the app's standard dialog-button font
+
+            // Repaint when the user toggles high-contrast mode so the HC paint path activates.
+            _prefChanged = (s, e) =>
+            {
+                if (e.Category == UserPreferenceCategory.Accessibility
+                    && IsHandleCreated && !IsDisposed)
+                    BeginInvoke((Action)Invalidate);
+            };
+            SystemEvents.UserPreferenceChanged += _prefChanged;
+        }
+
+        /// <summary>Unsubscribes from <see cref="SystemEvents.UserPreferenceChanged"/> to prevent leaks.</summary>
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+                SystemEvents.UserPreferenceChanged -= _prefChanged;
+            base.Dispose(disposing);
         }
 
         /// <summary>
@@ -199,9 +220,15 @@ namespace OnScreenKeyboard
             // Ring colour: accent blue on Neutral (grey) buttons, white on coloured variants.
             if (Focused)
             {
-                var ringColor = (Style == Variant.Neutral) ? Fluent.Accent : Color.White;
-                using var pen = new Pen(ringColor, 2f);
-                e.Graphics.DrawRectangle(pen, new Rectangle(2, 2, Width - 5, Height - 5));
+                var ring = new Rectangle(2, 2, Width - 5, Height - 5);
+                if (SystemInformation.HighContrast)
+                    ControlPaint.DrawFocusRectangle(e.Graphics, ring);
+                else
+                {
+                    var ringColor = (Style == Variant.Neutral) ? Fluent.Accent : Color.White;
+                    using var pen = new Pen(ringColor, 2f);
+                    e.Graphics.DrawRectangle(pen, ring);
+                }
             }
         }
     }
@@ -280,6 +307,9 @@ namespace OnScreenKeyboard
         // Same hover/pressed flags as FluentButton — see comments there.
         private bool _hovered, _pressed;
 
+        // Same HC subscription pattern as FluentButton.
+        private readonly UserPreferenceChangedEventHandler _prefChanged;
+
         /// <summary>
         /// Initialises the toolbar button with owner-draw and dark-theme defaults.
         /// </summary>
@@ -293,6 +323,22 @@ namespace OnScreenKeyboard
             TabStop = false;
             Cursor  = Cursors.Hand;
             Font    = Fluent.FontBtnTb;   // smaller font used in the compact toolbar
+
+            _prefChanged = (s, e) =>
+            {
+                if (e.Category == UserPreferenceCategory.Accessibility
+                    && IsHandleCreated && !IsDisposed)
+                    BeginInvoke((Action)Invalidate);
+            };
+            SystemEvents.UserPreferenceChanged += _prefChanged;
+        }
+
+        /// <summary>Unsubscribes from <see cref="SystemEvents.UserPreferenceChanged"/> to prevent leaks.</summary>
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+                SystemEvents.UserPreferenceChanged -= _prefChanged;
+            base.Dispose(disposing);
         }
 
         /// <summary>Suppresses background erase for flicker-free painting. See <see cref="FluentButton.OnPaintBackground"/>.</summary>
@@ -330,8 +376,14 @@ namespace OnScreenKeyboard
             // keyboard-nav target inside the toolbar (HasNavFocus is set by KeyboardForm).
             if (HasNavFocus)
             {
-                using var pen = new Pen(Fluent.Accent, 2f);
-                e.Graphics.DrawRectangle(pen, new Rectangle(2, 2, Width - 5, Height - 5));
+                var ring = new Rectangle(2, 2, Width - 5, Height - 5);
+                if (SystemInformation.HighContrast)
+                    ControlPaint.DrawFocusRectangle(e.Graphics, ring);
+                else
+                {
+                    using var pen = new Pen(Fluent.Accent, 2f);
+                    e.Graphics.DrawRectangle(pen, ring);
+                }
             }
         }
     }
@@ -395,6 +447,43 @@ namespace OnScreenKeyboard
             g.SmoothingMode     = SmoothingMode.AntiAlias;
             g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
             g.PixelOffsetMode   = PixelOffsetMode.HighQuality;
+
+            // High-contrast mode: use system colours so the OS-chosen HC theme shows through.
+            // All custom fills and tints are replaced with flat system-colour paints so the
+            // button looks and behaves like a native Windows button in every HC theme.
+            if (SystemInformation.HighContrast)
+            {
+                g.Clear(SystemColors.Control);
+                ControlPaint.DrawBorder(g, r,
+                    SystemColors.ControlText, 1, ButtonBorderStyle.Solid,
+                    SystemColors.ControlText, 1, ButtonBorderStyle.Solid,
+                    SystemColors.ControlText, 1, ButtonBorderStyle.Solid,
+                    SystemColors.ControlText, 1, ButtonBorderStyle.Solid);
+                Color hcFg    = enabled ? SystemColors.ControlText : SystemColors.GrayText;
+                var   pfxFlag = showKeyboardCues ? TextFormatFlags.Default : TextFormatFlags.HidePrefix;
+                if (!string.IsNullOrEmpty(icon))
+                {
+                    var mf  = pfxFlag | TextFormatFlags.SingleLine | TextFormatFlags.VerticalCenter;
+                    var inf = new Size(int.MaxValue, int.MaxValue);
+                    int iw  = TextRenderer.MeasureText(icon, Fluent.FontIconSm, inf, mf).Width;
+                    int tw  = string.IsNullOrEmpty(text) ? 0
+                            : TextRenderer.MeasureText(text, font, inf, mf).Width;
+                    int gap     = string.IsNullOrEmpty(text) ? 0 : 4;
+                    int startX  = Math.Max(4, (r.Width - iw - gap - tw) / 2);
+                    TextRenderer.DrawText(g, icon, Fluent.FontIconSm,
+                        new Rectangle(startX, 0, iw, r.Height), hcFg, mf);
+                    if (!string.IsNullOrEmpty(text))
+                        TextRenderer.DrawText(g, text, font,
+                            new Rectangle(startX + iw + gap, 0, tw + 4, r.Height), hcFg, mf);
+                }
+                else
+                {
+                    var flags = pfxFlag | TextFormatFlags.HorizontalCenter |
+                                TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine;
+                    TextRenderer.DrawText(g, text, font, r, hcFg, flags);
+                }
+                return;
+            }
 
             // Step 1: flood-fill the whole rectangle with the parent background.
             // The rounded-rect shape is drawn on top; anything outside its curves
@@ -524,6 +613,39 @@ namespace OnScreenKeyboard
         {
             g.SmoothingMode     = SmoothingMode.AntiAlias;
             g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+
+            // High-contrast mode: same flat system-colour approach as PaintLight.
+            // Active state uses SystemColors.Highlight / HighlightText so the OS HC
+            // theme can express "selected" in its own chosen colours.
+            if (SystemInformation.HighContrast)
+            {
+                Color hcBg = active ? SystemColors.Highlight : SystemColors.Control;
+                g.Clear(hcBg);
+                ControlPaint.DrawBorder(g, r,
+                    SystemColors.ControlText, 1, ButtonBorderStyle.Solid,
+                    SystemColors.ControlText, 1, ButtonBorderStyle.Solid,
+                    SystemColors.ControlText, 1, ButtonBorderStyle.Solid,
+                    SystemColors.ControlText, 1, ButtonBorderStyle.Solid);
+                Color hcFg = !enabled       ? SystemColors.GrayText
+                           : active         ? SystemColors.HighlightText
+                           :                  SystemColors.ControlText;
+                var flags = TextFormatFlags.NoPrefix | TextFormatFlags.HorizontalCenter |
+                            TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine;
+                if (!string.IsNullOrEmpty(icon))
+                {
+                    int iconH    = r.Height - 18;
+                    var iconRect = new Rectangle(0, 1, r.Width, iconH);
+                    var textRect = new Rectangle(0, r.Height - 16, r.Width, 16);
+                    TextRenderer.DrawText(g, icon, Fluent.FontIconTb, iconRect, hcFg, flags);
+                    if (!string.IsNullOrEmpty(text))
+                        TextRenderer.DrawText(g, text, font, textRect, hcFg, flags);
+                }
+                else
+                {
+                    TextRenderer.DrawText(g, text, font, r, hcFg, flags);
+                }
+                return;
+            }
 
             // Flood-fill to parent background first — this eliminates the "ghost"
             // remnant of a previous paint that would otherwise accumulate and create
@@ -688,6 +810,11 @@ namespace OnScreenKeyboard
             Graphics g, int w, int h, string title, Color accentColor, int hdrH,
             bool dark = false)
         {
+            // In high-contrast mode the panel's BackColor (set to SystemColors.Control by
+            // ApplyDialogTheme) already provides the correct system-theme background.
+            // Custom painting would override the OS colours, so we skip it entirely.
+            if (SystemInformation.HighContrast) return;
+
             g.SmoothingMode     = SmoothingMode.AntiAlias;
             g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
 
@@ -744,6 +871,17 @@ namespace OnScreenKeyboard
         internal static void ApplyDialogTheme(Control root, bool dark, params Control[] skip)
         {
             var skipSet  = new HashSet<Control>(skip);
+
+            // High-contrast mode: replace all custom colours with OS system colours so the
+            // Windows-chosen HC theme (e.g. "Black", "High Contrast White") shows correctly.
+            if (SystemInformation.HighContrast)
+            {
+                root.BackColor = SystemColors.Control;
+                root.ForeColor = SystemColors.ControlText;
+                ApplyHCChildren(root, skipSet);
+                return;
+            }
+
             Color formBg  = dark ? Fluent.DarkBg                 : Fluent.BgPage;
             Color cardBg  = dark ? Color.FromArgb(48, 48, 48)    : Fluent.BgCard;
             Color inputBg = dark ? Color.FromArgb(58, 58, 58)    : Fluent.BgInput;
@@ -751,6 +889,57 @@ namespace OnScreenKeyboard
 
             root.BackColor = formBg;
             ApplyThemeChildren(root, cardBg, inputBg, fg, skipSet);
+        }
+
+        /// <summary>
+        /// Recursive worker that applies system colours throughout a dialog tree when
+        /// Windows high-contrast mode is active.  Standard child controls handle their
+        /// own HC rendering automatically once BackColor / ForeColor are reset to the
+        /// system palette; <see cref="FluentButton"/> instances paint themselves and are
+        /// left alone here (they detect HC mode in <see cref="PaintLight"/>/<see cref="PaintDark"/>).
+        /// </summary>
+        private static void ApplyHCChildren(Control parent, HashSet<Control> skip)
+        {
+            foreach (Control c in parent.Controls)
+            {
+                if (skip.Contains(c)) continue;
+                if (c is FluentButton) continue;
+                if (c.Tag is string t && t == "notheme") continue;
+
+                switch (c)
+                {
+                    case Panel pnl:
+                        pnl.BackColor = SystemColors.Control;
+                        pnl.Invalidate();   // triggers PaintCard, which returns early in HC mode
+                        break;
+                    case Label lbl:
+                        lbl.ForeColor = SystemColors.ControlText;
+                        lbl.BackColor = Color.Transparent;
+                        break;
+                    case TextBox txt:
+                        txt.BackColor = SystemColors.Window;
+                        txt.ForeColor = SystemColors.WindowText;
+                        break;
+                    case ComboBox cmb:
+                        cmb.BackColor = SystemColors.Window;
+                        cmb.ForeColor = SystemColors.WindowText;
+                        break;
+                    case NumericUpDown nud:
+                        nud.BackColor = SystemColors.Window;
+                        nud.ForeColor = SystemColors.WindowText;
+                        break;
+                    case CheckBox chk:
+                        chk.ForeColor = SystemColors.ControlText;
+                        break;
+                    case ListBox lst:
+                        lst.BackColor = SystemColors.Window;
+                        lst.ForeColor = SystemColors.WindowText;
+                        break;
+                }
+
+                if (c.HasChildren)
+                    ApplyHCChildren(c, skip);
+            }
         }
 
         /// <summary>Recursive worker for <see cref="ApplyDialogTheme"/>.</summary>

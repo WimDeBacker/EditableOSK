@@ -10,7 +10,7 @@
     <Group Name="Besturing" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="2A6B35" BorderColor="003700" BorderThickness="2" />
     <Group Name="test2" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
   </Theme>
-  <Layout Language="en" GridRows="6" GridCols="18" GearRow="5" GearCol="17" WindowWidth="1061" WindowHeight="416" HideTitlebar="0" StickyModifiers="0" HoldToEdit="0" AlwaysOnTop="1" LastFile="C:\keyboard\0420\azertycolor.xml" ToolbarTheme="Light">
+  <Layout Language="nl" GridRows="6" GridCols="18" GearRow="5" GearCol="17" WindowWidth="1050" WindowHeight="290" HideTitlebar="0" StickyModifiers="0" HoldToEdit="0" AlwaysOnTop="1" LastFile="C:\keyboard\0420\azertycolor.xml" ToolbarTheme="Light">
     <Key Row="0" Col="0" RowSpan="1" ColSpan="2" GroupName="Woord" Label="Woord 1" Send="wp:0" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="0" Col="2" RowSpan="1" ColSpan="2" GroupName="Woord" Label="Woord 2" Send="wp:1" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="0" Col="4" RowSpan="1" ColSpan="2" GroupName="Woord" Label="Woord 2" Send="wp:2" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
@@ -89,8 +89,7 @@
     <Key Row="5" Col="13" RowSpan="1" ColSpan="1" GroupName="Leestekens" Label="-" Send="-" ShiftLabel="_" ShiftSend="_" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="5" Col="17" RowSpan="1" ColSpan="1" GroupName="" Label="" Send="" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="F2F2F0" KeyColor="F2F2F0" BorderColor="" BorderThickness="-1" />
     <Key Row="0" Col="8" RowSpan="1" ColSpan="2" GroupName="Woord" Label="Woord 4" Send="wp:4" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
-    <Key Row="3" Col="14" RowSpan="1" ColSpan="1" GroupName="Cijfers" Label="hallo" Send="hallo" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="3" Col="14" RowSpan="1" ColSpan="1" GroupName="Leestekens" Label="hallo" Send="hallo" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="1" Col="14" RowSpan="1" ColSpan="1" GroupName="Cijfers" Label="hallo" Send="hallo" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
-    <Key Row="4" Col="14" RowSpan="1" ColSpan="1" GroupName="test2" Label="test" Send="test" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
   </Layout>
 </OnScreenKeyboard>

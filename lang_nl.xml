@@ -53,6 +53,16 @@
   <!-- Validation error messages -->
   <String key="err: invalid hex"           value="Voer een geldige hexkleur in (#RRGGBB)" />
 
+  <!-- Accessible descriptions -->
+  <String key="preview: key '{0}', key colour {1}, font colour {2}, {3} {4} pt"
+          value="Voorbeeld: toets '{0}', toetskleur {1}, letterkleur {2}, {3} {4} pt" />
+<String key="import row: {0}: New — will be added"
+          value="{0}: Nieuw — wordt toegevoegd" />
+  <String key="import row: {0}: Conflict — choose Overwrite, Add as new, or Skip"
+          value="{0}: Conflict — kies Overschrijven, Toevoegen als nieuw of Overslaan" />
+  <String key="import row: {0}: Protected — choose Update or Skip"
+          value="{0}: Beveiligd — kies Bijwerken of Overslaan" />
+
   <!-- Toolbar button labels -->
   <String key="tb: Load"      value="Laden" />
   <String key="tb: Save"      value="Opslaan" />

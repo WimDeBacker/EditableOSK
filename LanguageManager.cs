@@ -110,6 +110,16 @@ namespace OnScreenKeyboard
             // ── Validation error messages ────────────────────────────
             ["err: invalid hex"]           = "Enter a valid hex colour (#RRGGBB)",
 
+            // ── Accessible descriptions ──────────────────────────────
+            // Preview panel — updated live in Refresh2(); screen readers announce it on focus.
+            ["preview: key '{0}', key colour {1}, font colour {2}, {3} {4} pt"] =
+                "Preview: key '{0}', key colour {1}, font colour {2}, {3} {4} pt",
+            // Import-dialog row accessible names.
+            ["import row: {0}: New — will be added"]                 = "{0}: New — will be added",
+            ["import row: {0}: Conflict — choose Overwrite, Add as new, or Skip"] =
+                "{0}: Conflict — choose Overwrite, Add as new, or Skip",
+            ["import row: {0}: Protected — choose Update or Skip"]   = "{0}: Protected — choose Update or Skip",
+
             // ── Toolbar row 1 buttons ────────────────────────────────
             ["📂 Load"]               = "📂 Load",
             ["↩ Undo"]               = "↩ Undo",

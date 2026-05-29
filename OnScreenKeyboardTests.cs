@@ -1553,6 +1553,139 @@ namespace OnScreenKeyboard
                 }
             }
 
+            Section("Priority 6 — Colour contrast (WCAG 2.1 AA)");
+
+            // WCAG relative-luminance and contrast-ratio helpers.
+            // Uses the standard IEC 61966-2-1 sRGB linearisation formula.
+            static double SrgbLinear(int channel)
+            {
+                double c = channel / 255.0;
+                return c <= 0.04045 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4);
+            }
+            static double Luminance(Color col) =>
+                0.2126 * SrgbLinear(col.R) +
+                0.7152 * SrgbLinear(col.G) +
+                0.0722 * SrgbLinear(col.B);
+            static double ContrastRatio(Color fg, Color bg)
+            {
+                double l1 = Luminance(fg), l2 = Luminance(bg);
+                double lighter = Math.Max(l1, l2), darker = Math.Min(l1, l2);
+                return (lighter + 0.05) / (darker + 0.05);
+            }
+
+            // TextHint on BgCard (white) — visible hint labels in KeyEditorForm / GroupEditorForm.
+            Assert(ContrastRatio(Fluent.TextHint, Fluent.BgCard) >= 4.5,
+                $"TextHint on BgCard >= 4.5:1  (actual {ContrastRatio(Fluent.TextHint, Fluent.BgCard):F2}:1)");
+
+            // TextHint on BgPage (#F3F3F3) — for any hint text directly on the form background.
+            Assert(ContrastRatio(Fluent.TextHint, Fluent.BgPage) >= 4.5,
+                $"TextHint on BgPage >= 4.5:1  (actual {ContrastRatio(Fluent.TextHint, Fluent.BgPage):F2}:1)");
+
+            // TextPrimary on BgCard — body / label text in dialogs.
+            Assert(ContrastRatio(Fluent.TextPrimary, Fluent.BgCard) >= 4.5,
+                $"TextPrimary on BgCard >= 4.5:1  (actual {ContrastRatio(Fluent.TextPrimary, Fluent.BgCard):F2}:1)");
+
+            // TextSecondary on BgCard — supporting / secondary labels.
+            Assert(ContrastRatio(Fluent.TextSecondary, Fluent.BgCard) >= 4.5,
+                $"TextSecondary on BgCard >= 4.5:1  (actual {ContrastRatio(Fluent.TextSecondary, Fluent.BgCard):F2}:1)");
+
+            // White text on coloured action-button backgrounds.
+            Assert(ContrastRatio(Color.White, Fluent.Accent) >= 4.5,
+                $"White on Accent >= 4.5:1  (actual {ContrastRatio(Color.White, Fluent.Accent):F2}:1)");
+            Assert(ContrastRatio(Color.White, Fluent.Danger) >= 4.5,
+                $"White on Danger >= 4.5:1  (actual {ContrastRatio(Color.White, Fluent.Danger):F2}:1)");
+            Assert(ContrastRatio(Color.White, Fluent.Success) >= 4.5,
+                $"White on Success >= 4.5:1  (actual {ContrastRatio(Color.White, Fluent.Success):F2}:1)");
+
+            // Danger (red) on BgCard — WP-full warning label text.
+            Assert(ContrastRatio(Fluent.Danger, Fluent.BgCard) >= 4.5,
+                $"Danger on BgCard >= 4.5:1  (actual {ContrastRatio(Fluent.Danger, Fluent.BgCard):F2}:1)");
+
+            Section("Priority 7 — Rich widget descriptions");
+
+            // ── Item 9: Preview panel AccessibleName ──
+            {
+                // BuildGroupSummary / preview desc both delegate to lang keys.
+                // Verify the English templates can be formatted without throwing.
+                string previewDesc = string.Format(
+                    Lang.T("preview: key '{0}', key colour {1}, font colour {2}, {3} {4} pt"),
+                    "A", "#2D2D4A", "#E0E0FF", "Arial", 13);
+                Assert(!string.IsNullOrEmpty(previewDesc),           "preview: accessible name template non-empty");
+                Assert(previewDesc.Contains("A"),                    "preview: accessible name contains label");
+                Assert(previewDesc.Contains("#2D2D4A"),              "preview: accessible name contains key colour");
+                Assert(previewDesc.Contains("Arial"),                "preview: accessible name contains font");
+
+                // Dutch template also works.
+                string nlPath7 = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "lang_nl.xml");
+                if (File.Exists(nlPath7))
+                {
+                    Lang.Load("nl");
+                    string nlDesc = string.Format(
+                        Lang.T("preview: key '{0}', key colour {1}, font colour {2}, {3} {4} pt"),
+                        "A", "#2D2D4A", "#E0E0FF", "Arial", 13);
+                    Assert(nlDesc != "preview: key '{0}', key colour {1}, font colour {2}, {3} {4} pt",
+                        "preview: Dutch template differs from key");
+                    Assert(nlDesc.Contains("A"), "preview: Dutch accessible name contains label");
+                    Lang.Load("en");
+                }
+            }
+
+            // ── Item 28: DescribedRow accessible names ──
+            {
+                string newRow      = string.Format(Lang.T("import row: {0}: New — will be added"), "Arrows");
+                string conflictRow = string.Format(Lang.T("import row: {0}: Conflict — choose Overwrite, Add as new, or Skip"), "Arrows");
+                string protRow     = string.Format(Lang.T("import row: {0}: Protected — choose Update or Skip"), "standard");
+
+                Assert(newRow.Contains("Arrows"),                    "import row: New — contains group name");
+                Assert(!string.IsNullOrEmpty(newRow),                "import row: New — non-empty");
+                Assert(conflictRow.Contains("Arrows"),               "import row: Conflict — contains group name");
+                Assert(conflictRow.Contains("Conflict") || conflictRow.Length > 10,
+                    "import row: Conflict — descriptive text present");
+                Assert(protRow.Contains("standard"),                 "import row: Protected — contains group name");
+
+                // DescribedRow itself: AccessibleRowName is stored and readable.
+                var dr = new DescribedRow { AccessibleRowName = newRow };
+                Assert(dr.AccessibleRowName == newRow,               "DescribedRow: AccessibleRowName round-trips");
+            }
+
+            Section("Priority 8 — DPI scaling (Sizable forms, AutoScroll scroll panel)");
+
+            // KeyEditorForm
+            {
+                var kp = new KeyProps("A", "a");
+                using var kef = new KeyEditorForm(kp, null);
+                Assert(kef.FormBorderStyle == FormBorderStyle.Sizable,
+                    "KeyEditorForm: FormBorderStyle is Sizable");
+                bool kefScroll = false;
+                foreach (Control ctrl in kef.Controls) { if (ctrl is Panel kefP && kefP.AutoScroll) { kefScroll = true; break; } }
+                Assert(kefScroll, "KeyEditorForm: has AutoScroll panel wrapper");
+            }
+
+            // GroupEditorForm
+            {
+                var groups8 = new System.Collections.Generic.List<KeyGroup>
+                    { new KeyGroup { Name = "standard" } };
+                using var gef = new GroupEditorForm(groups8);
+                Assert(gef.FormBorderStyle == FormBorderStyle.Sizable,
+                    "GroupEditorForm: FormBorderStyle is Sizable");
+                bool gefScroll = false;
+                foreach (Control ctrl in gef.Controls) { if (ctrl is Panel gefP && gefP.AutoScroll) { gefScroll = true; break; } }
+                Assert(gefScroll, "GroupEditorForm: has AutoScroll panel wrapper");
+            }
+
+            // KeyboardEditorForm
+            {
+                var theme8  = new VisualTheme();
+                var window8 = new WindowState();
+                var meta8   = new LayoutMeta();
+                using var kbef = new KeyboardEditorForm(theme8, window8, meta8, null);
+                Assert(kbef.FormBorderStyle == FormBorderStyle.Sizable,
+                    "KeyboardEditorForm: FormBorderStyle is Sizable");
+                bool kbefScroll = false;
+                foreach (Control ctrl in kbef.Controls) { if (ctrl is Panel kbefP && kbefP.AutoScroll) { kbefScroll = true; break; } }
+                Assert(kbefScroll, "KeyboardEditorForm: has AutoScroll panel wrapper");
+            }
+
             Section("StyleGroups — standard group name immutable through round-trip");
 
             {

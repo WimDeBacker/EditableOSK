@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Drawing.Text;
 using System.Linq;
 using System.Windows.Forms;
+using Microsoft.Win32;
 
 namespace OnScreenKeyboard
 {
@@ -119,6 +120,9 @@ namespace OnScreenKeyboard
         /// </summary>
         private ErrorProvider _err;
 
+        // Stored so it can be unsubscribed in FormClosed.
+        private UserPreferenceChangedEventHandler _onPrefChanged;
+
         /// <summary>
         /// (Control, factory) pairs registered by <see cref="SetTip"/> so that
         /// <see cref="RelabelUI"/> can push refreshed tooltip strings on language switch.
@@ -228,7 +232,7 @@ namespace OnScreenKeyboard
 
             Text         = Lang.T("Edit Keyboard");
             BackColor    = _dark ? Fluent.DarkBg : Fluent.BgPage;
-            FormBorderStyle = FormBorderStyle.FixedSingle;  // no resize handles
+            FormBorderStyle = FormBorderStyle.Sizable;
             MaximizeBox  = MinimizeBox = false;
             ShowIcon     = false;
             StartPosition = FormStartPosition.CenterParent;
@@ -245,12 +249,35 @@ namespace OnScreenKeyboard
             FluentPainter.ApplyDialogTheme(this, _dark);
             ActiveControl = _cmbLanguage;  // start keyboard focus on the language selector
 
+            Load += (s, e) =>
+            {
+                var wa = Screen.FromControl(this).WorkingArea;
+                if (Width > wa.Width - 10 || Height > wa.Height - 10)
+                {
+                    Width  = Math.Min(Width,  wa.Width  - 10);
+                    Height = Math.Min(Height, wa.Height - 10);
+                }
+                MinimumSize = new Size(Math.Min(Width, 480), Math.Min(Height, 320));
+            };
+
+            _onPrefChanged = (s, e) =>
+            {
+                if (e.Category == UserPreferenceCategory.Accessibility && IsHandleCreated && !IsDisposed)
+                    BeginInvoke((Action)(() => FluentPainter.ApplyDialogTheme(this, _dark)));
+            };
+            SystemEvents.UserPreferenceChanged += _onPrefChanged;
+
             // Subscribe to the global language-change event so every label
             // updates automatically when the user picks a different language.
             Lang.LanguageChanged += RelabelUI;
 
             // Unsubscribe when the form closes.
-            FormClosed += (s, e) => { Lang.LanguageChanged -= RelabelUI; _err?.Dispose(); };
+            FormClosed += (s, e) =>
+            {
+                Lang.LanguageChanged -= RelabelUI;
+                SystemEvents.UserPreferenceChanged -= _onPrefChanged;
+                _err?.Dispose();
+            };
         }
 
         // ════════════════════════════════════════════════════════════════
@@ -520,8 +547,28 @@ namespace OnScreenKeyboard
             AcceptButton = _btnApply;
             CancelButton = _btnCancel;
 
-            // Shrink-wrap the form height so there is no empty space at the bottom.
             ClientSize = new Size(ClientSize.Width, btnTop + 44 + margin);
+
+            var scrollPanel = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = _dark ? Fluent.DarkBg : Fluent.BgPage,
+                AutoScroll = true,
+                AutoScrollMinSize = new Size(ClientSize.Width, ClientSize.Height),
+            };
+            Controls.Remove(grpLang);
+            Controls.Remove(grpWnd);
+            Controls.Remove(grpFile);
+            Controls.Remove(grpAcc);
+            Controls.Remove(_btnCancel);
+            Controls.Remove(_btnApply);
+            scrollPanel.Controls.Add(grpLang);
+            scrollPanel.Controls.Add(grpWnd);
+            scrollPanel.Controls.Add(grpFile);
+            scrollPanel.Controls.Add(grpAcc);
+            scrollPanel.Controls.Add(_btnCancel);
+            scrollPanel.Controls.Add(_btnApply);
+            Controls.Add(scrollPanel);
         }
 
         // ════════════════════════════════════════════════════════════════

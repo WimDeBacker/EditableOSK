@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Drawing.Text;
 using System.Linq;
 using System.Windows.Forms;
+using Microsoft.Win32;
 
 namespace OnScreenKeyboard
 {
@@ -106,6 +107,9 @@ namespace OnScreenKeyboard
         /// the error to screen readers when a hex colour field contains invalid text.
         /// </summary>
         private ErrorProvider _err;
+
+        // Stored so it can be unsubscribed in FormClosed (prevents leaks after the dialog closes).
+        private UserPreferenceChangedEventHandler _onPrefChanged;
 
         /// <summary>
         /// (Control, factory) pairs registered by <see cref="SetTip"/> so that
@@ -418,62 +422,19 @@ namespace OnScreenKeyboard
                        : ownerG?.FontName ?? "Arial";
 
             // Find the currently selected group.
+            // Index 0 is always "(no group)", so a real group is only selected when index > 0.
             KeyGroup grp = null;
-            if (_cmbGroup != null && _cmbGroup.SelectedIndex >= 0)
+            if (_cmbGroup != null && _cmbGroup.SelectedIndex > 0)
             {
                 string gName = _cmbGroup.SelectedItem?.ToString();
                 grp = _groups.FirstOrDefault(g => g.Name == gName);
             }
-
-            bool isEmptyKey = string.IsNullOrEmpty(_original.Label) &&
-                              string.IsNullOrEmpty(_original.Send);
 
             // Local helper: per-key → group → global
             static Color Rc(Color pk, Color grpC, Color global) =>
                 !pk.IsEmpty   ? pk   :
                 !grpC.IsEmpty ? grpC :
                 global;
-
-            // ── Colors ────────────────────────────────────────────────
-            Color pfc = isEmptyKey ? Color.Empty : _original.FontColor;
-            Color pkc = isEmptyKey ? Color.Empty : _original.KeyColor;
-            Color pbc = isEmptyKey ? Color.Empty : _original.BorderColor;
-
-            _loadedFontColor   = Rc(pfc, grp?.FontColor   ?? Color.Empty, gFc);
-            _loadedKeyColor    = Rc(pkc, grp?.KeyColor    ?? Color.Empty, gKc);
-            _loadedBorderColor = Rc(pbc, grp?.BorderColor ?? Color.Empty, gBc);
-
-            SetSwatchHex(_pnlFontColor,   SettingsManager.Hex(_loadedFontColor));
-            SetSwatchHex(_pnlKeyColor,    SettingsManager.Hex(_loadedKeyColor));
-            SetSwatchHex(_pnlBorderColor, SettingsManager.Hex(_loadedBorderColor));
-
-            // ── Font name ──────────────────────────────────────────────
-            string pFn   = isEmptyKey ? "" : (_original.FontName ?? "");
-            string grpFn = grp?.FontName ?? "";
-            _loadedFontName = !string.IsNullOrEmpty(pFn)  ? pFn  :
-                              !string.IsNullOrEmpty(grpFn) ? grpFn :
-                              gFn;
-            int fi = _cmbFont.Items.IndexOf(_loadedFontName);
-            _cmbFont.SelectedIndex = fi >= 0 ? fi : (_cmbFont.Items.Count > 0 ? 0 : -1);
-
-            // ── Font size ──────────────────────────────────────────────
-            int pFs   = isEmptyKey ? 0 : _original.FontSize;
-            int grpFs = grp?.FontSize ?? 0;
-            _loadedFontSize = pFs > 0 ? pFs : (grpFs > 0 ? grpFs : 0);
-            int clampedSize = Math.Clamp(_loadedFontSize, 0, (int)_nudFontSize.Maximum);
-            if (clampedSize > 0)
-            { _nudFontSize.Value = clampedSize; _chkAutoSize.Checked = false; _nudFontSize.Enabled = true; }
-            else
-            { _nudFontSize.Value = 0; _chkAutoSize.Checked = true; _nudFontSize.Enabled = false; }
-
-            // ── Border thickness ───────────────────────────────────────
-            int pBt   = isEmptyKey ? -1 : _original.BorderThickness;
-            int grpBt = grp?.BorderThickness ?? -1;
-            _loadedBorderThickness = pBt  != -1 ? pBt  :
-                                     grpBt != -1 ? grpBt :
-                                     gBt;
-            _nudBorderThickness.Value = Math.Clamp(_loadedBorderThickness, -1,
-                                                   (int)_nudBorderThickness.Maximum);
 
             // ── Group-resolved values (no per-key layer) ───────────────
             // These are the effective values the selected group provides on its own.
@@ -488,6 +449,60 @@ namespace OnScreenKeyboard
             _groupFontSize = grpFsG > 0 ? grpFsG : 0;
             int grpBtG = grp?.BorderThickness ?? -1;
             _groupBorderThickness = grpBtG >= 0 ? grpBtG : gBt;
+
+            bool isEmptyKey = string.IsNullOrEmpty(_original.Label) &&
+                              string.IsNullOrEmpty(_original.Send);
+
+            // ── Set _loaded* values ────────────────────────────────────
+            // When a group is selected: show the group's own values so the user sees
+            // what the group provides before deciding to customise (and leave the group).
+            // When (no group): show the key's per-key overrides, falling back to global.
+            if (grp != null)
+            {
+                _loadedFontColor       = _groupFontColor;
+                _loadedKeyColor        = _groupKeyColor;
+                _loadedBorderColor     = _groupBorderColor;
+                _loadedFontName        = _groupFontName;
+                _loadedFontSize        = _groupFontSize;
+                _loadedBorderThickness = _groupBorderThickness;
+            }
+            else
+            {
+                // (no group) — use per-key overrides, fall back to global
+                Color pfc = isEmptyKey ? Color.Empty : _original.FontColor;
+                Color pkc = isEmptyKey ? Color.Empty : _original.KeyColor;
+                Color pbc = isEmptyKey ? Color.Empty : _original.BorderColor;
+
+                _loadedFontColor   = Rc(pfc, Color.Empty, gFc);
+                _loadedKeyColor    = Rc(pkc, Color.Empty, gKc);
+                _loadedBorderColor = Rc(pbc, Color.Empty, gBc);
+
+                string pFn = isEmptyKey ? "" : (_original.FontName ?? "");
+                _loadedFontName = !string.IsNullOrEmpty(pFn) ? pFn : gFn;
+
+                int pFs = isEmptyKey ? 0 : _original.FontSize;
+                _loadedFontSize = pFs > 0 ? pFs : 0;
+
+                int pBt = isEmptyKey ? -1 : _original.BorderThickness;
+                _loadedBorderThickness = pBt != -1 ? pBt : gBt;
+            }
+
+            // ── Push _loaded* into UI controls ─────────────────────────
+            SetSwatchHex(_pnlFontColor,   SettingsManager.Hex(_loadedFontColor));
+            SetSwatchHex(_pnlKeyColor,    SettingsManager.Hex(_loadedKeyColor));
+            SetSwatchHex(_pnlBorderColor, SettingsManager.Hex(_loadedBorderColor));
+
+            int fi = _cmbFont.Items.IndexOf(_loadedFontName);
+            _cmbFont.SelectedIndex = fi >= 0 ? fi : (_cmbFont.Items.Count > 0 ? 0 : -1);
+
+            int clampedSize = Math.Clamp(_loadedFontSize, 0, (int)_nudFontSize.Maximum);
+            if (clampedSize > 0)
+            { _nudFontSize.Value = clampedSize; _chkAutoSize.Checked = false; _nudFontSize.Enabled = true; }
+            else
+            { _nudFontSize.Value = 0; _chkAutoSize.Checked = true; _nudFontSize.Enabled = false; }
+
+            _nudBorderThickness.Value = Math.Clamp(_loadedBorderThickness, -1,
+                                                   (int)_nudBorderThickness.Maximum);
         }
 
         // ── Constructor ───────────────────────────────────────────────
@@ -544,7 +559,7 @@ namespace OnScreenKeyboard
 
             Text         = BuildTitle(props.Label);
             BackColor    = _dark ? Fluent.DarkBg : Fluent.BgPage;
-            FormBorderStyle = FormBorderStyle.FixedSingle;
+            FormBorderStyle = FormBorderStyle.Sizable;
             MaximizeBox  = MinimizeBox = false;
             ShowIcon     = false;
             StartPosition = FormStartPosition.CenterParent;
@@ -558,14 +573,38 @@ namespace OnScreenKeyboard
             BuildUI(props);
             FluentPainter.ApplyDialogTheme(this, _dark, _pnlPreview);
 
+            // After DPI scaling (which runs just before Load), clamp the form to the screen
+            // working area so it always fits — on small or high-DPI screens the scaled form
+            // can exceed the screen height/width.  Panels have AutoScroll=true so their
+            // content remains reachable even when the form is shorter than its design size.
+            Load += (s, e) =>
+            {
+                var wa = Screen.FromControl(this).WorkingArea;
+                if (Width > wa.Width - 10 || Height > wa.Height - 10)
+                {
+                    Width  = Math.Min(Width,  wa.Width  - 10);
+                    Height = Math.Min(Height, wa.Height - 10);
+                }
+                MinimumSize = new Size(Math.Min(Width, 480), Math.Min(Height, 320));
+            };
+
             // Subscribe to language-change events so translated text updates live
             Lang.LanguageChanged += OnLanguageChanged;
+
+            // Re-apply theme when the user switches high-contrast mode while this dialog is open.
+            _onPrefChanged = (s, e) =>
+            {
+                if (e.Category == UserPreferenceCategory.Accessibility && IsHandleCreated && !IsDisposed)
+                    BeginInvoke((Action)(() => FluentPainter.ApplyDialogTheme(this, _dark, _pnlPreview)));
+            };
+            SystemEvents.UserPreferenceChanged += _onPrefChanged;
 
             // Always clean up the hook and unsubscribe from events when the form closes,
             // regardless of whether the user clicked Apply or Cancel.
             FormClosed += (s, e) =>
             {
                 Lang.LanguageChanged -= OnLanguageChanged;
+                SystemEvents.UserPreferenceChanged -= _onPrefChanged;
                 // Safety net: uninstall hook if form closes while recording
                 if (_hookHandle != IntPtr.Zero)
                 {
@@ -860,16 +899,18 @@ namespace OnScreenKeyboard
             _cmbGroup.SelectedIndexChanged += (s, e) =>
             {
                 RefreshAppearanceFromGroup();
-                Refresh2();
+                Refresh2();   // Refresh2 updates _lblGroupSummary and _cmbGroup.AccessibleDescription
             };
             grpStyle.Controls.Add(_cmbGroup);
+            gy += ROW_H;  // advance past the Group combo row
 
-            // "Manage Groups…" button sits just below the combo and pre-selects whichever
-            // group is currently chosen so the user can edit it straight away.
+            // "Manage Groups…" button: sits on its own row, centred vertically in ROW_H so
+            // it has equal breathing room above and below.
             _btnGroupEdit = new FluentButton
             {
                 Text = Lang.T("Manage Groups…"),
-                Left = svx, Top = gy + 30, Width = svw, Height = 24,
+                Left = svx, Top = gy + (ROW_H - Fluent.BtnH) / 2,
+                Width = svw, Height = Fluent.BtnH,
                 Style = FluentButton.Variant.Neutral,
                 TabStop = true,
                 TabIndex = ti++,
@@ -891,7 +932,7 @@ namespace OnScreenKeyboard
             };
             grpStyle.Controls.Add(_btnGroupEdit);
             SetTip(_btnGroupEdit, () => Lang.T("tip: Manage Groups"));
-            gy += ROW_H + 28;  // extra 28 px for the "Manage Groups…" button row
+            gy += ROW_H;
 
             // Live preview: a small key-shaped panel that reflects the current settings
             AddFieldLabel(grpStyle, () => Lang.T("Preview"), slx, gy).TabIndex = ti++;
@@ -900,6 +941,7 @@ namespace OnScreenKeyboard
             {
                 Left = svx, Top = gy, Width = keyBtnW, Height = keyBtnH,
                 BackColor = Color.FromArgb(30, 30, 50),
+                AccessibleName = Lang.T("Preview"),   // updated live in Refresh2()
             };
             grpStyle.Controls.Add(_pnlPreview);
             _lblPreviewKey = new Label
@@ -912,7 +954,7 @@ namespace OnScreenKeyboard
             };
             _pnlPreview.Controls.Add(_lblPreviewKey);
 
-            // Apply/Cancel buttons: placed below whichever column is taller
+            // Buttons scroll with all other content — no separate button panel needed.
             int btnTop = Math.Max(margin + keyH, rightY) + gap;
             int bw     = (leftW + gap + rightW - gap) / 2;
             _btnCancel = MakeActionBtn(Lang.T("Cancel"), margin,        btnTop, bw, 44); _btnCancel.TabIndex = 2;
@@ -922,8 +964,28 @@ namespace OnScreenKeyboard
             AcceptButton = _btnApply;
             CancelButton = _btnCancel;
 
-            // Adjust the form height to fit all controls with a bottom margin
             ClientSize = new Size(ClientSize.Width, btnTop + 44 + margin);
+
+            // One scroll panel that contains everything.  DockStyle.Fill means it
+            // always matches the form size.  AutoScrollMinSize = full designed content
+            // size → scrollbars appear the moment the form is 1 px too small in
+            // either direction, for both scrollbars simultaneously if needed.
+            var scrollPanel = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = _dark ? Fluent.DarkBg : Fluent.BgPage,
+                AutoScroll = true,
+                AutoScrollMinSize = new Size(ClientSize.Width, ClientSize.Height),
+            };
+            Controls.Remove(grpKey);
+            Controls.Remove(grpStyle);
+            Controls.Remove(_btnCancel);
+            Controls.Remove(_btnApply);
+            scrollPanel.Controls.Add(grpKey);
+            scrollPanel.Controls.Add(grpStyle);
+            scrollPanel.Controls.Add(_btnCancel);
+            scrollPanel.Controls.Add(_btnApply);
+            Controls.Add(scrollPanel);
 
             SetupLayoutFocusTracking();
             PopulateFields(p);
@@ -2005,6 +2067,17 @@ namespace OnScreenKeyboard
                 _lblPreviewKey.Font = _previewFont;
             }
             catch { }  // ignore invalid font names — the preview just keeps its current font
+
+            // ── Accessible description for the preview panel ──────────
+            // Screen readers announce AccessibleName when the panel receives focus, giving a
+            // plain-English summary of the key's current appearance without requiring the user
+            // to navigate through the individual colour/font controls.
+            _pnlPreview.AccessibleName = string.Format(
+                Lang.T("preview: key '{0}', key colour {1}, font colour {2}, {3} {4} pt"),
+                _txtLabel?.Text ?? "",
+                SettingsManager.Hex(kc), SettingsManager.Hex(fc),
+                fn, fs);
+
         }
 
         // ── Apply ─────────────────────────────────────────────────────
