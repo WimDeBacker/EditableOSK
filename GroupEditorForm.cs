@@ -20,7 +20,7 @@ namespace OnScreenKeyboard
     /// list is exposed through <see cref="ResultGroups"/> and the dialog closes with
     /// <see cref="DialogResult.OK"/>.
     /// </summary>
-    public class GroupEditorForm : Form
+    public class GroupEditorForm : FluentDialogBase
     {
         /// <summary>
         /// The modified list of groups that should replace the caller's original list.
@@ -40,11 +40,7 @@ namespace OnScreenKeyboard
                 : null;
 
         // ── Theme (WinUI 3) ───────────────────────────────────────────
-        // All colours and fonts are sourced from the static Fluent helper so that
-        // every dialog in the application shares the same WinUI 3-inspired palette.
-        // True when the toolbar is in dark mode — dialogs follow the same theme.
-        private readonly bool _dark;
-
+        // _dark is inherited from FluentDialogBase.
         private static Color C_BG       => Fluent.BgPage;
         private static Color C_PANEL_BG => Fluent.BgCard;
         private static Color C_BORDER   => Fluent.BorderCard;
@@ -158,23 +154,7 @@ namespace OnScreenKeyboard
         private Label _lblNameError;
 
         // ── Tooltip / accessibility helpers ───────────────────────────
-        /// <summary>Shared ToolTip component — one instance per form (WinForms best practice).</summary>
-        private ToolTip _tip;
-
-        /// <summary>
-        /// Shared ErrorProvider — shows a field-level error icon and announces
-        /// the error to screen readers when a hex colour field contains invalid text.
-        /// </summary>
-        private ErrorProvider _err;
-
-        // Stored so it can be unsubscribed in FormClosed.
-        private UserPreferenceChangedEventHandler _onPrefChanged;
-
-        /// <summary>
-        /// Set by <see cref="AddLabel"/> and consumed by the next <see cref="AddColorRow"/> call
-        /// so the colour row controls automatically receive the correct <see cref="Control.AccessibleName"/>.
-        /// </summary>
-        private string _pendingAccessibleName;
+        // _tip, _err, _onPrefChanged, _pendingAccessibleName — all inherited from FluentDialogBase.
 
         // ── Reserved-name guard ───────────────────────────────────────
 
@@ -203,64 +183,25 @@ namespace OnScreenKeyboard
         /// the protected standard group.
         /// </param>
         public GroupEditorForm(List<KeyGroup> groups, string initialGroupName = null)
+            : base(new Size(880, 610))
         {
             // Deep-clone so cancelling truly discards all changes.
             _groups = groups.Select(g => g.Clone()).ToList();
 
-            _dark = !ToolbarButton.IsLightTheme;
-
-            AutoScaleMode       = AutoScaleMode.Dpi;
-            AutoScaleDimensions = new SizeF(96f, 96f);
-
-            Text            = Lang.T("Manage Groups");
-            BackColor       = _dark ? Fluent.DarkBg : Fluent.BgPage;
-            FormBorderStyle = FormBorderStyle.Sizable;
-            MaximizeBox = MinimizeBox = false;
-            ShowIcon    = false;
-            StartPosition   = FormStartPosition.CenterParent;
-            Size            = new Size(880, 610);
-            TopMost         = true;
-            Font            = F_LABEL;
-
-            _tip = new ToolTip { InitialDelay = 400, AutoPopDelay = 10000, ShowAlways = true };
-            _err = new ErrorProvider { ContainerControl = this, BlinkStyle = ErrorBlinkStyle.BlinkIfDifferentError };
+            Text = Lang.T("Manage Groups");
 
             BuildUI();
-            FluentPainter.ApplyDialogTheme(this, _dark);
-
-            Load += (s, e) =>
-            {
-                var wa = Screen.FromControl(this).WorkingArea;
-                if (Width > wa.Width - 10 || Height > wa.Height - 10)
-                {
-                    Width  = Math.Min(Width,  wa.Width  - 10);
-                    Height = Math.Min(Height, wa.Height - 10);
-                }
-                MinimumSize = new Size(Math.Min(Width, 480), Math.Min(Height, 320));
-            };
-
-            _onPrefChanged = (s, e) =>
-            {
-                if (e.Category == UserPreferenceCategory.Accessibility && IsHandleCreated && !IsDisposed)
-                    BeginInvoke((Action)(() => FluentPainter.ApplyDialogTheme(this, _dark)));
-            };
-            SystemEvents.UserPreferenceChanged += _onPrefChanged;
 
             // The three ContextMenuStrip instances created in AddColorRow are not owned by
             // any component container, so they must be explicitly disposed on close.
-            // We reach them through the ToolStripMenuItem.Owner back-reference, which is
-            // always valid because the field references keep the items (and therefore their
-            // parent menus) alive for the lifetime of this form.
+            // Base FormClosed handles Lang.LanguageChanged, UserPreferenceChanged, and _err.
             FormClosed += (s, e) =>
             {
-                SystemEvents.UserPreferenceChanged -= _onPrefChanged;
                 (_ctxClearFontColor?.Owner   as ContextMenuStrip)?.Dispose();
                 (_ctxClearKeyColor?.Owner    as ContextMenuStrip)?.Dispose();
                 (_ctxClearBorderColor?.Owner as ContextMenuStrip)?.Dispose();
-                _err?.Dispose();
             };
-            // Select the first group so the detail panel is populated from the start.
-            // If a specific group was requested, jump to it instead.
+
             int initialIdx = 0;
             if (initialGroupName != null)
             {
@@ -268,7 +209,34 @@ namespace OnScreenKeyboard
                 if (found >= 0) initialIdx = found;
             }
             RebuildList(initialIdx);
-            ActiveControl = _lstGroups;  // list is the natural entry point — pick a group first, then edit it
+            ActiveControl = _lstGroups;
+        }
+
+        /// <summary>
+        /// Re-applies the Fluent/HC theme, then restores intentionally-coloured controls
+        /// that <see cref="FluentPainter.ApplyDialogTheme"/> would otherwise overwrite.
+        /// </summary>
+        protected override void ApplyTheme()
+        {
+            base.ApplyTheme();
+            // ApplyThemeChildren/ApplyHCChildren sets every Label to the global fg color.
+            // _lblNameError is a validation indicator that must stay red — re-apply here.
+            if (_lblNameError != null)
+                _lblNameError.ForeColor = Color.FromArgb(200, 30, 30);
+        }
+
+        /// <summary>
+        /// Refreshes all translatable strings on the form when the language changes.
+        /// </summary>
+        protected override void OnLanguageChanged()
+        {
+            base.OnLanguageChanged();
+            Text           = Lang.T("Manage Groups");
+            _btnOK.Text    = Lang.T("Apply");
+            _btnCancel.Text= Lang.T("Cancel");
+            _btnAdd.Text   = Lang.T("+ Add group");
+            _btnDelete.Text= Lang.T("− Delete group");
+            _btnImport.Text= "&" + Lang.T("Import...");
         }
 
         // ── UI construction ───────────────────────────────────────────
@@ -288,7 +256,7 @@ namespace OnScreenKeyboard
             int innerH   = ClientSize.Height - PAD * 2 - btnAreaH - PAD; // panel height
 
             // ── List panel (left) ─────────────────────────────────────
-            var pnlList = AddPanel(PAD, PAD, listW, innerH, Lang.T("Groups"), Color.FromArgb(41, 128, 185));
+            var pnlList = AddGroup(() => Lang.T("Groups"), PAD, PAD, listW, innerH, Color.FromArgb(41, 128, 185), hdrH: 36);
             pnlList.TabIndex = 0;  // list panel first in form-level tab order
 
             // The list box sits inside a thin wrapper Panel that acts as a 2 px coloured focus ring.
@@ -350,8 +318,8 @@ namespace OnScreenKeyboard
             _btnDelete = MakeSmallBtn(Lang.T("− Delete group"), PAD + halfW + 4, btnY, halfW, 34); _btnDelete.TabIndex = 2;
             _btnAdd.Click    += OnAdd;
             _btnDelete.Click += OnDelete;
-            _tip.SetToolTip(_btnAdd,    Lang.T("tip: Add group"));
-            _tip.SetToolTip(_btnDelete, Lang.T("tip: Delete group"));
+            SetTip(_btnAdd,    () => Lang.T("tip: Add group"));
+            SetTip(_btnDelete, () => Lang.T("tip: Delete group"));
             pnlList.Controls.Add(_btnAdd);
             pnlList.Controls.Add(_btnDelete);
 
@@ -359,11 +327,11 @@ namespace OnScreenKeyboard
             int btnImportY = btnY + 34 + 4;
             _btnImport = MakeSmallBtn("&" + Lang.T("Import..."), PAD, btnImportY, listW - PAD * 2, 34); _btnImport.TabIndex = 3;
             _btnImport.Click += OnImport;
-            _tip.SetToolTip(_btnImport, Lang.T("tip: Import groups"));
+            SetTip(_btnImport, () => Lang.T("tip: Import groups"));
             pnlList.Controls.Add(_btnImport);
 
             // ── Detail panel (right) ──────────────────────────────────
-            var pnlDetail = AddPanel(detailX, PAD, detailW, innerH, Lang.T("Style"), Color.FromArgb(39, 174, 96));
+            var pnlDetail = AddGroup(() => Lang.T("Style"), detailX, PAD, detailW, innerH, Color.FromArgb(39, 174, 96), hdrH: 36);
             pnlDetail.TabIndex = 1;  // detail panel second in form-level tab order
 
             // Layout constants for the detail rows:
@@ -380,7 +348,7 @@ namespace OnScreenKeyboard
             // Name → Font → Font size → Font color → Key color → Border color → Border thickness
 
             // Name field
-            AddLabel(pnlDetail, "&" + Lang.T("Name"), lx, gy).TabIndex = ti++;
+            AddFieldLabel(pnlDetail, () => "&" + Lang.T("Name"), lx, gy).TabIndex = ti++;
             _txtName = new TextBox
             {
                 Left = vx, Top = gy, Width = vw,
@@ -404,7 +372,7 @@ namespace OnScreenKeyboard
 
             // Font family: index 0 is the special "(inherit standard)" entry for non-standard groups,
             // swapped to "(none / auto)" for the standard group by ApplyStandardProtections.
-            AddLabel(pnlDetail, "&" + Lang.T("Font"), lx, gy).TabIndex = ti++;
+            AddFieldLabel(pnlDetail, () => "&" + Lang.T("Font"), lx, gy).TabIndex = ti++;
             _cmbFont = new ComboBox
             {
                 Left = vx, Top = gy, Width = vw,
@@ -415,12 +383,12 @@ namespace OnScreenKeyboard
                 AccessibleName = Lang.StripMnemonic(Lang.T("Font")),
             };
             _cmbFont.Items.Add(Lang.T("(inherit standard)"));
-            foreach (var fn in GetInstalledFonts()) _cmbFont.Items.Add(fn);
+            _cmbFont.Items.AddRange(Fluent.InstalledFontNames());
             _cmbFont.SelectedIndex = 0;
             pnlDetail.Controls.Add(_cmbFont); gy += ROW;
 
             // Font size: 0 means "auto / inherit".
-            AddLabel(pnlDetail, Lang.T("Font size"), lx, gy).TabIndex = ti++;
+            AddFieldLabel(pnlDetail, () => Lang.T("Font size"), lx, gy).TabIndex = ti++;
             _nudFontSize = new NumericUpDown
             {
                 Left = vx, Top = gy, Width = 65, Minimum = 0, Maximum = 72,
@@ -429,24 +397,24 @@ namespace OnScreenKeyboard
                 AccessibleName        = Lang.StripMnemonic(Lang.T("Font size")),
                 AccessibleDescription = Lang.T("0 = auto / inherit"),
             };
-            _tip.SetToolTip(_nudFontSize, Lang.T("tip: Font size"));
+            SetTip(_nudFontSize, () => Lang.T("tip: Font size"));
             AddSmallHint(pnlDetail, Lang.T("0 = auto / inherit"), vx + 71, gy);
             pnlDetail.Controls.Add(_nudFontSize); gy += ROW;
 
             // Colour rows: hex text box + swatch button, matching KeyEditorForm's AddColorRow layout.
             // Right-click the swatch to show the "Clear" context menu item.
-            AddLabel(pnlDetail, Lang.T("Font color"), lx, gy).TabIndex = ti++;
+            AddFieldLabel(pnlDetail, () => Lang.T("Font color"), lx, gy).TabIndex = ti++;
             (_pnlFontColor, _txtFontColorHex, _ctxClearFontColor) = AddColorRow(pnlDetail, vx, gy, vw, ref ti); gy += ROW;
 
-            AddLabel(pnlDetail, "&" + Lang.T("Key color"), lx, gy).TabIndex = ti++;
+            AddFieldLabel(pnlDetail, () => "&" + Lang.T("Key color"), lx, gy).TabIndex = ti++;
             (_pnlKeyColor, _txtKeyColorHex, _ctxClearKeyColor) = AddColorRow(pnlDetail, vx, gy, vw, ref ti); gy += ROW;
 
-            AddLabel(pnlDetail, "&" + Lang.T("Border color"), lx, gy).TabIndex = ti++;
+            AddFieldLabel(pnlDetail, () => "&" + Lang.T("Border color"), lx, gy).TabIndex = ti++;
             (_pnlBorderColor, _txtBorderColorHex, _ctxClearBorderColor) = AddColorRow(pnlDetail, vx, gy, vw, ref ti); gy += ROW;
 
             // Border thickness: -1 means "inherit from standard group" for non-standard groups.
             // The standard group itself uses Minimum=0 (no inheritance) and the hint is hidden.
-            AddLabel(pnlDetail, "&" + Lang.T("Border thickness"), lx, gy).TabIndex = ti++;
+            AddFieldLabel(pnlDetail, () => "&" + Lang.T("Border thickness"), lx, gy).TabIndex = ti++;
             _nudBorderThickness = new NumericUpDown
             {
                 Left = vx, Top = gy, Width = 65, Minimum = -1, Maximum = 10,
@@ -455,7 +423,7 @@ namespace OnScreenKeyboard
                 AccessibleName        = Lang.StripMnemonic(Lang.T("Border thickness")),
                 AccessibleDescription = Lang.T("-1 = inherit standard"),
             };
-            _tip.SetToolTip(_nudBorderThickness, Lang.T("tip: Border thickness"));
+            SetTip(_nudBorderThickness, () => Lang.T("tip: Border thickness"));
             _lblBorderHint = AddSmallHint(pnlDetail, Lang.T("-1 = inherit standard"), vx + 71, gy);
             pnlDetail.Controls.Add(_nudBorderThickness);
 
@@ -472,25 +440,9 @@ namespace OnScreenKeyboard
                 DialogResult = DialogResult.OK;
                 Close();
             };
+            WrapInScrollPanel(pnlList, pnlDetail, _btnCancel, _btnOK);
             AcceptButton = _btnOK;
             CancelButton = _btnCancel;
-
-            var scrollPanel = new Panel
-            {
-                Dock = DockStyle.Fill,
-                BackColor = _dark ? Fluent.DarkBg : Fluent.BgPage,
-                AutoScroll = true,
-                AutoScrollMinSize = new Size(ClientSize.Width, ClientSize.Height),
-            };
-            Controls.Remove(pnlList);
-            Controls.Remove(pnlDetail);
-            Controls.Remove(_btnCancel);
-            Controls.Remove(_btnOK);
-            scrollPanel.Controls.Add(pnlList);
-            scrollPanel.Controls.Add(pnlDetail);
-            scrollPanel.Controls.Add(_btnCancel);
-            scrollPanel.Controls.Add(_btnOK);
-            Controls.Add(scrollPanel);
         }
 
         // ── List management ───────────────────────────────────────────
@@ -789,7 +741,21 @@ namespace OnScreenKeyboard
             // Shrink form height to fit the extra label row
             dlg.ClientSize = new Size(dlg.ClientSize.Width, ok.Bottom + 12);
 
-            return dlg.ShowDialog(this) == DialogResult.OK ? txt.Text.Trim() : null;
+            // Live high-contrast update for this inline dialog.
+            var prefHnd = new UserPreferenceChangedEventHandler((s2, e2) =>
+            {
+                if (e2.Category == UserPreferenceCategory.Accessibility && dlg.IsHandleCreated && !dlg.IsDisposed)
+                    dlg.BeginInvoke((Action)(() => FluentPainter.ApplyDialogTheme(dlg, _dark)));
+            });
+            SystemEvents.UserPreferenceChanged += prefHnd;
+            try
+            {
+                return dlg.ShowDialog(this) == DialogResult.OK ? txt.Text.Trim() : null;
+            }
+            finally
+            {
+                SystemEvents.UserPreferenceChanged -= prefHnd;
+            }
         }
 
         /// <summary>
@@ -918,13 +884,13 @@ namespace OnScreenKeyboard
                 txt.AccessibleName    = colorName + " hex";
                 swatch.AccessibleName = colorName + " swatch";
             }
-            _tip.SetToolTip(txt,    Lang.T("tip: Hex color"));
-            _tip.SetToolTip(swatch, Lang.T("tip: Color swatch"));
+            SetTip(txt,    () => Lang.T("tip: Hex color"));
+            SetTip(swatch, () => Lang.T("tip: Color swatch"));
 
             txt.TextChanged += (s, e) =>
             {
                 if (_loading) return;
-                Color c = TryParseHex(txt.Text);
+                Color c = ParseColor(txt.Text, Color.Empty);
                 swatch.BackColor = c.IsEmpty ? Fluent.Neutral : c;
                 bool bad = !string.IsNullOrWhiteSpace(txt.Text) && c.IsEmpty;
                 _err.SetError(txt, bad ? Lang.T("err: invalid hex") : "");
@@ -942,21 +908,7 @@ namespace OnScreenKeyboard
             return (swatch, txt, clearItem);
         }
 
-        /// <summary>
-        /// Attempts to parse a hex colour string (<c>"#RRGGBB"</c> or <c>"RRGGBB"</c>).
-        /// Returns <see cref="Color.Empty"/> for empty or invalid input.
-        /// </summary>
-        private static Color TryParseHex(string hex)
-        {
-            if (string.IsNullOrWhiteSpace(hex)) return Color.Empty;
-            try
-            {
-                string h = hex.Trim();
-                if (!h.StartsWith("#")) h = "#" + h;
-                return ColorTranslator.FromHtml(h);
-            }
-            catch { return Color.Empty; }
-        }
+        // TryParseHex removed — use ParseColor(hex, Color.Empty) from FluentDialogBase.
 
         /// <summary>
         /// Opens the system colour-picker dialog pre-filled with <paramref name="pnl"/>'s
@@ -1004,60 +956,12 @@ namespace OnScreenKeyboard
         /// or <see cref="Color.Empty"/> if the text box is empty or contains invalid hex.
         /// </summary>
         private static Color GetSwatchColor(Control pnl) =>
-            pnl.Tag is TextBox txt ? TryParseHex(txt.Text) : Color.Empty;
+            pnl.Tag is TextBox txt ? ParseColor(txt.Text, Color.Empty) : Color.Empty;
 
         // ── UI helpers ────────────────────────────────────────────────
 
-        /// <summary>
-        /// Creates a styled card panel with a painted title header and adds it to the form.
-        /// The actual drawing is delegated to <see cref="FluentPainter.PaintCard"/> in the
-        /// <c>Paint</c> event so the header redraws correctly on every resize or theme change.
-        /// </summary>
-        /// <param name="x">Left position on the form.</param>
-        /// <param name="y">Top position on the form.</param>
-        /// <param name="w">Panel width in pixels.</param>
-        /// <param name="h">Panel height in pixels.</param>
-        /// <param name="title">Text displayed in the card's header bar.</param>
-        /// <param name="accentColor">Colour used for the header bar background.</param>
-        /// <returns>The newly created panel (not yet containing any child controls).</returns>
-        private Panel AddPanel(int x, int y, int w, int h, string title, Color accentColor)
-        {
-            Color bg = _dark ? Color.FromArgb(48, 48, 48) : Fluent.BgCard;
-            var pnl = new Panel
-            {
-                Left = x, Top = y, Width = w, Height = h,
-                BackColor = bg,
-                BorderStyle = BorderStyle.None,
-            };
-            // 36 is the height of the painted header strip at the top of the card.
-            bool dark = _dark;
-            pnl.Paint += (s, e) =>
-                FluentPainter.PaintCard(e.Graphics, pnl.Width, pnl.Height, title, accentColor, 36, dark);
-            Controls.Add(pnl);
-            return pnl;
-        }
-
-        /// <summary>
-        /// Adds a right-aligned descriptive label to <paramref name="parent"/> at the
-        /// given position. The label uses the standard label font and primary text colour.
-        /// </summary>
-        /// <param name="parent">The panel that will own the label.</param>
-        /// <param name="text">The text to display.</param>
-        /// <param name="x">Left position inside <paramref name="parent"/>.</param>
-        /// <param name="y">Top position inside <paramref name="parent"/> (shifted down 6 px to align with input controls).</param>
-        private Label AddLabel(Panel parent, string text, int x, int y)
-        {
-            var lbl = new Label
-            {
-                Text = text, Left = x, Top = y + 6, AutoSize = true,
-                ForeColor = C_LBL, BackColor = Color.Transparent, Font = F_LABEL,
-            };
-            parent.Controls.Add(lbl);
-            // Store the stripped label text so the next AddColorRow call can assign
-            // AccessibleName to both the hex text box and the colour swatch.
-            _pendingAccessibleName = Lang.StripMnemonic(text);
-            return lbl;
-        }
+        // AddPanel → use AddGroup(hdrH: 36) from FluentDialogBase.
+        // AddLabel → use AddFieldLabel from FluentDialogBase.
 
         /// <summary>
         /// Adds a small greyed-out hint label next to an input control — used to
@@ -1125,18 +1029,7 @@ namespace OnScreenKeyboard
             return b;
         }
 
-        /// <summary>
-        /// Returns the names of all font families installed on the current system,
-        /// sorted alphabetically by the OS. Used to populate the font drop-down.
-        /// </summary>
-        /// <returns>A list of font family name strings.</returns>
-        private static List<string> GetInstalledFonts()
-        {
-            var result = new List<string>();
-            using var ifc = new System.Drawing.Text.InstalledFontCollection();
-            foreach (var ff in ifc.Families) result.Add(ff.Name);
-            return result;
-        }
+        // GetInstalledFonts removed — use Fluent.InstalledFontNames() which caches the result process-wide.
 
         // ── Import groups ─────────────────────────────────────────────
 
@@ -1289,6 +1182,8 @@ namespace OnScreenKeyboard
                 MaximizeBox = false, MinimizeBox = false, ShowIcon = false,
                 StartPosition = FormStartPosition.CenterParent,
                 TopMost = true, BackColor = C_BG, Font = F_LABEL,
+                AutoScaleMode       = AutoScaleMode.Dpi,
+                AutoScaleDimensions = new System.Drawing.SizeF(96f, 96f),
             };
 
             // Info line at the top adapts its message depending on whether conflicts exist.
@@ -1393,7 +1288,20 @@ namespace OnScreenKeyboard
             dlg.Controls.Add(btnCancel3);
             dlg.Controls.Add(btnOK3);
 
-            if (dlg.ShowDialog(this) != DialogResult.OK) return null;
+            // Apply Fluent/high-contrast theme (was missing from this dialog).
+            FluentPainter.ApplyDialogTheme(dlg, _dark);
+
+            // Live high-contrast update for this inline dialog.
+            var prefHnd = new UserPreferenceChangedEventHandler((s2, e2) =>
+            {
+                if (e2.Category == UserPreferenceCategory.Accessibility && dlg.IsHandleCreated && !dlg.IsDisposed)
+                    dlg.BeginInvoke((Action)(() => FluentPainter.ApplyDialogTheme(dlg, _dark)));
+            });
+            SystemEvents.UserPreferenceChanged += prefHnd;
+            bool importOK;
+            try   { importOK = dlg.ShowDialog(this) == DialogResult.OK; }
+            finally { SystemEvents.UserPreferenceChanged -= prefHnd; }
+            if (!importOK) return null;
 
             // Walk every data row and convert the user's combo-box selection into an ImportAction enum value.
             var result = new List<(KeyGroup, ImportAction)>();

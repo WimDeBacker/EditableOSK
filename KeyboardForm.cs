@@ -137,12 +137,25 @@ namespace OnScreenKeyboard
 
         private Button _gearBtn;
         private System.Windows.Forms.Timer _holdTimer;  // fires after 1 s when HoldToEdit is on
+
+        // ── Slow Keys ─────────────────────────────────────────────────
+        private System.Windows.Forms.Timer _slowTimer;  // 50 ms tick — advances slow-key progress
+        private GridCell _slowCell;                      // cell currently being held for slow-key
+        private Button   _slowBtn;                       // button being held (for progress repaint)
+        private int      _slowElapsed;                   // ms elapsed since key was pressed
+
+        // ── Dwell Click ───────────────────────────────────────────────
+        private System.Windows.Forms.Timer _dwellTimer;  // 50 ms tick — advances dwell progress
+        private GridCell _dwellCell;                      // cell currently being dwelled over
+        private Button   _dwellBtn;                       // button being dwelled (for repaint)
+        private int      _dwellElapsed;                   // ms elapsed since hover started
         private Panel  _editStrip;   // thin colored bar along bottom — signals edit/quickedit mode
         private Panel  _toolbar;     // toolbar row 1: file ops + mode buttons (Edit+QuickEdit)
         private Panel  _toolbarEdit; // toolbar row 2: key/grid actions (Edit only)
         private ToolbarButton _btnEdit;       // toolbar: switch to Edit mode
         private ToolbarButton _btnExitEdit;   // toolbar: return to Normal mode
         private ToolbarButton _btnEditKeyboard; // toolbar: open keyboard editor
+        private ToolbarButton _btnNew;        // toolbar: new keyboard wizard
         private ToolbarButton _btnLoad;       // toolbar: load layout file
         private ToolbarButton _btnSave;       // toolbar: save layout file
         private ToolbarButton _btnUndo;       // toolbar: undo last edit
@@ -344,6 +357,8 @@ namespace OnScreenKeyboard
                 Lang.LanguageChanged -= onLangChanged;
                 if (_hookHandle != IntPtr.Zero) { UnhookWinEvent(_hookHandle); _hookHandle = IntPtr.Zero; }
                 _toolTip?.Dispose();
+                _slowTimer?.Stop();  _slowTimer?.Dispose();
+                _dwellTimer?.Stop(); _dwellTimer?.Dispose();
                 _window.WindowWidth  = Width;
                 _window.WindowHeight = Height - ToolbarHeightForMode(_mode);
                 AutoSave();
@@ -442,6 +457,36 @@ namespace OnScreenKeyboard
                 _holdTimer.Stop();
                 _gearBtn.BackColor = _mode == Mode.Edit ? _gearEditBg : StdKeyColor; // restore colour
                 SetMode(_mode == Mode.Edit ? Mode.Normal : Mode.Edit);
+            };
+
+            // Slow-keys timer: 50 ms tick counts up to SlowKeysMs threshold,
+            // draws a bottom-bar progress indicator, then fires the key action.
+            _slowTimer = new System.Windows.Forms.Timer { Interval = 50 };
+            _slowTimer.Tick += (s, e) =>
+            {
+                _slowElapsed += 50;
+                _slowBtn?.Invalidate();
+                if (_slowElapsed >= _meta.SlowKeysMs)
+                {
+                    var cell = _slowCell;
+                    CancelSlowKey();
+                    if (cell != null) OnKeyClick(cell);
+                }
+            };
+
+            // Dwell timer: 50 ms tick counts up to DwellMs threshold,
+            // draws a pie-arc progress overlay, then fires the key action.
+            _dwellTimer = new System.Windows.Forms.Timer { Interval = 50 };
+            _dwellTimer.Tick += (s, e) =>
+            {
+                _dwellElapsed += 50;
+                _dwellBtn?.Invalidate();
+                if (_dwellElapsed >= _meta.DwellMs)
+                {
+                    var cell = _dwellCell;
+                    CancelDwell();
+                    if (cell != null) OnKeyClick(cell);
+                }
             };
 
             // Dual-mode drag handler:
@@ -582,6 +627,7 @@ namespace OnScreenKeyboard
                 return b;
             }
 
+            _btnNew          = MakeBtn("file.svg",             Lang.T("tb: New"));
             _btnLoad         = MakeBtn("load.svg",            Lang.T("tb: Load"));
             _btnSave         = MakeBtn("save.svg",            Lang.T("tb: Save"));
             _btnUndo         = MakeBtn("undo.svg",            Lang.T("tb: Undo"));
@@ -600,6 +646,7 @@ namespace OnScreenKeyboard
             };
             _toolbar.Controls.Add(_lblFilename);
 
+            _btnNew.Click          += (s, e) => OpenNewWizard();
             _btnLoad.Click         += (s, e) => LoadSettings();
             _btnSave.Click         += (s, e) => SaveSettings(false);
             _btnUndo.Click         += (s, e) => Undo();
@@ -622,8 +669,9 @@ namespace OnScreenKeyboard
             int W = _toolbar.ClientSize.Width;
             if (W < 50) return;
 
-            // Left side: Load, Save, Undo, Redo
+            // Left side: New, Load, Save, Undo, Redo
             int lx = 2;
+            _btnNew.SetBounds(lx,  y, 56, h); lx += 56 + gap;
             _btnLoad.SetBounds(lx, y, 60, h); lx += 60 + gap;
             _btnSave.SetBounds(lx, y, 60, h); lx += 60 + gap;
             _btnUndo.SetBounds(lx, y, 64, h); lx += 64 + gap;
@@ -850,6 +898,7 @@ namespace OnScreenKeyboard
         private void RefreshToolbarButtonLabels()
         {
             // Row 1 button labels
+            if (_btnNew          != null) _btnNew.Text          = Lang.T("tb: New");
             if (_btnLoad         != null) _btnLoad.Text         = Lang.T("tb: Load");
             if (_btnSave         != null) _btnSave.Text         = Lang.T("tb: Save");
             if (_btnUndo         != null) _btnUndo.Text         = Lang.T("tb: Undo");
@@ -893,6 +942,7 @@ namespace OnScreenKeyboard
             if (_toolTip == null || _btnEdit == null) return;
 
             // Row 1
+            _toolTip.SetToolTip(_btnNew,       Lang.T("tip: New"));
             _toolTip.SetToolTip(_btnLoad,      Lang.T("tip: Load"));
             _toolTip.SetToolTip(_btnSave,      Lang.T("tip: Save"));
             _toolTip.SetToolTip(_btnUndo,      Lang.T("tip: Undo"));
@@ -937,6 +987,8 @@ namespace OnScreenKeyboard
         /// </summary>
         private void RebuildAllButtons()
         {
+            CancelSlowKey();
+            CancelDwell();
             // Renumber WP slots to 0, 1, 2, … on every rebuild so hand-edited XML
             // with duplicate or out-of-order slots is silently corrected at load time.
             NormaliseWPSlots();
@@ -1138,7 +1190,17 @@ namespace OnScreenKeyboard
                 }
                 else
                 {
-                    OnKeyClick(cell);
+                    if (_meta.SlowKeysMs > 0)
+                    {
+                        _slowCell    = cell;
+                        _slowBtn     = btn;
+                        _slowElapsed = 0;
+                        _slowTimer.Start();
+                    }
+                    else
+                    {
+                        OnKeyClick(cell);
+                    }
                 }
             };
 
@@ -1161,7 +1223,24 @@ namespace OnScreenKeyboard
                 btn.DoDragDrop(src, DragDropEffects.Move);
             };
 
-            btn.MouseUp += (s, e) => { _dragCandidate = null; };
+            btn.MouseUp += (s, e) =>
+            {
+                _dragCandidate = null;
+                if (_slowCell == cell) CancelSlowKey();
+            };
+
+            btn.MouseEnter += (s, e) =>
+            {
+                if (_mode != Mode.Normal || _meta.DwellMs <= 0) return;
+                _dwellCell    = cell;
+                _dwellBtn     = btn;
+                _dwellElapsed = 0;
+                _dwellTimer.Start();
+            };
+            btn.MouseLeave += (s, e) =>
+            {
+                if (_dwellCell == cell) CancelDwell();
+            };
 
             // ── Drop target events ────────────────────────────────────
             btn.DragEnter += (s, e) =>
@@ -1758,6 +1837,28 @@ namespace OnScreenKeyboard
                 TextRenderer.DrawText(e.Graphics, al, cf, rectA,
                     Color.FromArgb(130, fc),
                     TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine);
+            }
+
+            // ── Slow-key / dwell progress (bottom-up fill) ───────────
+            // Both features share the same visual: a semi-transparent fill that
+            // rises from the bottom of the key to the top as progress advances.
+            // The fill colour is the key's own font colour at ~35 % opacity so it
+            // contrasts with any key background while leaving the label readable.
+            float progressFill = 0f;
+            if (_meta.ShowTimingAnimation)
+            {
+                if (ReferenceEquals(_slowBtn, btn) && _meta.SlowKeysMs > 0 && _slowElapsed > 0)
+                    progressFill = Math.Clamp((float)_slowElapsed / _meta.SlowKeysMs, 0f, 1f);
+                else if (ReferenceEquals(_dwellBtn, btn) && _meta.DwellMs > 0 && _dwellElapsed > 0)
+                    progressFill = Math.Clamp((float)_dwellElapsed / _meta.DwellMs, 0f, 1f);
+            }
+
+            if (progressFill > 0f)
+            {
+                int fillH = (int)(btn.Height * progressFill);
+                int fillY = btn.Height - fillH;
+                using var fillBrush = new SolidBrush(Color.FromArgb(90, fc));
+                e.Graphics.FillRectangle(fillBrush, 0, fillY, btn.Width, fillH);
             }
 
         }
@@ -2591,8 +2692,30 @@ namespace OnScreenKeyboard
         /// state from being painted.
         /// </para>
         /// </summary>
+        private void CancelSlowKey()
+        {
+            _slowTimer.Stop();
+            var prev = _slowBtn;
+            _slowCell    = null;
+            _slowBtn     = null;
+            _slowElapsed = 0;
+            prev?.Invalidate();
+        }
+
+        private void CancelDwell()
+        {
+            _dwellTimer.Stop();
+            var prev = _dwellBtn;
+            _dwellCell    = null;
+            _dwellBtn     = null;
+            _dwellElapsed = 0;
+            prev?.Invalidate();
+        }
+
         private void SetMode(Mode newMode)
         {
+            CancelSlowKey();
+            CancelDwell();
             if (newMode != Mode.Edit) { _selectedCell = null; UpdateSelectedKeyLabel(); }
             if (newMode != Mode.Edit && _fmtPaintMode)  { _fmtPaintMode  = false; UpdatePaintModeCursors();    }
             if (newMode != Mode.Edit && _keyPaintMode)  { _keyPaintMode  = false; UpdateKeyPaintModeCursors(); }
@@ -3200,11 +3323,12 @@ namespace OnScreenKeyboard
         private void OpenKeyboardEditor()
         {
             using var dlg = new KeyboardEditorForm(_theme, _window, _meta, this,
-                groups:    _layout.Groups,
-                onSave:    () => SaveSettings(false),
-                onSaveAs:  () => SaveSettings(true),
-                onLoad:    () => LoadSettings(),
-                getGroups: () => _layout.Groups);
+                groups:      _layout.Groups,
+                onSave:      () => SaveSettings(false),
+                onSaveAs:    () => SaveSettings(true),
+                onLoad:      () => LoadSettings(),
+                getGroups:   () => _layout.Groups,
+                getSettings: () => (_theme, _window, _meta));
             if (dlg.ShowDialog(this) != DialogResult.OK) return;
             PushUndo();
 
@@ -3276,6 +3400,23 @@ namespace OnScreenKeyboard
             {
                 MessageBox.Show($"{Lang.T("Save failed")}\n{ex.Message}",
                     "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
+        /// Opens the New Keyboard Wizard.  On success the created file is loaded
+        /// immediately via <see cref="ApplyLoadedSettings"/>, just like a regular file load.
+        /// </summary>
+        private void OpenNewWizard()
+        {
+            using var wiz = new NewKeyboardWizard();
+            if (wiz.ShowDialog(this) == System.Windows.Forms.DialogResult.OK &&
+                !string.IsNullOrEmpty(wiz.CreatedFilePath))
+            {
+                _undoStack.Clear();
+                _redoStack.Clear();
+                RefreshUndoRedoState();
+                ApplyLoadedSettings(wiz.CreatedFilePath);
             }
         }
 

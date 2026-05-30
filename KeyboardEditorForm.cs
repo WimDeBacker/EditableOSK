@@ -22,7 +22,7 @@ namespace OnScreenKeyboard
     /// <see cref="DialogResult.Cancel"/> and the original values are left
     /// unchanged.
     /// </summary>
-    public class KeyboardEditorForm : Form
+    public class KeyboardEditorForm : FluentDialogBase
     {
         // ── Public results (read by the caller after DialogResult.OK) ────
 
@@ -41,14 +41,14 @@ namespace OnScreenKeyboard
         /// </summary>
         public List<KeyGroup> ResultGroups { get; private set; }
 
-        // ── Snapshot of the original settings (never mutated) ───────────
+        // ── Snapshot of the original settings (updated after Load) ──────
 
-        /// <summary>The theme as it was when the editor was opened — used for change-detection in <see cref="Apply"/>.</summary>
-        private readonly VisualTheme _srcTheme;
-        /// <summary>The window state as it was when the editor was opened — fields not exposed in this editor are copied back verbatim.</summary>
-        private readonly WindowState _srcWindow;
-        /// <summary>The layout metadata as it was when the editor was opened.</summary>
-        private readonly LayoutMeta  _srcMeta;
+        /// <summary>The theme as it was when the editor was opened (or last loaded) — passthrough fields in <see cref="Apply"/> are copied from here.</summary>
+        private VisualTheme _srcTheme;
+        /// <summary>The window state as it was when the editor was opened (or last loaded).</summary>
+        private WindowState _srcWindow;
+        /// <summary>The layout metadata as it was when the editor was opened (or last loaded).</summary>
+        private LayoutMeta  _srcMeta;
 
         /// <summary>
         /// Working copy of the key-group list.  Never changed inside this dialog (group
@@ -67,11 +67,18 @@ namespace OnScreenKeyboard
         private Button        _pnlBgColor;
 
         // Window/accessibility checkboxes
-        private CheckBox      _chkAlwaysOnTop;
-        private CheckBox      _chkStickyMods;
-        private CheckBox      _chkHoldToEdit;
-        private CheckBox      _chkHideTitlebar;
-        private ComboBox      _cmbToolbarTheme;
+        private CheckBox        _chkAlwaysOnTop;
+        private CheckBox        _chkStickyMods;
+        private CheckBox        _chkHoldToEdit;
+        private CheckBox        _chkHideTitlebar;
+        private ComboBox        _cmbToolbarTheme;
+
+        // Accessibility — slow keys and dwell click (checkbox = enabled, NUD = duration)
+        private CheckBox        _chkSlowKeys;
+        private NumericUpDown   _nudSlowKeys;
+        private CheckBox        _chkDwell;
+        private NumericUpDown   _nudDwell;
+        private CheckBox        _chkTimingAnimation;
 
         // File action delegates — called when Save/SaveAs/Load buttons are clicked
         private readonly Action _onSave;
@@ -83,58 +90,23 @@ namespace OnScreenKeyboard
         /// </summary>
         private readonly Func<List<KeyGroup>> _getGroups;
 
-        // File buttons — kept as fields so <see cref="RelabelUI"/> can update their text
+        /// <summary>
+        /// Retrieves the freshly-loaded theme, window state, and layout metadata
+        /// from the main form after a "Load" operation.
+        /// </summary>
+        private readonly Func<(VisualTheme, WindowState, LayoutMeta)> _getSettings;
+
+        // File buttons — kept as fields so OnLanguageChanged() can update their text
         private Button _btnSaveFile, _btnSaveAsFile, _btnLoadFile;
 
-        // True when the toolbar is currently in dark mode — dialogs follow the same theme.
-        private readonly bool _dark;
+        // _dark is inherited from FluentDialogBase.
 
         // Confirm / dismiss
         private Button _btnApply, _btnCancel;
 
-        // ── Translation helpers ──────────────────────────────────────────
-
-        /// <summary>
-        /// Labels whose text needs to be refreshed whenever the UI language
-        /// changes.  Stored as (control, factory function) pairs so we can
-        /// call the factory and push the new string on demand.
-        /// </summary>
-        private readonly List<(Label Ctrl, Func<string> GetText)> _transLabels
-            = new List<(Label, Func<string>)>();
-
-        /// <summary>
-        /// Group panels whose header title needs to be redrawn on a
-        /// language change.  Only the panel reference is needed here because
-        /// the title factory is captured in the panel's Paint handler.
-        /// </summary>
-        private readonly List<(Panel Pnl, Func<string> GetTitle)> _transGroups
-            = new List<(Panel, Func<string>)>();
-
-        // ── Tooltip / accessibility helpers ──────────────────────────────
-        /// <summary>Shared ToolTip component — one instance per form (WinForms best practice).</summary>
-        private ToolTip _tip;
-
-        /// <summary>
-        /// Shared ErrorProvider — shows a field-level error icon and announces
-        /// the error to screen readers when a hex colour field contains invalid text.
-        /// </summary>
-        private ErrorProvider _err;
-
-        // Stored so it can be unsubscribed in FormClosed.
-        private UserPreferenceChangedEventHandler _onPrefChanged;
-
-        /// <summary>
-        /// (Control, factory) pairs registered by <see cref="SetTip"/> so that
-        /// <see cref="RelabelUI"/> can push refreshed tooltip strings on language switch.
-        /// </summary>
-        private readonly List<(Control Ctrl, Func<string> GetTip)> _transTooltips
-            = new List<(Control, Func<string>)>();
-
-        /// <summary>
-        /// Set by <see cref="AddFieldLabel"/> and consumed by the next <see cref="AddColorRow"/>
-        /// call so the colour row controls automatically receive the correct accessible name.
-        /// </summary>
-        private string _pendingAccessibleName;
+        // ── Translation / tooltip / accessibility helpers ────────────────
+        // _transLabels, _transGroups, _transTooltips, _tip, _err, _onPrefChanged,
+        // _pendingAccessibleName — all inherited from FluentDialogBase.
 
         // ── Fluent / WinUI-3 colour and font shorthands ─────────────────
         // These are static properties so they always return the current
@@ -201,83 +173,33 @@ namespace OnScreenKeyboard
         public KeyboardEditorForm(VisualTheme theme, WindowState window, LayoutMeta meta,
                                   Form owner,
                                   Action onSave = null, Action onSaveAs = null, Action onLoad = null,
-                                  List<KeyGroup> groups = null, Func<List<KeyGroup>> getGroups = null)
+                                  List<KeyGroup> groups = null, Func<List<KeyGroup>> getGroups = null,
+                                  Func<(VisualTheme, WindowState, LayoutMeta)> getSettings = null)
+            : base(new Size(940, 560))
         {
-            // Store originals for change-detection and for fields we do not expose.
             _srcTheme  = theme;
             _srcWindow = window;
             _srcMeta   = meta;
 
-            // Working copies — the user edits these; they are written back only on Apply().
             ResultTheme  = theme.Clone();
             ResultWindow = window.Clone();
             ResultMeta   = meta.Clone();
 
-            // Deep-clone each group so the Group Editor sub-dialog cannot
-            // accidentally modify the caller's list before OK is pressed.
-            _groups   = groups?.Select(g => g.Clone()).ToList() ?? new List<KeyGroup>();
+            _groups      = groups?.Select(g => g.Clone()).ToList() ?? new List<KeyGroup>();
             ResultGroups = _groups;
 
-            _onSave   = onSave;
-            _onSaveAs = onSaveAs;
-            _onLoad   = onLoad;
-            _getGroups = getGroups;
+            _onSave      = onSave;
+            _onSaveAs    = onSaveAs;
+            _onLoad      = onLoad;
+            _getGroups   = getGroups;
+            _getSettings = getSettings;
 
-            // Follow the toolbar theme so dialogs match the overall colour mode.
-            _dark = !ToolbarButton.IsLightTheme;
-
-            // Form chrome
-            AutoScaleMode       = AutoScaleMode.Dpi;
-            AutoScaleDimensions = new SizeF(96f, 96f);
-
-            Text         = Lang.T("Edit Keyboard");
-            BackColor    = _dark ? Fluent.DarkBg : Fluent.BgPage;
-            FormBorderStyle = FormBorderStyle.Sizable;
-            MaximizeBox  = MinimizeBox = false;
-            ShowIcon     = false;
-            StartPosition = FormStartPosition.CenterParent;
-            Size         = new Size(940, 560);  // final height is adjusted in BuildUI()
-            TopMost      = true;
-            Font         = F_LABEL;
-
-            _tip = new ToolTip { InitialDelay = 400, AutoPopDelay = 10000, ShowAlways = true };
-            _err = new ErrorProvider { ContainerControl = this, BlinkStyle = ErrorBlinkStyle.BlinkIfDifferentError };
+            Text = Lang.T("Edit Keyboard");
 
             BuildUI();
             PopulateFields(theme, window, meta);
-            // Apply dark/light theme to every control — after BuildUI so all controls exist.
-            FluentPainter.ApplyDialogTheme(this, _dark);
-            ActiveControl = _cmbLanguage;  // start keyboard focus on the language selector
-
-            Load += (s, e) =>
-            {
-                var wa = Screen.FromControl(this).WorkingArea;
-                if (Width > wa.Width - 10 || Height > wa.Height - 10)
-                {
-                    Width  = Math.Min(Width,  wa.Width  - 10);
-                    Height = Math.Min(Height, wa.Height - 10);
-                }
-                MinimumSize = new Size(Math.Min(Width, 480), Math.Min(Height, 320));
-            };
-
-            _onPrefChanged = (s, e) =>
-            {
-                if (e.Category == UserPreferenceCategory.Accessibility && IsHandleCreated && !IsDisposed)
-                    BeginInvoke((Action)(() => FluentPainter.ApplyDialogTheme(this, _dark)));
-            };
-            SystemEvents.UserPreferenceChanged += _onPrefChanged;
-
-            // Subscribe to the global language-change event so every label
-            // updates automatically when the user picks a different language.
-            Lang.LanguageChanged += RelabelUI;
-
-            // Unsubscribe when the form closes.
-            FormClosed += (s, e) =>
-            {
-                Lang.LanguageChanged -= RelabelUI;
-                SystemEvents.UserPreferenceChanged -= _onPrefChanged;
-                _err?.Dispose();
-            };
+            ActiveControl = _cmbLanguage;
+            // Base FormClosed handles Lang.LanguageChanged, UserPreferenceChanged, and _err.
         }
 
         // ════════════════════════════════════════════════════════════════
@@ -285,12 +207,13 @@ namespace OnScreenKeyboard
         // ════════════════════════════════════════════════════════════════
 
         /// <summary>
-        /// Called automatically whenever <see cref="Lang.LanguageChanged"/>
-        /// fires.  Re-translates every piece of text in the dialog so the
-        /// user does not need to reopen it after switching language.
+        /// Refreshes all translatable strings on the form when the language changes.
+        /// Calls <see cref="FluentDialogBase.OnLanguageChanged"/> first (handles labels,
+        /// group-panel headers, tooltips), then updates form-specific controls.
         /// </summary>
-        private void RelabelUI()
+        protected override void OnLanguageChanged()
         {
+            base.OnLanguageChanged();
             Text                  = Lang.T("Edit Keyboard");
             _btnApply.Text        = Lang.T("Apply");
             _btnCancel.Text       = Lang.T("Cancel");
@@ -298,21 +221,14 @@ namespace OnScreenKeyboard
             _chkStickyMods.Text   = Lang.T("Sticky modifiers");
             _chkHoldToEdit.Text   = Lang.T("Hold to edit");
             _chkHideTitlebar.Text = Lang.T("Hide title bar");
-            _btnSaveFile.Text   = "&" + Lang.T("Save");
-            _btnSaveAsFile.Text = Lang.T("Save As…");
-            _btnLoadFile.Text   = "&" + Lang.T("Load…");
-
-            // Re-run each label's text factory and push the translated string.
-            foreach (var (ctrl, getText) in _transLabels) ctrl.Text = getText();
-
-            // Group panels paint their own header text via a custom Paint
-            // handler, so invalidating them is enough to trigger a redraw.
-            foreach (var (pnl,  _) in _transGroups) pnl.Invalidate();
-
-            // Refresh all tooltips registered via SetTip() so they use the new language.
-            foreach (var (ctrl, getTip) in _transTooltips) _tip.SetToolTip(ctrl, getTip());
-
-            Invalidate(true);  // repaint everything else (e.g. the form background)
+            _chkSlowKeys.Text           = Lang.T("Slow keys");
+            _chkDwell.Text              = Lang.T("Dwell click");
+            _chkTimingAnimation.Text    = Lang.T("Show timing animation");
+            _nudSlowKeys.AccessibleName = Lang.StripMnemonic(Lang.T("Slow keys"));
+            _nudDwell.AccessibleName    = Lang.StripMnemonic(Lang.T("Dwell click"));
+            _btnSaveFile.Text     = "&" + Lang.T("Save");
+            _btnSaveAsFile.Text   = Lang.T("Save As…");
+            _btnLoadFile.Text     = "&" + Lang.T("Load…");
         }
 
         // ════════════════════════════════════════════════════════════════
@@ -498,15 +414,22 @@ namespace OnScreenKeyboard
             _btnLoadFile.Click += (s, e) =>
             {
                 _onLoad?.Invoke();
-                // After the load, fetch the newly loaded groups (if the caller
-                // provided a factory) and refresh all controls.
+                // Fetch the freshly loaded theme/window/meta so PopulateFields
+                // shows the new file's values, not the pre-open snapshots.
+                if (_getSettings != null)
+                {
+                    var (t, ws, m) = _getSettings();
+                    _srcTheme  = t;
+                    _srcWindow = ws;
+                    _srcMeta   = m;
+                }
                 if (_getGroups != null)
                     _groups = _getGroups().Select(g => g.Clone()).ToList();
                 PopulateFields(_srcTheme, _srcWindow, _srcMeta);
             };
 
             // ── Accessibility card ─────────────────────────────────────────
-            int accH = HDR_H + PAD + ROW_H * 2 + PAD;
+            int accH = HDR_H + PAD + ROW_H * 5 + PAD;
             var grpAcc = AddGroup(() => Lang.T("Accessibility"), rightX, rightY, rightW, accH,
                                   Color.FromArgb(155, 89, 182));
             grpAcc.TabIndex = 3;
@@ -534,255 +457,121 @@ namespace OnScreenKeyboard
             };
             grpAcc.Controls.Add(_chkHoldToEdit);
 
+            // Slow keys: key must be held for N ms before it registers.
+            // Dwell click: hovering over a key for N ms auto-fires it.
+            // The two are mutually exclusive; setting one > 0 clears the other.
+            int nudW = 75;
+            int nudX = rightW - PAD - nudW;
+            int slowY = HDR_H + PAD + ROW_H * 2;
+            int dwellY = HDR_H + PAD + ROW_H * 3;
+
+            // Slow keys row: checking enables the feature; NUD greyed when unchecked.
+            _chkSlowKeys = new CheckBox
+            {
+                Text = Lang.T("Slow keys"), Left = PAD, Top = slowY + 8, AutoSize = true,
+                ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent, Font = F_LABEL,
+                TabIndex = 2,
+            };
+            grpAcc.Controls.Add(_chkSlowKeys);
+            SetTip(_chkSlowKeys, () => Lang.T("tip: Slow keys"));
+
+            _nudSlowKeys = new NumericUpDown
+            {
+                Left = nudX, Top = slowY + 4, Width = nudW, Height = 26,
+                Minimum = 100, Maximum = 3000, Increment = 50, Value = 300,
+                BackColor = C_INPUT_BG, ForeColor = C_LBL, Font = F_LABEL,
+                TabIndex = 3, Enabled = false,
+                AccessibleName = Lang.StripMnemonic(Lang.T("Slow keys")),
+            };
+            grpAcc.Controls.Add(_nudSlowKeys);
+            SetTip(_nudSlowKeys, () => Lang.T("tip: Slow keys"));
+
+            // Dwell click row: same pattern.
+            _chkDwell = new CheckBox
+            {
+                Text = Lang.T("Dwell click"), Left = PAD, Top = dwellY + 8, AutoSize = true,
+                ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent, Font = F_LABEL,
+                TabIndex = 4,
+            };
+            grpAcc.Controls.Add(_chkDwell);
+            SetTip(_chkDwell, () => Lang.T("tip: Dwell click"));
+
+            _nudDwell = new NumericUpDown
+            {
+                Left = nudX, Top = dwellY + 4, Width = nudW, Height = 26,
+                Minimum = 100, Maximum = 5000, Increment = 100, Value = 1000,
+                BackColor = C_INPUT_BG, ForeColor = C_LBL, Font = F_LABEL,
+                TabIndex = 5, Enabled = false,
+                AccessibleName = Lang.StripMnemonic(Lang.T("Dwell click")),
+            };
+            grpAcc.Controls.Add(_nudDwell);
+            SetTip(_nudDwell, () => Lang.T("tip: Dwell click"));
+
+            // Checking one feature auto-unchecks the other (mutually exclusive);
+            // also enables/disables the paired NUD and the animation checkbox.
+            _chkSlowKeys.CheckedChanged += (s, e) =>
+            {
+                _nudSlowKeys.Enabled        = _chkSlowKeys.Checked;
+                if (_chkSlowKeys.Checked) _chkDwell.Checked = false;
+                _chkTimingAnimation.Enabled = _chkSlowKeys.Checked || _chkDwell.Checked;
+            };
+            _chkDwell.CheckedChanged += (s, e) =>
+            {
+                _nudDwell.Enabled           = _chkDwell.Checked;
+                if (_chkDwell.Checked) _chkSlowKeys.Checked = false;
+                _chkTimingAnimation.Enabled = _chkSlowKeys.Checked || _chkDwell.Checked;
+            };
+
+            // Show timing animation: bottom-up fill on keys during countdown.
+            int animY = HDR_H + PAD + ROW_H * 4;
+            _chkTimingAnimation = new CheckBox
+            {
+                Text = Lang.T("Show timing animation"),
+                Left = PAD, Top = animY + 8, AutoSize = true,
+                ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent, Font = F_LABEL,
+                TabIndex = 6, Checked = true,
+            };
+            grpAcc.Controls.Add(_chkTimingAnimation);
+            SetTip(_chkTimingAnimation, () => Lang.T("tip: Show timing animation"));
+
             // ── Bottom action buttons ─────────────────────────────────────
             // Place them below whichever column is taller.
             int btnTop = Math.Max(leftY, rightY) + gap;
             int bw     = (colW * 2 + gap - gap) / 2;  // each button is half the total column width
 
-            _btnCancel = MakeActionBtn(Lang.T("Cancel"), FluentButton.Variant.Neutral, margin,        btnTop, bw, 44); _btnCancel.TabIndex = 4;
-            _btnApply  = MakeActionBtn(Lang.T("Apply"),  FluentButton.Variant.Neutral, margin+bw+gap, btnTop, bw, 44); _btnApply.TabIndex  = 5;
+            _btnCancel = MakeActionBtn(Lang.T("Cancel"), margin,        btnTop, bw, 44); _btnCancel.TabIndex = 4;
+            _btnApply  = MakeActionBtn(Lang.T("Apply"),  margin+bw+gap, btnTop, bw, 44); _btnApply.TabIndex  = 5;
 
             _btnApply.Click  += (s, e) => Apply();
             _btnCancel.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
-            AcceptButton = _btnApply;
-            CancelButton = _btnCancel;
 
             ClientSize = new Size(ClientSize.Width, btnTop + 44 + margin);
 
-            var scrollPanel = new Panel
-            {
-                Dock = DockStyle.Fill,
-                BackColor = _dark ? Fluent.DarkBg : Fluent.BgPage,
-                AutoScroll = true,
-                AutoScrollMinSize = new Size(ClientSize.Width, ClientSize.Height),
-            };
-            Controls.Remove(grpLang);
-            Controls.Remove(grpWnd);
-            Controls.Remove(grpFile);
-            Controls.Remove(grpAcc);
-            Controls.Remove(_btnCancel);
-            Controls.Remove(_btnApply);
-            scrollPanel.Controls.Add(grpLang);
-            scrollPanel.Controls.Add(grpWnd);
-            scrollPanel.Controls.Add(grpFile);
-            scrollPanel.Controls.Add(grpAcc);
-            scrollPanel.Controls.Add(_btnCancel);
-            scrollPanel.Controls.Add(_btnApply);
-            Controls.Add(scrollPanel);
+            WrapInScrollPanel(grpLang, grpWnd, grpFile, grpAcc, _btnCancel, _btnApply);
+            AcceptButton = _btnApply;
+            CancelButton = _btnCancel;
         }
 
         // ════════════════════════════════════════════════════════════════
         // Helper methods for building UI sections
         // ════════════════════════════════════════════════════════════════
 
-        /// <summary>
-        /// Creates a styled card (a <see cref="Panel"/> with a coloured
-        /// header bar drawn via <see cref="FluentPainter.PaintCard"/>) and
-        /// adds it to the form.
-        /// </summary>
-        /// <param name="getTitle">
-        ///   Factory that returns the translated title string.  Called each
-        ///   time the panel is painted so language changes show immediately.
-        /// </param>
-        /// <param name="x">Left edge of the card in form coordinates.</param>
-        /// <param name="y">Top edge of the card in form coordinates.</param>
-        /// <param name="w">Width of the card in pixels.</param>
-        /// <param name="h">Height of the card in pixels.</param>
-        /// <param name="accentColor">
-        ///   Colour used for the left accent stripe in the header bar.
-        /// </param>
-        /// <returns>The panel that acts as the card's content container.</returns>
-        private Panel AddGroup(Func<string> getTitle, int x, int y, int w, int h, Color accentColor)
-        {
-            Color bg = _dark ? Color.FromArgb(48, 48, 48) : Fluent.BgCard;
-            var pnl = new Panel { Left = x, Top = y, Width = w, Height = h, BackColor = bg };
-
-            // The Paint handler delegates all drawing to FluentPainter so the
-            // card automatically uses the current Fluent theme colours.
-            bool dark = _dark;
-            pnl.Paint += (s, e) =>
-                FluentPainter.PaintCard(e.Graphics, pnl.Width, pnl.Height, getTitle(), accentColor, HDR_H, dark);
-
-            Controls.Add(pnl);
-
-            // Register in the translation list so RelabelUI() can trigger a
-            // repaint when the language changes.
-            _transGroups.Add((pnl, getTitle));
-            return pnl;
-        }
+        // AddGroup, AddColorRow, GetSwatchHex (was GetHex), SetSwatchHex (was SetHex),
+        // AddFieldLabel, SetTip, MakeActionBtn, ParseColor — all inherited from FluentDialogBase.
 
         /// <summary>
-        /// Adds a colour-picker row to a parent panel.  The row consists of:
-        /// <list type="number">
-        ///   <item><description>
-        ///     A <see cref="TextBox"/> for typing a hex colour code (#RRGGBB).
-        ///   </description></item>
-        ///   <item><description>
-        ///     A small coloured swatch <see cref="Panel"/> that shows the
-        ///     current colour and opens a <see cref="ColorDialog"/> on click.
-        ///   </description></item>
-        /// </list>
-        /// The two controls are kept in sync: changing the hex text updates
-        /// the swatch, and picking a colour from the dialog writes its hex
-        /// back to the text box.
+        /// Creates a small <see cref="FluentButton"/> suitable for file operations
+        /// (Save, Save As, Load) and adds it to a parent panel.
         /// </summary>
-        /// <param name="parent">Panel that will own the new controls.</param>
-        /// <param name="x">Left edge of the row inside <paramref name="parent"/>.</param>
-        /// <param name="y">Top edge of the row inside <paramref name="parent"/>.</param>
-        /// <param name="totalW">Total width for both controls combined.</param>
-        /// <returns>
-        ///   The swatch panel (used as a handle by <see cref="GetHex"/> and
-        ///   <see cref="SetHex"/>).  The text box reference is stored in
-        ///   <see cref="Control.Tag"/> so it can be retrieved from the swatch.
-        /// </returns>
-        private Button AddColorRow(Panel parent, int x, int y, int totalW, ref int ti)
-        {
-            int sw = 32;  // fixed width of the colour swatch square
-            var txtHex = new TextBox
-            {
-                Left = x, Top = y, Width = totalW - sw - 5,
-                BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary,
-                BorderStyle = BorderStyle.FixedSingle,
-                Font = Fluent.FontCourier,  // monospace makes hex codes easier to read
-                TabIndex = ti++,
-            };
-            // ColorSwatchButton participates in Tab order and responds to Space/Enter natively
-            // (WCAG 2.1 A §2.1.1). It also draws a two-tone focus ring visible on any colour
-            // (WCAG 2.1 AA §2.4.7).
-            var swatch = new ColorSwatchButton
-            {
-                Left = x + totalW - sw, Top = y, Width = sw, Height = 26,
-                BackColor = Color.Gray,
-                TabIndex = ti++,
-            };
-            // Consume the name queued by the preceding AddFieldLabel call.
-            string colorName = _pendingAccessibleName;
-            _pendingAccessibleName = null;
-            if (colorName != null)
-            {
-                txtHex.AccessibleName  = colorName + " hex";
-                swatch.AccessibleName  = colorName + " swatch";
-            }
-            SetTip(txtHex, () => Lang.T("tip: Hex color"));
-            SetTip(swatch, () => Lang.T("tip: Color swatch"));
-
-            // Keep the swatch colour in sync as the user types a hex value.
-            // ParseColor uses the current swatch colour as fallback so the
-            // swatch does not flash to black on a partially typed hex string.
-            txtHex.TextChanged += (s, e) =>
-            {
-                swatch.BackColor = ParseColor(txtHex.Text, swatch.BackColor);
-                bool bad = !string.IsNullOrWhiteSpace(txtHex.Text)
-                           && ParseColor(txtHex.Text, Color.Empty).IsEmpty;
-                _err.SetError(txtHex, bad ? Lang.T("err: invalid hex") : "");
-            };
-
-            // Clicking (or pressing Space/Enter) the swatch opens the system colour picker.
-            swatch.Click += (s, e) =>
-            {
-                using var dlg = new ColorDialog { Color = swatch.BackColor };
-                if (dlg.ShowDialog() == DialogResult.OK)
-                    txtHex.Text = SettingsManager.Hex(dlg.Color);  // writes hex → triggers TextChanged above
-            };
-
-            parent.Controls.Add(txtHex);
-            parent.Controls.Add(swatch);
-
-            // Store the text box in Tag so GetHex/SetHex can retrieve it
-            // from just the swatch panel reference.
-            swatch.Tag = txtHex;
-            return swatch;
-        }
-
-        /// <summary>
-        /// Reads the hex colour string from the text box that belongs to a
-        /// colour-picker swatch panel created by <see cref="AddColorRow"/>.
-        /// </summary>
-        /// <param name="s">The swatch panel whose Tag holds the text box.</param>
-        /// <returns>The current hex string, or an empty string if unavailable.</returns>
-        private string GetHex(Button s) => (s.Tag is TextBox t) ? t.Text : "";
-
-        /// <summary>
-        /// Writes a hex colour string into the text box of a colour-picker
-        /// swatch panel and updates the swatch background accordingly.
-        /// </summary>
-        /// <param name="s">The swatch panel whose Tag holds the text box.</param>
-        /// <param name="hex">Hex colour string such as "#FF8800".</param>
-        private void SetHex(Button s, string hex)
-        {
-            if (s.Tag is TextBox t) { t.Text = hex; s.BackColor = ParseColor(hex, s.BackColor); }
-        }
-
-        /// <summary>
-        /// Adds a right-aligned field label to a card panel and registers it
-        /// in the translation list so it updates when the language changes.
-        /// </summary>
-        /// <param name="parent">The card panel that will contain the label.</param>
-        /// <param name="getText">Factory that returns the translated label text.</param>
-        /// <param name="x">Left edge of the label inside <paramref name="parent"/>.</param>
-        /// <param name="y">Top edge of the row; the label is offset down by 6 px to vertically align with adjacent inputs.</param>
-        private Label AddFieldLabel(Panel parent, Func<string> getText, int x, int y)
-        {
-            var lbl = new Label
-            {
-                Text = getText(), Left = x, Top = y + 6, AutoSize = true,
-                ForeColor = C_LBL, BackColor = Color.Transparent, Font = F_LABEL,
-            };
-            parent.Controls.Add(lbl);
-            _transLabels.Add((lbl, getText));
-            // Store stripped label text for the next AddColorRow call.
-            _pendingAccessibleName = Lang.StripMnemonic(getText());
-            return lbl;
-        }
-
-        /// <summary>
-        /// Registers a tooltip on <paramref name="ctrl"/> and adds it to
-        /// <see cref="_transTooltips"/> so <see cref="RelabelUI"/> can refresh it.
-        /// </summary>
-        private void SetTip(Control ctrl, Func<string> getTip)
-        {
-            _tip.SetToolTip(ctrl, getTip());
-            _transTooltips.Add((ctrl, getTip));
-        }
-
-        /// <summary>
-        /// Creates a small <see cref="FluentButton"/> suitable for file
-        /// operations (Save, Save As, Load) and adds it to a parent panel.
-        /// </summary>
-        /// <param name="text">Button label text.</param>
-        /// <param name="parent">Card panel that will own the button.</param>
-        /// <param name="x">Left edge inside <paramref name="parent"/>.</param>
-        /// <param name="y">Top edge inside <paramref name="parent"/>.</param>
-        /// <param name="w">Button width in pixels.</param>
-        /// <returns>The newly created button.</returns>
         private Button MakeFileBtn(string text, Panel parent, int x, int y, int w)
         {
             var btn = new FluentButton
             {
                 Text = text, Left = x, Top = y, Width = w, Height = ROW_H - 8,
                 Style = FluentButton.Variant.Neutral,
-                TabStop = true,   // file buttons must be keyboard-reachable (WCAG 2.1 A §2.1.1)
+                TabStop = true,
             };
             parent.Controls.Add(btn);
-            return btn;
-        }
-
-        /// <summary>
-        /// Creates an action button (Apply / Cancel) and adds it directly to
-        /// the form (not to a card panel) so it sits below all the cards.
-        /// </summary>
-        /// <param name="text">Button label text.</param>
-        /// <param name="style">Visual variant from <see cref="FluentButton.Variant"/>.</param>
-        /// <param name="x">Left edge in form coordinates.</param>
-        /// <param name="y">Top edge in form coordinates.</param>
-        /// <param name="w">Width in pixels.</param>
-        /// <param name="h">Height in pixels.</param>
-        /// <returns>The newly created button.</returns>
-        private Button MakeActionBtn(string text, FluentButton.Variant style, int x, int y, int w, int h)
-        {
-            var btn = new FluentButton { Text = text, Left = x, Top = y, Width = w, Height = h, Style = style,
-                                         TabStop = true };   // action buttons must be reachable by keyboard
-            Controls.Add(btn);
             return btn;
         }
 
@@ -806,13 +595,36 @@ namespace OnScreenKeyboard
             int opacitySlider = (int)Math.Round((1.0 - Math.Clamp(t.Opacity, 0.2, 1.0)) * 100);
             _trkOpacity.Value = Math.Clamp(opacitySlider, 0, 80);
 
-            SetHex(_pnlBgColor, SettingsManager.Hex(t.BackgroundColor));
+            SetSwatchHex(_pnlBgColor, SettingsManager.Hex(t.BackgroundColor));
 
             _chkAlwaysOnTop.Checked  = ws.AlwaysOnTop;
             _chkStickyMods.Checked   = m.StickyModifiers;
             _chkHoldToEdit.Checked   = m.HoldToEdit;
             _chkHideTitlebar.Checked = ws.HideTitlebar;
             _cmbToolbarTheme.SelectedIndex = (int)m.ToolbarTheme;
+            if (m.SlowKeysMs > 0)
+            {
+                _nudSlowKeys.Value   = Math.Clamp(m.SlowKeysMs, 100, 3000);
+                _chkSlowKeys.Checked = true;
+            }
+            else
+            {
+                _chkSlowKeys.Checked = false;
+            }
+            _nudSlowKeys.Enabled = _chkSlowKeys.Checked;
+
+            if (m.DwellMs > 0)
+            {
+                _nudDwell.Value   = Math.Clamp(m.DwellMs, 100, 5000);
+                _chkDwell.Checked = true;
+            }
+            else
+            {
+                _chkDwell.Checked = false;
+            }
+            _nudDwell.Enabled           = _chkDwell.Checked;
+            _chkTimingAnimation.Enabled = m.SlowKeysMs > 0 || m.DwellMs > 0;
+            _chkTimingAnimation.Checked = m.ShowTimingAnimation;
         }
 
         // ════════════════════════════════════════════════════════════════
@@ -836,7 +648,7 @@ namespace OnScreenKeyboard
             // style fields through unchanged from the source theme.
             var theme = new VisualTheme
             {
-                BackgroundColor = ParseColor(GetHex(_pnlBgColor), ColorTranslator.FromHtml("#1A1A2E")),
+                BackgroundColor = ParseColor(GetSwatchHex(_pnlBgColor), ColorTranslator.FromHtml("#1A1A2E")),
 
                 // Convert slider value back to an opacity fraction.
                 // Slider 0 → opacity 1.0 (opaque); slider 80 → opacity 0.2 (most transparent).
@@ -874,6 +686,9 @@ namespace OnScreenKeyboard
                 StickyModifiers = _chkStickyMods.Checked,
                 HoldToEdit      = _chkHoldToEdit.Checked,
                 ToolbarTheme    = (ToolbarTheme)_cmbToolbarTheme.SelectedIndex,
+                SlowKeysMs           = _chkSlowKeys.Checked ? (int)_nudSlowKeys.Value : 0,
+                DwellMs              = _chkDwell.Checked    ? (int)_nudDwell.Value    : 0,
+                ShowTimingAnimation  = _chkTimingAnimation.Checked,
             };
 
             ResultTheme  = theme;
@@ -889,15 +704,7 @@ namespace OnScreenKeyboard
         // Static utility methods
         // ════════════════════════════════════════════════════════════════
 
-        /// <summary>
-        /// Thin wrapper around <see cref="SettingsManager.ParseColor"/> that
-        /// keeps call sites concise.
-        /// </summary>
-        /// <param name="hex">A hex colour string such as "#RRGGBB" or "#AARRGGBB".</param>
-        /// <param name="fallback">Colour to return when <paramref name="hex"/> cannot be parsed.</param>
-        /// <returns>The parsed colour, or <paramref name="fallback"/>.</returns>
-        private static Color ParseColor(string hex, Color fallback) => SettingsManager.ParseColor(hex, fallback);
-
+        // ParseColor inherited from FluentDialogBase.
         // GetInstalledFonts removed — use Fluent.InstalledFontNames() which caches the
         // result process-wide so the expensive GDI enumeration only runs once.
 

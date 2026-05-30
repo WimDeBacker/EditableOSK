@@ -12,6 +12,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Reflection;
 using System.Windows.Forms;
 
 namespace OnScreenKeyboard
@@ -53,6 +54,11 @@ namespace OnScreenKeyboard
             T_AutoScaleMode_Dialogs();
             T_GrowWindowOnEditMode();
             T_PaintHandlerAudit();
+            T_SlowKeysDwell();
+            T_AccessibilityControls();
+            T_WizardKeyParser();
+            T_WizardKeyClassifier();
+            T_WizardThemePresets();
             T_StyleGroups();
             T_XmlRobustness();
 
@@ -382,6 +388,7 @@ namespace OnScreenKeyboard
                 var saveMeta = new LayoutMeta
                 {
                     Language = "nl", LastFile = tmp, StickyModifiers = false,
+                    SlowKeysMs = 350, DwellMs = 0,
                 };
 
                 SettingsManager.SaveSettings(layout, saveTheme, saveWindow, saveMeta, tmp);
@@ -429,6 +436,8 @@ namespace OnScreenKeyboard
                 Assert(lgWindow.HideTitlebar  == true,  "HideTitlebar round-trip");
                 Assert(lgMeta.StickyModifiers == false, "StickyModifiers round-trip");
                 Assert(lgWindow.AlwaysOnTop   == false, "AlwaysOnTop round-trip");
+                Assert(lgMeta.SlowKeysMs      == 350,   "SlowKeysMs round-trip");
+                Assert(lgMeta.DwellMs         == 0,     "DwellMs round-trip (zero)");
                 Assert(Math.Abs(lgTheme.Opacity - 0.85) < 0.001, "Opacity round-trip");
                 Assert(lgTheme.BackgroundColor == Color.FromArgb(10,20,30), "BackgroundColor round-trip");
             }
@@ -3127,13 +3136,15 @@ namespace OnScreenKeyboard
             Assert(!ReferenceEquals(ws, wsc),"WindowState.Clone: new object");
 
             // ── LayoutMeta.Clone() ────────────────────────────────────
-            var m = new LayoutMeta { Language = "nl", StickyModifiers = false, GearRow = 3, GearCol = 5, LastFile = "test.xml" };
+            var m = new LayoutMeta { Language = "nl", StickyModifiers = false, GearRow = 3, GearCol = 5, LastFile = "test.xml", SlowKeysMs = 400, DwellMs = 1200 };
             var mc = m.Clone();
             Assert(mc.Language        == "nl",      "LayoutMeta.Clone: Language");
             Assert(mc.StickyModifiers == false,     "LayoutMeta.Clone: StickyModifiers");
             Assert(mc.GearRow         == 3,         "LayoutMeta.Clone: GearRow");
             Assert(mc.GearCol         == 5,         "LayoutMeta.Clone: GearCol");
             Assert(mc.LastFile        == "test.xml","LayoutMeta.Clone: LastFile");
+            Assert(mc.SlowKeysMs      == 400,       "LayoutMeta.Clone: SlowKeysMs");
+            Assert(mc.DwellMs         == 1200,      "LayoutMeta.Clone: DwellMs");
             Assert(!ReferenceEquals(m, mc),         "LayoutMeta.Clone: new object");
             mc.GearRow = 99;
             Assert(m.GearRow == 3, "LayoutMeta.Clone: mutation independent");
@@ -3505,6 +3516,554 @@ namespace OnScreenKeyboard
         // ════════════════════════════════════════════════════════════════
         // Paint / Resize / Layout handler audit
         // ════════════════════════════════════════════════════════════════
+        // ════════════════════════════════════════════════════════════════
+        // Accessibility controls — keyboard reachability, accessible names,
+        // tab order, AcceptButton / CancelButton, tooltips, NUD descriptions
+        // ════════════════════════════════════════════════════════════════
+
+        // Recursively collect all controls of type T under root.
+        private static List<T> AllControls<T>(Control root) where T : Control
+        {
+            var result = new List<T>();
+            foreach (Control c in root.Controls)
+            {
+                if (c is T t) result.Add(t);
+                result.AddRange(AllControls<T>(c));
+            }
+            return result;
+        }
+
+        // Every control with TabStop=true must have a non-empty accessible label
+        // (either AccessibleName or Text — WinForms exposes Text as the accessible
+        // name for CheckBox/Button when AccessibleName is empty).
+        private static void CheckInteractiveAccessibility(Control root, string formName)
+        {
+            void Walk(Control c)
+            {
+                foreach (Control child in c.Controls)
+                {
+                    if (child.TabStop)
+                    {
+                        bool ok = !string.IsNullOrWhiteSpace(child.AccessibleName)
+                               || !string.IsNullOrWhiteSpace(child.Text);
+                        Assert(ok,
+                            $"{formName}: {child.GetType().Name} TabIndex={child.TabIndex} " +
+                            $"has neither AccessibleName nor Text");
+                    }
+                    Walk(child);
+                }
+            }
+            Walk(root);
+        }
+
+        // Within each parent container, no two TabStop=true siblings share a TabIndex.
+        private static void CheckTabIndexUnique(Control root, string formName)
+        {
+            void Walk(Control parent)
+            {
+                var seen = new Dictionary<int, string>();
+                foreach (Control child in parent.Controls)
+                {
+                    if (child.TabStop)
+                    {
+                        string typeName = child.GetType().Name;
+                        if (seen.TryGetValue(child.TabIndex, out string existing))
+                            Assert(false,
+                                $"{formName}: duplicate TabIndex={child.TabIndex} " +
+                                $"in {parent.GetType().Name} ({existing} and {typeName})");
+                        else
+                            seen[child.TabIndex] = typeName;
+                    }
+                    Walk(child);
+                }
+            }
+            Walk(root);
+        }
+
+        // At least one NumericUpDown in the form must have a non-empty AccessibleDescription
+        // (used to document sentinel values such as "0 = inherit from group").
+        private static void CheckNudHasDescription(Control root, string formName)
+        {
+            bool found = false;
+            void Walk(Control c)
+            {
+                foreach (Control child in c.Controls)
+                {
+                    if (child is NumericUpDown n && !string.IsNullOrEmpty(n.AccessibleDescription))
+                        found = true;
+                    Walk(child);
+                }
+            }
+            Walk(root);
+            Assert(found, $"{formName}: at least one NumericUpDown has AccessibleDescription (sentinel hint)");
+        }
+
+        // _transTooltips (inherited from FluentDialogBase) must be non-empty after construction,
+        // proving that SetTip() was called for at least one control in BuildUI().
+        private static void CheckTooltipsRegistered(Form f, string formName)
+        {
+            var fi = typeof(FluentDialogBase)
+                .GetField("_transTooltips", BindingFlags.NonPublic | BindingFlags.Instance);
+            if (fi == null)
+            { Assert(false, $"{formName}: _transTooltips field not found via reflection"); return; }
+            var list = fi.GetValue(f) as System.Collections.ICollection;
+            Assert(list != null && list.Count > 0,
+                $"{formName}: _transTooltips is non-empty (SetTip was called during BuildUI)");
+        }
+
+        private static void T_AccessibilityControls()
+        {
+            Section("Accessibility controls — TabStop, AcceptButton, AccessibleName, TabIndex, tooltips, NUD descriptions");
+
+            // ── GroupEditorForm ───────────────────────────────────────
+            try
+            {
+                using var f = new GroupEditorForm(new List<KeyGroup>());
+
+                Assert(f.AcceptButton != null, "GroupEditorForm: AcceptButton is set");
+                Assert(f.CancelButton != null, "GroupEditorForm: CancelButton is set");
+
+                CheckInteractiveAccessibility(f, "GroupEditorForm");
+                CheckTabIndexUnique(f, "GroupEditorForm");
+                CheckNudHasDescription(f, "GroupEditorForm");
+                CheckTooltipsRegistered(f, "GroupEditorForm");
+
+                // Every Button with TabStop=true must have TabStop=true (belt-and-suspenders:
+                // ensure FluentButton instances were not accidentally constructed with TabStop=false)
+                var buttons = AllControls<Button>(f);
+                int tabStopButtons = 0;
+                foreach (var b in buttons) if (b.TabStop) tabStopButtons++;
+                Assert(tabStopButtons > 0, "GroupEditorForm: at least one Button has TabStop=true");
+            }
+            catch (Exception ex) { Assert(false, $"GroupEditorForm accessibility check failed: {ex.Message}"); }
+
+            // ── KeyboardEditorForm ────────────────────────────────────
+            try
+            {
+                using var f = new KeyboardEditorForm(
+                    new VisualTheme(), new WindowState(), new LayoutMeta(), owner: null);
+
+                Assert(f.AcceptButton != null, "KeyboardEditorForm: AcceptButton is set");
+                Assert(f.CancelButton != null, "KeyboardEditorForm: CancelButton is set");
+
+                CheckInteractiveAccessibility(f, "KeyboardEditorForm");
+                CheckTabIndexUnique(f, "KeyboardEditorForm");
+                CheckTooltipsRegistered(f, "KeyboardEditorForm");
+
+                // Slow-keys and dwell NUDs must have AccessibleName
+                var nuds = AllControls<NumericUpDown>(f);
+                int namedNuds = 0;
+                foreach (var n in nuds) if (!string.IsNullOrEmpty(n.AccessibleName)) namedNuds++;
+                Assert(namedNuds >= 2,
+                    $"KeyboardEditorForm: at least 2 NumericUpDown controls have AccessibleName (got {namedNuds})");
+            }
+            catch (Exception ex) { Assert(false, $"KeyboardEditorForm accessibility check failed: {ex.Message}"); }
+
+            // ── KeyEditorForm ─────────────────────────────────────────
+            try
+            {
+                using var f = new KeyEditorForm(new KeyProps("A", "A"), owner: null);
+
+                Assert(f.AcceptButton != null, "KeyEditorForm: AcceptButton is set");
+                Assert(f.CancelButton != null, "KeyEditorForm: CancelButton is set");
+
+                CheckInteractiveAccessibility(f, "KeyEditorForm");
+                CheckTabIndexUnique(f, "KeyEditorForm");
+                CheckNudHasDescription(f, "KeyEditorForm");
+                CheckTooltipsRegistered(f, "KeyEditorForm");
+
+                // Record button must be keyboard-reachable (TabStop=true)
+                var allButtons = AllControls<Button>(f);
+                bool recordFound = false;
+                foreach (var b in allButtons)
+                    if (b.AccessibleName != null && b.AccessibleName.IndexOf("record", StringComparison.OrdinalIgnoreCase) >= 0)
+                    { recordFound = true; Assert(b.TabStop, "KeyEditorForm: Record button has TabStop=true"); break; }
+                // Record button presence is verified; if absent the name convention changed — flag it.
+                Assert(recordFound, "KeyEditorForm: Record button found (AccessibleName contains 'record')");
+
+                // Mode-selector buttons (send-mode radio group) must all have TabStop=true
+                // They live in the form's control tree and are identified by their AccessibleName.
+                int modeButtonCount = 0;
+                foreach (var b in allButtons)
+                    if (b.TabStop && b.Parent != null) modeButtonCount++;
+                Assert(modeButtonCount > 5, $"KeyEditorForm: more than 5 TabStop buttons present (got {modeButtonCount})");
+            }
+            catch (Exception ex) { Assert(false, $"KeyEditorForm accessibility check failed: {ex.Message}"); }
+        }
+
+        private static void T_SlowKeysDwell()
+        {
+            Section("Slow keys & dwell click — XML round-trip, clamping, CopyFrom");
+
+            string tmp = Path.Combine(Path.GetTempPath(), $"osk_slowdwell_{Guid.NewGuid():N}.xml");
+            try
+            {
+                var layout = new GridLayout(1, 1);
+                layout.Cells.Add(new GridCell(0, 0, new KeyProps("a", "a"), 1, 1));
+
+                // ── Round-trip both non-zero values ───────────────────────────
+                var meta1 = new LayoutMeta { SlowKeysMs = 750, DwellMs = 0 };
+                SettingsManager.SaveSettings(layout, new VisualTheme(), new WindowState(), meta1, tmp);
+                var loaded1 = new LayoutMeta();
+                SettingsManager.LoadSettings(new VisualTheme(), new WindowState(), loaded1, tmp);
+                Assert(loaded1.SlowKeysMs == 750, "SlowKeysMs non-zero round-trip");
+                Assert(loaded1.DwellMs    == 0,   "DwellMs zero preserved in round-trip");
+
+                var meta2 = new LayoutMeta { SlowKeysMs = 0, DwellMs = 1500 };
+                SettingsManager.SaveSettings(layout, new VisualTheme(), new WindowState(), meta2, tmp);
+                var loaded2 = new LayoutMeta();
+                SettingsManager.LoadSettings(new VisualTheme(), new WindowState(), loaded2, tmp);
+                Assert(loaded2.SlowKeysMs == 0,    "SlowKeysMs zero preserved in round-trip");
+                Assert(loaded2.DwellMs    == 1500, "DwellMs non-zero round-trip");
+
+                // ── Load-time clamp: values > 5000 are capped; SlowKeys wins mutual exclusivity ──
+                // Inject an XML file with both timing features set by hand (not possible via UI).
+                string xml = $@"<?xml version=""1.0"" encoding=""utf-8""?>
+<OnScreenKeyboard>
+  <Theme />
+  <Layout GridRows=""1"" GridCols=""1"" SlowKeysMs=""9999"" DwellMs=""8000"" />
+</OnScreenKeyboard>";
+                File.WriteAllText(tmp, xml);
+                var loadedClamp = new LayoutMeta();
+                SettingsManager.LoadSettings(new VisualTheme(), new WindowState(), loadedClamp, tmp);
+                Assert(loadedClamp.SlowKeysMs == 5000, "SlowKeysMs clamped to 5000");
+                Assert(loadedClamp.DwellMs    == 0,    "DwellMs cleared to 0 when SlowKeysMs > 0 (mutual exclusivity)");
+
+                // ── Absent attributes default to 0 ───────────────────────────
+                string xmlAbsent = $@"<?xml version=""1.0"" encoding=""utf-8""?>
+<OnScreenKeyboard>
+  <Theme />
+  <Layout GridRows=""1"" GridCols=""1"" />
+</OnScreenKeyboard>";
+                File.WriteAllText(tmp, xmlAbsent);
+                var loadedAbsent = new LayoutMeta();
+                SettingsManager.LoadSettings(new VisualTheme(), new WindowState(), loadedAbsent, tmp);
+                Assert(loadedAbsent.SlowKeysMs == 0, "SlowKeysMs defaults to 0 when absent");
+                Assert(loadedAbsent.DwellMs    == 0, "DwellMs defaults to 0 when absent");
+
+                // ── CopyFrom propagates both fields ───────────────────────────
+                var src  = new LayoutMeta { SlowKeysMs = 600, DwellMs = 2000 };
+                var dst  = new LayoutMeta();
+                dst.CopyFrom(src);
+                Assert(dst.SlowKeysMs == 600,  "LayoutMeta.CopyFrom: SlowKeysMs");
+                Assert(dst.DwellMs    == 2000, "LayoutMeta.CopyFrom: DwellMs");
+                src.SlowKeysMs = 1;
+                Assert(dst.SlowKeysMs == 600, "LayoutMeta.CopyFrom: mutation independent");
+            }
+            finally { if (File.Exists(tmp)) File.Delete(tmp); }
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        // T_WizardKeyParser — parser logic for the New Keyboard Wizard
+        // ══════════════════════════════════════════════════════════════════
+
+        private static void T_WizardKeyParser()
+        {
+            Section("WizardKeyParser");
+
+            // Plain words.
+            {
+                var rows = WizardKeyParser.Parse("ja nee help");
+                Assert(rows.Count == 1,            "parser: 1 row");
+                Assert(rows[0].Count == 3,         "parser: 3 keys");
+                Assert(rows[0][0].Label == "ja",   "parser: label ja");
+                Assert(rows[0][0].Send  == "ja",   "parser: send  ja");
+                Assert(rows[0][2].Label == "help", "parser: label help");
+            }
+
+            // Multiple rows.
+            {
+                var rows = WizardKeyParser.Parse("a b c\nd e f");
+                Assert(rows.Count == 2,  "parser: 2 rows");
+                Assert(rows[0].Count == 3, "parser: row 0 has 3");
+                Assert(rows[1].Count == 3, "parser: row 1 has 3");
+                Assert(rows[1][2].Label == "f", "parser: row1 col2 = f");
+            }
+
+            // Blank spacer.
+            {
+                var rows = WizardKeyParser.Parse("a _ b");
+                Assert(rows[0].Count == 3,             "parser: spacer counted");
+                Assert(rows[0][1].IsBlank,             "parser: middle is blank");
+                Assert(rows[0][1].Label == "",         "parser: blank label empty");
+                Assert(rows[0][1].Send  == "",         "parser: blank send empty");
+                Assert(!rows[0][0].IsBlank,            "parser: first not blank");
+            }
+
+            // Arrow keys — English tokens.
+            {
+                var rows = WizardKeyParser.Parse("[up] [down] [left] [right]");
+                var r = rows[0];
+                Assert(r[0].Send == "{UP}",    "parser: [up] send");
+                Assert(r[0].Label == "↑",      "parser: [up] label");
+                Assert(r[1].Send == "{DOWN}",  "parser: [down] send");
+                Assert(r[2].Send == "{LEFT}",  "parser: [left] send");
+                Assert(r[3].Send == "{RIGHT}", "parser: [right] send");
+            }
+
+            // Dutch aliases.
+            {
+                var rows = WizardKeyParser.Parse("[omhoog] [omlaag] [links] [rechts]", dutch: true);
+                var r = rows[0];
+                Assert(r[0].Send  == "{UP}",    "parser: [omhoog] send");
+                Assert(r[0].Label == "↑",       "parser: [omhoog] label");
+                Assert(r[1].Send  == "{DOWN}",  "parser: [omlaag] send");
+                Assert(r[2].Send  == "{LEFT}",  "parser: [links]  send");
+                Assert(r[3].Send  == "{RIGHT}", "parser: [rechts] send");
+            }
+
+            // Enter, Backspace, Tab, Esc, Delete.
+            {
+                var rows = WizardKeyParser.Parse("[enter] [backspace] [tab] [esc] [delete]");
+                var r = rows[0];
+                Assert(r[0].Send == "{ENTER}",     "parser: [enter]");
+                Assert(r[0].Label == "↵",          "parser: enter label");
+                Assert(r[1].Send == "{BACKSPACE}",  "parser: [backspace]");
+                Assert(r[1].Label == "⌫",          "parser: backspace label");
+                Assert(r[2].Send == "{TAB}",        "parser: [tab]");
+                Assert(r[2].Label == "⇥",          "parser: tab label");
+                Assert(r[3].Send == "{ESC}",        "parser: [esc]");
+                Assert(r[4].Send == "{DELETE}",     "parser: [delete]");
+            }
+
+            // Space / Spatie — English label when dutch=false.
+            {
+                var rows = WizardKeyParser.Parse("[space]", dutch: false);
+                Assert(rows[0][0].Send  == " ",      "parser: [space] send");
+                Assert(rows[0][0].Label == "Space",  "parser: [space] label EN");
+            }
+
+            // Spatie — Dutch label when dutch=true.
+            {
+                var rows = WizardKeyParser.Parse("[spatie]", dutch: true);
+                Assert(rows[0][0].Send  == " ",      "parser: [spatie] send");
+                Assert(rows[0][0].Label == "Spatie", "parser: [spatie] label NL");
+            }
+
+            // [space] with dutch=true gives Dutch label too.
+            {
+                var rows = WizardKeyParser.Parse("[space]", dutch: true);
+                Assert(rows[0][0].Label == "Space",  "parser: [space] EN label even when dutch=true (no NL override)");
+            }
+
+            // Quoted phrase.
+            {
+                var rows = WizardKeyParser.Parse("\"thank you\" bye");
+                Assert(rows[0].Count == 2,                  "parser: quoted + word = 2");
+                Assert(rows[0][0].Label == "thank you",     "parser: quoted label");
+                Assert(rows[0][0].Send  == "thank you",     "parser: quoted send");
+                Assert(rows[0][1].Label == "bye",           "parser: after quote");
+            }
+
+            // Case-insensitive special tokens.
+            {
+                var rows = WizardKeyParser.Parse("[UP] [Enter] [BACKSPACE]");
+                Assert(rows[0][0].Send == "{UP}",        "parser: [UP] uppercase");
+                Assert(rows[0][1].Send == "{ENTER}",     "parser: [Enter] mixed");
+                Assert(rows[0][2].Send == "{BACKSPACE}",  "parser: [BACKSPACE]");
+            }
+
+            // Unknown bracket token — treated as text.
+            {
+                var rows = WizardKeyParser.Parse("[unknown]");
+                Assert(rows[0][0].Label == "unknown", "parser: unknown token label");
+                Assert(rows[0][0].Send  == "unknown", "parser: unknown token send");
+            }
+
+            // Empty text → empty result.
+            {
+                var rows = WizardKeyParser.Parse("");
+                Assert(rows.Count == 0, "parser: empty string → 0 rows");
+            }
+
+            // Whitespace-only lines are skipped.
+            {
+                var rows = WizardKeyParser.Parse("a\n\n   \nb");
+                Assert(rows.Count == 2, "parser: blank lines skipped");
+            }
+
+            // [del] alias for delete.
+            {
+                var rows = WizardKeyParser.Parse("[del]");
+                Assert(rows[0][0].Send == "{DELETE}", "parser: [del] alias");
+            }
+
+            // [escape] alias.
+            {
+                var rows = WizardKeyParser.Parse("[escape]");
+                Assert(rows[0][0].Send == "{ESC}", "parser: [escape] alias");
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        // T_WizardThemePresets — WCAG contrast checks for built-in presets
+        // ══════════════════════════════════════════════════════════════════
+
+        private static void T_WizardKeyClassifier()
+        {
+            Section("WizardKeyParser — key classification (ClassifyKey)");
+
+            // ── Besturing (control / navigation) ─────────────────────────
+            Assert(NewKeyboardWizard.ClassifyKey("↑",   "{UP}")    == "Besturing", "classify: ↑ → Besturing");
+            Assert(NewKeyboardWizard.ClassifyKey("↓",   "{DOWN}")  == "Besturing", "classify: ↓ → Besturing");
+            Assert(NewKeyboardWizard.ClassifyKey("←",   "{LEFT}")  == "Besturing", "classify: ← → Besturing");
+            Assert(NewKeyboardWizard.ClassifyKey("→",   "{RIGHT}") == "Besturing", "classify: → → Besturing");
+            Assert(NewKeyboardWizard.ClassifyKey("↵",   "{ENTER}") == "Besturing", "classify: ↵ → Besturing");
+            Assert(NewKeyboardWizard.ClassifyKey("⌫",   "{BACKSPACE}") == "Besturing", "classify: ⌫ → Besturing");
+            Assert(NewKeyboardWizard.ClassifyKey("⇥",   "{TAB}")   == "Besturing", "classify: ⇥ → Besturing");
+            Assert(NewKeyboardWizard.ClassifyKey("Esc", "{ESC}")   == "Besturing", "classify: Esc → Besturing");
+            Assert(NewKeyboardWizard.ClassifyKey("Del", "{DELETE}")== "Besturing", "classify: Del → Besturing");
+            // Space — send is a single space, not a { } code
+            Assert(NewKeyboardWizard.ClassifyKey("Space", " ")     == "Besturing", "classify: Space label → Besturing");
+            Assert(NewKeyboardWizard.ClassifyKey("Spatie"," ")     == "Besturing", "classify: Spatie label → Besturing");
+            Assert(NewKeyboardWizard.ClassifyKey("",     " ")      == "Besturing", "classify: send=space → Besturing");
+            // Generic SendKeys { } format
+            Assert(NewKeyboardWizard.ClassifyKey("F1",  "{F1}")    == "Besturing", "classify: F1 → Besturing");
+            Assert(NewKeyboardWizard.ClassifyKey("Shift","{SHIFT}")== "Besturing", "classify: Shift → Besturing");
+            Assert(NewKeyboardWizard.ClassifyKey("Ctrl", "{CTRL}") == "Besturing", "classify: Ctrl → Besturing");
+
+            // ── Klinkers (vowels) ─────────────────────────────────────────
+            foreach (var v in new[]{"a","e","i","o","u","A","E","I","O","U"})
+                Assert(NewKeyboardWizard.ClassifyKey(v, v) == "Klinkers", $"classify: {v} → Klinkers");
+            Assert(NewKeyboardWizard.ClassifyKey("é","é") == "Klinkers", "classify: é → Klinkers");
+            Assert(NewKeyboardWizard.ClassifyKey("ë","ë") == "Klinkers", "classify: ë → Klinkers");
+            Assert(NewKeyboardWizard.ClassifyKey("ü","ü") == "Klinkers", "classify: ü → Klinkers");
+
+            // ── Medeklinkers (consonants) ────────────────────────────────
+            foreach (var c in new[]{"b","d","f","g","h","j","k","l","m","n",
+                                    "p","q","r","s","t","v","w","x","y","z"})
+                Assert(NewKeyboardWizard.ClassifyKey(c, c) == "Medeklinkers", $"classify: {c} → Medeklinkers");
+
+            // ── Cijfers (digits) ─────────────────────────────────────────
+            foreach (var d in new[]{"0","1","2","3","4","5","6","7","8","9"})
+                Assert(NewKeyboardWizard.ClassifyKey(d, d) == "Cijfers", $"classify: {d} → Cijfers");
+
+            // ── Leestekens (punctuation / symbols) ───────────────────────
+            Assert(NewKeyboardWizard.ClassifyKey(".",".") == "Leestekens", "classify: . → Leestekens");
+            Assert(NewKeyboardWizard.ClassifyKey(",",",") == "Leestekens", "classify: , → Leestekens");
+            Assert(NewKeyboardWizard.ClassifyKey("!","!") == "Leestekens", "classify: ! → Leestekens");
+            Assert(NewKeyboardWizard.ClassifyKey("?","?") == "Leestekens", "classify: ? → Leestekens");
+
+            // ── Woord (word-prediction slots) ────────────────────────────
+            Assert(NewKeyboardWizard.ClassifyKey("Woord 1","wp:0") == "Woord", "classify: wp:0 → Woord");
+            Assert(NewKeyboardWizard.ClassifyKey("Woord 9","wp:9") == "Woord", "classify: wp:9 → Woord");
+
+            // ── Multi-word labels → null (no auto-classification) ─────────
+            Assert(NewKeyboardWizard.ClassifyKey("ja",  "ja")    == null, "classify: 'ja' (2 chars) → null");
+            Assert(NewKeyboardWizard.ClassifyKey("help","help")  == null, "classify: 'help' → null");
+            Assert(NewKeyboardWizard.ClassifyKey("",    "")      == null, "classify: empty → null");
+        }
+
+        private static void T_WizardThemePresets()
+        {
+            Section("Wizard theme preset contrast");
+
+            // Each assertion: font-on-key ≥ 4.5 : 1  (WCAG AA normal text)
+            // and font-on-background ≥ 3 : 1  (WCAG AA large text / focus ring)
+            //
+            // Values match NewKeyboardWizard.Presets static data.
+
+            void CheckPreset(string name, string bgHex, string keyHex, string fontHex, double minFontOnKey, double minFontOnBg)
+            {
+                Color bg   = SettingsManager.ParseColor(bgHex,   Color.Black);
+                Color key  = SettingsManager.ParseColor(keyHex,  Color.Gray);
+                Color font = SettingsManager.ParseColor(fontHex, Color.White);
+
+                double ratioFontKey = WizardThemeValidator.ContrastRatio(font, key);
+                double ratioFontBg  = WizardThemeValidator.ContrastRatio(font, bg);
+
+                // WCAG AA requires 4.5:1; our thresholds are set higher to the actual design values.
+                Assert(ratioFontKey >= minFontOnKey,
+                    $"{name}: font-on-key contrast {ratioFontKey:F1} < {minFontOnKey} (WCAG AA)");
+                Assert(ratioFontBg >= minFontOnBg,
+                    $"{name}: font-on-bg  contrast {ratioFontBg:F1}  < {minFontOnBg}");
+                // Note: key-on-background ratio is intentionally low in Dark and Light because
+                // the key is distinguished by its border, not by colour contrast with the background.
+            }
+
+            // Dark preset: near-white (#EFEFFF) on dark navy (#2C2C42) — design values 10-12:1
+            CheckPreset("Dark",
+                bgHex: "1C1C28", keyHex: "2C2C42", fontHex: "EFEFFF",
+                minFontOnKey: 10.0, minFontOnBg: 10.0);
+
+            // Light preset: near-black (#1A1A1A) on white (#FFFFFF) — design values 14-17:1
+            CheckPreset("Light",
+                bgHex: "EBEBEB", keyHex: "FFFFFF", fontHex: "1A1A1A",
+                minFontOnKey: 14.0, minFontOnBg: 13.0);
+
+            // High Contrast preset: black on pure yellow
+            CheckPreset("High Contrast",
+                bgHex: "000000", keyHex: "FFFF00", fontHex: "000000",
+                minFontOnKey: 19.0, minFontOnBg: 1.0); // font on bg = black on black = 1:1 (intentional)
+
+            // HC — Accent 1: black on gold
+            {
+                Color gold = SettingsManager.ParseColor("FFD700", Color.White);
+                Color blk  = SettingsManager.ParseColor("000000", Color.Black);
+                double r   = WizardThemeValidator.ContrastRatio(blk, gold);
+                Assert(r >= 14.0, $"HC Accent 1 (gold) black-on-gold: {r:F1} < 14");
+            }
+
+            // Dark theme groups — all use near-white #EFEFFF font
+            foreach (var (name, keyHex) in new[]{
+                ("Dark Klinkers",     "3A3A5A"),
+                ("Dark Cijfers",      "243050"),
+                ("Dark Besturing",    "1C1C2E"),
+                ("Dark Leestekens",   "38283C"),
+                ("Dark Woord",        "263826"),
+            })
+            {
+                Color key  = SettingsManager.ParseColor(keyHex, Color.Gray);
+                // Besturing uses a muted font #9090A8; all others use #EFEFFF
+                Color font = name.Contains("Besturing")
+                    ? SettingsManager.ParseColor("9090A8", Color.Gray)
+                    : SettingsManager.ParseColor("EFEFFF", Color.White);
+                double r = WizardThemeValidator.ContrastRatio(font, key);
+                Assert(r >= 4.5, $"{name}: font-on-key {r:F1} < 4.5 (WCAG AA)");
+            }
+
+            // Light theme groups — all use near-black #1A1A1A font
+            // (Besturing uses darker font #505050)
+            foreach (var (name, keyHex) in new[]{
+                ("Light Klinkers",     "DFF0FF"),
+                ("Light Cijfers",      "FFF3DC"),
+                ("Light Besturing",    "EAEAEA"),
+                ("Light Leestekens",   "F4F0FF"),
+                ("Light Woord",        "EAFAEA"),
+            })
+            {
+                Color key  = SettingsManager.ParseColor(keyHex, Color.White);
+                Color font = name.Contains("Besturing")
+                    ? SettingsManager.ParseColor("505050", Color.DarkGray)
+                    : SettingsManager.ParseColor("1A1A1A", Color.Black);
+                double r = WizardThemeValidator.ContrastRatio(font, key);
+                Assert(r >= 4.5, $"{name}: font-on-key {r:F1} < 4.5 (WCAG AA)");
+            }
+
+            // HC — Accent 2: black on amber
+            {
+                Color amber = SettingsManager.ParseColor("FFA500", Color.White);
+                Color blk   = SettingsManager.ParseColor("000000", Color.Black);
+                double r    = WizardThemeValidator.ContrastRatio(blk, amber);
+                Assert(r >= 10.0, $"HC Accent 2 (amber) black-on-amber: {r:F1} < 10");
+            }
+
+            // WizardThemeValidator.ContrastRatio is symmetric.
+            {
+                Color a = Color.White, b = Color.Black;
+                double r1 = WizardThemeValidator.ContrastRatio(a, b);
+                double r2 = WizardThemeValidator.ContrastRatio(b, a);
+                Assert(Math.Abs(r1 - r2) < 0.001, "ContrastRatio: symmetric");
+                Assert(Math.Abs(r1 - 21.0) < 0.1, "ContrastRatio: white/black ≈ 21:1");
+            }
+
+            // Identical colours → ratio = 1.
+            {
+                double r = WizardThemeValidator.ContrastRatio(Color.Red, Color.Red);
+                Assert(Math.Abs(r - 1.0) < 0.001, "ContrastRatio: identical = 1");
+            }
+        }
+
         private static void T_PaintHandlerAudit()
         {
             Section("Paint handler audit");

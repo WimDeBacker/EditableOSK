@@ -231,6 +231,25 @@ namespace OnScreenKeyboard
         public ToolbarTheme ToolbarTheme { get; set; } = ToolbarTheme.Dark;
 
         /// <summary>
+        /// Minimum hold duration (ms) before a key press is registered.
+        /// Accidental brushes shorter than this threshold are ignored.
+        /// 0 = disabled (keys fire immediately on press).
+        /// </summary>
+        public int SlowKeysMs { get; set; } = 0;
+
+        /// <summary>
+        /// Hover duration (ms) before a key auto-fires without a physical click.
+        /// 0 = disabled.  Mutually exclusive with <see cref="SlowKeysMs"/>.
+        /// </summary>
+        public int DwellMs { get; set; } = 0;
+
+        /// <summary>
+        /// When true, a bottom-up fill animation is drawn on keys while slow-keys or
+        /// dwell-click is counting down.  Set to false for users who find it distracting.
+        /// </summary>
+        public bool ShowTimingAnimation { get; set; } = true;
+
+        /// <summary>
         /// Creates a new <see cref="LayoutMeta"/> with identical values to
         /// this one.
         /// </summary>
@@ -244,6 +263,9 @@ namespace OnScreenKeyboard
             GearCol         = GearCol,
             LastFile        = LastFile,
             ToolbarTheme    = ToolbarTheme,
+            SlowKeysMs           = SlowKeysMs,
+            DwellMs              = DwellMs,
+            ShowTimingAnimation  = ShowTimingAnimation,
         };
 
         /// <summary>
@@ -260,6 +282,9 @@ namespace OnScreenKeyboard
             GearCol         = src.GearCol;
             LastFile        = src.LastFile;
             ToolbarTheme    = src.ToolbarTheme;
+            SlowKeysMs          = src.SlowKeysMs;
+            DwellMs             = src.DwellMs;
+            ShowTimingAnimation = src.ShowTimingAnimation;
         }
     }
 
@@ -435,6 +460,9 @@ namespace OnScreenKeyboard
             w.WriteAttributeString("StickyModifiers", m.StickyModifiers ? "1" : "0");
             w.WriteAttributeString("HoldToEdit",      m.HoldToEdit      ? "1" : "0");
             w.WriteAttributeString("AlwaysOnTop",     ws.AlwaysOnTop    ? "1" : "0");
+            w.WriteAttributeString("SlowKeysMs",          m.SlowKeysMs.ToString());
+            w.WriteAttributeString("DwellMs",             m.DwellMs.ToString());
+            w.WriteAttributeString("ShowTimingAnimation", m.ShowTimingAnimation ? "1" : "0");
             w.WriteAttributeString("LastFile",        m.LastFile ?? "");
             w.WriteAttributeString("ToolbarTheme",    m.ToolbarTheme.ToString());
             WriteGrid(w, layout);
@@ -606,6 +634,10 @@ namespace OnScreenKeyboard
             // "1" / "0" string comparison — matches how SaveSettings writes these flags.
             meta.StickyModifiers = Attr(lNode,"StickyModifiers","1") == "1";
             meta.HoldToEdit      = Attr(lNode,"HoldToEdit","0")      == "1";
+            if (int.TryParse(Attr(lNode,"SlowKeysMs","0"), out int skMs) && skMs >= 0) meta.SlowKeysMs = Math.Min(skMs, 5000);
+            if (int.TryParse(Attr(lNode,"DwellMs","0"),    out int dwMs) && dwMs >= 0) meta.DwellMs    = Math.Min(dwMs, 5000);
+            if (meta.SlowKeysMs > 0) meta.DwellMs = 0;  // enforce mutual exclusivity for hand-edited XML
+            meta.ShowTimingAnimation = Attr(lNode,"ShowTimingAnimation","1") == "1";
 
             // Sanity-clamp window size to reasonable display boundaries
             // (600–7680 wide, 180–4320 tall) to prevent windows that are

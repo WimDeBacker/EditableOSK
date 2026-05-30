@@ -12,7 +12,7 @@
   <String key="tip: Undo"               value="Laatste bewerking ongedaan maken" />
   <String key="tip: Redo"               value="Ongedaan gemaakte bewerking opnieuw uitvoeren" />
   <String key="tip: Edit mode"          value="Overschakelen naar bewerkingsmodus" />
-  <String key="tip: Edit Keyboard"      value="Toetsenbord bewerken" />
+  <String key="tip: Edit Keyboard"      value="Toetsenbord instellingen" />
   <String key="tip: Exit edit mode"     value="Bewerkingsmodus verlaten" />
   <String key="tip: Edit key"           value="Geselecteerde toets bewerken" />
   <String key="tip: Remove key"         value="Geselecteerde toets leegmaken" />
@@ -69,7 +69,7 @@
   <String key="tb: Undo"      value="Ongedaan" />
   <String key="tb: Redo"      value="Opnieuw" />
   <String key="tb: Edit"      value="Bewerken" />
-  <String key="tb: Keyboard"  value="Bewerk toets." />
+  <String key="tb: Keyboard"  value="Instellingen" />
   <String key="tb: Exit"      value="Sluiten" />
   <String key="tb: Edit key"  value="Bewerk cel" />
   <String key="tb: Remove"    value="Wissen" />
@@ -154,6 +154,12 @@
   <String key="Accessibility"      value="Toegankelijkheid" />
   <String key="Sticky modifiers"   value="&amp;Plaktoetsen (Sticky Keys)" />
   <String key="Hold to edit"       value="&amp;Ingedrukt houden voor bewerkingsmodus" />
+  <String key="Slow keys"          value="&amp;Langzame toetsen" />
+  <String key="Dwell click"        value="Automatis&amp;che klik" />
+  <String key="tip: Slow keys"     value="Houd een toets zo lang ingedrukt (in milliseconden) voordat deze wordt geregistreerd. Voorkomt onbedoelde toetsaanslagen." />
+  <String key="tip: Dwell click"          value="Zweef over een toets gedurende dit aantal milliseconden om deze automatisch te activeren, zonder klikken." />
+  <String key="Show timing animation"     value="Voortgangsanimatie &amp;tonen" />
+  <String key="tip: Show timing animation" value="Toont een visuele animatie op toetsen terwijl langzame toetsen of automatische klik aftelt. Vink uit als u de animatie afleidend vindt." />
   <String key="Toolbar theme"      value="&amp;Werkbalkthema" />
   <String key="Dark"               value="Donker" />
   <String key="Light"              value="Licht" />
@@ -196,6 +202,72 @@
   <String key="Name 'standard' is reserved." value="De naam 'standard' is gereserveerd." />
   <String key="Update standard group style"  value="Standaardgroepstijl bijwerken" />
   <String key="Protected"              value="Beveiligd" />
+
+  <!-- New Keyboard Wizard -->
+  <String key="tip: New"                    value="Een nieuw toetsenbordlay-out maken met de wizard" />
+  <String key="tb: New"                     value="Nieuw" />
+  <String key="New Keyboard"                value="Nieuw toetsenbord" />
+  <String key="wiz: p1 title"               value="Hoe wilt u beginnen?" />
+  <String key="wiz: p1 sub"                 value="Kies het startpunt voor uw nieuwe toetsenbordlay-out." />
+  <String key="wiz: p2 title"               value="Raster en toetslabels" />
+  <String key="wiz: p2 sub"                 value="Stel de rastergrootte in en typ eventueel de toetslabels." />
+  <String key="wiz: p3 title"               value="Vensterinstellingen" />
+  <String key="wiz: p3 sub"                 value="Configureer het gedrag van het toetsenbordvenster." />
+  <String key="wiz: p4 title"               value="Thema" />
+  <String key="wiz: p4 sub"                 value="Kies een kleurthema voor het toetsenbord." />
+  <String key="wiz: p5 title"               value="Opslaan als" />
+  <String key="wiz: p5 sub"                 value="Kies een bestandsnaam en map, en klik op Aanmaken." />
+  <String key="wiz: Blank grid"             value="Leeg toetsenbord - ik vul zelf de toetsen in" />
+  <String key="wiz: Paste labels"           value="Toetsen snel invullen door typen of plakken" />
+  <String key="wiz: Copy from file"         value="Kopiëren van een bestaand toetsenbordbestand" />
+  <String key="wiz: Layout file"            value="Lay-outbestand" />
+  <String key="wiz: Key labels"             value="Toetslabels" />
+  <String key="wiz: Grid size"              value="Rastergrootte" />
+  <String key="wiz: Rows"                   value="Rijen" />
+  <String key="wiz: Columns"               value="Kolommen" />
+  <String key="wiz: Preview"               value="Voorbeeld" />
+  <String key="wiz: Language"               value="Taal" />
+  <String key="wiz: Theme file"             value="Themabestand" />
+  <String key="wiz: From file…"             value="Uit bestand…" />
+  <String key="wiz: Validate with"          value="Geïmporteerd thema valideren met:" />
+  <String key="wiz: suite contrast"         value="Kleurcontrast (WCAG AA — minimaal 4,5 : 1)" />
+  <String key="wiz: suite focus"            value="Focusring zichtbaarheid (toets vs. achtergrond 3 : 1)" />
+  <String key="wiz: File name"              value="Bestandsnaam" />
+  <String key="wiz: Folder"                value="Map" />
+  <String key="wiz: default filename"       value="nieuw toetsenbord" />
+  <String key="wiz: Step {0} of {1}"        value="Stap {0} van {1}" />
+  <String key="Next →"                      value="Volgende →" />
+  <String key="← Back"                      value="← Terug" />
+  <String key="Create"                      value="Aanmaken" />
+  <String key="Yes"                         value="Ja" />
+  <String key="No"                          value="Nee" />
+  <String key="wiz: theme dark"             value="Donker" />
+  <String key="wiz: theme light"            value="Licht" />
+  <String key="wiz: theme hc"               value="Hoog contrast" />
+  <String key="wiz: theme colorful"         value="Kleurrijk" />
+  <String key="wiz: tip Blank grid"         value="Een leeg raster aanmaken met de opgegeven grootte. Toetsen invullen via de editor." />
+  <String key="wiz: tip Paste labels"       value="Toetslabels typen of plakken — één rij per regel, woorden gescheiden door spaties." />
+  <String key="wiz: tip Copy from file"     value="Beginnen vanuit een bestaande lay-out. Thema en vensterinstellingen zijn nog aan te passen." />
+  <String key="wiz: tip always on top"      value="Het toetsenbord boven alle andere vensters houden." />
+  <String key="wiz: tip hide title bar"     value="De Windows-titelbalk verbergen voor een strakker zwevend toetsenbord." />
+  <String key="wiz: tip paste"              value="Één rij per regel, woorden gescheiden door spaties of tabs.&#10;[Enter]  [Backspace]  [Tab]  [Spatie]  [Omhoog]  [Omlaag]  [Links]  [Rechts]  [Esc]  [Del]&#10;&quot;geciteerde zin&quot;  =  één toets met dat label&#10;_  =  lege spacer" />
+  <String key="wiz: tip folder"             value="Map waar het nieuwe lay-outbestand wordt opgeslagen." />
+  <String key="wiz: paste hint"             value="Één rij per regel · woorden = toetsen · [Enter] [Backspace] [Tab] [Spatie] [Omhoog] [Omlaag] [Links] [Rechts] · &quot;geciteerde zin&quot; · _ = leeg" />
+  <String key="wiz: Select layout"          value="Selecteer een bestaand lay-outbestand" />
+  <String key="wiz: Select theme file"      value="Selecteer een lay-outbestand om het thema van te kopiëren" />
+  <String key="wiz: copy info"              value="Toetsen worden gekopieerd van: {0}" />
+  <String key="wiz: err no copy file"       value="Selecteer een lay-outbestand om van te kopiëren." />
+  <String key="wiz: err no theme file"      value="Selecteer een lay-outbestand om het thema van te kopiëren." />
+  <String key="wiz: err no name"            value="Voer een bestandsnaam in." />
+  <String key="wiz: err bad folder"         value="De geselecteerde map bestaat niet." />
+  <String key="wiz: validation title"       value="Themavalidatiewaarschuwingen" />
+  <String key="wiz: validation header"      value="De volgende problemen zijn gevonden bij het geïmporteerde thema:" />
+  <String key="wiz: fail contrast"          value="De kleurcontrastverhouding is {0:F1} : 1 — onder het WCAG AA-minimum van 4,5 : 1." />
+  <String key="wiz: fail focus"             value="Het focusringcontrast is {0:F1} : 1 — onder het minimum van 3 : 1." />
+  <String key="wiz: sum rows cols"          value="Raster: {0} rijen × {1} kolommen (laatste kolom gereserveerd voor de instellingsknop)" />
+  <String key="wiz: sum theme"              value="Thema: {0}" />
+  <String key="wiz: sum language"           value="Taal: {0}" />
+  <String key="wiz: sum always on top"      value="Altijd bovenaan: {0}" />
 
   <!-- Errors -->
   <String key="Save failed"         value="Opslaan mislukt:" />

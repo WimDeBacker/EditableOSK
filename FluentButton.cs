@@ -928,12 +928,27 @@ namespace OnScreenKeyboard
                         nud.BackColor = SystemColors.Window;
                         nud.ForeColor = SystemColors.WindowText;
                         break;
+                    case RadioButton rb:
+                        rb.ForeColor = SystemColors.ControlText;
+                        break;
+                    case Button btn:
+                        btn.ForeColor = SystemColors.ControlText;
+                        break;
                     case CheckBox chk:
                         chk.ForeColor = SystemColors.ControlText;
                         break;
                     case ListBox lst:
                         lst.BackColor = SystemColors.Window;
                         lst.ForeColor = SystemColors.WindowText;
+                        break;
+                    case DataGridView dgv:
+                        dgv.BackgroundColor = SystemColors.Window;
+                        dgv.GridColor       = SystemColors.ControlDark;
+                        dgv.DefaultCellStyle.BackColor = SystemColors.Window;
+                        dgv.DefaultCellStyle.ForeColor = SystemColors.WindowText;
+                        dgv.ColumnHeadersDefaultCellStyle.BackColor = SystemColors.ActiveCaption;
+                        dgv.ColumnHeadersDefaultCellStyle.ForeColor = SystemColors.ActiveCaptionText;
+                        dgv.Invalidate();
                         break;
                 }
 
@@ -978,6 +993,12 @@ namespace OnScreenKeyboard
                         case NumericUpDown nud:
                             nud.BackColor = inputBg;
                             nud.ForeColor = fg;
+                            break;
+                        case RadioButton rb:
+                            rb.ForeColor = fg;
+                            break;
+                        case Button btn:
+                            btn.ForeColor = fg;
                             break;
                         case CheckBox chk:
                             chk.ForeColor = fg;
