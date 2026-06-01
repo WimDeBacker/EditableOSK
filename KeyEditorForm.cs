@@ -1029,7 +1029,7 @@ namespace OnScreenKeyboard
                 using var dlg = new OpenFileDialog
                 {
                     Title            = Lang.T("Layout file"),
-                    Filter           = "XML files (*.xml)|*.xml|All files (*.*)|*.*",
+                    Filter           = "Keyboard layouts (*.kbl)|*.kbl|All files (*.*)|*.*",
                     InitialDirectory = initDir,
                 };
                 if (dlg.ShowDialog() != DialogResult.OK) return;
@@ -1620,7 +1620,7 @@ namespace OnScreenKeyboard
             // Word-prediction keys store "wp:N" as their Send value
             if (!string.IsNullOrEmpty(send) && send.StartsWith("wp:", StringComparison.Ordinal))
                 return SendMode.WordPrediction;
-            // Layout-switch keys store "layout:filename.xml" as their Send value
+            // Layout-switch keys store "layout:filename.kbl" as their Send value
             if (!string.IsNullOrEmpty(send) && send.StartsWith("layout:", StringComparison.Ordinal))
                 return SendMode.Layout;
             // Any send string that contains SendKeys special characters is a key sequence

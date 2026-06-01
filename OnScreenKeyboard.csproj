@@ -28,12 +28,29 @@
 
   <!-- Copy layout and language files next to the exe on every build -->
   <ItemGroup>
-    <Content Include="qwerty.xml">  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory> </Content>
-    <Content Include="azerty.xml">  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory> </Content>
-    <Content Include="math.xml">    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory> </Content>
-    <Content Include="lang_nl.xml"> <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory> </Content>
-    <Content Include="worddb.xml">      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory> </Content>
-    <Content Include="azertycolor.xml"> <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory> </Content>
+    <Content Include="qwerty.kbl">      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory> </Content>
+    <Content Include="azerty.kbl">      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory> </Content>
+    <Content Include="math.kbl">        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory> </Content>
+    <Content Include="azertycolor.kbl"> <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory> </Content>
+    <Content Include="lang_nl.xml">     <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory> </Content>
   </ItemGroup>
+
+  <!--
+    Convert word-frequency source files (.xml, human-editable) to the .wfq
+    runtime format (adds version/language/isPersonal attributes + Candidates
+    section).  The target is incremental: it only runs when a source file is
+    newer than its corresponding output.
+  -->
+  <Target Name="ConvertWordDb_NL" BeforeTargets="Build"
+          Inputs="$(MSBuildProjectDirectory)\worddb_NL.xml"
+          Outputs="$(OutputPath)worddb_NL.wfq">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\tools\ConvertWordDb.ps1&quot; -Source &quot;$(MSBuildProjectDirectory)\worddb_NL.xml&quot; -Dest &quot;$(OutputPath)worddb_NL.wfq&quot; -Language nl" />
+  </Target>
+
+  <Target Name="ConvertWordDb_EN" BeforeTargets="Build"
+          Inputs="$(MSBuildProjectDirectory)\worddb_EN.xml"
+          Outputs="$(OutputPath)worddb_EN.wfq">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\tools\ConvertWordDb.ps1&quot; -Source &quot;$(MSBuildProjectDirectory)\worddb_EN.xml&quot; -Dest &quot;$(OutputPath)worddb_EN.wfq&quot; -Language en" />
+  </Target>
 
 </Project>

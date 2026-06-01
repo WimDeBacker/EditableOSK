@@ -10,7 +10,7 @@
     <Group Name="Leestekens" FontName="" FontSize="0" FontColor="CCE8DC" KeyColor="2E4035" BorderColor="3E5848" BorderThickness="-1" />
     <Group Name="Besturing" FontName="" FontSize="0" FontColor="A0CCB8" KeyColor="162820" BorderColor="243C30" BorderThickness="-1" />
   </Theme>
-  <Layout Language="nl" GridRows="7" GridCols="14" GearRow="6" GearCol="13" WindowWidth="1036" WindowHeight="553" HideTitlebar="0" StickyModifiers="0" HoldToEdit="0" AlwaysOnTop="1" LastFile="C:\keyboard\0420\azerty.xml" ToolbarTheme="Dark">
+  <Layout Language="nl" GridRows="7" GridCols="14" GearRow="6" GearCol="13" WindowWidth="1036" WindowHeight="445" HideTitlebar="0" StickyModifiers="0" HoldToEdit="0" AlwaysOnTop="1" SlowKeysMs="0" DwellMs="0" ShowTimingAnimation="1" LastFile="C:\keyboard\0420\azerty.kbl" ToolbarTheme="Dark">
     <Key Row="0" Col="0" RowSpan="1" ColSpan="2" GroupName="Woord" Label="Woord 1" Send="wp:0" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="0" Col="2" RowSpan="1" ColSpan="2" GroupName="Woord" Label="Woord 2" Send="wp:1" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="0" Col="4" RowSpan="1" ColSpan="2" GroupName="Woord" Label="Woord 3" Send="wp:2" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />

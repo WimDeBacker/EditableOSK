@@ -187,7 +187,13 @@ namespace OnScreenKeyboard
         private ToolbarButton _btnSplitCell;
 
         private ToolTip          _toolTip;          // shared tooltip for all toolbar buttons
-        private string _currentFilePath = null;
+        private string _currentFilePath  = null;
+        /// <summary>
+        /// Full path of the database file most recently handed off to
+        /// <see cref="WordDatabase.Load"/>.  Used to skip redundant reloads
+        /// when the user applies settings changes that don't affect the database.
+        /// </summary>
+        private string _lastLoadedDbPath = null;
 
         // ── Word prediction ──────────────────────────────────────────
         private readonly WordPredictor _predictor = new WordPredictor(7);
@@ -319,13 +325,13 @@ namespace OnScreenKeyboard
             KeyPreview      = true;
 
             Lang.Load("en");
-            // Load word prediction database if present next to the exe
-            string wpDbPath = Path.Combine(
-                AppDomain.CurrentDomain.BaseDirectory, "worddb.xml");
-            if (File.Exists(wpDbPath)) WordDatabase.Load(wpDbPath);
+            // Word database is loaded after TryAutoLoad() sets _meta.Language.
+            // See LoadWordDatabase() below.
             _predictor.PredictionsChanged += () => { if (IsHandleCreated) BeginInvoke((Action)ApplyWPTags); };
             _predictor.ShiftLatchChanged  += latch => { if (latch) LatchShiftForSentence(); else UnlatchShift(); };
             _predictor.InjectSend         += s => SendKeysHelper.Send(s);
+            // When background database load finishes, refresh WP cells on the UI thread.
+            WordDatabase.Loaded += OnWordDatabaseLoaded;
             SendKeysHelper.SetUiControl(this);
 
             _layout = KeyLayout.BuildDefaultQwerty();
@@ -355,6 +361,7 @@ namespace OnScreenKeyboard
             FormClosing += (s, e) =>
             {
                 Lang.LanguageChanged -= onLangChanged;
+                WordDatabase.Loaded  -= OnWordDatabaseLoaded;
                 if (_hookHandle != IntPtr.Zero) { UnhookWinEvent(_hookHandle); _hookHandle = IntPtr.Zero; }
                 _toolTip?.Dispose();
                 _slowTimer?.Stop();  _slowTimer?.Dispose();
@@ -2351,6 +2358,89 @@ namespace OnScreenKeyboard
         // ── Word prediction methods ──────────────────────────────────
 
         /// <summary>
+        /// <summary>
+        /// Selects and loads the word-frequency database that best matches the
+        /// current layout's <see cref="LayoutMeta.Language"/> and optional
+        /// <see cref="LayoutMeta.WordDatabase"/> override.
+        ///
+        /// <para>Priority order:</para>
+        /// <list type="number">
+        ///   <item>Explicit filename in <c>_meta.WordDatabase</c> — if the file
+        ///   exists next to the exe, it is loaded directly.</item>
+        ///   <item>First base (non-personal) <c>.wfq</c> file whose
+        ///   <c>language</c> attribute matches <c>_meta.Language</c>.</item>
+        ///   <item>Any available base database, regardless of language.</item>
+        /// </list>
+        ///
+        /// <para>Silently does nothing if no database can be found — the
+        /// keyboard continues without word prediction.</para>
+        ///
+        /// <para>
+        /// The actual parse runs on a background thread so the keyboard opens
+        /// immediately.  Word-prediction cells show blank while loading and
+        /// fill in when <see cref="OnWordDatabaseLoaded"/> fires.
+        /// </para>
+        /// </summary>
+        private void LoadWordDatabase()
+        {
+            string appDir = AppDomain.CurrentDomain.BaseDirectory;
+            string path   = null;
+
+            // Priority 1: explicit filename override stored in the layout file.
+            if (!string.IsNullOrEmpty(_meta.WordDatabase))
+            {
+                string explicitPath = Path.Combine(appDir, _meta.WordDatabase);
+                if (File.Exists(explicitPath)) path = explicitPath;
+            }
+
+            if (path == null)
+            {
+                // Priority 2 & 3: auto-select via LanguageRegistry.
+                var registry = new LanguageRegistry(appDir);
+
+                if (!string.IsNullOrEmpty(_meta.Language))
+                {
+                    var match = registry.GetForLanguage(_meta.Language)
+                                        .FirstOrDefault(d => !d.IsPersonal);
+                    if (match != null) path = match.FilePath;
+                }
+
+                if (path == null)
+                {
+                    var any = registry.All.FirstOrDefault(d => !d.IsPersonal)
+                           ?? registry.All.FirstOrDefault();
+                    if (any != null) path = any.FilePath;
+                }
+            }
+
+            if (path == null) return;   // no database found — word prediction stays off
+
+            // Skip redundant reload: if the same file is already loaded (or loading),
+            // starting a new Task would blank WP cells for no reason (finding #7).
+            if (path == _lastLoadedDbPath) return;
+            _lastLoadedDbPath = path;
+
+            // Run the parse on a background thread so the keyboard opens immediately.
+            // OnWordDatabaseLoaded() is invoked via WordDatabase.Loaded when done.
+            System.Threading.Tasks.Task.Run(() => WordDatabase.Load(path));
+        }
+
+        /// <summary>
+        /// Called by <see cref="WordDatabase.Loaded"/> from the background thread
+        /// when a database finishes loading.  Marshals back to the UI thread and
+        /// refreshes the word-prediction cells.
+        /// </summary>
+        private void OnWordDatabaseLoaded()
+        {
+            if (!IsHandleCreated || IsDisposed) return;
+            // Wrap BeginInvoke: the form can be disposed between the guard above
+            // and the actual call if the UI thread is tearing down concurrently
+            // (finding #1).
+            try { BeginInvoke((Action)ApplyWPTags); }
+            catch (InvalidOperationException) { }
+        }
+
+        /// <summary>
         /// Push the current _wpPredictions onto the button Tags.
         /// Called after every UpdateCornerTag pass so predictions are never
         /// overwritten by the static placeholder labels.
@@ -3346,7 +3436,9 @@ namespace OnScreenKeyboard
             ForceTopMost();  // re-apply always-on-top setting immediately
             BackColor = _theme.BackgroundColor; Opacity = _theme.Opacity;
             ApplyToolbarTheme();
+            LoadWordDatabase();   // re-load if WordDatabase selection changed
             RefreshAllButtons();
+            ApplyWPTags();
             AutoSave();
         }
 
@@ -3382,8 +3474,8 @@ namespace OnScreenKeyboard
             if (saveAs || _currentFilePath == null)
             {
                 using var dlg = new SaveFileDialog
-                { Title="Save",Filter="XML files (*.xml)|*.xml|All files (*.*)|*.*",
-                  DefaultExt="xml",FileName=path };
+                { Title="Save",Filter="Keyboard layouts (*.kbl)|*.kbl|All files (*.*)|*.*",
+                  DefaultExt="kbl",FileName=path };
                 if (dlg.ShowDialog() != DialogResult.OK) return;
                 path = dlg.FileName;
             }
@@ -3427,7 +3519,7 @@ namespace OnScreenKeyboard
         private void LoadSettings()
         {
             using var dlg = new OpenFileDialog
-            { Title="Load",Filter="XML files (*.xml)|*.xml|All files (*.*)|*.*",
+            { Title="Load",Filter="Keyboard layouts (*.kbl)|*.kbl|All files (*.*)|*.*",
               FileName=_currentFilePath ?? SettingsManager.DefaultPath };
             if (dlg.ShowDialog() == DialogResult.OK) ApplyLoadedSettings(dlg.FileName);
         }
@@ -3470,6 +3562,7 @@ namespace OnScreenKeyboard
                 ApplyTitlebarState();
                 ApplyToolbarTheme();
                 if (!string.IsNullOrEmpty(_meta.Language)) Lang.Load(_meta.Language);
+                LoadWordDatabase();
                 RebuildAllButtons();
                 Size = new Size(_window.WindowWidth, _window.WindowHeight);
             }
@@ -3685,6 +3778,7 @@ namespace OnScreenKeyboard
             BackColor = _theme.BackgroundColor; Opacity = _theme.Opacity;
             ApplyTitlebarState();
             if (!string.IsNullOrEmpty(_meta.Language)) Lang.Load(_meta.Language);
+            LoadWordDatabase();
             RebuildAllButtons();
             Size = new Size(_window.WindowWidth, _window.WindowHeight);
             AutoSave();

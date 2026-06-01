@@ -21,7 +21,7 @@
     <Group Name="Medeklinkers" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="1A4E8A" BorderColor="00FF00" BorderThickness="1" />
     <Group Name="Leestekens" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="C86A00" BorderColor="00FF00" BorderThickness="1" />
   </Theme>
-  <Layout Language="nl" GridRows="7" GridCols="22" GearRow="0" GearCol="-1" WindowWidth="1400" WindowHeight="462" HideTitlebar="0" StickyModifiers="0" HoldToEdit="0" AlwaysOnTop="1" LastFile="C:\keyboard\0420\math.xml" ToolbarTheme="Dark">
+  <Layout Language="nl" GridRows="7" GridCols="22" GearRow="0" GearCol="-1" WindowWidth="1400" WindowHeight="462" HideTitlebar="0" StickyModifiers="0" HoldToEdit="0" AlwaysOnTop="1" SlowKeysMs="0" DwellMs="0" ShowTimingAnimation="1" LastFile="C:\keyboard\0420\math.kbl" ToolbarTheme="Dark">
     <Key Row="0" Col="0" RowSpan="1" ColSpan="1" GroupName="Cijfers" Label="1" Send="1" ShiftLabel="¹" ShiftSend="¹" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="0" Col="1" RowSpan="1" ColSpan="1" GroupName="Cijfers" Label="2" Send="2" ShiftLabel="²" ShiftSend="²" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="0" Col="2" RowSpan="1" ColSpan="1" GroupName="Cijfers" Label="3" Send="3" ShiftLabel="³" ShiftSend="³" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />

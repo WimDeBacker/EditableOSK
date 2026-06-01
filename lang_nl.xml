@@ -269,6 +269,25 @@
   <String key="wiz: sum language"           value="Taal: {0}" />
   <String key="wiz: sum always on top"      value="Altijd bovenaan: {0}" />
 
+  <!-- Word prediction database UI -->
+  <String key="wp: Word prediction"      value="Woordvoorspelling" />
+  <String key="wp: Database"             value="Database" />
+  <String key="wp: Auto"                 value="(automatisch)" />
+  <String key="wp: Create copy…"         value="Persoonlijke kopie…" />
+  <String key="wp: Export…"             value="Exporteren…" />
+  <String key="wp: Save personal copy"   value="Persoonlijke kopie opslaan" />
+  <String key="wp: Export personal copy" value="Database exporteren" />
+  <String key="wp: Personal"             value="Persoonlijk" />
+  <String key="wp: Base"                 value="Standaard" />
+  <String key="wp: words"                value="woorden" />
+  <String key="wp: No database loaded"   value="Geen database geladen" />
+  <String key="wp: Copy failed"          value="Kopie mislukt:" />
+  <String key="wp: Export failed"        value="Exporteren mislukt:" />
+  <String key="wp: tip database"         value="Kies de woordendatabase voor dit toetsenbord. Kies een persoonlijk bestand (★) om woorden bij te leren." />
+  <String key="wp: tip create copy"      value="Maak een persoonlijke kopie van de geselecteerde database om woorden bij te leren." />
+  <String key="wp: tip export"            value="Exporteer de persoonlijke database naar een andere locatie (back-up of overzetten naar een andere pc)." />
+  <String key="wp: unsaved"              value="niet opgeslagen" />
+
   <!-- Errors -->
   <String key="Save failed"         value="Opslaan mislukt:" />
   <String key="Save invalid msg"    value="De indeling bevat overlappende of ontbrekende cellen en kan niet worden opgeslagen.&#10;&#10;Tip: schakel over naar de bewerkingsmodus om de indeling te controleren en te corrigeren." />

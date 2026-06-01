@@ -250,6 +250,14 @@ namespace OnScreenKeyboard
         public bool ShowTimingAnimation { get; set; } = true;
 
         /// <summary>
+        /// Filename (without path) of the .wfq word-frequency database to load
+        /// when this layout is active, e.g. "worddb_NL.wfq".
+        /// Empty string = auto-select the first available database whose
+        /// <c>language</c> attribute matches <see cref="Language"/>.
+        /// </summary>
+        public string WordDatabase { get; set; } = "";
+
+        /// <summary>
         /// Creates a new <see cref="LayoutMeta"/> with identical values to
         /// this one.
         /// </summary>
@@ -266,6 +274,7 @@ namespace OnScreenKeyboard
             SlowKeysMs           = SlowKeysMs,
             DwellMs              = DwellMs,
             ShowTimingAnimation  = ShowTimingAnimation,
+            WordDatabase         = WordDatabase,
         };
 
         /// <summary>
@@ -285,6 +294,7 @@ namespace OnScreenKeyboard
             SlowKeysMs          = src.SlowKeysMs;
             DwellMs             = src.DwellMs;
             ShowTimingAnimation = src.ShowTimingAnimation;
+            WordDatabase        = src.WordDatabase;
         }
     }
 
@@ -465,6 +475,8 @@ namespace OnScreenKeyboard
             w.WriteAttributeString("ShowTimingAnimation", m.ShowTimingAnimation ? "1" : "0");
             w.WriteAttributeString("LastFile",        m.LastFile ?? "");
             w.WriteAttributeString("ToolbarTheme",    m.ToolbarTheme.ToString());
+            if (!string.IsNullOrEmpty(m.WordDatabase))
+                w.WriteAttributeString("WordDatabase", m.WordDatabase);
             WriteGrid(w, layout);
             w.WriteEndElement();
         }
@@ -638,6 +650,7 @@ namespace OnScreenKeyboard
             if (int.TryParse(Attr(lNode,"DwellMs","0"),    out int dwMs) && dwMs >= 0) meta.DwellMs    = Math.Min(dwMs, 5000);
             if (meta.SlowKeysMs > 0) meta.DwellMs = 0;  // enforce mutual exclusivity for hand-edited XML
             meta.ShowTimingAnimation = Attr(lNode,"ShowTimingAnimation","1") == "1";
+            meta.WordDatabase        = Attr(lNode,"WordDatabase","");
 
             // Sanity-clamp window size to reasonable display boundaries
             // (600–7680 wide, 180–4320 tall) to prevent windows that are

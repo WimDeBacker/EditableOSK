@@ -1067,7 +1067,7 @@ namespace OnScreenKeyboard
             using var ofd = new OpenFileDialog
             {
                 Title = Lang.T("Select a layout file to import groups from"),
-                Filter = "Keyboard layout (*.xml)|*.xml|All files (*.*)|*.*",
+                Filter = "Keyboard layout (*.kbl)|*.kbl|All files (*.*)|*.*",
                 RestoreDirectory = true,
             };
             if (ofd.ShowDialog(this) != DialogResult.OK) return;

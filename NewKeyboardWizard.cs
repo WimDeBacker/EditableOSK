@@ -7,7 +7,7 @@ using System.Windows.Forms;
 namespace OnScreenKeyboard
 {
     // ══════════════════════════════════════════════════════════════════════
-    // NewKeyboardWizard — 5-page wizard that creates a new .xml layout file.
+    // NewKeyboardWizard — 5-page wizard that creates a new .kbl layout file.
     // ══════════════════════════════════════════════════════════════════════
     internal sealed class NewKeyboardWizard : FluentDialogBase
     {
@@ -369,7 +369,7 @@ namespace OnScreenKeyboard
             _btnBrowseCopy = MakeBrowse(pg, 812, 234, () =>
             {
                 using var dlg = new OpenFileDialog { Title=Lang.T("wiz: Select layout"),
-                    Filter="XML files (*.xml)|*.xml|All files (*.*)|*.*" };
+                    Filter="Keyboard layouts (*.kbl)|*.kbl|All files (*.*)|*.*" };
                 if (dlg.ShowDialog(this)==DialogResult.OK) _txtCopyFile.Text=dlg.FileName;
             });
             SetTip(_txtCopyFile,  ()=>Lang.T("tip: Browse layout"));
@@ -588,7 +588,7 @@ namespace OnScreenKeyboard
             _btnBrowseTheme.Click+=(s,e)=>
             {
                 using var dlg=new OpenFileDialog { Title=Lang.T("wiz: Select theme file"),
-                    Filter="XML files (*.xml)|*.xml|All files (*.*)|*.*" };
+                    Filter="Keyboard layouts (*.kbl)|*.kbl|All files (*.*)|*.*" };
                 if (dlg.ShowDialog(this)==DialogResult.OK) _txtThemeFile.Text=dlg.FileName;
             };
 
@@ -961,7 +961,7 @@ namespace OnScreenKeyboard
             if (!Directory.Exists(folder))
             { _lblSaveError.Text=Lang.T("wiz: err bad folder"); _txtFolder.Focus(); return; }
 
-            if (!name.EndsWith(".xml",StringComparison.OrdinalIgnoreCase)) name+=".xml";
+            if (!name.EndsWith(".kbl",StringComparison.OrdinalIgnoreCase)) name+=".kbl";
             string path=Path.Combine(folder,name);
             try
             {

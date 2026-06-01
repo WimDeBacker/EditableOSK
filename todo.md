@@ -4,9 +4,29 @@
 
 - [x] **Priority 1 — New keyboard wizard** ✓ *(UI/UX — medium)* — When creating a new layout file, ask for the number of rows and columns instead of starting with a blank default. Optionally: include a multiline text field where the user can type or paste the key labels row by row (e.g. `q w e r t y` on one line, `a s d f g h` on the next) and the wizard generates the full grid automatically — each word becomes a key label and send value.
 
-- [ ] **Priority 2 — Word prediction: learn new words and word pairs** *(structural — high)* — While the user types (via the keyboard or prediction cells), record new words and word-pair frequencies so the prediction engine improves over time. Store learned data separately from the bundled word database so it survives layout reloads.
+- [ ] **Next — Ultra code review** *(quality)* — Run `/code-review` at ultra level on all changes since the last review. Fix findings before continuing with new features.
 
-- [ ] **Priority 2b — English word prediction** *(content)* — Add an English word list / frequency database so word prediction works out of the box for English layouts, not just Dutch.
+- [ ] **Priority 2 — Word prediction: multi-language & database UI** *(structural — high)*
+
+  - [x] **Step 1 — New file extensions** — Rename keyboard layouts `.xml` → `.kbl`, word databases `.xml` → `.wfq`. Update all file pickers, csproj, tests, and physical files. ✓
+
+  - [x] **Step 2 — `.wfq` file format** ✓ — XML root gets `version`, `language`, `isPersonal` attributes and an empty `<Candidates>` section. Build-time converter (`tools/ConvertWordDb.ps1`) produces `.wfq` from source `.xml` files. `WordDatabase` exposes `Language` and `IsPersonal` properties.
+
+  - [x] **Step 3 — Multi-database loader** ✓ — `LanguageRegistry` scans the app folder for `.wfq` files, peeks at root-element attributes (fast even for 500 MB files), and groups results by language code. Supports multiple databases per language.
+
+  - [x] **Step 4 — Keyboard layout links to a specific database** ✓ — `LayoutMeta.WordDatabase` stores an optional filename override. `LoadWordDatabase()` auto-selects on every layout load: explicit filename → language-matched base file → any base file.
+
+  - [x] **Step 5 — UI: database management** ✓ — "Word databases…" panel in Edit Keyboard:
+    - Dropdown listing all `.wfq` files; info label; Export button
+    - Base files shown with `→` suffix — selecting one triggers copy dialog; cancelling reverts to previous valid selection (auto or personal)
+    - Personal files (`★`) are the only selectable targets; layout never points at a base file directly
+    - `● unsaved` indicator appears next to info label whenever the combo selection differs from what was last saved to the layout file; hides after Apply/Save closes the dialog
+
+  - [ ] **Step 6 — Tests** — Tests for: database switching via UI, automatic personal-copy creation, word count display, `.kbl`/`.wfq` round-trip with `WordDatabase` field, regression confirming Dutch and English prediction work correctly.
+
+- [x] **Priority 2a — Word prediction: fast database load** ✓ — `XmlDocument` replaced by forward-only `XmlReader` in `WordDatabase.ParseFile()` (~3–5× faster, ~1.5 GB → ~200 MB peak for the 239 MB EN file). `LoadWordDatabase()` now fires `Task.Run(() => WordDatabase.Load(path))`; keyboard opens immediately with blank WP cells. `WordDatabase.Loaded` event (subscribed in constructor, unsubscribed in `FormClosing`) marshals back via `BeginInvoke` → `ApplyWPTags()`. Thread-safety: immutable `DbSnapshot` published via a single `volatile` reference write — no locking on the read path.
+
+- [ ] **Priority 2b — Word prediction: learning engine** *(new runtime behaviour — high)* — While the user types (via keys or prediction cells), record word and word-pair frequencies. Known words get their frequency incremented immediately. Unknown words go into a `<Candidates>` buffer; promoted to the main list only when count > 2 (filters typos). Personal `.wfq` file is updated in place; writes batched every 30 s or on app close. Candidate list visible and manageable in the Step 5 UI panel.
 
 - [ ] **Priority 2c — Shrink and review the test suite** *(maintenance)* — The test program has grown large and many tests cover the same paths multiple times. Audit which tests are still load-bearing (catch real regressions), which are redundant duplicates, and which are deprecated (testing code that no longer exists or behaviour that has changed). Goal: smaller, faster, easier to maintain suite without losing meaningful coverage.
 
@@ -14,7 +34,7 @@
 
 - [ ] **Priority 4 — Scanning** *(accessibility — medium)* — Auto-advance a highlight through keys/rows at a fixed interval; the user confirms with a single switch input. More complex to implement.
 
-- [ ] **Priority 5 — Bundled keyboard layouts** *(content)* — Ship ready-made `.xml` layout files for the four wizard themes (Dark, Light, High Contrast, Colorful) × two key arrangements (AZERTY Dutch, QWERTY English) = 8 files. Users can load one immediately without running the wizard. Layouts should include the standard group colours from each theme preset and a word-prediction row.
+- [ ] **Priority 5 — Bundled keyboard layouts** *(content)* — Ship ready-made `.kbl` layout files for the four wizard themes (Dark, Light, High Contrast, Colorful) × two key arrangements (AZERTY Dutch, QWERTY English) = 8 files. Users can load one immediately without running the wizard. Layouts should include the standard group colours from each theme preset and a word-prediction row.
 
 ---
 

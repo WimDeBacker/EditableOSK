@@ -1,4 +1,4 @@
-// ═══════════════════════════════════════════════════════════════════════════
+﻿// ═══════════════════════════════════════════════════════════════════════════
 //  OnScreenKeyboardTests.cs  —  Self-contained test runner
 //
 //  HOW TO RUN:
@@ -12,6 +12,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Windows.Forms;
 
@@ -68,6 +69,8 @@ namespace OnScreenKeyboard
             WordPredictorE2ETests.Run(Assert, Section);
             // Run word database robustness tests (graceful failure on bad/missing DB)
             WordDatabaseRobustnessTests.Run(Assert, Section);
+            // Run LanguageRegistry tests (database discovery and grouping)
+            LanguageRegistryTests.Run(Assert, Section);
 
             // ── Final summary and report (after ALL tests including prediction) ──
             Console.WriteLine();
@@ -344,7 +347,7 @@ namespace OnScreenKeyboard
         {
             Section("SettingsManager — save/load round-trip");
 
-            string tmp = Path.Combine(Path.GetTempPath(), $"osk_rt_{Guid.NewGuid()}.xml");
+            string tmp = Path.Combine(Path.GetTempPath(), $"osk_rt_{Guid.NewGuid()}.kbl");
             try
             {
                 var layout = new GridLayout(2, 3);
@@ -388,7 +391,7 @@ namespace OnScreenKeyboard
                 var saveMeta = new LayoutMeta
                 {
                     Language = "nl", LastFile = tmp, StickyModifiers = false,
-                    SlowKeysMs = 350, DwellMs = 0,
+                    SlowKeysMs = 350, DwellMs = 0, WordDatabase = "worddb_NL.wfq",
                 };
 
                 SettingsManager.SaveSettings(layout, saveTheme, saveWindow, saveMeta, tmp);
@@ -436,8 +439,9 @@ namespace OnScreenKeyboard
                 Assert(lgWindow.HideTitlebar  == true,  "HideTitlebar round-trip");
                 Assert(lgMeta.StickyModifiers == false, "StickyModifiers round-trip");
                 Assert(lgWindow.AlwaysOnTop   == false, "AlwaysOnTop round-trip");
-                Assert(lgMeta.SlowKeysMs      == 350,   "SlowKeysMs round-trip");
-                Assert(lgMeta.DwellMs         == 0,     "DwellMs round-trip (zero)");
+                Assert(lgMeta.SlowKeysMs      == 350,             "SlowKeysMs round-trip");
+                Assert(lgMeta.DwellMs         == 0,               "DwellMs round-trip (zero)");
+                Assert(lgMeta.WordDatabase    == "worddb_NL.wfq", "WordDatabase round-trip");
                 Assert(Math.Abs(lgTheme.Opacity - 0.85) < 0.001, "Opacity round-trip");
                 Assert(lgTheme.BackgroundColor == Color.FromArgb(10,20,30), "BackgroundColor round-trip");
             }
@@ -452,7 +456,7 @@ namespace OnScreenKeyboard
             Section("SettingsManager — atomic save");
 
             string dir  = Path.GetTempPath();
-            string path = Path.Combine(dir, $"osk_atomicsave_{Guid.NewGuid():N}.xml");
+            string path = Path.Combine(dir, $"osk_atomicsave_{Guid.NewGuid():N}.kbl");
             string tmp  = path + ".tmp";
             string bak  = path + ".bak";
 
@@ -495,7 +499,7 @@ namespace OnScreenKeyboard
             }
 
             // ── Invalid layout: SaveSettings must throw before touching any file ──
-            string badPath = Path.Combine(Path.GetTempPath(), $"osk_invalid_{Guid.NewGuid():N}.xml");
+            string badPath = Path.Combine(Path.GetTempPath(), $"osk_invalid_{Guid.NewGuid():N}.kbl");
             string badTmp  = badPath + ".tmp";
             try
             {
@@ -527,7 +531,7 @@ namespace OnScreenKeyboard
             Section("SettingsManager — bad input handling");
 
             // Corrupt XML throws
-            string bad = Path.Combine(Path.GetTempPath(), $"osk_bad_{Guid.NewGuid()}.xml");
+            string bad = Path.Combine(Path.GetTempPath(), $"osk_bad_{Guid.NewGuid()}.kbl");
             File.WriteAllText(bad, "not xml <<< garbage >>>");
             bool threw = false;
             try { SettingsManager.LoadSettings(new VisualTheme(), new WindowState(), new LayoutMeta(), bad); } catch { threw = true; }
@@ -536,7 +540,7 @@ namespace OnScreenKeyboard
 
             // Missing file returns null
             Assert(SettingsManager.LoadSettings(new VisualTheme(), new WindowState(), new LayoutMeta(),
-                Path.Combine(Path.GetTempPath(), "osk_missing_xyz.xml")) == null,
+                Path.Combine(Path.GetTempPath(), "osk_missing_xyz.kbl")) == null,
                 "Missing file returns null");
 
             // Helper: build a minimal valid 2×1 grid XML
@@ -556,7 +560,7 @@ namespace OnScreenKeyboard
 </OnScreenKeyboard>";
 
             // FontSize 999 → clamped to 72
-            string ff = Path.Combine(Path.GetTempPath(), $"osk_fs_{Guid.NewGuid()}.xml");
+            string ff = Path.Combine(Path.GetTempPath(), $"osk_fs_{Guid.NewGuid()}.kbl");
             File.WriteAllText(ff, MakeXml(keyAttribs: @"FontSize=""999"""));
             var fr = SettingsManager.LoadSettings(new VisualTheme(), new WindowState(), new LayoutMeta(), ff);
             Assert(fr != null, "FontSize 999: loads without crash");
@@ -564,7 +568,7 @@ namespace OnScreenKeyboard
             File.Delete(ff);
 
             // BorderThickness 99 → clamped to 10
-            string btf = Path.Combine(Path.GetTempPath(), $"osk_bt_{Guid.NewGuid()}.xml");
+            string btf = Path.Combine(Path.GetTempPath(), $"osk_bt_{Guid.NewGuid()}.kbl");
             File.WriteAllText(btf, MakeXml(keyAttribs: @"BorderThickness=""99"""));
             var btr = SettingsManager.LoadSettings(new VisualTheme(), new WindowState(), new LayoutMeta(), btf);
             Assert(btr != null, "BorderThickness 99: loads without crash");
@@ -596,7 +600,7 @@ namespace OnScreenKeyboard
         {
             Section("SettingsManager — sentinel round-trips");
 
-            string tmp = Path.Combine(Path.GetTempPath(), $"osk_sent_{Guid.NewGuid()}.xml");
+            string tmp = Path.Combine(Path.GetTempPath(), $"osk_sent_{Guid.NewGuid()}.kbl");
             try
             {
                 var layout = new GridLayout(1, 3);
@@ -648,7 +652,7 @@ namespace OnScreenKeyboard
                 var windowOn = new WindowState { AlwaysOnTop = true  };
                 var metaOff  = new LayoutMeta  { StickyModifiers = false };
                 var windowOff = new WindowState { AlwaysOnTop = false };
-                string tmp2 = Path.Combine(Path.GetTempPath(), $"osk_sa_{Guid.NewGuid()}.xml");
+                string tmp2 = Path.Combine(Path.GetTempPath(), $"osk_sa_{Guid.NewGuid()}.kbl");
                 var gl2 = new GridLayout(1, 1); gl2.Cells.Add(new GridCell(0, 0, new KeyProps("", "")));
                 SettingsManager.SaveSettings(gl2, new VisualTheme(), windowOn, metaOn, tmp2);
                 var lgOnMeta = new LayoutMeta(); var lgOnWindow = new WindowState();
@@ -657,7 +661,7 @@ namespace OnScreenKeyboard
                 Assert(lgOnWindow.AlwaysOnTop   == true,   "AlwaysOnTop=true round-trip");
                 File.Delete(tmp2);
 
-                string tmp3 = Path.Combine(Path.GetTempPath(), $"osk_sa2_{Guid.NewGuid()}.xml");
+                string tmp3 = Path.Combine(Path.GetTempPath(), $"osk_sa2_{Guid.NewGuid()}.kbl");
                 var gl3 = new GridLayout(1, 1); gl3.Cells.Add(new GridCell(0, 0, new KeyProps("", "")));
                 SettingsManager.SaveSettings(gl3, new VisualTheme(), windowOff, metaOff, tmp3);
                 var lgOffMeta = new LayoutMeta(); var lgOffWindow = new WindowState();
@@ -1357,7 +1361,7 @@ namespace OnScreenKeyboard
 
             Section("StyleGroups — XML round-trip with groups and GroupName");
 
-            string tmp = Path.Combine(Path.GetTempPath(), $"osk_grp_{Guid.NewGuid()}.xml");
+            string tmp = Path.Combine(Path.GetTempPath(), $"osk_grp_{Guid.NewGuid()}.kbl");
             try
             {
                 var cKey  = Color.FromArgb(255, 74, 48, 16);
@@ -1411,7 +1415,7 @@ namespace OnScreenKeyboard
             Section("StyleGroups — standard group auto-created with neutral defaults when missing");
 
             {
-                string f = Path.Combine(Path.GetTempPath(), $"osk_std_{Guid.NewGuid()}.xml");
+                string f = Path.Combine(Path.GetTempPath(), $"osk_std_{Guid.NewGuid()}.kbl");
                 try
                 {
                     // Write a file with no standard group
@@ -1438,7 +1442,7 @@ namespace OnScreenKeyboard
             Section("StyleGroups — standard group preserved when present in file");
 
             {
-                string f = Path.Combine(Path.GetTempPath(), $"osk_stdp_{Guid.NewGuid()}.xml");
+                string f = Path.Combine(Path.GetTempPath(), $"osk_stdp_{Guid.NewGuid()}.kbl");
                 try
                 {
                     var cK = Color.FromArgb(255, 11, 22, 33);
@@ -1474,7 +1478,7 @@ namespace OnScreenKeyboard
             Section("StyleGroups — standard group written on save");
 
             {
-                string f = Path.Combine(Path.GetTempPath(), $"osk_stds_{Guid.NewGuid()}.xml");
+                string f = Path.Combine(Path.GetTempPath(), $"osk_stds_{Guid.NewGuid()}.kbl");
                 try
                 {
                     var saveLayout = new GridLayout(1, 1);
@@ -1698,7 +1702,7 @@ namespace OnScreenKeyboard
             Section("StyleGroups — standard group name immutable through round-trip");
 
             {
-                string f2 = Path.Combine(Path.GetTempPath(), $"stdname_{Guid.NewGuid()}.xml");
+                string f2 = Path.Combine(Path.GetTempPath(), $"stdname_{Guid.NewGuid()}.kbl");
                 try
                 {
                     var stdLayout = new GridLayout(1, 1);
@@ -1980,7 +1984,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 string xml = MakeLayout(gridRows: 2, gridCols: 2, keys:
                     "    <Key Row=\"0\" Col=\"0\" Label=\"A\" Send=\"A\" />\n" +
                     "    <Key Row=\"5\" Col=\"5\" Label=\"X\" Send=\"X\" />\n");   // out of bounds
-                string tmp = Path.Combine(Path.GetTempPath(), $"osk_rob1_{Guid.NewGuid()}.xml");
+                string tmp = Path.Combine(Path.GetTempPath(), $"osk_rob1_{Guid.NewGuid()}.kbl");
                 try
                 {
                     File.WriteAllText(tmp, xml);
@@ -2002,7 +2006,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 string xml = MakeLayout(gridRows: 2, gridCols: 2, keys:
                     "    <Key Row=\"0\" Col=\"0\" Label=\"First\" Send=\"A\" />\n" +
                     "    <Key Row=\"0\" Col=\"0\" Label=\"Second\" Send=\"B\" />\n");
-                string tmp = Path.Combine(Path.GetTempPath(), $"osk_rob2_{Guid.NewGuid()}.xml");
+                string tmp = Path.Combine(Path.GetTempPath(), $"osk_rob2_{Guid.NewGuid()}.kbl");
                 try
                 {
                     File.WriteAllText(tmp, xml);
@@ -2022,7 +2026,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 string xml = MakeLayout(gridRows: 2, gridCols: 2, keys:
                     "    <Key Label=\"Ghost\" Send=\"G\" />\n" +  // no Row= or Col=
                     "    <Key Row=\"1\" Col=\"1\" Label=\"B\" Send=\"B\" />\n");
-                string tmp = Path.Combine(Path.GetTempPath(), $"osk_rob3_{Guid.NewGuid()}.xml");
+                string tmp = Path.Combine(Path.GetTempPath(), $"osk_rob3_{Guid.NewGuid()}.kbl");
                 try
                 {
                     File.WriteAllText(tmp, xml);
@@ -2051,7 +2055,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
     <Key Row=""0"" Col=""0"" Label=""A"" Send=""A"" />
   </Layout>
 </OnScreenKeyboard>";
-                string tmp = Path.Combine(Path.GetTempPath(), $"osk_rob4a_{Guid.NewGuid()}.xml");
+                string tmp = Path.Combine(Path.GetTempPath(), $"osk_rob4a_{Guid.NewGuid()}.kbl");
                 try
                 {
                     File.WriteAllText(tmp, xml);
@@ -2068,7 +2072,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
             {
                 string xml = MakeLayout(extraGroups:
                     "    <Group Name=\"Test\" FontSize=\"999\" />\n");
-                string tmp = Path.Combine(Path.GetTempPath(), $"osk_rob4b_{Guid.NewGuid()}.xml");
+                string tmp = Path.Combine(Path.GetTempPath(), $"osk_rob4b_{Guid.NewGuid()}.kbl");
                 try
                 {
                     File.WriteAllText(tmp, xml);
@@ -2087,7 +2091,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 // 4-col grid; key at col=2 with ColSpan=10 would extend 8 cols past the edge
                 string xml = MakeLayout(gridRows: 2, gridCols: 4, keys:
                     "    <Key Row=\"0\" Col=\"2\" ColSpan=\"10\" Label=\"Wide\" Send=\"W\" />\n");
-                string tmp = Path.Combine(Path.GetTempPath(), $"osk_rob5_{Guid.NewGuid()}.xml");
+                string tmp = Path.Combine(Path.GetTempPath(), $"osk_rob5_{Guid.NewGuid()}.kbl");
                 try
                 {
                     File.WriteAllText(tmp, xml);
@@ -2110,7 +2114,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 string hugeXml = xml.Replace(
                     "WindowWidth=\"800\" WindowHeight=\"200\"",
                     "WindowWidth=\"2000000\" WindowHeight=\"2000000\"");
-                string tmp = Path.Combine(Path.GetTempPath(), $"osk_rob6_{Guid.NewGuid()}.xml");
+                string tmp = Path.Combine(Path.GetTempPath(), $"osk_rob6_{Guid.NewGuid()}.kbl");
                 try
                 {
                     File.WriteAllText(tmp, hugeXml);
@@ -2130,7 +2134,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 string xml = MakeLayout(extraGroups:
                     "    <Group Name=\"Klinkers\" KeyColor=\"FF0000\" />\n" +
                     "    <Group Name=\"Klinkers\" KeyColor=\"00FF00\" />\n");
-                string tmp = Path.Combine(Path.GetTempPath(), $"osk_rob7_{Guid.NewGuid()}.xml");
+                string tmp = Path.Combine(Path.GetTempPath(), $"osk_rob7_{Guid.NewGuid()}.kbl");
                 try
                 {
                     File.WriteAllText(tmp, xml);
@@ -2213,7 +2217,7 @@ namespace OnScreenKeyboard
 
             // ── Missing file: IsLoaded stays false, no crash ──────────────
             WordDatabase.Load(System.IO.Path.Combine(
-                AppDomain.CurrentDomain.BaseDirectory, "nonexistent_worddb_xyz.xml"));
+                AppDomain.CurrentDomain.BaseDirectory, "nonexistent_worddb_xyz.wfq"));
             assert(!WordDatabase.IsLoaded,  "Missing file: IsLoaded = false");
             assert(WordDatabase.LoadError != null, "Missing file: LoadError set");
 
@@ -2224,7 +2228,7 @@ namespace OnScreenKeyboard
 
             // ── Corrupt file: IsLoaded = false, LoadError set, no crash ──
             string corrupt = System.IO.Path.Combine(
-                System.IO.Path.GetTempPath(), $"osk_corrupt_{Guid.NewGuid():N}.xml");
+                System.IO.Path.GetTempPath(), $"osk_corrupt_{Guid.NewGuid():N}.wfq");
             try
             {
                 System.IO.File.WriteAllText(corrupt, "<<< not valid xml >>>");
@@ -2256,6 +2260,62 @@ namespace OnScreenKeyboard
             catch { threw = true; }
             assert(!threw, "WordPredictor.OnKeySent with no DB: no exception");
             assert(string.IsNullOrEmpty(predictor.Predictions[0]), "WordPredictor: predictions blank when DB not loaded");
+
+            // ── .wfq format: Language and IsPersonal properties ───────────
+            section("WordDatabase — .wfq format metadata");
+
+            // Build a minimal valid .wfq with language + isPersonal attributes
+            string wfqPath = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(), $"osk_wfq_{Guid.NewGuid():N}.wfq");
+            try
+            {
+                // Base file: isPersonal="false"
+                System.IO.File.WriteAllText(wfqPath,
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n" +
+                    "<WordDatabase version=\"1\" language=\"nl\" isPersonal=\"false\">\r\n" +
+                    "  <Candidates />\r\n" +
+                    "  <Word value=\"de\" frequency=\"100\"><Next value=\"beste\" frequency=\"5\" /></Word>\r\n" +
+                    "</WordDatabase>",
+                    System.Text.Encoding.UTF8);
+                WordDatabase.Load(wfqPath);
+                assert(WordDatabase.IsLoaded,          "wfq base: IsLoaded = true");
+                assert(WordDatabase.Language == "nl",   "wfq base: Language = nl");
+                assert(!WordDatabase.IsPersonal,        "wfq base: IsPersonal = false");
+                var wfqPreds = WordDatabase.GetPredictions("", "d", false, 5);
+                assert(wfqPreds.Count > 0,              "wfq base: predictions work");
+                assert(wfqPreds.Contains("de"),         "wfq base: 'de' predicted");
+
+                // Personal file: isPersonal="true"
+                System.IO.File.WriteAllText(wfqPath,
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n" +
+                    "<WordDatabase version=\"1\" language=\"en\" isPersonal=\"true\">\r\n" +
+                    "  <Candidates>\r\n" +
+                    "    <Candidate value=\"zonk\" count=\"1\" />\r\n" +
+                    "  </Candidates>\r\n" +
+                    "  <Word value=\"the\" frequency=\"500\" />\r\n" +
+                    "</WordDatabase>",
+                    System.Text.Encoding.UTF8);
+                WordDatabase.Load(wfqPath);
+                assert(WordDatabase.IsLoaded,          "wfq personal: IsLoaded = true");
+                assert(WordDatabase.Language == "en",   "wfq personal: Language = en");
+                assert(WordDatabase.IsPersonal,         "wfq personal: IsPersonal = true");
+
+                // Old format (no metadata attributes) — backward compat
+                System.IO.File.WriteAllText(wfqPath,
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n" +
+                    "<WordDatabase>\r\n" +
+                    "  <Word value=\"hallo\" frequency=\"42\" />\r\n" +
+                    "</WordDatabase>",
+                    System.Text.Encoding.UTF8);
+                WordDatabase.Load(wfqPath);
+                assert(WordDatabase.IsLoaded,              "wfq legacy: IsLoaded = true");
+                assert(WordDatabase.Language == "",         "wfq legacy: Language = empty");
+                assert(!WordDatabase.IsPersonal,            "wfq legacy: IsPersonal = false");
+            }
+            finally
+            {
+                if (System.IO.File.Exists(wfqPath)) System.IO.File.Delete(wfqPath);
+            }
         }
     }
 
@@ -2272,11 +2332,11 @@ namespace OnScreenKeyboard
         public static void Run(Action<bool, string> assert, Action<string> section)
         {
             string dbPath = System.IO.Path.Combine(
-                AppDomain.CurrentDomain.BaseDirectory, "worddb.xml");
+                AppDomain.CurrentDomain.BaseDirectory, "worddb_NL.wfq");
             if (!System.IO.File.Exists(dbPath))
             {
                 Console.ForegroundColor = ConsoleColor.DarkYellow;
-                Console.WriteLine("  (worddb.xml not found — word prediction tests skipped)");
+                Console.WriteLine("  (worddb_NL.wfq not found — word prediction tests skipped)");
                 Console.ResetColor();
                 return;
             }
@@ -2357,7 +2417,7 @@ namespace OnScreenKeyboard
             _section("[04] After 'kat' — mid-sentence");
             var p04 = P("kat", "", false);
             _assert(AllLower(p04),                  "04: all lowercase");
-            _assert(Contains(p04, "de"),            "04: 'de' in list");
+            _assert(Contains(p04, "en"),            "04: 'en' in list");
             _assert(Contains(p04, "in"),            "04: 'in' in list");
             _assert(!p04.Exists(w => w == "De"),   "04: no capitalised 'De' (case-sensitive)");
 
@@ -2368,7 +2428,7 @@ namespace OnScreenKeyboard
             var p05 = P("zit", "", false);
             _assert(AllLower(p05),                  "05: all lowercase");
             _assert(Contains(p05, "in"),            "05: 'in' (next-word of zit)");
-            _assert(Contains(p05, "ook"),           "05: 'ook' in list");
+            _assert(Contains(p05, "de"),            "05: 'de' in list");
 
             // ════════════════════════════════════════════════════════
             // 6. COMMA — no sentence start after comma
@@ -2376,7 +2436,7 @@ namespace OnScreenKeyboard
             _section("[06] After 'mat,' — comma does NOT trigger sentence start");
             var p06 = P("mat", "", false);
             _assert(AllLower(p06),                  "06: still lowercase after comma");
-            _assert(Contains(p06, "de"),            "06: 'de' in list");
+            _assert(Contains(p06, "en"),            "06: 'en' in list");
             _assert(!AllUpper(p06),                 "06: not capitalised after comma");
 
             // ════════════════════════════════════════════════════════
@@ -2439,7 +2499,7 @@ namespace OnScreenKeyboard
             _assert(AllLower(p13),                  "13: all lowercase");
             _assert(Contains(p13, "de"),            "13: 'de' in list");
             _assert(Contains(p13, "je"),            "13: 'je' (next-word of wil)");
-            _assert(Contains(p13, "niet"),          "13: 'niet' in list");
+            _assert(Contains(p13, "ook"),           "13: 'ook' in list");
 
             // ════════════════════════════════════════════════════════
             // 14. AFTER 'graag' — second words (after comma)
@@ -2520,11 +2580,11 @@ namespace OnScreenKeyboard
             // ════════════════════════════════════════════════════════
             _section("[22] Proper nouns NOT in DB — never predicted");
             var p22a = P("", "", true);
-            _assert(!Contains(p22a, "Emma"),        "22: 'Emma' never predicted");
+            _assert(!Contains(p22a, "Emmeline"),    "22: 'Emmeline' never predicted");
             _assert(!Contains(p22a, "Filemon"),     "22: 'Filemon' never predicted");
             _assert(!Contains(p22a, "Lovis"),       "22: 'Lovis' never predicted");
             var p22b = P("ik", "Em", false);
-            _assert(!Contains(p22b, "Emma"),        "22: 'Emma' not in prefix 'Em' list");
+            _assert(!Contains(p22b, "Emmeline"),    "22: 'Emmeline' not in prefix 'Em' list");
             var p22c = P("ik", "Fi", false);
             _assert(!Contains(p22c, "Filemon"),     "22: 'Filemon' not in prefix 'Fi' list");
 
@@ -2563,7 +2623,7 @@ namespace OnScreenKeyboard
             var p25 = P("sleutel", "", false);
             _assert(HasN(p25, 7),                   "25: always 7 predictions (first-words fill gaps)");
             _assert(AllLower(p25),                  "25: all lowercase");
-            _assert(Contains(p25, "de"),            "25: 'de' (freq=269) in fallback list");
+            _assert(Contains(p25, "in"),            "25: 'in' (next-word of sleutel) in list");
 
             // ════════════════════════════════════════════════════════
             // 26. AFTER 'kunnen' — second words
@@ -2657,9 +2717,9 @@ namespace OnScreenKeyboard
             // 35. NAMES NOT IN DB — Sofie, Robbe, Axel, Bavo, Fien
             // ════════════════════════════════════════════════════════
             _section("[35] Names NOT in DB — never predicted even with prefix");
-            _assert(!Contains(P("en", "So", false), "Sofie"),   "35: 'Sofie' never predicted");
+            _assert(!Contains(P("en", "So", false), "Sophronia"), "35: 'Sophronia' never predicted");
             _assert(!Contains(P("en", "Ro", false), "Robbe"),   "35: 'Robbe' never predicted");
-            _assert(!Contains(P("en", "Ax", false), "Axel"),    "35: 'Axel' never predicted");
+            _assert(!Contains(P("en", "Ax", false), "Axmed"),   "35: 'Axmed' never predicted");
             _assert(!Contains(P("en", "Ba", false), "Bavo"),    "35: 'Bavo' never predicted");
             _assert(!Contains(P("en", "Fi", false), "Fien"),    "35: 'Fien' never predicted");
         }
@@ -2682,11 +2742,11 @@ namespace OnScreenKeyboard
         public static void Run(Action<bool, string> assert, Action<string> section)
         {
             string dbPath = System.IO.Path.Combine(
-                AppDomain.CurrentDomain.BaseDirectory, "worddb.xml");
+                AppDomain.CurrentDomain.BaseDirectory, "worddb.wfq");
             if (!System.IO.File.Exists(dbPath))
             {
                 Console.ForegroundColor = ConsoleColor.DarkYellow;
-                Console.WriteLine("  (worddb.xml not found — e2e prediction tests skipped)");
+                Console.WriteLine("  (worddb.wfq not found — e2e prediction tests skipped)");
                 Console.ResetColor();
                 return;
             }
@@ -3136,15 +3196,16 @@ namespace OnScreenKeyboard
             Assert(!ReferenceEquals(ws, wsc),"WindowState.Clone: new object");
 
             // ── LayoutMeta.Clone() ────────────────────────────────────
-            var m = new LayoutMeta { Language = "nl", StickyModifiers = false, GearRow = 3, GearCol = 5, LastFile = "test.xml", SlowKeysMs = 400, DwellMs = 1200 };
+            var m = new LayoutMeta { Language = "nl", StickyModifiers = false, GearRow = 3, GearCol = 5, LastFile = "test.kbl", SlowKeysMs = 400, DwellMs = 1200, WordDatabase = "worddb_NL.wfq" };
             var mc = m.Clone();
-            Assert(mc.Language        == "nl",      "LayoutMeta.Clone: Language");
-            Assert(mc.StickyModifiers == false,     "LayoutMeta.Clone: StickyModifiers");
-            Assert(mc.GearRow         == 3,         "LayoutMeta.Clone: GearRow");
-            Assert(mc.GearCol         == 5,         "LayoutMeta.Clone: GearCol");
-            Assert(mc.LastFile        == "test.xml","LayoutMeta.Clone: LastFile");
-            Assert(mc.SlowKeysMs      == 400,       "LayoutMeta.Clone: SlowKeysMs");
-            Assert(mc.DwellMs         == 1200,      "LayoutMeta.Clone: DwellMs");
+            Assert(mc.Language        == "nl",               "LayoutMeta.Clone: Language");
+            Assert(mc.StickyModifiers == false,              "LayoutMeta.Clone: StickyModifiers");
+            Assert(mc.GearRow         == 3,                  "LayoutMeta.Clone: GearRow");
+            Assert(mc.GearCol         == 5,                  "LayoutMeta.Clone: GearCol");
+            Assert(mc.LastFile        == "test.kbl",         "LayoutMeta.Clone: LastFile");
+            Assert(mc.SlowKeysMs      == 400,                "LayoutMeta.Clone: SlowKeysMs");
+            Assert(mc.DwellMs         == 1200,               "LayoutMeta.Clone: DwellMs");
+            Assert(mc.WordDatabase    == "worddb_NL.wfq",    "LayoutMeta.Clone: WordDatabase");
             Assert(!ReferenceEquals(m, mc),         "LayoutMeta.Clone: new object");
             mc.GearRow = 99;
             Assert(m.GearRow == 3, "LayoutMeta.Clone: mutation independent");
@@ -3383,7 +3444,7 @@ namespace OnScreenKeyboard
 
             // ── 5. XML round-trip — raw braced values survive save + load ─
             string xmlTmp = System.IO.Path.Combine(
-                System.IO.Path.GetTempPath(), $"osk_sendstrip_{Guid.NewGuid():N}.xml");
+                System.IO.Path.GetTempPath(), $"osk_sendstrip_{Guid.NewGuid():N}.kbl");
             try
             {
                 var gl     = new GridLayout(1, 1);
@@ -3695,7 +3756,7 @@ namespace OnScreenKeyboard
         {
             Section("Slow keys & dwell click — XML round-trip, clamping, CopyFrom");
 
-            string tmp = Path.Combine(Path.GetTempPath(), $"osk_slowdwell_{Guid.NewGuid():N}.xml");
+            string tmp = Path.Combine(Path.GetTempPath(), $"osk_slowdwell_{Guid.NewGuid():N}.kbl");
             try
             {
                 var layout = new GridLayout(1, 1);
@@ -3738,15 +3799,17 @@ namespace OnScreenKeyboard
                 File.WriteAllText(tmp, xmlAbsent);
                 var loadedAbsent = new LayoutMeta();
                 SettingsManager.LoadSettings(new VisualTheme(), new WindowState(), loadedAbsent, tmp);
-                Assert(loadedAbsent.SlowKeysMs == 0, "SlowKeysMs defaults to 0 when absent");
-                Assert(loadedAbsent.DwellMs    == 0, "DwellMs defaults to 0 when absent");
+                Assert(loadedAbsent.SlowKeysMs   == 0,  "SlowKeysMs defaults to 0 when absent");
+                Assert(loadedAbsent.DwellMs      == 0,  "DwellMs defaults to 0 when absent");
+                Assert(loadedAbsent.WordDatabase == "",  "WordDatabase defaults to empty when absent");
 
-                // ── CopyFrom propagates both fields ───────────────────────────
-                var src  = new LayoutMeta { SlowKeysMs = 600, DwellMs = 2000 };
+                // ── CopyFrom propagates WordDatabase ─────────────────────────
+                var src  = new LayoutMeta { SlowKeysMs = 600, DwellMs = 2000, WordDatabase = "my_nl.wfq" };
                 var dst  = new LayoutMeta();
                 dst.CopyFrom(src);
-                Assert(dst.SlowKeysMs == 600,  "LayoutMeta.CopyFrom: SlowKeysMs");
-                Assert(dst.DwellMs    == 2000, "LayoutMeta.CopyFrom: DwellMs");
+                Assert(dst.SlowKeysMs  == 600,          "LayoutMeta.CopyFrom: SlowKeysMs");
+                Assert(dst.DwellMs     == 2000,          "LayoutMeta.CopyFrom: DwellMs");
+                Assert(dst.WordDatabase == "my_nl.wfq", "LayoutMeta.CopyFrom: WordDatabase");
                 src.SlowKeysMs = 1;
                 Assert(dst.SlowKeysMs == 600, "LayoutMeta.CopyFrom: mutation independent");
             }
@@ -4087,6 +4150,154 @@ namespace OnScreenKeyboard
             using var pen = new Pen(Color.Blue, 1f);
             Assert(br  is IDisposable, "SolidBrush is IDisposable — safe to allocate with 'using' in Paint");
             Assert(pen is IDisposable, "Pen is IDisposable — safe to allocate with 'using' in Paint");
+        }
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// LanguageRegistryTests
+//
+// Covers:
+//   • empty / missing folder → empty list
+//   • databases grouped and counted by language
+//   • GetForLanguage returns the right subset
+//   • Languages property returns distinct sorted codes
+//   • base files sort before personal copies
+//   • alphabetical sort within each group
+//   • DisplayName equals filename without extension
+//   • corrupt / unreadable files are skipped gracefully
+//   • language code matching is case-insensitive
+// ════════════════════════════════════════════════════════════════════════════
+
+namespace OnScreenKeyboard
+{
+    public static class LanguageRegistryTests
+    {
+        public static void Run(Action<bool, string> assert, Action<string> section)
+        {
+            section("LanguageRegistry — basic scanning");
+
+            string dir = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(), $"osk_lreg_{Guid.NewGuid():N}");
+            System.IO.Directory.CreateDirectory(dir);
+
+            try
+            {
+                // ── Helper: write a minimal .wfq file ─────────────────────────
+                void WriteWfq(string name, string language, bool isPersonal)
+                {
+                    string personal = isPersonal ? "true" : "false";
+                    System.IO.File.WriteAllText(
+                        System.IO.Path.Combine(dir, name),
+                        $"<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n" +
+                        $"<WordDatabase version=\"1\" language=\"{language}\" isPersonal=\"{personal}\">\r\n" +
+                        $"  <Candidates />\r\n" +
+                        $"  <Word value=\"test\" frequency=\"1\" />\r\n" +
+                        $"</WordDatabase>",
+                        System.Text.Encoding.UTF8);
+                }
+
+                // ── Missing folder ─────────────────────────────────────────────
+                section("LanguageRegistry — missing folder");
+                var reg0 = new LanguageRegistry(System.IO.Path.Combine(dir, "nonexistent"));
+                assert(reg0.All.Count == 0,        "missing folder: All is empty");
+                assert(reg0.Languages.Count == 0,  "missing folder: Languages is empty");
+
+                // ── Empty folder ───────────────────────────────────────────────
+                section("LanguageRegistry — empty folder");
+                var reg1 = new LanguageRegistry(dir);
+                assert(reg1.All.Count == 0,        "empty folder: All is empty");
+
+                // ── Populate folder ────────────────────────────────────────────
+                WriteWfq("worddb_NL.wfq",          "nl",  false);
+                WriteWfq("worddb_NL_children.wfq", "nl",  false);
+                WriteWfq("worddb_EN.wfq",           "en",  false);
+                WriteWfq("my_nl_personal.wfq",      "nl",  true);
+
+                section("LanguageRegistry — populated folder");
+                var reg = new LanguageRegistry(dir);
+
+                assert(reg.All.Count == 4,         "4 databases found");
+
+                // ── GetForLanguage ─────────────────────────────────────────────
+                section("LanguageRegistry — GetForLanguage");
+                var nl = reg.GetForLanguage("nl");
+                var en = reg.GetForLanguage("en");
+                var de = reg.GetForLanguage("de");
+
+                assert(nl.Count == 3,              "3 Dutch databases");
+                assert(en.Count == 1,              "1 English database");
+                assert(de.Count == 0,              "0 German databases");
+
+                // Case-insensitive lookup
+                assert(reg.GetForLanguage("NL").Count == 3, "GetForLanguage NL (uppercase) = 3");
+                assert(reg.GetForLanguage("EN").Count == 1, "GetForLanguage EN (uppercase) = 1");
+
+                // ── Languages list ─────────────────────────────────────────────
+                section("LanguageRegistry — Languages list");
+                var langs = reg.Languages;
+                assert(langs.Count == 2,           "2 distinct language codes");
+                assert(langs.Contains("en"),       "Languages contains 'en'");
+                assert(langs.Contains("nl"),       "Languages contains 'nl'");
+
+                // ── Sort order: base before personal ───────────────────────────
+                section("LanguageRegistry — sort order");
+                var nlList = reg.GetForLanguage("nl");
+                // Base files: worddb_NL, worddb_NL_children (alphabetical)
+                // Personal:   my_nl_personal
+                assert(!nlList[0].IsPersonal,      "nl[0] is a base file");
+                assert(!nlList[1].IsPersonal,      "nl[1] is a base file");
+                assert( nlList[2].IsPersonal,      "nl[2] is the personal copy");
+                // Alphabetical within base group
+                assert(string.Compare(nlList[0].DisplayName, nlList[1].DisplayName,
+                       StringComparison.OrdinalIgnoreCase) < 0,
+                       "base files are alphabetically ordered");
+
+                // ── DisplayName ────────────────────────────────────────────────
+                section("LanguageRegistry — DisplayName");
+                var nlBase = nlList.First(d => !d.IsPersonal &&
+                    d.DisplayName.Equals("worddb_NL", StringComparison.OrdinalIgnoreCase));
+                assert(nlBase != null,             "worddb_NL base found");
+                assert(nlBase.DisplayName == "worddb_NL", "DisplayName = filename without extension");
+                assert(nlBase.Language == "nl",    "Language = nl");
+                assert(!nlBase.IsPersonal,         "IsPersonal = false");
+
+                // ── Personal file properties ───────────────────────────────────
+                section("LanguageRegistry — personal file properties");
+                var personal = nlList.First(d => d.IsPersonal);
+                assert(personal.IsPersonal,        "personal: IsPersonal = true");
+                assert(personal.Language == "nl",  "personal: Language = nl");
+                assert(personal.DisplayName == "my_nl_personal", "personal: DisplayName correct");
+
+                // ── Corrupt file is skipped ────────────────────────────────────
+                section("LanguageRegistry — corrupt file skipped");
+                string corrupt = System.IO.Path.Combine(dir, "corrupt.wfq");
+                System.IO.File.WriteAllText(corrupt, "<<< not xml >>>",
+                    System.Text.Encoding.UTF8);
+                var regWithCorrupt = new LanguageRegistry(dir);
+                assert(regWithCorrupt.All.Count == 4, "corrupt file skipped; 4 valid databases remain");
+
+                // ── File without language attribute (legacy format) ────────────
+                section("LanguageRegistry — legacy file (no language attribute)");
+                string legacy = System.IO.Path.Combine(dir, "legacy.wfq");
+                System.IO.File.WriteAllText(legacy,
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n" +
+                    "<WordDatabase>\r\n" +
+                    "  <Word value=\"hallo\" frequency=\"1\" />\r\n" +
+                    "</WordDatabase>",
+                    System.Text.Encoding.UTF8);
+                var regWithLegacy = new LanguageRegistry(dir);
+                assert(regWithLegacy.All.Count == 5, "legacy file included; 5 databases total");
+                var legacy1 = regWithLegacy.All.First(d =>
+                    d.DisplayName.Equals("legacy", StringComparison.OrdinalIgnoreCase));
+                assert(legacy1 != null,                    "legacy database found");
+                assert(legacy1.Language == string.Empty,   "legacy: Language = empty string");
+                assert(!legacy1.IsPersonal,                "legacy: IsPersonal = false");
+            }
+            finally
+            {
+                try { System.IO.Directory.Delete(dir, recursive: true); } catch { }
+            }
         }
     }
 }
