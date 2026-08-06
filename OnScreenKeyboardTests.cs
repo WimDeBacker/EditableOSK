@@ -2316,6 +2316,233 @@ namespace OnScreenKeyboard
             {
                 if (System.IO.File.Exists(wfqPath)) System.IO.File.Delete(wfqPath);
             }
+
+            // ── WordCount ─────────────────────────────────────────────────────
+            section("WordDatabase — WordCount");
+
+            string wcPath = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(), $"osk_wc_{Guid.NewGuid():N}.wfq");
+            try
+            {
+                // 3-word database
+                System.IO.File.WriteAllText(wcPath,
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n" +
+                    "<WordDatabase version=\"1\" language=\"nl\" isPersonal=\"false\">\r\n" +
+                    "  <Word value=\"de\" frequency=\"100\"><Next value=\"beste\" frequency=\"5\" /></Word>\r\n" +
+                    "  <Word value=\"het\" frequency=\"80\" />\r\n" +
+                    "  <Word value=\"een\" frequency=\"70\" />\r\n" +
+                    "</WordDatabase>",
+                    System.Text.Encoding.UTF8);
+                WordDatabase.Load(wcPath);
+                assert(WordDatabase.WordCount == 3,  "WordCount: 3 after 3-word load");
+
+                // Reload with 1-word database — count updates
+                System.IO.File.WriteAllText(wcPath,
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n" +
+                    "<WordDatabase version=\"1\" language=\"en\" isPersonal=\"false\">\r\n" +
+                    "  <Word value=\"the\" frequency=\"500\" />\r\n" +
+                    "</WordDatabase>",
+                    System.Text.Encoding.UTF8);
+                WordDatabase.Load(wcPath);
+                assert(WordDatabase.WordCount == 1,  "WordCount: 1 after reload with 1-word file");
+                assert(WordDatabase.IsLoaded,         "WordCount: IsLoaded after reload");
+
+                // After a failed reload the snapshot is unchanged — WordCount
+                // reflects the last successful load, not zero.
+                WordDatabase.Load("nonexistent_wc_xyz.wfq");
+                assert(!WordDatabase.IsLoaded,        "WordCount: IsLoaded=false after failed reload");
+                assert(WordDatabase.WordCount == 1,   "WordCount: unchanged (from last good snapshot) after failed reload");
+            }
+            finally
+            {
+                if (System.IO.File.Exists(wcPath)) System.IO.File.Delete(wcPath);
+            }
+
+            // ── IsLoading flag and Loaded event ───────────────────────────────
+            section("WordDatabase — IsLoading and Loaded event");
+
+            string evPath = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(), $"osk_ev_{Guid.NewGuid():N}.wfq");
+            try
+            {
+                System.IO.File.WriteAllText(evPath,
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n" +
+                    "<WordDatabase version=\"1\" language=\"nl\" isPersonal=\"false\">\r\n" +
+                    "  <Word value=\"hallo\" frequency=\"10\" />\r\n" +
+                    "</WordDatabase>",
+                    System.Text.Encoding.UTF8);
+
+                int  firedCount      = 0;
+                bool loadingAtFire   = true;   // will be set inside handler
+                bool loadedAtFire    = false;
+                int  wordCountAtFire = -1;
+
+                Action handler = () =>
+                {
+                    firedCount++;
+                    loadingAtFire   = WordDatabase.IsLoading;
+                    loadedAtFire    = WordDatabase.IsLoaded;
+                    wordCountAtFire = WordDatabase.WordCount;
+                };
+                WordDatabase.Loaded += handler;
+                try
+                {
+                    // Successful synchronous load — event must fire exactly once
+                    WordDatabase.Load(evPath);
+                    assert(firedCount == 1,       "Loaded: fires once on success");
+                    assert(!loadingAtFire,         "Loaded: IsLoading=false when event fires");
+                    assert(loadedAtFire,           "Loaded: IsLoaded=true when event fires");
+                    assert(wordCountAtFire == 1,   "Loaded: WordCount correct when event fires");
+
+                    // State after synchronous load
+                    assert(!WordDatabase.IsLoading, "IsLoading: false after synchronous load");
+                    assert(WordDatabase.IsLoaded,   "IsLoaded: true after successful load");
+
+                    // Failed load — event must NOT fire
+                    WordDatabase.Load("nonexistent_ev_xyz.wfq");
+                    assert(firedCount == 1,         "Loaded: not fired on failure");
+                    assert(!WordDatabase.IsLoading, "IsLoading: false after failed load");
+                    assert(!WordDatabase.IsLoaded,  "IsLoaded: false after failed load");
+
+                    // Second successful load — fires again
+                    WordDatabase.Load(evPath);
+                    assert(firedCount == 2,         "Loaded: fires again on second success");
+                }
+                finally
+                {
+                    WordDatabase.Loaded -= handler;
+                }
+            }
+            finally
+            {
+                if (System.IO.File.Exists(evPath)) System.IO.File.Delete(evPath);
+            }
+
+            // ── Sequential reload replaces previous snapshot ──────────────────
+            section("WordDatabase — sequential reload");
+
+            string reloadNL = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(), $"osk_rnl_{Guid.NewGuid():N}.wfq");
+            string reloadEN = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(), $"osk_ren_{Guid.NewGuid():N}.wfq");
+            try
+            {
+                System.IO.File.WriteAllText(reloadNL,
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n" +
+                    "<WordDatabase version=\"1\" language=\"nl\" isPersonal=\"false\">\r\n" +
+                    "  <Word value=\"de\" frequency=\"100\"><Next value=\"beste\" frequency=\"5\" /></Word>\r\n" +
+                    "  <Word value=\"het\" frequency=\"80\" />\r\n" +
+                    "</WordDatabase>",
+                    System.Text.Encoding.UTF8);
+                System.IO.File.WriteAllText(reloadEN,
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n" +
+                    "<WordDatabase version=\"1\" language=\"en\" isPersonal=\"false\">\r\n" +
+                    "  <Word value=\"the\" frequency=\"500\"><Next value=\"best\" frequency=\"10\" /></Word>\r\n" +
+                    "  <Word value=\"a\" frequency=\"400\" />\r\n" +
+                    "  <Word value=\"of\" frequency=\"300\" />\r\n" +
+                    "</WordDatabase>",
+                    System.Text.Encoding.UTF8);
+
+                // Load NL
+                WordDatabase.Load(reloadNL);
+                assert(WordDatabase.Language   == "nl", "reload: first load language=nl");
+                assert(WordDatabase.WordCount  == 2,    "reload: first load WordCount=2");
+                assert(WordDatabase.IsLoaded,            "reload: IsLoaded after first load");
+                assert(WordDatabase.LoadError  == null,  "reload: no error after first load");
+
+                var nlPreds = WordDatabase.GetPredictions("", "d", false, 5);
+                assert(nlPreds.Contains("de"),          "reload: NL word 'de' predicted");
+
+                // Reload with EN — replaces NL data
+                WordDatabase.Load(reloadEN);
+                assert(WordDatabase.Language   == "en", "reload: second load language=en");
+                assert(WordDatabase.WordCount  == 3,    "reload: second load WordCount=3");
+                assert(WordDatabase.IsLoaded,            "reload: IsLoaded after second load");
+                assert(WordDatabase.LoadError  == null,  "reload: no error after second load");
+
+                // NL word gone, EN word present
+                var enPreds = WordDatabase.GetPredictions("", "t", false, 5);
+                assert(enPreds.Contains("the"),         "reload: EN word 'the' predicted after reload");
+                var oldNlPreds = WordDatabase.GetPredictions("", "d", false, 5);
+                // 'de' is not in the EN database, so it should not appear
+                assert(!oldNlPreds.Contains("de"),      "reload: NL word 'de' absent after EN reload");
+            }
+            finally
+            {
+                if (System.IO.File.Exists(reloadNL)) System.IO.File.Delete(reloadNL);
+                if (System.IO.File.Exists(reloadEN)) System.IO.File.Delete(reloadEN);
+            }
+
+            // ── Concurrent load stability ─────────────────────────────────────
+            section("WordDatabase — concurrent load stability");
+
+            string concNL = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(), $"osk_cnl_{Guid.NewGuid():N}.wfq");
+            string concEN = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(), $"osk_cen_{Guid.NewGuid():N}.wfq");
+            try
+            {
+                System.IO.File.WriteAllText(concNL,
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n" +
+                    "<WordDatabase version=\"1\" language=\"nl\" isPersonal=\"false\">\r\n" +
+                    "  <Word value=\"de\" frequency=\"100\" />\r\n" +
+                    "  <Word value=\"het\" frequency=\"80\" />\r\n" +
+                    "</WordDatabase>",
+                    System.Text.Encoding.UTF8);
+                System.IO.File.WriteAllText(concEN,
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n" +
+                    "<WordDatabase version=\"1\" language=\"en\" isPersonal=\"false\">\r\n" +
+                    "  <Word value=\"the\" frequency=\"500\" />\r\n" +
+                    "  <Word value=\"a\"   frequency=\"400\" />\r\n" +
+                    "</WordDatabase>",
+                    System.Text.Encoding.UTF8);
+
+                // Fire both loads simultaneously; wait for both to finish.
+                // We cannot predict which wins — but the final state must be
+                // self-consistent: IsLoaded, !IsLoading, Language from one of
+                // the two files, WordCount > 0, GetPredictions does not throw.
+                var t1 = System.Threading.Tasks.Task.Run(() => WordDatabase.Load(concNL));
+                var t2 = System.Threading.Tasks.Task.Run(() => WordDatabase.Load(concEN));
+                System.Threading.Tasks.Task.WaitAll(t1, t2);
+
+                assert(!WordDatabase.IsLoading,
+                    "concurrent: IsLoading=false after both tasks complete");
+                assert(WordDatabase.IsLoaded,
+                    "concurrent: IsLoaded=true after both tasks complete");
+                assert(WordDatabase.Language == "nl" || WordDatabase.Language == "en",
+                    "concurrent: Language is from one of the two loads");
+                assert(WordDatabase.WordCount > 0,
+                    "concurrent: WordCount > 0 after both loads");
+                assert(WordDatabase.LoadError == null,
+                    "concurrent: no LoadError after successful concurrent loads");
+
+                var concPreds = WordDatabase.GetPredictions("", "", false, 3);
+                assert(concPreds != null,
+                    "concurrent: GetPredictions returns non-null");
+
+                // Run a third batch of 10 concurrent loads to stress the
+                // generation counter — no crash, stable state at the end.
+                var tasks = new System.Threading.Tasks.Task[10];
+                for (int i = 0; i < 10; i++)
+                {
+                    string p = (i % 2 == 0) ? concNL : concEN;
+                    tasks[i] = System.Threading.Tasks.Task.Run(() => WordDatabase.Load(p));
+                }
+                System.Threading.Tasks.Task.WaitAll(tasks);
+
+                assert(!WordDatabase.IsLoading,
+                    "concurrent stress: IsLoading=false after 10 parallel loads");
+                assert(WordDatabase.IsLoaded,
+                    "concurrent stress: IsLoaded=true after 10 parallel loads");
+                var stressPreds = WordDatabase.GetPredictions("", "", false, 3);
+                assert(stressPreds != null,
+                    "concurrent stress: GetPredictions does not throw");
+            }
+            finally
+            {
+                if (System.IO.File.Exists(concNL)) System.IO.File.Delete(concNL);
+                if (System.IO.File.Exists(concEN)) System.IO.File.Delete(concEN);
+            }
         }
     }
 

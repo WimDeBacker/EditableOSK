@@ -1,0 +1,40 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build *)",
+      "Bash(start \"\" \"C:\\\\keyboard\\\\0420\\\\bin\\\\Debug\\\\net10.0-windows\\\\OnScreenKeyboard.exe\")",
+      "Bash(taskkill /IM OnScreenKeyboard.exe /F)",
+      "Skill(update-config)",
+      "Skill(update-config:*)",
+      "Bash(dotnet run *)",
+      "Bash(dotnet test *)",
+      "Bash(grep -v \"^$\")",
+      "Bash(python3 -c ' *)",
+      "Bash(Copy-Item \"C:\\\\keyboard\\\\0420\\\\math.xml\" \"C:\\\\keyboard\\\\0420\\\\bin\\\\Debug\\\\net10.0-windows\\\\math.xml\" -Force)",
+      "PowerShell(Copy-Item \"C:\\\\keyboard\\\\0420\\\\math.xml\" \"C:\\\\keyboard\\\\0420\\\\bin\\\\Debug\\\\net10.0-windows\\\\math.xml\" -Force)",
+      "Bash(findstr /C:\"✘\" /C:\"FAILED\" /C:\"StyleGroups\")",
+      "Bash(Select-String \"✘|FAILED|StyleGroups\")",
+      "Bash(taskkill /F /IM OnScreenKeyboard.exe)",
+      "Bash(cd /d C:\\\\keyboard\\\\0420)",
+      "Bash(findstr /n \"Variant\" KeyboardEditorForm.cs KeyEditorForm.cs GroupEditorForm.cs)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(Get-Content \"C:\\\\keyboard\\\\0420\\\\FluentTheme.cs\" -Raw)",
+      "Bash(ls \"C:\\\\claude-config\\\\\")",
+      "Bash(ls \"C:\\\\claude-config\\\\\" )",
+      "Bash(git -C C:\\\\keyboard\\\\0420 diff HEAD~1 HEAD)",
+      "Bash(git diff *)",
+      "Bash(echo \"exit:$?\")",
+      "Bash(Get-Content KeyEditorForm.cs, GroupEditorForm.cs, KeyboardEditorForm.cs)",
+      "Bash(Select-String -Pattern \"RadioButton|new Button\" -Context 1)",
+      "Bash(git -C \"C:\\\\keyboard\\\\0420\" worktree list)",
+      "Bash(git -C \"C:\\\\keyboard\\\\0420\" log --oneline claude/elastic-mclaren-d141c0..master)",
+      "Bash(git -C \"C:\\\\keyboard\\\\0420\" log --oneline master..claude/elastic-mclaren-d141c0)",
+      "Bash(sort -t'\"' -k1,1n -k3,3n)",
+      "Bash(Get-Content C:\\\\keyboard\\\\0420\\\\WordDatabase.cs)",
+      "Bash(dir C:\\\\keyboard\\\\0420\\\\worddb_EN.xml)",
+      "Bash(git rm *)",
+      "Bash(sort -k5 -rn)"
+    ]
+  }
+}
