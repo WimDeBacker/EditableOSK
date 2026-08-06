@@ -2427,8 +2427,12 @@ namespace OnScreenKeyboard
 
         /// <summary>
         /// Called by <see cref="WordDatabase.Loaded"/> from the background thread
-        /// when a database finishes loading.  Marshals back to the UI thread and
-        /// refreshes the word-prediction cells.
+        /// when a database finishes loading.  Marshals back to the UI thread,
+        /// recomputes predictions (the initial <see cref="WordPredictor.OnSentenceStart"/>
+        /// call at startup usually runs before this background load finishes and
+        /// therefore caches empty predictions — this is what makes them "catch up"
+        /// without waiting for the next keystroke), and refreshes the word-prediction
+        /// cells.
         /// </summary>
         private void OnWordDatabaseLoaded()
         {
@@ -2436,7 +2440,7 @@ namespace OnScreenKeyboard
             // Wrap BeginInvoke: the form can be disposed between the guard above
             // and the actual call if the UI thread is tearing down concurrently
             // (finding #1).
-            try { BeginInvoke((Action)ApplyWPTags); }
+            try { BeginInvoke((Action)(() => { _predictor.RefreshNow(); ApplyWPTags(); })); }
             catch (InvalidOperationException) { }
         }
 

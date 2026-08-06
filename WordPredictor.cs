@@ -234,6 +234,14 @@ namespace OnScreenKeyboard
         }
 
         /// <summary>
+        /// Recomputes predictions for the current typing state without touching
+        /// sentence-start tracking. Call after the word database finishes loading
+        /// in the background, so predictions become available immediately instead
+        /// of waiting for the next keystroke to trigger a recompute.
+        /// </summary>
+        public void RefreshNow() => RefreshPredictions();
+
+        /// <summary>
         /// Notifies the predictor that a key has just been sent to the target
         /// application.  This is the main entry point — call it after every
         /// key press so the predictor can keep its state in sync with what
