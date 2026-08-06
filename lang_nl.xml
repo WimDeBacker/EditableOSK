@@ -271,22 +271,25 @@
 
   <!-- Word prediction database UI -->
   <String key="wp: Word prediction"      value="Woordvoorspelling" />
+  <String key="wp: Remember typed words" value="Getypte woorden onthouden" />
+  <String key="wp: tip remember"         value="Onthoud de woorden en woordparen die je typt, zodat vaak gebruikte woorden sneller worden voorgesteld. Op elk moment uit te zetten voor privacy." />
+  <String key="wp: learning on"          value="onthoudt woorden" />
+  <String key="wp: learning off"         value="onthoudt geen woorden" />
   <String key="wp: Database"             value="Database" />
   <String key="wp: Auto"                 value="(automatisch)" />
-  <String key="wp: Create copy…"         value="Persoonlijke kopie…" />
-  <String key="wp: Export…"             value="Exporteren…" />
-  <String key="wp: Save personal copy"   value="Persoonlijke kopie opslaan" />
-  <String key="wp: Export personal copy" value="Database exporteren" />
-  <String key="wp: Personal"             value="Persoonlijk" />
-  <String key="wp: Base"                 value="Standaard" />
+  <String key="wp: Export…"              value="Exporteren…" />
+  <String key="wp: Export learned words" value="Geleerde woorden exporteren" />
   <String key="wp: words"                value="woorden" />
   <String key="wp: No database loaded"   value="Geen database geladen" />
-  <String key="wp: Copy failed"          value="Kopie mislukt:" />
   <String key="wp: Export failed"        value="Exporteren mislukt:" />
-  <String key="wp: tip database"         value="Kies de woordendatabase voor dit toetsenbord. Kies een persoonlijk bestand (★) om woorden bij te leren." />
-  <String key="wp: tip create copy"      value="Maak een persoonlijke kopie van de geselecteerde database om woorden bij te leren." />
-  <String key="wp: tip export"            value="Exporteer de persoonlijke database naar een andere locatie (back-up of overzetten naar een andere pc)." />
-  <String key="wp: unsaved"              value="niet opgeslagen" />
+  <String key="wp: tip database"         value="Kies de woordendatabase voor dit toetsenbord." />
+  <String key="wp: tip export"           value="Exporteer de geleerde woorden naar een andere locatie (back-up of overzetten naar een andere pc)." />
+  <String key="wp: Candidates"           value="Kandidaten" />
+  <String key="wp: Promote"              value="Toevoegen" />
+  <String key="wp: Reject"               value="Verwijderen" />
+  <String key="wp: tip candidates"       value="Onbekende woorden die tijdens het typen zijn gezien, maar nog niet aan de woordenlijst zijn toegevoegd. Een woord wordt automatisch toegevoegd zodra het meer dan twee keer is getypt." />
+  <String key="wp: tip promote"          value="Voeg de geselecteerde kandidaat nu direct toe aan de woordenlijst, zonder te wachten tot het opnieuw wordt getypt." />
+  <String key="wp: tip reject"           value="Verwerp de geselecteerde kandidaat. Bij opnieuw typen wordt de teller weer vanaf nul opgebouwd." />
 
   <!-- Errors -->
   <String key="Save failed"         value="Opslaan mislukt:" />

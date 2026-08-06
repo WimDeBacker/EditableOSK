@@ -2261,34 +2261,34 @@ namespace OnScreenKeyboard
             assert(!threw, "WordPredictor.OnKeySent with no DB: no exception");
             assert(string.IsNullOrEmpty(predictor.Predictions[0]), "WordPredictor: predictions blank when DB not loaded");
 
-            // ── .wfq format: Language and IsPersonal properties ───────────
+            // ── .wfq format: Language property, legacy compatibility ─────
             section("WordDatabase — .wfq format metadata");
 
-            // Build a minimal valid .wfq with language + isPersonal attributes
             string wfqPath = System.IO.Path.Combine(
                 System.IO.Path.GetTempPath(), $"osk_wfq_{Guid.NewGuid():N}.wfq");
             try
             {
-                // Base file: isPersonal="false"
+                // Base file with a language attribute.
                 System.IO.File.WriteAllText(wfqPath,
                     "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n" +
-                    "<WordDatabase version=\"1\" language=\"nl\" isPersonal=\"false\">\r\n" +
-                    "  <Candidates />\r\n" +
+                    "<WordDatabase version=\"1\" language=\"nl\">\r\n" +
                     "  <Word value=\"de\" frequency=\"100\"><Next value=\"beste\" frequency=\"5\" /></Word>\r\n" +
                     "</WordDatabase>",
                     System.Text.Encoding.UTF8);
                 WordDatabase.Load(wfqPath);
                 assert(WordDatabase.IsLoaded,          "wfq base: IsLoaded = true");
                 assert(WordDatabase.Language == "nl",   "wfq base: Language = nl");
-                assert(!WordDatabase.IsPersonal,        "wfq base: IsPersonal = false");
                 var wfqPreds = WordDatabase.GetPredictions("", "d", false, 5);
                 assert(wfqPreds.Count > 0,              "wfq base: predictions work");
                 assert(wfqPreds.Contains("de"),         "wfq base: 'de' predicted");
 
-                // Personal file: isPersonal="true"
+                // A <Candidates> section inside the base file itself is not a
+                // thing any more (candidates live only in the companion
+                // overlay — see ApplyOverlay) and must be silently ignored if
+                // present, e.g. in a hand-edited or legacy file.
                 System.IO.File.WriteAllText(wfqPath,
                     "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n" +
-                    "<WordDatabase version=\"1\" language=\"en\" isPersonal=\"true\">\r\n" +
+                    "<WordDatabase version=\"1\" language=\"en\">\r\n" +
                     "  <Candidates>\r\n" +
                     "    <Candidate value=\"zonk\" count=\"1\" />\r\n" +
                     "  </Candidates>\r\n" +
@@ -2296,9 +2296,10 @@ namespace OnScreenKeyboard
                     "</WordDatabase>",
                     System.Text.Encoding.UTF8);
                 WordDatabase.Load(wfqPath);
-                assert(WordDatabase.IsLoaded,          "wfq personal: IsLoaded = true");
-                assert(WordDatabase.Language == "en",   "wfq personal: Language = en");
-                assert(WordDatabase.IsPersonal,         "wfq personal: IsPersonal = true");
+                assert(WordDatabase.IsLoaded,          "wfq with stray Candidates: IsLoaded = true");
+                assert(WordDatabase.Language == "en",   "wfq with stray Candidates: Language = en");
+                assert(!WordDatabase.GetCandidates().Any(c => c.Word == "zonk"),
+                    "wfq with stray Candidates: base file's own <Candidates> is ignored");
 
                 // Old format (no metadata attributes) — backward compat
                 System.IO.File.WriteAllText(wfqPath,
@@ -2310,11 +2311,12 @@ namespace OnScreenKeyboard
                 WordDatabase.Load(wfqPath);
                 assert(WordDatabase.IsLoaded,              "wfq legacy: IsLoaded = true");
                 assert(WordDatabase.Language == "",         "wfq legacy: Language = empty");
-                assert(!WordDatabase.IsPersonal,            "wfq legacy: IsPersonal = false");
             }
             finally
             {
                 if (System.IO.File.Exists(wfqPath)) System.IO.File.Delete(wfqPath);
+                if (System.IO.File.Exists(WordDatabase.GetOverlayPath(wfqPath)))
+                    System.IO.File.Delete(WordDatabase.GetOverlayPath(wfqPath));
             }
 
             // ── WordCount ─────────────────────────────────────────────────────
@@ -2542,6 +2544,298 @@ namespace OnScreenKeyboard
             {
                 if (System.IO.File.Exists(concNL)) System.IO.File.Delete(concNL);
                 if (System.IO.File.Exists(concEN)) System.IO.File.Delete(concEN);
+            }
+
+            // ── Learning engine — RecordWord, candidates, save/load round-trip ──
+            section("WordDatabase — learning engine (RecordWord)");
+
+            string learnPath = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(), $"osk_learn_{Guid.NewGuid():N}.wfq");
+            string learnOverlayPath = WordDatabase.GetOverlayPath(learnPath);
+            try
+            {
+                WordDatabase.LearningEnabled = true;
+                System.IO.File.WriteAllText(learnPath,
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n" +
+                    "<WordDatabase version=\"1\" language=\"nl\">\r\n" +
+                    "  <Word value=\"de\" frequency=\"100\"><Next value=\"beste\" frequency=\"5\" /></Word>\r\n" +
+                    "  <Word value=\"beste\" frequency=\"10\" />\r\n" +
+                    "</WordDatabase>",
+                    System.Text.Encoding.UTF8);
+                WordDatabase.Load(learnPath);
+                assert(WordDatabase.IsLoaded, "learn: database loaded");
+
+                // Known word: personal-use count increments immediately (kept
+                // separate from the base corpus Frequency — see WordDatabase's
+                // learning-engine remarks).
+                WordDatabase.RecordWord(null, "beste");
+                var predsAfterBump = WordDatabase.GetPredictions("", "beste", false, 5);
+                assert(predsAfterBump.Contains("beste"), "learn: bumped word still predicted");
+
+                // Bigram: previously unseen pair "de" -> "goede" gets added
+                // (personal-use count 1).
+                WordDatabase.RecordWord("de", "goede");
+                var afterNewPair = WordDatabase.GetPredictions("de", "", false, 5);
+                assert(afterNewPair.Contains("goede"),
+                    "learn: new word-pair appears in next-word predictions");
+
+                // Bigram: existing pair "de" -> "beste" gets bumped twice, so its
+                // personal-use count (2) clearly exceeds "goede"'s (1) — ranked
+                // first regardless of either pair's base Frequency.
+                WordDatabase.RecordWord("de", "beste");
+                WordDatabase.RecordWord("de", "beste");
+                var afterBump = WordDatabase.GetPredictions("de", "", false, 5);
+                assert(afterBump.Count >= 1 && afterBump[0] == "beste",
+                    "learn: pair with the higher personal-use count ranks first");
+
+                // Unknown word: buffered as a candidate, not yet promoted.
+                WordDatabase.RecordWord(null, "flarn");
+                WordDatabase.RecordWord(null, "flarn");
+                var candidatesAfter2 = WordDatabase.GetCandidates();
+                assert(candidatesAfter2.Any(c => c.Word == "flarn" && c.Count == 2),
+                    "learn: unknown word buffered as candidate after 2 occurrences");
+                var predsBeforePromotion = WordDatabase.GetPredictions("", "flarn", false, 5);
+                assert(!predsBeforePromotion.Contains("flarn"),
+                    "learn: candidate not yet predictable before promotion threshold");
+
+                // Third occurrence (count > 2) promotes it automatically.
+                WordDatabase.RecordWord(null, "flarn");
+                assert(!WordDatabase.GetCandidates().Any(c => c.Word == "flarn"),
+                    "learn: candidate removed from buffer after promotion");
+                var predsAfterPromotion = WordDatabase.GetPredictions("", "flarn", false, 5);
+                assert(predsAfterPromotion.Contains("flarn"),
+                    "learn: promoted word is now predictable");
+
+                // Manual promote / reject via the candidate-management API.
+                WordDatabase.RecordWord(null, "zult");
+                assert(WordDatabase.PromoteCandidate("zult"),
+                    "learn: PromoteCandidate succeeds for an existing candidate");
+                assert(WordDatabase.GetPredictions("", "zult", false, 5).Contains("zult"),
+                    "learn: manually-promoted word is predictable");
+                assert(!WordDatabase.PromoteCandidate("zult"),
+                    "learn: PromoteCandidate returns false once already promoted");
+
+                WordDatabase.RecordWord(null, "typo");
+                assert(WordDatabase.RemoveCandidate("typo"),
+                    "learn: RemoveCandidate succeeds for an existing candidate");
+                assert(!WordDatabase.GetCandidates().Any(c => c.Word == "typo"),
+                    "learn: rejected candidate no longer listed");
+                assert(!WordDatabase.RemoveCandidate("typo"),
+                    "learn: RemoveCandidate returns false when already gone");
+
+                // Save round-trip: personal-use counts, word-pairs, and
+                // remaining candidates all survive a save + reload. The save
+                // targets the small overlay file, never the base file itself.
+                assert(WordDatabase.IsDirty, "learn: IsDirty=true before save");
+                WordDatabase.SaveNow();
+                assert(!WordDatabase.IsDirty, "learn: IsDirty=false immediately after SaveNow");
+                assert(System.IO.File.Exists(learnOverlayPath),
+                    "learn: SaveNow writes the overlay file, not the base file");
+                string baseContentsAfterSave = System.IO.File.ReadAllText(learnPath);
+                assert(!baseContentsAfterSave.Contains("flarn"),
+                    "learn: the base file itself is never modified by saving");
+
+                WordDatabase.Load(learnPath);
+                assert(WordDatabase.IsLoaded, "learn: reload after save succeeds");
+                var reloadedPreds = WordDatabase.GetPredictions("", "flarn", false, 5);
+                assert(reloadedPreds.Contains("flarn"),
+                    "learn: promoted word survives save/reload round-trip (via overlay merge)");
+                var reloadedNext = WordDatabase.GetPredictions("de", "", false, 5);
+                assert(reloadedNext.Count >= 1 && reloadedNext[0] == "beste",
+                    "learn: word-pair personal-use count and order survive save/reload round-trip");
+                assert(!WordDatabase.GetCandidates().Any(c => c.Word == "flarn"),
+                    "learn: promoted word is not re-listed as a candidate after reload");
+            }
+            finally
+            {
+                if (System.IO.File.Exists(learnPath)) System.IO.File.Delete(learnPath);
+                if (System.IO.File.Exists(learnOverlayPath)) System.IO.File.Delete(learnOverlayPath);
+                if (System.IO.File.Exists(learnOverlayPath + ".bak")) System.IO.File.Delete(learnOverlayPath + ".bak");
+            }
+
+            // ── Learning engine — overlay merge at load time ──────────────────
+            // A hand-authored overlay file (as if written by a previous
+            // session's SaveNow) must be merged onto the base file at Load().
+            section("WordDatabase — overlay merge at load");
+
+            string mergeBasePath = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(), $"osk_merge_{Guid.NewGuid():N}.wfq");
+            string mergeOverlayPath = WordDatabase.GetOverlayPath(mergeBasePath);
+            try
+            {
+                WordDatabase.LearningEnabled = true;
+                System.IO.File.WriteAllText(mergeBasePath,
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n" +
+                    "<WordDatabase version=\"1\" language=\"nl\">\r\n" +
+                    "  <Word value=\"de\" frequency=\"100\"><Next value=\"beste\" frequency=\"5\" /></Word>\r\n" +
+                    "  <Word value=\"beste\" frequency=\"10\" />\r\n" +
+                    "</WordDatabase>",
+                    System.Text.Encoding.UTF8);
+                System.IO.File.WriteAllText(mergeOverlayPath,
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n" +
+                    "<WordDatabaseOverlay version=\"1\">\r\n" +
+                    "  <Candidates><Candidate value=\"flarnix\" count=\"2\" /></Candidates>\r\n" +
+                    "  <PersonalUse value=\"beste\" count=\"5\" />\r\n" +
+                    "  <NewWord value=\"zult\" frequency=\"3\" personalUse=\"3\">\r\n" +
+                    "    <Next value=\"fijn\" frequency=\"1\" personalUse=\"1\" />\r\n" +
+                    "  </NewWord>\r\n" +
+                    "  <PairUse word=\"de\" next=\"beste\" count=\"4\" />\r\n" +
+                    "  <NewPair word=\"de\" next=\"goedkoop\" frequency=\"1\" personalUse=\"1\" />\r\n" +
+                    "</WordDatabaseOverlay>",
+                    System.Text.Encoding.UTF8);
+
+                WordDatabase.Load(mergeBasePath);
+                assert(WordDatabase.IsLoaded, "merge: base+overlay loaded");
+                assert(WordDatabase.GetCandidates().Any(c => c.Word == "flarnix" && c.Count == 2),
+                    "merge: <Candidates> from the overlay populates the candidate buffer");
+                assert(WordDatabase.GetPredictions("", "zult", false, 5).Contains("zult"),
+                    "merge: <NewWord> becomes a real, predictable word");
+                assert(WordDatabase.GetPredictions("zult", "", false, 5).Contains("fijn"),
+                    "merge: a <NewWord>'s own <Next> children are usable for its bigrams");
+                var mergedDePreds = WordDatabase.GetPredictions("de", "", false, 5);
+                assert(mergedDePreds.Contains("goedkoop"),
+                    "merge: <NewPair> adds a brand-new word-pair to a base word");
+                assert(mergedDePreds[0] == "beste",
+                    "merge: <PersonalUse>/<PairUse> personal-use counts rank the base word/pair first");
+            }
+            finally
+            {
+                if (System.IO.File.Exists(mergeBasePath)) System.IO.File.Delete(mergeBasePath);
+                if (System.IO.File.Exists(mergeOverlayPath)) System.IO.File.Delete(mergeOverlayPath);
+            }
+
+            // ── Learning engine — personal-tier ranking cap ───────────────────
+            // Personally-used words may fill at most PersonalCap(count) slots —
+            // see WordDatabase.PersonalCap — so normal frequency suggestions are
+            // never fully crowded out. count=7 -> cap=6, leaving >=1 normal slot.
+            section("WordDatabase — personal-use ranking cap");
+
+            string capPath = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(), $"osk_cap_{Guid.NewGuid():N}.wfq");
+            string capOverlayPath = WordDatabase.GetOverlayPath(capPath);
+            try
+            {
+                WordDatabase.LearningEnabled = true;
+                var sb = new System.Text.StringBuilder();
+                sb.Append("<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n<WordDatabase version=\"1\" language=\"nl\">\r\n");
+                // 8 personally-usable words (p0..p7) all sharing prefix "p", plus
+                // one ordinary high-frequency word "plan" (never personally used)
+                // that must still appear given the guaranteed non-personal slot.
+                for (int i = 0; i < 8; i++)
+                    sb.Append($"  <Word value=\"p{i}\" frequency=\"{10 - i}\" />\r\n");
+                sb.Append("  <Word value=\"plan\" frequency=\"999999\" />\r\n");
+                sb.Append("</WordDatabase>");
+                System.IO.File.WriteAllText(capPath, sb.ToString(), System.Text.Encoding.UTF8);
+                WordDatabase.Load(capPath);
+                assert(WordDatabase.IsLoaded, "cap: database loaded");
+
+                for (int i = 0; i < 8; i++)
+                    WordDatabase.RecordWord(null, $"p{i}"); // each used exactly once
+
+                var capPreds = WordDatabase.GetPredictions("", "p", false, 7);
+                int personalCount = capPreds.Count(w => w != "plan");
+                assert(capPreds.Count == 7, "cap: fills all 7 requested slots");
+                assert(personalCount <= 6,
+                    "cap: personal-use tier never exceeds its cap (6 of 7 slots for count=7)");
+                assert(capPreds.Contains("plan"),
+                    "cap: at least one normal frequency-ranked suggestion always gets through");
+            }
+            finally
+            {
+                if (System.IO.File.Exists(capPath)) System.IO.File.Delete(capPath);
+                if (System.IO.File.Exists(capOverlayPath)) System.IO.File.Delete(capOverlayPath);
+                if (System.IO.File.Exists(capOverlayPath + ".bak")) System.IO.File.Delete(capOverlayPath + ".bak");
+            }
+
+            // ── Learning engine — disabled via LearningEnabled ────────────────
+            section("WordDatabase — learning disabled (LearningEnabled = false)");
+
+            string offPath = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(), $"osk_learnoff_{Guid.NewGuid():N}.wfq");
+            try
+            {
+                System.IO.File.WriteAllText(offPath,
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n" +
+                    "<WordDatabase version=\"1\" language=\"nl\">\r\n" +
+                    "  <Word value=\"de\" frequency=\"100\" />\r\n" +
+                    "</WordDatabase>",
+                    System.Text.Encoding.UTF8);
+                WordDatabase.Load(offPath);
+                assert(WordDatabase.IsLoaded, "learn off: database loaded");
+
+                WordDatabase.LearningEnabled = false;
+                WordDatabase.RecordWord(null, "nieuwwoord");
+                assert(!WordDatabase.GetCandidates().Any(),
+                    "learn off: RecordWord is a no-op while LearningEnabled = false");
+                assert(!WordDatabase.IsDirty,
+                    "learn off: database is never marked dirty while disabled");
+                WordDatabase.LearningEnabled = true; // restore default for subsequent tests
+            }
+            finally
+            {
+                if (System.IO.File.Exists(offPath)) System.IO.File.Delete(offPath);
+            }
+
+            // ── Learning engine — WordPredictor integration ───────────────────
+            // Verifies CompleteWord's sentence-start normalisation: a word
+            // auto-capitalised only because it opened a sentence must be
+            // recorded lowercase, while a genuine mid-sentence proper noun
+            // (deliberate Shift) keeps its capital.
+            section("WordDatabase — learning via WordPredictor (sentence-start normalisation)");
+
+            string predLearnPath = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(), $"osk_predlearn_{Guid.NewGuid():N}.wfq");
+            string predLearnOverlayPath = WordDatabase.GetOverlayPath(predLearnPath);
+            try
+            {
+                WordDatabase.LearningEnabled = true;
+                System.IO.File.WriteAllText(predLearnPath,
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n" +
+                    "<WordDatabase version=\"1\" language=\"nl\">\r\n" +
+                    "</WordDatabase>",
+                    System.Text.Encoding.UTF8);
+                WordDatabase.Load(predLearnPath);
+                assert(WordDatabase.IsLoaded, "learn/predictor: empty database loaded");
+
+                var learnPredictor = new WordPredictor(7);
+                learnPredictor.OnSentenceStart(); // matches KeyboardForm's Shown-time call
+
+                // Type "Hallo" at the very start of a sentence: 'H' arrives with
+                // shifted=true because the auto-capitalisation latch forces it —
+                // this must be learned as "hallo", not "Hallo". A single occurrence
+                // only reaches the candidate buffer (promotion needs >2), so check
+                // GetCandidates rather than GetPredictions here.
+                learnPredictor.OnKeySent("H", shifted: true);
+                learnPredictor.OnKeySent("a", shifted: false);
+                learnPredictor.OnKeySent("l", shifted: false);
+                learnPredictor.OnKeySent("l", shifted: false);
+                learnPredictor.OnKeySent("o", shifted: false);
+                learnPredictor.OnKeySent(" ", shifted: false); // completes the word
+
+                var candidatesAfterSentenceStart = WordDatabase.GetCandidates();
+                assert(candidatesAfterSentenceStart.Any(c => c.Word == "hallo"),
+                    "learn/predictor: sentence-start word learned lowercase");
+                assert(!candidatesAfterSentenceStart.Any(c => c.Word == "Hallo"),
+                    "learn/predictor: sentence-start word never buffered under its capitalised form");
+
+                // Mid-sentence deliberate Shift (proper noun): 'J' in "Jan" arrives
+                // shifted=true while NOT at a sentence start — must keep its capital.
+                learnPredictor.OnKeySent("J", shifted: true);
+                learnPredictor.OnKeySent("a", shifted: false);
+                learnPredictor.OnKeySent("n", shifted: false);
+                learnPredictor.OnKeySent(" ", shifted: false);
+
+                var candidatesAfterProperNoun = WordDatabase.GetCandidates();
+                assert(candidatesAfterProperNoun.Any(c => c.Word == "Jan"),
+                    "learn/predictor: mid-sentence proper noun learned with its capital preserved");
+                assert(!candidatesAfterProperNoun.Any(c => c.Word == "jan"),
+                    "learn/predictor: mid-sentence proper noun not also recorded lowercase");
+            }
+            finally
+            {
+                if (System.IO.File.Exists(predLearnPath)) System.IO.File.Delete(predLearnPath);
+                if (System.IO.File.Exists(predLearnOverlayPath)) System.IO.File.Delete(predLearnOverlayPath);
+                if (System.IO.File.Exists(predLearnOverlayPath + ".bak")) System.IO.File.Delete(predLearnOverlayPath + ".bak");
             }
         }
     }
@@ -4411,14 +4705,12 @@ namespace OnScreenKeyboard
             try
             {
                 // ── Helper: write a minimal .wfq file ─────────────────────────
-                void WriteWfq(string name, string language, bool isPersonal)
+                void WriteWfq(string name, string language)
                 {
-                    string personal = isPersonal ? "true" : "false";
                     System.IO.File.WriteAllText(
                         System.IO.Path.Combine(dir, name),
                         $"<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n" +
-                        $"<WordDatabase version=\"1\" language=\"{language}\" isPersonal=\"{personal}\">\r\n" +
-                        $"  <Candidates />\r\n" +
+                        $"<WordDatabase version=\"1\" language=\"{language}\">\r\n" +
                         $"  <Word value=\"test\" frequency=\"1\" />\r\n" +
                         $"</WordDatabase>",
                         System.Text.Encoding.UTF8);
@@ -4436,15 +4728,17 @@ namespace OnScreenKeyboard
                 assert(reg1.All.Count == 0,        "empty folder: All is empty");
 
                 // ── Populate folder ────────────────────────────────────────────
-                WriteWfq("worddb_NL.wfq",          "nl",  false);
-                WriteWfq("worddb_NL_children.wfq", "nl",  false);
-                WriteWfq("worddb_EN.wfq",           "en",  false);
-                WriteWfq("my_nl_personal.wfq",      "nl",  true);
+                // Multiple databases per language are still supported (e.g. a
+                // "general Dutch" base alongside a differently-scoped one) —
+                // that's independent of the (now-removed) personal/base split.
+                WriteWfq("worddb_NL.wfq",          "nl");
+                WriteWfq("worddb_NL_children.wfq", "nl");
+                WriteWfq("worddb_EN.wfq",           "en");
 
                 section("LanguageRegistry — populated folder");
                 var reg = new LanguageRegistry(dir);
 
-                assert(reg.All.Count == 4,         "4 databases found");
+                assert(reg.All.Count == 3,         "3 databases found");
 
                 // ── GetForLanguage ─────────────────────────────────────────────
                 section("LanguageRegistry — GetForLanguage");
@@ -4452,12 +4746,12 @@ namespace OnScreenKeyboard
                 var en = reg.GetForLanguage("en");
                 var de = reg.GetForLanguage("de");
 
-                assert(nl.Count == 3,              "3 Dutch databases");
+                assert(nl.Count == 2,              "2 Dutch databases");
                 assert(en.Count == 1,              "1 English database");
                 assert(de.Count == 0,              "0 German databases");
 
                 // Case-insensitive lookup
-                assert(reg.GetForLanguage("NL").Count == 3, "GetForLanguage NL (uppercase) = 3");
+                assert(reg.GetForLanguage("NL").Count == 2, "GetForLanguage NL (uppercase) = 2");
                 assert(reg.GetForLanguage("EN").Count == 1, "GetForLanguage EN (uppercase) = 1");
 
                 // ── Languages list ─────────────────────────────────────────────
@@ -4467,34 +4761,35 @@ namespace OnScreenKeyboard
                 assert(langs.Contains("en"),       "Languages contains 'en'");
                 assert(langs.Contains("nl"),       "Languages contains 'nl'");
 
-                // ── Sort order: base before personal ───────────────────────────
+                // ── Sort order: alphabetical by display name ───────────────────
                 section("LanguageRegistry — sort order");
                 var nlList = reg.GetForLanguage("nl");
-                // Base files: worddb_NL, worddb_NL_children (alphabetical)
-                // Personal:   my_nl_personal
-                assert(!nlList[0].IsPersonal,      "nl[0] is a base file");
-                assert(!nlList[1].IsPersonal,      "nl[1] is a base file");
-                assert( nlList[2].IsPersonal,      "nl[2] is the personal copy");
-                // Alphabetical within base group
                 assert(string.Compare(nlList[0].DisplayName, nlList[1].DisplayName,
                        StringComparison.OrdinalIgnoreCase) < 0,
-                       "base files are alphabetically ordered");
+                       "Dutch databases are alphabetically ordered");
 
                 // ── DisplayName ────────────────────────────────────────────────
                 section("LanguageRegistry — DisplayName");
-                var nlBase = nlList.First(d => !d.IsPersonal &&
+                var nlBase = nlList.First(d =>
                     d.DisplayName.Equals("worddb_NL", StringComparison.OrdinalIgnoreCase));
-                assert(nlBase != null,             "worddb_NL base found");
+                assert(nlBase != null,             "worddb_NL found");
                 assert(nlBase.DisplayName == "worddb_NL", "DisplayName = filename without extension");
                 assert(nlBase.Language == "nl",    "Language = nl");
-                assert(!nlBase.IsPersonal,         "IsPersonal = false");
 
-                // ── Personal file properties ───────────────────────────────────
-                section("LanguageRegistry — personal file properties");
-                var personal = nlList.First(d => d.IsPersonal);
-                assert(personal.IsPersonal,        "personal: IsPersonal = true");
-                assert(personal.Language == "nl",  "personal: Language = nl");
-                assert(personal.DisplayName == "my_nl_personal", "personal: DisplayName correct");
+                // ── Overlay files are not databases ─────────────────────────────
+                // *.learned.wfq is the learning engine's companion file for a base
+                // database (see WordDatabase.GetOverlayPath) — it must never show
+                // up as if it were independently selectable.
+                section("LanguageRegistry — overlay files excluded");
+                System.IO.File.WriteAllText(
+                    WordDatabase.GetOverlayPath(System.IO.Path.Combine(dir, "worddb_NL.wfq")),
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n<WordDatabaseOverlay version=\"1\" />",
+                    System.Text.Encoding.UTF8);
+                var regWithOverlay = new LanguageRegistry(dir);
+                assert(regWithOverlay.All.Count == 3,
+                    "overlay file present on disk but excluded from the scan; still 3 databases");
+                assert(!regWithOverlay.All.Any(d => d.FilePath.EndsWith(".learned.wfq", StringComparison.OrdinalIgnoreCase)),
+                    "no entry in All has a .learned.wfq path");
 
                 // ── Corrupt file is skipped ────────────────────────────────────
                 section("LanguageRegistry — corrupt file skipped");
@@ -4502,7 +4797,7 @@ namespace OnScreenKeyboard
                 System.IO.File.WriteAllText(corrupt, "<<< not xml >>>",
                     System.Text.Encoding.UTF8);
                 var regWithCorrupt = new LanguageRegistry(dir);
-                assert(regWithCorrupt.All.Count == 4, "corrupt file skipped; 4 valid databases remain");
+                assert(regWithCorrupt.All.Count == 3, "corrupt file skipped; 3 valid databases remain");
 
                 // ── File without language attribute (legacy format) ────────────
                 section("LanguageRegistry — legacy file (no language attribute)");
@@ -4514,12 +4809,11 @@ namespace OnScreenKeyboard
                     "</WordDatabase>",
                     System.Text.Encoding.UTF8);
                 var regWithLegacy = new LanguageRegistry(dir);
-                assert(regWithLegacy.All.Count == 5, "legacy file included; 5 databases total");
+                assert(regWithLegacy.All.Count == 4, "legacy file included; 4 databases total");
                 var legacy1 = regWithLegacy.All.First(d =>
                     d.DisplayName.Equals("legacy", StringComparison.OrdinalIgnoreCase));
                 assert(legacy1 != null,                    "legacy database found");
                 assert(legacy1.Language == string.Empty,   "legacy: Language = empty string");
-                assert(!legacy1.IsPersonal,                "legacy: IsPersonal = false");
             }
             finally
             {

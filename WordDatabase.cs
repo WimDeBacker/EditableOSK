@@ -27,6 +27,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Xml;
@@ -65,11 +66,43 @@ namespace OnScreenKeyboard
         // NextWords are the most common words that follow this one.
         private class WordEntry
         {
-            public string       Word      { get; }
-            public int          Frequency { get; }
-            public List<string> NextWords { get; } = new List<string>();
+            public string          Word      { get; }
+            // Mutable: the learning engine (RecordWord) increments this in place as
+            // the user types. Safe without locking because all mutation happens on
+            // the UI thread (see RecordWord remarks); Save() copies values onto a
+            // plain-data structure on the caller's thread before handing off to a
+            // background thread for the actual file write.
+            public int              Frequency { get; set; }
+            public List<NextEntry>  NextWords { get; } = new List<NextEntry>();
+
+            // How many times the user has personally used this word. Tracked
+            // separately from Frequency (which stays the base corpus value for
+            // words that came from the base file) so personal usage can be given
+            // its own ranking tier instead of being drowned out by — or, if
+            // weighted too heavily, unpredictably overtaking — the base frequency.
+            // See GetPredictionsCore's "Step 1.5" and RecordWord.
+            public int              PersonalUseCount { get; set; }
+
+            // True only for entries parsed from the base file. False for entries
+            // created by PromoteInternal (promoted candidates) — those have no
+            // base counterpart, so at save time they are always written in full
+            // as <NewWord>, never as a <PersonalUse> delta.
+            public bool             IsFromBase { get; set; }
 
             public WordEntry(string word, int frequency)
+            { Word = word; Frequency = frequency; }
+        }
+
+        // One "commonly follows" entry for a WordEntry.NextWords list.
+        // Frequency/PersonalUseCount/IsFromBase mirror WordEntry's fields above,
+        // for the same reasons.
+        private class NextEntry
+        {
+            public string Word;
+            public int    Frequency;
+            public int    PersonalUseCount;
+            public bool   IsFromBase;
+            public NextEntry(string word, int frequency)
             { Word = word; Frequency = frequency; }
         }
 
@@ -85,22 +118,27 @@ namespace OnScreenKeyboard
             public static readonly DbSnapshot Empty = new DbSnapshot(
                 new Dictionary<string, WordEntry>(StringComparer.Ordinal),
                 new List<WordEntry>(),
-                string.Empty, false);
+                string.Empty);
 
             public readonly Dictionary<string, WordEntry> ByExact;
             public readonly List<WordEntry>               ByFrequency;
             public readonly string                        Language;
-            public readonly bool                          IsPersonal;
+
+            // Words with PersonalUseCount > 0, sorted descending by PersonalUseCount.
+            // Populated by the overlay merge at load time and kept up to date by
+            // RecordWord/PromoteCandidate. Small in practice (a user's personal
+            // vocabulary), so a full re-sort on each change is cheap. Same
+            // UI-thread-only mutation invariant as ByFrequency/NextWords — see
+            // RecordWord's thread-safety remarks.
+            public readonly List<WordEntry> ByPersonalUse = new List<WordEntry>();
 
             public DbSnapshot(Dictionary<string, WordEntry> byExact,
                               List<WordEntry>               byFrequency,
-                              string                        language,
-                              bool                          isPersonal)
+                              string                        language)
             {
                 ByExact     = byExact;
                 ByFrequency = byFrequency;
                 Language    = language;
-                IsPersonal  = isPersonal;
             }
         }
 
@@ -120,6 +158,45 @@ namespace OnScreenKeyboard
         // Each load stamps its own generation; it only publishes if no newer
         // call has started since (fixes the concurrent-load race).
         private static int _loadGen = 0;
+
+        // ── Learning engine state ───────────────────────────────────────
+        //
+        // Unknown words the user has typed, not yet promoted to a full WordEntry.
+        // Key = the word as recorded (see RecordWord's case-normalisation rule),
+        // value = how many times it has been seen. Reset on every Load() (each
+        // file has its own <Candidates> section). Only ever touched from the UI
+        // thread (RecordWord is called synchronously from key-press handling),
+        // so no locking is needed — see RecordWord's remarks.
+        private static Dictionary<string, int> _candidates =
+            new Dictionary<string, int>(StringComparer.Ordinal);
+
+        // True when RecordWord/PromoteCandidate/RemoveCandidate has changed
+        // in-memory state since the last successful save.
+        private static volatile bool _dirty = false;
+
+        // Guards against overlapping background saves if SaveIfDirty is called
+        // again (e.g. by a periodic timer) while a previous save is still writing.
+        private static volatile bool _saving = false;
+
+        // Companion overlay file path for whatever base file is currently loaded
+        // (see DeriveOverlayPath). Null before the first successful Load(). Read
+        // by SaveNow/SaveIfDirty, which no longer take a path parameter — the
+        // overlay is always the one paired with the currently loaded base file.
+        private static volatile string _overlayPath = null;
+
+        // Master switch for the learning engine. RecordWord/PromoteCandidate are
+        // no-ops while this is false. Defaults to true (learning starts working
+        // immediately without any setup); KeyboardForm keeps this in sync with
+        // LayoutMeta.WordLearningEnabled after every load and whenever the user
+        // toggles the "Remember typed words" checkbox.
+        public static bool LearningEnabled { get; set; } = true;
+
+        // Unknown-word occurrences strictly greater than this are promoted from
+        // the candidate buffer into the real word list (spec: "count > 2").
+        private const int CandidatePromotionThreshold = 2;
+
+        // Matches the load-time cap on <Next> children per word (see ParseFile).
+        private const int MaxNextWords = 10;
 
         /// <summary>
         /// True after a successful call to <see cref="Load"/>; false while
@@ -152,13 +229,6 @@ namespace OnScreenKeyboard
         public static string Language => _snapshot.Language;
 
         /// <summary>
-        /// <c>true</c> when the loaded file is a personal copy (contains learned
-        /// words and adjusted frequencies); <c>false</c> for base (read-only)
-        /// databases.
-        /// </summary>
-        public static bool IsPersonal => _snapshot.IsPersonal;
-
-        /// <summary>
         /// Fired on the calling thread immediately after a successful load.
         /// When <see cref="Load"/> is called via <c>Task.Run</c>, this fires on
         /// the background thread — subscribers must marshal back to the UI thread
@@ -169,25 +239,26 @@ namespace OnScreenKeyboard
         // ── Load ─────────────────────────────────────────────────────
 
         /// <summary>
-        /// Reads the XML word-frequency database from disk into memory.
-        /// Safe to call from any thread — typically called via
+        /// Reads the base XML word-frequency database from disk into memory,
+        /// then merges in its companion overlay file if one exists (see
+        /// <see cref="DeriveOverlayPath"/> / <see cref="ApplyOverlay"/>) — no
+        /// separate call needed to pick up previously learned words. Safe to
+        /// call from any thread — typically called via
         /// <c>Task.Run(() =&gt; WordDatabase.Load(path))</c> so the UI remains
         /// responsive during the parse.
         /// </summary>
         /// <param name="path">
-        /// The full file-system path to the .wfq file (e.g. "worddb_EN.wfq").
+        /// The full file-system path to the base .wfq file (e.g. "worddb_EN.wfq").
         /// The file must have the structure:
         /// <code>
-        /// &lt;WordDatabase version="1" language="nl" isPersonal="false"&gt;
-        ///   &lt;Candidates /&gt;
+        /// &lt;WordDatabase version="1" language="nl"&gt;
         ///   &lt;Word value="de" frequency="123456"&gt;
         ///     &lt;Next value="beste" frequency="5" /&gt;
         ///   &lt;/Word&gt;
         /// &lt;/WordDatabase&gt;
         /// </code>
-        /// The <c>version</c>, <c>language</c> and <c>isPersonal</c> attributes
-        /// and the <c>&lt;Candidates&gt;</c> section are optional for backward
-        /// compatibility with older files.
+        /// The <c>version</c> and <c>language</c> attributes are optional for
+        /// backward compatibility with older files.
         /// </param>
         /// <remarks>
         /// <see cref="IsLoaded"/> is set to <c>false</c> and
@@ -223,6 +294,13 @@ namespace OnScreenKeyboard
                     return;
                 }
 
+                // Merge in the companion overlay file (learned words/word-pairs and
+                // the candidate buffer) before publishing, if one exists. snap is
+                // not reachable from anywhere else yet, so mutating it here needs
+                // no thread-safety beyond what Load already provides.
+                string overlayPath = DeriveOverlayPath(path);
+                var    candidates  = ApplyOverlay(snap, overlayPath);
+
                 // Atomically publish the new snapshot.  The volatile write to
                 // _snapshot acts as a release fence — any thread that subsequently
                 // reads _snapshot with an acquire fence (all volatile reads do)
@@ -232,6 +310,13 @@ namespace OnScreenKeyboard
                 // _isLoaded is set AFTER the finally block so the IsLoading flag
                 // is already false when IsLoaded becomes true — no window where
                 // both flags are true simultaneously (fixes finding #8).
+
+                // Reset the learning engine's state for the newly loaded file.
+                // Candidates and the overlay path are per-file; any unsaved state
+                // from a previous file must not leak across.
+                _candidates  = candidates;
+                _overlayPath = overlayPath;
+                _dirty       = false;
             }
             finally
             {
@@ -253,10 +338,12 @@ namespace OnScreenKeyboard
         }
 
         /// <summary>
-        /// Parses the .wfq file with a forward-only <see cref="XmlReader"/> into
-        /// a new immutable <see cref="DbSnapshot"/>.
-        /// All work is done in thread-local variables — no static state is touched
-        /// until the caller atomically publishes the result.
+        /// Parses the base .wfq corpus file with a forward-only <see cref="XmlReader"/>
+        /// into a new immutable <see cref="DbSnapshot"/>. All work is done in
+        /// thread-local variables — no static state is touched until the caller
+        /// atomically publishes the result. Does not read learning-engine data
+        /// (candidates, personal use) — that lives in the companion overlay file
+        /// and is merged in separately by <see cref="ApplyOverlay"/>.
         /// </summary>
         private static (DbSnapshot snapshot, string error) ParseFile(string path)
         {
@@ -271,9 +358,8 @@ namespace OnScreenKeyboard
                     IgnoreProcessingInstructions = true,
                 };
 
-                var    byExact    = new Dictionary<string, WordEntry>(StringComparer.Ordinal);
-                string lang       = string.Empty;
-                bool   isPersonal = false;
+                var    byExact = new Dictionary<string, WordEntry>(StringComparer.Ordinal);
+                string lang    = string.Empty;
 
                 WordEntry current   = null;  // the <Word> element currently being read
                 int       nextTaken = 0;     // how many <Next> children we have stored
@@ -286,8 +372,7 @@ namespace OnScreenKeyboard
                     switch (reader.LocalName)
                     {
                         case "WordDatabase":
-                            lang       = reader.GetAttribute("language")   ?? string.Empty;
-                            isPersonal = reader.GetAttribute("isPersonal") == "true";
+                            lang = reader.GetAttribute("language") ?? string.Empty;
                             break;
 
                         case "Word":
@@ -295,25 +380,29 @@ namespace OnScreenKeyboard
                             string word = reader.GetAttribute("value");
                             if (string.IsNullOrEmpty(word)) { current = null; break; }
                             int.TryParse(reader.GetAttribute("frequency"), out int freq);
-                            current   = new WordEntry(word, freq);
+                            current = new WordEntry(word, freq) { IsFromBase = true };
                             nextTaken = 0;
                             byExact[word] = current;
                             break;
                         }
 
                         case "Next":
-                            if (current != null && nextTaken < 10)
+                            if (current != null && nextTaken < MaxNextWords)
                             {
                                 string nv = reader.GetAttribute("value");
                                 if (!string.IsNullOrEmpty(nv))
                                 {
-                                    current.NextWords.Add(nv);
+                                    int.TryParse(reader.GetAttribute("frequency"), out int nfreq);
+                                    current.NextWords.Add(new NextEntry(nv, nfreq) { IsFromBase = true });
                                     nextTaken++;
                                 }
                             }
                             break;
 
-                        // <Candidates> and any other elements are silently skipped.
+                        // Base (corpus) files never define <Candidate>/<PersonalUse>/etc. —
+                        // that learning-engine data lives only in the companion overlay
+                        // file (see DeriveOverlayPath / ApplyOverlay), applied after this
+                        // base parse completes.
                     }
                 }
 
@@ -324,12 +413,183 @@ namespace OnScreenKeyboard
                     .OrderByDescending(e => e.Frequency)
                     .ToList();
 
-                return (new DbSnapshot(byExact, byFreq, lang, isPersonal), null);
+                return (new DbSnapshot(byExact, byFreq, lang), null);
             }
             catch (Exception ex)
             {
                 return (DbSnapshot.Empty, ex.Message);
             }
+        }
+
+        // ── Overlay (learning engine persistence) ───────────────────────
+        //
+        // A small companion file that sits next to a base .wfq file and holds
+        // only what the learning engine has changed — personal-use counts,
+        // brand-new words/word-pairs the user typed, and the not-yet-promoted
+        // candidate buffer. This keeps "remembering typed words" cheap (no need
+        // to duplicate a 200MB base corpus) and lets it apply on top of ANY base
+        // file without the user ever choosing or managing a separate "personal
+        // database" file.
+
+        /// <summary>
+        /// The companion overlay path for a base <c>.wfq</c> file, e.g.
+        /// <c>worddb_NL.wfq</c> → <c>worddb_NL.learned.wfq</c>, same directory.
+        /// Public so the Word Prediction UI can locate the (small) overlay file
+        /// for exporting, without duplicating the naming convention.
+        /// </summary>
+        public static string GetOverlayPath(string basePath) => DeriveOverlayPath(basePath);
+
+        private static string DeriveOverlayPath(string basePath) =>
+            Path.Combine(
+                Path.GetDirectoryName(basePath) ?? "",
+                Path.GetFileNameWithoutExtension(basePath) + ".learned.wfq");
+
+        /// <summary>
+        /// If <paramref name="overlayPath"/> exists, parses it and applies every
+        /// record onto <paramref name="snap"/> (which is not yet published/
+        /// reachable from anywhere else, so this needs no locking beyond what
+        /// <see cref="Load"/> already provides). Reuses the same mutation
+        /// primitives <see cref="RecordWord"/> uses internally, so a freshly
+        /// merged snapshot looks exactly as if every learned word had just been
+        /// typed again in a new session.
+        /// </summary>
+        /// <returns>
+        /// The candidate buffer read from the overlay's <c>&lt;Candidates&gt;</c>
+        /// section, or an empty dictionary if there is no overlay file (or it
+        /// fails to parse — corrupt/missing overlay data must never block the
+        /// base database from loading).
+        /// </returns>
+        private static Dictionary<string, int> ApplyOverlay(DbSnapshot snap, string overlayPath)
+        {
+            var candidates = new Dictionary<string, int>(StringComparer.Ordinal);
+            if (!File.Exists(overlayPath)) return candidates;
+
+            try
+            {
+                var settings = new XmlReaderSettings
+                {
+                    DtdProcessing                = DtdProcessing.Prohibit,
+                    XmlResolver                  = null,
+                    IgnoreWhitespace             = true,
+                    IgnoreComments               = true,
+                    IgnoreProcessingInstructions = true,
+                };
+
+                // Set only while inside a <NewWord> block, so its <Next>
+                // children are routed onto the right entry. Mirrors ParseFile's
+                // "current" pattern — safe because the writer always emits a
+                // NewWord's own <Next> children immediately after it and before
+                // any other top-level record (see WriteSaveData).
+                WordEntry current = null;
+
+                using var reader = XmlReader.Create(overlayPath, settings);
+                while (reader.Read())
+                {
+                    if (reader.NodeType != XmlNodeType.Element) continue;
+
+                    switch (reader.LocalName)
+                    {
+                        case "Candidate":
+                        {
+                            current = null;
+                            string cv = reader.GetAttribute("value");
+                            if (!string.IsNullOrEmpty(cv))
+                            {
+                                int.TryParse(reader.GetAttribute("count"), out int cnt);
+                                candidates[cv] = cnt;
+                            }
+                            break;
+                        }
+
+                        case "PersonalUse":
+                        {
+                            current = null;
+                            string value = reader.GetAttribute("value");
+                            int.TryParse(reader.GetAttribute("count"), out int count);
+                            if (!string.IsNullOrEmpty(value) && count > 0 &&
+                                snap.ByExact.TryGetValue(value, out var entry))
+                                BumpPersonalUse(snap, entry, count);
+                            break;
+                        }
+
+                        case "NewWord":
+                        {
+                            string value = reader.GetAttribute("value");
+                            if (string.IsNullOrEmpty(value)) { current = null; break; }
+                            int.TryParse(reader.GetAttribute("frequency"),   out int freq);
+                            int.TryParse(reader.GetAttribute("personalUse"), out int use);
+                            var entry = new WordEntry(value, freq) { IsFromBase = false };
+                            snap.ByExact[value] = entry;
+                            snap.ByFrequency.Add(entry);
+                            if (use > 0) BumpPersonalUse(snap, entry, use);
+                            current = entry;
+                            break;
+                        }
+
+                        case "Next":
+                            if (current != null && current.NextWords.Count < MaxNextWords)
+                            {
+                                string nv = reader.GetAttribute("value");
+                                if (!string.IsNullOrEmpty(nv))
+                                {
+                                    int.TryParse(reader.GetAttribute("frequency"),   out int nfreq);
+                                    int.TryParse(reader.GetAttribute("personalUse"), out int nuse);
+                                    current.NextWords.Add(new NextEntry(nv, nfreq)
+                                        { IsFromBase = false, PersonalUseCount = nuse });
+                                }
+                            }
+                            break;
+
+                        case "PairUse":
+                        {
+                            current = null;
+                            string word = reader.GetAttribute("word");
+                            string next = reader.GetAttribute("next");
+                            int.TryParse(reader.GetAttribute("count"), out int count);
+                            if (!string.IsNullOrEmpty(word) && !string.IsNullOrEmpty(next) && count > 0 &&
+                                snap.ByExact.TryGetValue(word, out var prevEntry))
+                            {
+                                var pair = prevEntry.NextWords.Find(
+                                    n => string.Equals(n.Word, next, StringComparison.Ordinal));
+                                if (pair != null) pair.PersonalUseCount += count;
+                            }
+                            break;
+                        }
+
+                        case "NewPair":
+                        {
+                            current = null;
+                            string word = reader.GetAttribute("word");
+                            string next = reader.GetAttribute("next");
+                            if (!string.IsNullOrEmpty(word) && !string.IsNullOrEmpty(next) &&
+                                snap.ByExact.TryGetValue(word, out var prevEntry) &&
+                                prevEntry.NextWords.Count < MaxNextWords)
+                            {
+                                int.TryParse(reader.GetAttribute("frequency"),   out int nfreq);
+                                int.TryParse(reader.GetAttribute("personalUse"), out int nuse);
+                                prevEntry.NextWords.Add(new NextEntry(next, nfreq)
+                                    { IsFromBase = false, PersonalUseCount = nuse });
+                            }
+                            break;
+                        }
+                    }
+                }
+
+                // Re-sort every word's NextWords once, after all PersonalUse/
+                // PairUse/NewPair records have been applied, using the same key
+                // RecordWord uses at runtime — simpler and just as cheap as
+                // re-sorting incrementally record-by-record while parsing.
+                foreach (var entry in snap.ByExact.Values)
+                    if (entry.NextWords.Count > 1)
+                        entry.NextWords.Sort(RankPairs);
+            }
+            catch
+            {
+                // A corrupt or unreadable overlay must never block the base
+                // database from loading — worst case, learned data is lost.
+            }
+
+            return candidates;
         }
 
         // ── Public API ───────────────────────────────────────────────
@@ -342,14 +602,22 @@ namespace OnScreenKeyboard
         /// <list type="number">
         ///   <item>
         ///     <b>Second-word suggestions</b> — words that frequently follow
-        ///     <paramref name="lastCompletedWord"/> in the training corpus.
+        ///     <paramref name="lastCompletedWord"/> in the training corpus,
+        ///     personally-reinforced pairs ranked first within this step.
         ///     Filtered by <paramref name="currentPrefix"/> when the user has
         ///     started typing. These are the most contextually relevant results.
         ///   </item>
         ///   <item>
+        ///     <b>Personally-used words</b> — words the user has typed before
+        ///     (tracked separately from corpus frequency so they reliably surface
+        ///     regardless of how large a competing word's base frequency is),
+        ///     up to a cap that always leaves room for at least one normal
+        ///     suggestion. Fills any slots Step 1 did not use.
+        ///   </item>
+        ///   <item>
         ///     <b>Frequency-sorted first words</b> — the most common words in
         ///     the entire database, filtered by prefix when relevant. These fill
-        ///     any prediction slots that Step 1 did not fill, so the suggestion
+        ///     any prediction slots Steps 1–2 did not fill, so the suggestion
         ///     bar is never empty.
         ///   </item>
         /// </list>
@@ -468,8 +736,12 @@ namespace OnScreenKeyboard
 
                 if (lastEntry != null)
                 {
-                    foreach (string w in lastEntry.NextWords)
+                    // NextWords is kept sorted descending by frequency (both at load
+                    // time and whenever RecordWord bumps an entry), so iterating in
+                    // list order already yields the strongest pairings first.
+                    foreach (NextEntry ne in lastEntry.NextWords)
                     {
+                        string w = ne.Word;
                         if (result.Count >= count) break;
 
                         // If the user has started typing, skip any next-word that
@@ -494,24 +766,27 @@ namespace OnScreenKeyboard
                 }
             }
 
-            // ── Step 2: First words ───────────────────────────────────
-            //
-            // If Step 1 did not fill all the requested slots, pad with the
-            // most-frequent words from the entire database (already sorted).
-            if (result.Count < count)
+            // Adds up to maxAdd matching words from source (in whatever order
+            // source is already sorted in) to result, applying the same
+            // prefix/case rules used throughout this method. Shared by Step 1.5
+            // (personal-use tier, capped) and Step 2 (frequency fallback,
+            // uncapped) below — identical matching logic, different source list
+            // and cap.
+            void AddMatching(List<WordEntry> source, int maxAdd)
             {
+                int added = 0;
                 if (preferUpperCase && hasPrefix)
                 {
                     // The user held Shift and started typing mid-sentence.
                     // They explicitly want a proper noun, so only return words
                     // that start with an uppercase letter, matching the prefix
                     // with a case-sensitive comparison.
-                    foreach (var entry in snap.ByFrequency)
+                    foreach (var entry in source)
                     {
-                        if (result.Count >= count) break;
+                        if (result.Count >= count || added >= maxAdd) break;
                         if (!MatchesPrefix(entry.Word, currentPrefix, true)) continue;
                         if (!StartsWithCase(entry.Word, true)) continue;
-                        if (seen.Add(entry.Word)) result.Add(entry.Word);
+                        if (seen.Add(entry.Word)) { result.Add(entry.Word); added++; }
                     }
                 }
                 else if (preferUpperCase)
@@ -519,26 +794,25 @@ namespace OnScreenKeyboard
                     // Shift is active but no characters typed yet — list proper
                     // nouns first (uppercase-starting), then fill any remaining
                     // slots with common lowercase words.
-                    foreach (var entry in snap.ByFrequency)
+                    foreach (var entry in source)
                     {
-                        if (result.Count >= count) break;
+                        if (result.Count >= count || added >= maxAdd) break;
                         if (!StartsWithCase(entry.Word, true)) continue;
-                        if (seen.Add(entry.Word)) result.Add(entry.Word);
+                        if (seen.Add(entry.Word)) { result.Add(entry.Word); added++; }
                     }
-                    foreach (var entry in snap.ByFrequency)
+                    foreach (var entry in source)
                     {
-                        if (result.Count >= count) break;
+                        if (result.Count >= count || added >= maxAdd) break;
                         if (!StartsWithCase(entry.Word, false)) continue;
-                        if (seen.Add(entry.Word)) result.Add(entry.Word);
+                        if (seen.Add(entry.Word)) { result.Add(entry.Word); added++; }
                     }
                 }
                 else
                 {
-                    // Normal case: return most-frequent words that match the
-                    // prefix and case rules.
-                    foreach (var entry in snap.ByFrequency)
+                    // Normal case: return matching words in source order.
+                    foreach (var entry in source)
                     {
-                        if (result.Count >= count) break;
+                        if (result.Count >= count || added >= maxAdd) break;
 
                         // Skip words that don't start with the typed prefix.
                         if (hasPrefix && !MatchesPrefix(entry.Word, currentPrefix, !sentenceStart && prefixUpper)) continue;
@@ -547,10 +821,27 @@ namespace OnScreenKeyboard
                         // user typed an uppercase prefix (filterUpper=true).
                         if (!sentenceStart && !StartsWithCase(entry.Word, filterUpper)) continue;
 
-                        if (seen.Add(entry.Word)) result.Add(entry.Word);
+                        if (seen.Add(entry.Word)) { result.Add(entry.Word); added++; }
                     }
                 }
             }
+
+            // ── Step 1.5: Personally-used words ───────────────────────
+            //
+            // Words the user has typed before (snap.ByPersonalUse, already
+            // sorted by PersonalUseCount descending), ranked ahead of raw
+            // corpus frequency so they reliably surface regardless of how much
+            // larger a competing base word's frequency is. Capped so normal
+            // frequency-based suggestions are never fully crowded out.
+            if (result.Count < count)
+                AddMatching(snap.ByPersonalUse, PersonalCap(count));
+
+            // ── Step 2: First words ───────────────────────────────────
+            //
+            // If Steps 1–1.5 did not fill all the requested slots, pad with the
+            // most-frequent words from the entire database (already sorted).
+            if (result.Count < count)
+                AddMatching(snap.ByFrequency, int.MaxValue);
 
             // Capitalise all results when at the start of a sentence.
             // We do this last — the matching above works with the stored
@@ -563,7 +854,443 @@ namespace OnScreenKeyboard
             return result;
         }
 
+        // ── Learning engine ──────────────────────────────────────────
+
+        /// <summary>
+        /// Records that <paramref name="word"/> was just typed or chosen, and
+        /// (when <paramref name="previousWord"/> is given) that it followed
+        /// <paramref name="previousWord"/> — i.e. a word-pair (bigram) occurrence.
+        ///
+        /// <para>
+        /// Known words have their <see cref="WordEntry.PersonalUseCount"/>
+        /// incremented immediately — kept separate from the base corpus
+        /// <see cref="WordEntry.Frequency"/>, so personal usage gets its own
+        /// ranking tier (see <c>GetPredictionsCore</c>'s "Step 1.5") instead of
+        /// being invisible against — or unpredictably outranking — a base
+        /// frequency that can be orders of magnitude larger. The word-pair link's
+        /// personal-use count is bumped the same way (or the pair is created, up
+        /// to <see cref="MaxNextWords"/> pairs per word). Unknown words go into a
+        /// small candidate buffer and are only promoted to a real, predictable
+        /// word once they have been seen more than
+        /// <see cref="CandidatePromotionThreshold"/> times — this filters out
+        /// one-off typos.
+        /// </para>
+        ///
+        /// <para>
+        /// No-op when no database is loaded or <see cref="LearningEnabled"/> is
+        /// <c>false</c>.
+        /// </para>
+        ///
+        /// <para>
+        /// <b>Thread-safety:</b> must only be called from the UI thread. It
+        /// mutates <see cref="WordEntry"/>/<c>NextEntry</c> objects reachable from
+        /// the published snapshot in place, and appends to (never removes from,
+        /// except a bounded replace in the word-pair list) the snapshot's small
+        /// <c>ByPersonalUse</c>/<c>NextWords</c> lists. This is safe as long as
+        /// nothing else enumerates those same objects concurrently;
+        /// <see cref="SaveIfDirty"/> guarantees this by copying all data into
+        /// plain values on the caller's thread before handing off to a background
+        /// thread for the actual file write.
+        /// </para>
+        /// </summary>
+        /// <param name="previousWord">
+        /// The word completed immediately before <paramref name="word"/>, or
+        /// <c>null</c>/empty if there is none (e.g. the first word of a
+        /// session). Matched the same way <see cref="GetPredictions"/> matches
+        /// it: exact, then lower-cased fallback.
+        /// </param>
+        /// <param name="word">The word that was just completed.</param>
+        public static void RecordWord(string previousWord, string word)
+        {
+            if (!_isLoaded || !LearningEnabled || string.IsNullOrEmpty(word)) return;
+
+            var snap = _snapshot;
+
+            if (snap.ByExact.TryGetValue(word, out var entry))
+            {
+                BumpPersonalUse(snap, entry);
+                _dirty = true;
+            }
+            else
+            {
+                _candidates.TryGetValue(word, out int count);
+                count++;
+                if (count > CandidatePromotionThreshold)
+                {
+                    _candidates.Remove(word);
+                    entry = PromoteInternal(snap, word, count);
+                }
+                else
+                {
+                    _candidates[word] = count;
+                }
+                _dirty = true;
+            }
+
+            // ── Word-pair (bigram) link ───────────────────────────────
+            if (!string.IsNullOrEmpty(previousWord))
+            {
+                WordEntry prevEntry;
+                if (!snap.ByExact.TryGetValue(previousWord, out prevEntry))
+                    snap.ByExact.TryGetValue(previousWord.ToLower(), out prevEntry);
+
+                if (prevEntry != null)
+                {
+                    var next = prevEntry.NextWords.Find(
+                        n => string.Equals(n.Word, word, StringComparison.Ordinal));
+                    if (next != null)
+                    {
+                        next.PersonalUseCount++;
+                        _dirty = true;
+                    }
+                    else if (prevEntry.NextWords.Count < MaxNextWords)
+                    {
+                        prevEntry.NextWords.Add(new NextEntry(word, 1) { PersonalUseCount = 1 });
+                        _dirty = true;
+                    }
+                    else
+                    {
+                        // List is full — replace the weakest existing pair only if
+                        // it is no stronger than a brand-new (frequency 1) entry,
+                        // so well-established pairs are never displaced by noise.
+                        // "Weakest" uses the same (PersonalUseCount, Frequency)
+                        // ordering as the ranking sort below.
+                        NextEntry weakest = prevEntry.NextWords[0];
+                        foreach (var n in prevEntry.NextWords)
+                            if (IsWeakerPair(n, weakest)) weakest = n;
+                        if (weakest.PersonalUseCount == 0 && weakest.Frequency <= 1)
+                        {
+                            prevEntry.NextWords.Remove(weakest);
+                            prevEntry.NextWords.Add(new NextEntry(word, 1) { PersonalUseCount = 1 });
+                            _dirty = true;
+                        }
+                    }
+                    // Personally-reinforced pairs first, then strongest base pairs,
+                    // so GetPredictionsCore's Step 1 (which takes them in list
+                    // order) surfaces the most relevant pairing first.
+                    prevEntry.NextWords.Sort(RankPairs);
+                }
+            }
+        }
+
+        // Shared ranking order for a WordEntry.NextWords list: personal use
+        // first, base frequency as tie-break, both descending. Used by
+        // RecordWord (incremental re-sort after a bump) and ApplyOverlay
+        // (one re-sort pass after merging).
+        private static int RankPairs(NextEntry a, NextEntry b)
+        {
+            int byPersonal = b.PersonalUseCount.CompareTo(a.PersonalUseCount);
+            return byPersonal != 0 ? byPersonal : b.Frequency.CompareTo(a.Frequency);
+        }
+
+        // True if a is strictly weaker than b: personal use compared first,
+        // base frequency as tie-break. Mirrors the NextWords ranking sort.
+        private static bool IsWeakerPair(NextEntry a, NextEntry b) =>
+            a.PersonalUseCount != b.PersonalUseCount
+                ? a.PersonalUseCount < b.PersonalUseCount
+                : a.Frequency < b.Frequency;
+
+        /// <summary>
+        /// Increments <paramref name="entry"/>'s <see cref="WordEntry.PersonalUseCount"/>
+        /// by <paramref name="amount"/> and keeps <paramref name="snap"/>'s
+        /// <c>ByPersonalUse</c> list correct: adds the entry the first time its
+        /// count leaves zero, and re-sorts (cheap — this list only ever contains
+        /// a user's personally-used words, never the full corpus).
+        /// </summary>
+        private static void BumpPersonalUse(DbSnapshot snap, WordEntry entry, int amount = 1)
+        {
+            bool wasZero = entry.PersonalUseCount == 0;
+            entry.PersonalUseCount += amount;
+            if (wasZero) snap.ByPersonalUse.Add(entry);
+            snap.ByPersonalUse.Sort((a, b) => b.PersonalUseCount.CompareTo(a.PersonalUseCount));
+        }
+
+        /// <summary>
+        /// Creates a new <see cref="WordEntry"/> for <paramref name="word"/>,
+        /// not from the base file (<see cref="WordEntry.IsFromBase"/> = false, so
+        /// it is written to the overlay in full as a <c>&lt;NewWord&gt;</c> rather
+        /// than a <c>&lt;PersonalUse&gt;</c> delta), and adds it to
+        /// <paramref name="snap"/>'s collections including <c>ByPersonalUse</c> —
+        /// a promoted word is, by definition, personally used, so it should
+        /// surface via the personal-use ranking tier immediately rather than
+        /// wait to accumulate more occurrences. Shared by automatic promotion
+        /// (candidate count exceeds the threshold) and manual promotion via
+        /// <see cref="PromoteCandidate"/>.
+        /// </summary>
+        private static WordEntry PromoteInternal(DbSnapshot snap, string word, int useCount)
+        {
+            var entry = new WordEntry(word, Math.Max(1, useCount)) { IsFromBase = false };
+            snap.ByExact[word] = entry;
+            snap.ByFrequency.Add(entry);
+            BumpPersonalUse(snap, entry, Math.Max(1, useCount));
+            return entry;
+        }
+
+        /// <summary>
+        /// Current candidate (not-yet-promoted) words and how many times each has
+        /// been typed, most-seen first. Empty if no database is loaded or nothing
+        /// has been typed yet.
+        /// </summary>
+        public static IReadOnlyList<(string Word, int Count)> GetCandidates() =>
+            _candidates
+                .OrderByDescending(kv => kv.Value)
+                .ThenBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(kv => (kv.Key, kv.Value))
+                .ToList();
+
+        /// <summary>
+        /// Immediately promotes a candidate word to the real word list,
+        /// bypassing the usual occurrence-count threshold. Used by the
+        /// candidate-management UI (Edit Keyboard → Word Prediction).
+        /// </summary>
+        /// <returns><c>true</c> if the word was a known candidate and was promoted.</returns>
+        public static bool PromoteCandidate(string word)
+        {
+            if (string.IsNullOrEmpty(word)) return false;
+            if (!_isLoaded) return false;
+            if (!_candidates.TryGetValue(word, out int count)) return false;
+
+            _candidates.Remove(word);
+            PromoteInternal(_snapshot, word, count);
+            _dirty = true;
+            return true;
+        }
+
+        /// <summary>
+        /// Discards a candidate word (e.g. a typo the user does not want
+        /// remembered) without promoting it. It will start accumulating from
+        /// zero again if typed in the future.
+        /// </summary>
+        /// <returns><c>true</c> if the word was a known candidate and was removed.</returns>
+        public static bool RemoveCandidate(string word)
+        {
+            if (string.IsNullOrEmpty(word)) return false;
+            bool removed = _candidates.Remove(word);
+            if (removed) _dirty = true;
+            return removed;
+        }
+
+        /// <summary>
+        /// <c>true</c> when learned frequencies, word-pair links, or the
+        /// candidate buffer have changed since the last successful save.
+        /// </summary>
+        public static bool IsDirty => _dirty;
+
+        // Plain-data copy of everything a save needs, built on the calling
+        // thread so the background write never touches live WordEntry/NextEntry
+        // objects that the UI thread might be mutating concurrently via RecordWord.
+        // Mirrors the overlay's own record types (see ApplyOverlay) exactly, so
+        // BuildSaveData / WriteSaveData / ApplyOverlay stay in lock-step.
+        private readonly struct SaveData
+        {
+            public readonly List<(string word, int count)> personalUse;
+            public readonly List<(string word, int frequency, int personalUse,
+                                   List<(string word, int frequency, int personalUse)> next)> newWords;
+            public readonly List<(string word, string next, int count)> pairUse;
+            public readonly List<(string word, string next, int frequency, int personalUse)> newPair;
+            public readonly List<(string word, int count)> candidates;
+
+            public SaveData(
+                List<(string, int)> personalUse,
+                List<(string, int, int, List<(string, int, int)>)> newWords,
+                List<(string, string, int)> pairUse,
+                List<(string, string, int, int)> newPair,
+                List<(string, int)> candidates)
+            {
+                this.personalUse = personalUse;
+                this.newWords     = newWords;
+                this.pairUse      = pairUse;
+                this.newPair      = newPair;
+                this.candidates   = candidates;
+            }
+        }
+
+        private static SaveData BuildSaveData()
+        {
+            var snap        = _snapshot;
+            var personalUse = new List<(string, int)>();
+            var newWords    = new List<(string, int, int, List<(string, int, int)>)>();
+            var pairUse     = new List<(string, string, int)>();
+            var newPair     = new List<(string, string, int, int)>();
+
+            foreach (var e in snap.ByExact.Values)
+            {
+                if (e.IsFromBase)
+                {
+                    if (e.PersonalUseCount > 0) personalUse.Add((e.Word, e.PersonalUseCount));
+
+                    foreach (var n in e.NextWords)
+                    {
+                        if (n.IsFromBase)
+                        {
+                            if (n.PersonalUseCount > 0) pairUse.Add((e.Word, n.Word, n.PersonalUseCount));
+                        }
+                        else
+                        {
+                            newPair.Add((e.Word, n.Word, n.Frequency, n.PersonalUseCount));
+                        }
+                    }
+                }
+                else
+                {
+                    // Brand-new word (promoted candidate): written in full,
+                    // including all of its own word-pairs as children — none of
+                    // them have a base counterpart either, so no PairUse/NewPair
+                    // split is needed for this word's own NextWords.
+                    var next = new List<(string, int, int)>(e.NextWords.Count);
+                    foreach (var n in e.NextWords) next.Add((n.Word, n.Frequency, n.PersonalUseCount));
+                    newWords.Add((e.Word, e.Frequency, e.PersonalUseCount, next));
+                }
+            }
+
+            var candidates = new List<(string, int)>(_candidates.Count);
+            foreach (var kv in _candidates) candidates.Add((kv.Key, kv.Value));
+
+            return new SaveData(personalUse, newWords, pairUse, newPair, candidates);
+        }
+
+        /// <summary>
+        /// Writes <paramref name="data"/> to <paramref name="path"/> as a
+        /// <c>WordDatabaseOverlay</c> file, using the same crash-safe
+        /// temp-file-then-<see cref="File.Replace(string,string,string)"/>
+        /// pattern as <c>SettingsManager</c>.
+        /// </summary>
+        private static void WriteSaveData(SaveData data, string path)
+        {
+            string tmp = path + ".tmp";
+            try
+            {
+                var xs = new XmlWriterSettings { Indent = true };
+                using (var writer = XmlWriter.Create(tmp, xs))
+                {
+                    writer.WriteStartDocument();
+                    writer.WriteStartElement("WordDatabaseOverlay");
+                    writer.WriteAttributeString("version", "1");
+
+                    writer.WriteStartElement("Candidates");
+                    foreach (var (word, count) in data.candidates)
+                    {
+                        writer.WriteStartElement("Candidate");
+                        writer.WriteAttributeString("value", word);
+                        writer.WriteAttributeString("count", count.ToString());
+                        writer.WriteEndElement();
+                    }
+                    writer.WriteEndElement(); // Candidates
+
+                    foreach (var (word, count) in data.personalUse)
+                    {
+                        writer.WriteStartElement("PersonalUse");
+                        writer.WriteAttributeString("value", word);
+                        writer.WriteAttributeString("count", count.ToString());
+                        writer.WriteEndElement();
+                    }
+
+                    // Each NewWord is fully self-contained (its own <Next>
+                    // children written immediately inside it) — ApplyOverlay
+                    // relies on that ordering to route them correctly.
+                    foreach (var (word, frequency, personalUse, next) in data.newWords)
+                    {
+                        writer.WriteStartElement("NewWord");
+                        writer.WriteAttributeString("value", word);
+                        writer.WriteAttributeString("frequency", frequency.ToString());
+                        writer.WriteAttributeString("personalUse", personalUse.ToString());
+                        foreach (var (nWord, nFreq, nUse) in next)
+                        {
+                            writer.WriteStartElement("Next");
+                            writer.WriteAttributeString("value", nWord);
+                            writer.WriteAttributeString("frequency", nFreq.ToString());
+                            writer.WriteAttributeString("personalUse", nUse.ToString());
+                            writer.WriteEndElement();
+                        }
+                        writer.WriteEndElement(); // NewWord
+                    }
+
+                    foreach (var (word, next, count) in data.pairUse)
+                    {
+                        writer.WriteStartElement("PairUse");
+                        writer.WriteAttributeString("word", word);
+                        writer.WriteAttributeString("next", next);
+                        writer.WriteAttributeString("count", count.ToString());
+                        writer.WriteEndElement();
+                    }
+
+                    foreach (var (word, next, frequency, personalUse) in data.newPair)
+                    {
+                        writer.WriteStartElement("NewPair");
+                        writer.WriteAttributeString("word", word);
+                        writer.WriteAttributeString("next", next);
+                        writer.WriteAttributeString("frequency", frequency.ToString());
+                        writer.WriteAttributeString("personalUse", personalUse.ToString());
+                        writer.WriteEndElement();
+                    }
+
+                    writer.WriteEndElement(); // WordDatabaseOverlay
+                    writer.WriteEndDocument();
+                }
+
+                if (File.Exists(path))
+                    File.Replace(tmp, path, path + ".bak");
+                else
+                    File.Move(tmp, path);
+            }
+            catch
+            {
+                try { if (File.Exists(tmp)) File.Delete(tmp); } catch { /* best-effort */ }
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Synchronously writes the current learned data (personal-use counts,
+        /// new words/word-pairs, and the candidate buffer) to the overlay file
+        /// paired with whatever base database is currently loaded (see
+        /// <see cref="DeriveOverlayPath"/>). No-op when no database is loaded.
+        /// Used directly by tests and by the app-close handler, where blocking
+        /// briefly is acceptable.
+        /// </summary>
+        public static void SaveNow()
+        {
+            if (!_isLoaded || _overlayPath == null) return;
+            WriteSaveData(BuildSaveData(), _overlayPath);
+            _dirty = false;
+        }
+
+        /// <summary>
+        /// Saves to the overlay file on a background thread, but only if
+        /// something has actually changed (<see cref="IsDirty"/>) and no save is
+        /// already in flight. Intended to be called periodically (e.g. every
+        /// 30 s) from a UI timer.
+        /// </summary>
+        public static void SaveIfDirty()
+        {
+            if (_saving || !_dirty) return;
+            if (!_isLoaded || _overlayPath == null) return;
+
+            _saving = true;
+            string path = _overlayPath;
+            // Build the plain-data copy here, on the caller's (UI) thread —
+            // see BuildSaveData's remarks on why the background thread must not
+            // touch the live WordEntry/NextEntry objects directly.
+            SaveData data = BuildSaveData();
+
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                try   { WriteSaveData(data, path); _dirty = false; }
+                catch { /* best-effort — stays dirty, retried on the next cycle */ }
+                finally { _saving = false; }
+            });
+        }
+
         // ── Helpers ──────────────────────────────────────────────────
+
+        /// <summary>
+        /// Maximum number of prediction slots the personal-use tier (Step 1.5)
+        /// may fill: up to 3/4 of <paramref name="count"/>, rounded up, but
+        /// always leaving at least 1 slot for a normal frequency-ranked
+        /// suggestion whenever <paramref name="count"/> &gt; 1.
+        /// </summary>
+        private static int PersonalCap(int count) =>
+            count <= 1 ? 0 : Math.Min((int)Math.Ceiling(count * 0.75), count - 1);
 
         /// <summary>
         /// Returns <c>true</c> if the first character of <paramref name="word"/>

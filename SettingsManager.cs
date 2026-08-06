@@ -258,6 +258,16 @@ namespace OnScreenKeyboard
         public string WordDatabase { get; set; } = "";
 
         /// <summary>
+        /// When true, the word-prediction learning engine records personal-use
+        /// counts and new words/word-pairs as the user types, saved to a small
+        /// overlay file alongside <see cref="WordDatabase"/> (see
+        /// <c>WordDatabase.RecordWord</c>). Defaults to true — learning works
+        /// immediately without any setup; the user can turn it off in Edit
+        /// Keyboard → Word Prediction for privacy.
+        /// </summary>
+        public bool WordLearningEnabled { get; set; } = true;
+
+        /// <summary>
         /// Creates a new <see cref="LayoutMeta"/> with identical values to
         /// this one.
         /// </summary>
@@ -271,10 +281,11 @@ namespace OnScreenKeyboard
             GearCol         = GearCol,
             LastFile        = LastFile,
             ToolbarTheme    = ToolbarTheme,
-            SlowKeysMs           = SlowKeysMs,
-            DwellMs              = DwellMs,
-            ShowTimingAnimation  = ShowTimingAnimation,
-            WordDatabase         = WordDatabase,
+            SlowKeysMs             = SlowKeysMs,
+            DwellMs                = DwellMs,
+            ShowTimingAnimation    = ShowTimingAnimation,
+            WordDatabase           = WordDatabase,
+            WordLearningEnabled    = WordLearningEnabled,
         };
 
         /// <summary>
@@ -295,6 +306,7 @@ namespace OnScreenKeyboard
             DwellMs             = src.DwellMs;
             ShowTimingAnimation = src.ShowTimingAnimation;
             WordDatabase        = src.WordDatabase;
+            WordLearningEnabled = src.WordLearningEnabled;
         }
     }
 
@@ -477,6 +489,7 @@ namespace OnScreenKeyboard
             w.WriteAttributeString("ToolbarTheme",    m.ToolbarTheme.ToString());
             if (!string.IsNullOrEmpty(m.WordDatabase))
                 w.WriteAttributeString("WordDatabase", m.WordDatabase);
+            w.WriteAttributeString("WordLearningEnabled", m.WordLearningEnabled ? "1" : "0");
             WriteGrid(w, layout);
             w.WriteEndElement();
         }
@@ -651,6 +664,7 @@ namespace OnScreenKeyboard
             if (meta.SlowKeysMs > 0) meta.DwellMs = 0;  // enforce mutual exclusivity for hand-edited XML
             meta.ShowTimingAnimation = Attr(lNode,"ShowTimingAnimation","1") == "1";
             meta.WordDatabase        = Attr(lNode,"WordDatabase","");
+            meta.WordLearningEnabled = Attr(lNode,"WordLearningEnabled","1") == "1";
 
             // Sanity-clamp window size to reasonable display boundaries
             // (600–7680 wide, 180–4320 tall) to prevent windows that are

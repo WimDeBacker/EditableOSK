@@ -126,6 +126,15 @@ namespace OnScreenKeyboard
         // send the next punctuation character.
         private bool     _lastActionWasPrediction = false;
 
+        // Captured at the moment the word currently in progress began, from
+        // _atSentenceStart. Used by CompleteWord to learn sentence-start words
+        // as lowercase — their leading capital is a display artefact of
+        // sentence position (see GetPredictionsCore's final capitalisation
+        // step), not a real proper-noun distinction, so recording it verbatim
+        // would pollute WordDatabase with duplicate capitalised entries for
+        // ordinary words.
+        private bool     _pendingWordIsSentenceStart = false;
+
         // Fixed-size array for prediction slots (maximum 10).
         // The actual number of slots in use is _slotCount.
         // Unused tail slots are kept as empty strings so array bounds
@@ -314,6 +323,15 @@ namespace OnScreenKeyboard
 
                     if (_wordBuffer.Length == 0)
                     {
+                        // Capture sentence-start-ness for the word about to begin.
+                        // Mirrors the "else if (_nextWordUpper)" branch's condition
+                        // below exactly: _atSentenceStart alone is not enough,
+                        // because it is only cleared by the FIRST branch (word #2
+                        // of the sentence), i.e. still true while THIS word is
+                        // being typed — checking it here would misclassify word #2
+                        // as a sentence-start word too.
+                        _pendingWordIsSentenceStart = _nextWordUpper && !_sentenceFirstWordDone;
+
                         // This is the very first character of a new word.
                         if (_nextWordUpper && _sentenceFirstWordDone)
                         {
@@ -426,6 +444,11 @@ namespace OnScreenKeyboard
 
             string toSend = predicted;
 
+            // predicted is already display-capitalised by GetPredictionsCore when
+            // _atSentenceStart is true, so CompleteWord needs to know that before
+            // it normalises the word for learning — capture it before the reset below.
+            _pendingWordIsSentenceStart = _atSentenceStart;
+
             // Record the chosen word as the last completed word for next-word
             // prediction, then reset all sentence-start and shift flags because
             // the prediction click itself is a neutral, mid-sentence action.
@@ -480,11 +503,24 @@ namespace OnScreenKeyboard
         /// <summary>
         /// Records a word as completed and clears the live typing buffer.
         /// The completed word is stored so it can be used for next-word
-        /// (bigram) predictions on subsequent keystrokes.
+        /// (bigram) predictions on subsequent keystrokes. Also feeds the
+        /// learning engine (<see cref="WordDatabase.RecordWord"/>) so frequencies
+        /// and word-pair links improve as the user types — a no-op unless a
+        /// personal (writable) database is currently loaded.
         /// </summary>
         /// <param name="word">The word that was just finished.</param>
         private void CompleteWord(string word)
         {
+            // Sentence-start words have a display-only leading capital (see
+            // _pendingWordIsSentenceStart); normalise it away before learning
+            // so the database isn't polluted with duplicate capitalised entries
+            // for ordinary words. LastCompletedWord itself is left untouched —
+            // GetPredictionsCore already falls back to a lower-cased lookup.
+            string forLearning = (_pendingWordIsSentenceStart && word.Length > 0)
+                ? char.ToLower(word[0]) + word.Substring(1)
+                : word;
+            WordDatabase.RecordWord(_lastCompletedWord, forLearning);
+
             _lastCompletedWord = word;
             _wordBuffer        = "";
         }

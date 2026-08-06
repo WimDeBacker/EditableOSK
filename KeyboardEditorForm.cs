@@ -81,14 +81,17 @@ namespace OnScreenKeyboard
         private CheckBox        _chkTimingAnimation;
 
         // Word prediction database
+        private CheckBox        _chkWPLearning;       // "Remember typed words"
         private ComboBox        _cmbWPDatabase;
         private Label           _lblWPInfo;
-        private Label           _lblWPChanged;        // "● unsaved" indicator
-        private Button          _btnWPCopy;
         private Button          _btnWPExport;
         private bool            _suppressWPChanged;   // re-entrancy guard
-        private string          _wpOriginalDatabase;  // filename when PopulateFields was called
-        private int             _wpPreviousValidIndex;// last index that was auto(0) or personal
+
+        // Word prediction — learning candidates (unknown words seen while typing,
+        // not yet promoted to the real word list). See WordDatabase.RecordWord.
+        private ListBox          _lstWPCandidates;
+        private Button           _btnWPPromote;
+        private Button           _btnWPReject;
 
         // Subscribed to WordDatabase.Loaded so the info label refreshes when a
         // background load completes while the editor is open (finding #6).
@@ -220,7 +223,7 @@ namespace OnScreenKeyboard
             _onWordDbLoaded = () =>
             {
                 if (!IsHandleCreated || IsDisposed) return;
-                try { BeginInvoke((Action)UpdateWPInfoLabel); }
+                try { BeginInvoke((Action)(() => { UpdateWPInfoLabel(); PopulateWPCandidates(); })); }
                 catch (InvalidOperationException) { }
             };
             WordDatabase.Loaded += _onWordDbLoaded;
@@ -255,9 +258,10 @@ namespace OnScreenKeyboard
             _btnSaveFile.Text     = "&" + Lang.T("Save");
             _btnSaveAsFile.Text   = Lang.T("Save As…");
             _btnLoadFile.Text     = "&" + Lang.T("Load…");
-            if (_btnWPCopy    != null) _btnWPCopy.Text   = Lang.T("wp: Create copy…");
-            if (_btnWPExport  != null) _btnWPExport.Text = Lang.T("wp: Export…");
-            if (_lblWPChanged != null) _lblWPChanged.Text = "● " + Lang.T("wp: unsaved");
+            if (_chkWPLearning != null) _chkWPLearning.Text = "&" + Lang.T("wp: Remember typed words");
+            if (_btnWPExport   != null) _btnWPExport.Text   = Lang.T("wp: Export…");
+            if (_btnWPPromote  != null) _btnWPPromote.Text  = Lang.T("wp: Promote");
+            if (_btnWPReject   != null) _btnWPReject.Text   = Lang.T("wp: Reject");
             UpdateWPInfoLabel();
         }
 
@@ -565,8 +569,11 @@ namespace OnScreenKeyboard
             SetTip(_chkTimingAnimation, () => Lang.T("tip: Show timing animation"));
 
             // ── Word Prediction card ──────────────────────────────────────
-            // Rows: combo (label + dropdown), info label, two buttons
-            int wpH = HDR_H + PAD + 70 + ROW_H + ROW_H + PAD;
+            // Rows: "Remember typed words" checkbox, combo (label + dropdown),
+            // info label, export button, candidates label, candidates list,
+            // promote/reject buttons.
+            const int ChkRowH = 30;
+            int wpH = HDR_H + PAD + ChkRowH + 24 + 46 + ROW_H + ROW_H + 24 + 74 + ROW_H + PAD;
             var grpWP = AddGroup(() => Lang.T("wp: Word prediction"), rightX, rightY, rightW, wpH,
                                  Color.FromArgb(22, 160, 133));
             grpWP.TabIndex = 4;
@@ -574,80 +581,97 @@ namespace OnScreenKeyboard
 
             int wgy = HDR_H + PAD;   // running y inside the WP card
 
-            // Database selector
-            AddFieldLabel(grpWP, () => Lang.T("wp: Database"), PAD, wgy + 2).TabIndex = 0;
+            // Master on/off switch for the learning engine. When off, RecordWord
+            // is a no-op (WordDatabase.LearningEnabled) and nothing is written
+            // to the overlay file — see WordDatabase's learning-engine remarks.
+            _chkWPLearning = new CheckBox
+            {
+                Text = "&" + Lang.T("wp: Remember typed words"),
+                Left = PAD, Top = wgy + 4, AutoSize = true,
+                ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent, Font = F_LABEL,
+                TabIndex = 0, Checked = true,
+            };
+            grpWP.Controls.Add(_chkWPLearning);
+            SetTip(_chkWPLearning, () => Lang.T("wp: tip remember"));
+            _chkWPLearning.CheckedChanged += (s, e) =>
+            {
+                // Live feedback while the dialog is open — actual persistence
+                // (LayoutMeta.WordLearningEnabled) only takes effect on Apply.
+                WordDatabase.LearningEnabled = _chkWPLearning.Checked;
+                UpdateWPInfoLabel();
+                UpdateWPCandidateControlsEnabled();
+            };
+            wgy += ChkRowH;
+
+            // Database selector — which base language file to use. No personal/
+            // copy concept here: "Remember typed words" above handles learning
+            // for whichever base file ends up loaded.
+            AddFieldLabel(grpWP, () => Lang.T("wp: Database"), PAD, wgy + 2).TabIndex = 1;
             wgy += 24;
             _cmbWPDatabase = new ComboBox
             {
                 Left = PAD, Top = wgy, Width = rightW - PAD * 2,
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary,
-                Font = F_INPUT, FlatStyle = FlatStyle.Flat, TabIndex = 1,
+                Font = F_INPUT, FlatStyle = FlatStyle.Flat, TabIndex = 2,
                 AccessibleName = Lang.StripMnemonic(Lang.T("wp: Database")),
             };
             grpWP.Controls.Add(_cmbWPDatabase);
             SetTip(_cmbWPDatabase, () => Lang.T("wp: tip database"));
             wgy += 46;
 
-            // Info label: language · word count · base/personal  +  "● unsaved" indicator
-            int infoW = rightW - PAD * 2 - 82;
+            // Info label: language · word count · learning on/off
             _lblWPInfo = new Label
             {
-                Left = PAD, Top = wgy + 4, Width = infoW, Height = 20,
+                Left = PAD, Top = wgy + 4, Width = rightW - PAD * 2, Height = 20,
                 ForeColor = Fluent.TextHint, Font = F_HINT, AutoSize = false,
             };
             grpWP.Controls.Add(_lblWPInfo);
-
-            _lblWPChanged = new Label
-            {
-                Left = PAD + infoW + 4, Top = wgy + 4, Width = 78, Height = 20,
-                ForeColor = Fluent.Accent, Font = F_HINT, AutoSize = false,
-                TextAlign = ContentAlignment.MiddleRight,
-                Text = "● " + Lang.T("wp: unsaved"),
-                Visible = false,
-            };
-            grpWP.Controls.Add(_lblWPChanged);
             wgy += ROW_H;
 
-            // Two buttons: Create personal copy & Export
-            int halfBw = (rightW - PAD * 2 - gap) / 2;
-            _btnWPCopy = MakeFileBtn(Lang.T("wp: Create copy…"), grpWP, PAD,             wgy, halfBw);
-            _btnWPCopy.TabIndex = 2;
-            SetTip(_btnWPCopy, () => Lang.T("wp: tip create copy"));
-            _btnWPExport = MakeFileBtn(Lang.T("wp: Export…"), grpWP, PAD + halfBw + gap, wgy, halfBw);
+            _btnWPExport = MakeFileBtn(Lang.T("wp: Export…"), grpWP, PAD, wgy, rightW - PAD * 2);
             _btnWPExport.TabIndex = 3;
             SetTip(_btnWPExport, () => Lang.T("wp: tip export"));
-
-            _btnWPCopy.Click   += (s, e) => WPCreatePersonalCopy();
             _btnWPExport.Click += (s, e) => WPExport();
 
-            // Selection change: update info label and button states
+            // ── Candidates: unknown words seen while typing, awaiting promotion ──
+            wgy += ROW_H;
+            AddFieldLabel(grpWP, () => Lang.T("wp: Candidates"), PAD, wgy + 2).TabIndex = 4;
+            wgy += 24;
+
+            _lstWPCandidates = new ListBox
+            {
+                Left = PAD, Top = wgy, Width = rightW - PAD * 2, Height = 70,
+                BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary,
+                Font = F_INPUT, BorderStyle = BorderStyle.FixedSingle, TabIndex = 5,
+                AccessibleName = Lang.StripMnemonic(Lang.T("wp: Candidates")),
+            };
+            grpWP.Controls.Add(_lstWPCandidates);
+            SetTip(_lstWPCandidates, () => Lang.T("wp: tip candidates"));
+            _lstWPCandidates.SelectedIndexChanged += (s, e) => UpdateWPCandidateControlsEnabled();
+            wgy += 74;
+
+            int halfBw2 = (rightW - PAD * 2 - gap) / 2;
+            _btnWPPromote = MakeFileBtn(Lang.T("wp: Promote"), grpWP, PAD, wgy, halfBw2);
+            _btnWPPromote.TabIndex = 6;
+            SetTip(_btnWPPromote, () => Lang.T("wp: tip promote"));
+            _btnWPReject = MakeFileBtn(Lang.T("wp: Reject"), grpWP, PAD + halfBw2 + gap, wgy, halfBw2);
+            _btnWPReject.TabIndex = 7;
+            SetTip(_btnWPReject, () => Lang.T("wp: tip reject"));
+
+            _btnWPPromote.Click += (s, e) => WPPromoteSelectedCandidate();
+            _btnWPReject.Click  += (s, e) => WPRejectSelectedCandidate();
+
+            PopulateWPCandidates();
+            UpdateWPCandidateControlsEnabled();
+
+            // Selection change: just refresh the info label — no copy dialog,
+            // no revert logic; every entry in the (base-only) combo is directly
+            // selectable.
             _cmbWPDatabase.SelectedIndexChanged += (s, e) =>
             {
                 if (_suppressWPChanged) return;
-
-                // Base file selected → trigger copy dialog; revert if the user cancels.
-                // A layout must never point directly at a base file.
-                if (_cmbWPDatabase.SelectedItem is WPDbItem wpItem && !wpItem.Info.IsPersonal)
-                {
-                    if (!WPCreatePersonalCopy())
-                    {
-                        // User cancelled: revert to the last valid (auto or personal) index
-                        _suppressWPChanged = true;
-                        try { _cmbWPDatabase.SelectedIndex = _wpPreviousValidIndex; }
-                        finally { _suppressWPChanged = false; }
-                        UpdateWPButtonStates();
-                        UpdateWPInfoLabel();
-                    }
-                    // On success: PopulateWPDatabaseCombo already updated everything
-                    return;
-                }
-
-                // Auto or personal file: record as the new safe fallback
-                _wpPreviousValidIndex = _cmbWPDatabase.SelectedIndex;
-                UpdateWPButtonStates();
                 UpdateWPInfoLabel();
-                UpdateWPChangedIndicator();
             };
 
             // ── Bottom action buttons ─────────────────────────────────────
@@ -742,15 +766,17 @@ namespace OnScreenKeyboard
             _chkTimingAnimation.Enabled = m.SlowKeysMs > 0 || m.DwellMs > 0;
             _chkTimingAnimation.Checked = m.ShowTimingAnimation;
 
-            // Word prediction database combo
+            // Word prediction: learning toggle + database combo
+            _chkWPLearning.Checked = m.WordLearningEnabled;
             PopulateWPDatabaseCombo(m.WordDatabase);
+            UpdateWPCandidateControlsEnabled();
         }
 
         // ════════════════════════════════════════════════════════════════
         // Word prediction database helpers
         // ════════════════════════════════════════════════════════════════
 
-        /// <summary>Combo-box item representing one .wfq database file.</summary>
+        /// <summary>Combo-box item representing one base .wfq database file.</summary>
         private sealed class WPDbItem
         {
             public DatabaseInfo Info { get; }
@@ -759,10 +785,7 @@ namespace OnScreenKeyboard
             {
                 string lang = string.IsNullOrEmpty(Info.Language)
                     ? "?" : Info.Language.ToUpper();
-                // Personal files are selectable targets; base files are copy-triggers only.
-                return Info.IsPersonal
-                    ? $"[{lang}]  {Info.DisplayName} ★"
-                    : $"[{lang}]  {Info.DisplayName}  →";
+                return $"[{lang}]  {Info.DisplayName}";
             }
         }
 
@@ -773,19 +796,13 @@ namespace OnScreenKeyboard
         }
 
         /// <summary>
-        /// Fills the word-prediction combo from the .wfq files found in the app
-        /// directory and pre-selects the entry that matches
+        /// Fills the word-prediction combo from the base .wfq files found in the
+        /// app directory and pre-selects the entry that matches
         /// <paramref name="selectedFilename"/> (just the filename, no path).
         /// Selects "(auto)" when the string is empty or no match is found.
         /// </summary>
         /// <param name="selectedFilename">Filename to pre-select (no path).</param>
-        /// <param name="updateOriginal">
-        ///   When <see langword="true"/> (default) stores <paramref name="selectedFilename"/>
-        ///   as the "original" value so the unsaved-changes indicator compares against it.
-        ///   Pass <see langword="false"/> after an internal copy-creation so the indicator
-        ///   correctly shows that the new copy is not yet saved to the layout file.
-        /// </param>
-        private void PopulateWPDatabaseCombo(string selectedFilename, bool updateOriginal = true)
+        private void PopulateWPDatabaseCombo(string selectedFilename)
         {
             _suppressWPChanged = true;
             try
@@ -813,148 +830,95 @@ namespace OnScreenKeyboard
                     }
                 }
                 _cmbWPDatabase.SelectedIndex = selectIdx;
-
-                // Keep track of the "original" filename for the changed indicator.
-                if (updateOriginal) _wpOriginalDatabase = selectedFilename;
-
-                // The previous-valid index is the selected index unless it landed on
-                // a base file (which cannot be a final target), in which case fall back to 0.
-                _wpPreviousValidIndex =
-                    (selectIdx > 0 &&
-                     _cmbWPDatabase.Items[selectIdx] is WPDbItem baseChk &&
-                     !baseChk.Info.IsPersonal)
-                    ? 0 : selectIdx;
             }
             finally { _suppressWPChanged = false; }
 
             UpdateWPInfoLabel();
-            UpdateWPButtonStates();
-            UpdateWPChangedIndicator();
         }
 
-        /// <summary>Updates the info label below the combo.</summary>
+        /// <summary>
+        /// Updates the info label below the combo (language, word count,
+        /// learning on/off) and the Export button's enabled state.
+        /// </summary>
         private void UpdateWPInfoLabel()
         {
             if (_lblWPInfo == null) return;
 
+            string kind = _chkWPLearning.Checked
+                ? Lang.T("wp: learning on") : Lang.T("wp: learning off");
+
             if (_cmbWPDatabase.SelectedItem is WPDbAutoItem)
             {
-                if (WordDatabase.IsLoaded)
-                {
-                    string lang = string.IsNullOrEmpty(WordDatabase.Language)
-                        ? "?" : WordDatabase.Language.ToUpper();
-                    string kind = WordDatabase.IsPersonal
-                        ? Lang.T("wp: Personal") : Lang.T("wp: Base");
-                    _lblWPInfo.Text =
-                        $"{lang}  ·  {WordDatabase.WordCount:N0} {Lang.T("wp: words")}  ·  {kind}";
-                }
-                else _lblWPInfo.Text = Lang.T("wp: No database loaded");
+                _lblWPInfo.Text = WordDatabase.IsLoaded
+                    ? $"{LangOrUnknown(WordDatabase.Language)}  ·  {WordDatabase.WordCount:N0} {Lang.T("wp: words")}  ·  {kind}"
+                    : Lang.T("wp: No database loaded");
             }
             else if (_cmbWPDatabase.SelectedItem is WPDbItem item)
             {
-                string lang = string.IsNullOrEmpty(item.Info.Language)
-                    ? "?" : item.Info.Language.ToUpper();
-                string kind = item.Info.IsPersonal
-                    ? Lang.T("wp: Personal") : Lang.T("wp: Base");
-                _lblWPInfo.Text = $"{lang}  ·  {kind}";
+                _lblWPInfo.Text = $"{LangOrUnknown(item.Info.Language)}  ·  {kind}";
             }
+
+            UpdateWPExportEnabled();
         }
 
-        /// <summary>Enables/disables the Copy and Export buttons.</summary>
-        private void UpdateWPButtonStates()
-        {
-            if (_btnWPCopy == null) return;
-            bool hasItem = _cmbWPDatabase.SelectedItem is WPDbItem;
-            _btnWPCopy.Enabled   = hasItem;   // can copy any selected DB
-            _btnWPExport.Enabled = _cmbWPDatabase.SelectedItem is WPDbItem exp
-                                   && exp.Info.IsPersonal;
-        }
+        private static string LangOrUnknown(string lang) =>
+            string.IsNullOrEmpty(lang) ? "?" : lang.ToUpper();
 
         /// <summary>
-        /// Copies the currently selected database to a new file in the app
-        /// directory with <c>isPersonal="true"</c>, then selects the new copy.
+        /// The Export button is only meaningful once something has actually
+        /// been learned — enabled only when the selected (or auto-resolved)
+        /// base database has a companion overlay file on disk.
         /// </summary>
-        /// <returns>
-        ///   <see langword="true"/> when a copy was successfully created and selected;
-        ///   <see langword="false"/> when no item is selected or the user cancelled the dialog.
-        /// </returns>
-        private bool WPCreatePersonalCopy()
+        private void UpdateWPExportEnabled()
         {
-            if (!(_cmbWPDatabase.SelectedItem is WPDbItem src)) return false;
-
-            string appDir = System.AppDomain.CurrentDomain.BaseDirectory;
-            string suggestedName = src.Info.DisplayName + "_personal.wfq";
-
-            using var dlg = new SaveFileDialog
-            {
-                Title            = Lang.T("wp: Save personal copy"),
-                Filter           = "Word database (*.wfq)|*.wfq|All files (*.*)|*.*",
-                DefaultExt       = "wfq",
-                InitialDirectory = appDir,
-                FileName         = suggestedName,
-            };
-            if (dlg.ShowDialog(this) != System.Windows.Forms.DialogResult.OK) return false;
-
-            string destPath = dlg.FileName;
-            try
-            {
-                // Stream copy — change isPersonal="false" → "true" on the root line.
-                using var reader = new System.IO.StreamReader(src.Info.FilePath,
-                    System.Text.Encoding.UTF8);
-                using var writer = new System.IO.StreamWriter(destPath, false,
-                    System.Text.Encoding.UTF8);
-                writer.WriteLine(reader.ReadLine()); // <?xml ...?>
-                string rootLine = reader.ReadLine() ?? "";
-                rootLine = rootLine.Replace("isPersonal=\"false\"", "isPersonal=\"true\"");
-                // If the file had no isPersonal attribute, add it.
-                if (!rootLine.Contains("isPersonal="))
-                    rootLine = rootLine.TrimEnd('>') + " isPersonal=\"true\">";
-                writer.WriteLine(rootLine);
-                char[] buf = new char[65536];
-                int n;
-                while ((n = reader.Read(buf, 0, buf.Length)) > 0)
-                    writer.Write(buf, 0, n);
-            }
-            catch (Exception ex)
-            {
-                // Clean up the partially-written file so it doesn't pollute the
-                // database directory and confuse LanguageRegistry (finding #4).
-                try { if (System.IO.File.Exists(destPath)) System.IO.File.Delete(destPath); }
-                catch { /* best-effort; ignore secondary failure */ }
-
-                System.Windows.Forms.MessageBox.Show(
-                    $"{Lang.T("wp: Copy failed")}\n{ex.Message}",
-                    Lang.T("wp: Word prediction"),
-                    System.Windows.Forms.MessageBoxButtons.OK,
-                    System.Windows.Forms.MessageBoxIcon.Error);
-                return false;
-            }
-
-            // Refresh combo and select the new file.
-            // updateOriginal: false — the copy is not yet saved to the layout file,
-            // so the unsaved-changes indicator must remain visible until the user clicks Apply.
-            PopulateWPDatabaseCombo(System.IO.Path.GetFileName(destPath), updateOriginal: false);
-            return true;
+            if (_btnWPExport == null) return;
+            string basePath = SelectedOrLoadedBasePath();
+            _btnWPExport.Enabled = basePath != null &&
+                System.IO.File.Exists(WordDatabase.GetOverlayPath(basePath));
         }
 
         /// <summary>
-        /// Copies the currently selected personal database to a user-chosen
-        /// location (for backup or transfer to another PC).
+        /// Full path of the base database the combo currently resolves to: the
+        /// explicitly selected file, or (for "(auto)") whatever is actually
+        /// loaded right now.
+        /// </summary>
+        private string SelectedOrLoadedBasePath()
+        {
+            if (_cmbWPDatabase.SelectedItem is WPDbItem item) return item.Info.FilePath;
+            // "(auto)": WordDatabase doesn't expose its own load path, but
+            // LastFile-style lookups aren't needed here — fall back to
+            // re-resolving the same way KeyboardForm.LoadWordDatabase does,
+            // via the registry, since the export button only needs a plausible
+            // target, not perfect precision while the dialog is still open.
+            var registry = new LanguageRegistry(System.AppDomain.CurrentDomain.BaseDirectory);
+            var match = !string.IsNullOrEmpty(_srcMeta.Language)
+                ? registry.GetForLanguage(_srcMeta.Language).FirstOrDefault()
+                : null;
+            return (match ?? registry.All.FirstOrDefault())?.FilePath;
+        }
+
+        /// <summary>
+        /// Exports the currently selected base database's overlay file (the
+        /// small file holding everything the learning engine has recorded) to
+        /// a user-chosen location, for backup or transfer to another PC.
         /// </summary>
         private void WPExport()
         {
-            if (!(_cmbWPDatabase.SelectedItem is WPDbItem src) || !src.Info.IsPersonal) return;
+            string basePath = SelectedOrLoadedBasePath();
+            if (basePath == null) return;
+            string overlayPath = WordDatabase.GetOverlayPath(basePath);
+            if (!System.IO.File.Exists(overlayPath)) return;
 
             using var dlg = new SaveFileDialog
             {
-                Title      = Lang.T("wp: Export personal copy"),
+                Title      = Lang.T("wp: Export learned words"),
                 Filter     = "Word database (*.wfq)|*.wfq|All files (*.*)|*.*",
                 DefaultExt = "wfq",
-                FileName   = System.IO.Path.GetFileName(src.Info.FilePath),
+                FileName   = System.IO.Path.GetFileName(overlayPath),
             };
             if (dlg.ShowDialog(this) != System.Windows.Forms.DialogResult.OK) return;
 
-            try   { System.IO.File.Copy(src.Info.FilePath, dlg.FileName, overwrite: true); }
+            try   { System.IO.File.Copy(overlayPath, dlg.FileName, overwrite: true); }
             catch (Exception ex)
             {
                 System.Windows.Forms.MessageBox.Show(
@@ -966,20 +930,78 @@ namespace OnScreenKeyboard
         }
 
         /// <summary>
-        /// Shows or hides the "● unsaved" label depending on whether the
-        /// current combo selection differs from the value that was present
-        /// in <see cref="LayoutMeta.WordDatabase"/> when <see cref="PopulateFields"/>
-        /// was called.  The indicator disappears after the user clicks Apply or Save,
-        /// because Apply closes the dialog (so the indicator is irrelevant).
+        /// Candidates are shown as plain "word (count)" strings; the raw word
+        /// is recovered by stripping the " (n)" suffix in
+        /// <see cref="SelectedCandidateWord"/>. Refills <see cref="_lstWPCandidates"/>
+        /// from <see cref="WordDatabase.GetCandidates"/>, most-seen first. Call
+        /// after opening the dialog and after any promote/reject action.
         /// </summary>
-        private void UpdateWPChangedIndicator()
+        private void PopulateWPCandidates()
         {
-            if (_lblWPChanged == null) return;
-            string current = _cmbWPDatabase.SelectedItem is WPDbItem sel
-                ? System.IO.Path.GetFileName(sel.Info.FilePath) : "";
-            bool changed = !string.Equals(current, _wpOriginalDatabase ?? "",
-                                          StringComparison.OrdinalIgnoreCase);
-            _lblWPChanged.Visible = changed;
+            if (_lstWPCandidates == null) return;
+            string previouslySelected = SelectedCandidateWord();
+
+            _lstWPCandidates.Items.Clear();
+            foreach (var (word, count) in WordDatabase.GetCandidates())
+                _lstWPCandidates.Items.Add($"{word} ({count})");
+
+            if (previouslySelected != null)
+            {
+                for (int i = 0; i < _lstWPCandidates.Items.Count; i++)
+                    if (_lstWPCandidates.Items[i].ToString().StartsWith(previouslySelected + " (", StringComparison.Ordinal))
+                    { _lstWPCandidates.SelectedIndex = i; break; }
+            }
+
+            UpdateWPCandidateControlsEnabled();
+        }
+
+        /// <summary>
+        /// Enables the whole Candidates section only while "Remember typed
+        /// words" is on, and the Promote/Reject buttons only while something
+        /// is selected in the list.
+        /// </summary>
+        private void UpdateWPCandidateControlsEnabled()
+        {
+            bool learning = _chkWPLearning != null && _chkWPLearning.Checked;
+            bool selected = _lstWPCandidates != null && _lstWPCandidates.SelectedIndex >= 0;
+
+            if (_lstWPCandidates != null) _lstWPCandidates.Enabled = learning;
+            if (_btnWPPromote    != null) _btnWPPromote.Enabled    = learning && selected;
+            if (_btnWPReject     != null) _btnWPReject.Enabled     = learning && selected;
+        }
+
+        /// <summary>
+        /// Extracts the raw word from the selected "word (count)" list entry,
+        /// or <c>null</c> if nothing is selected.
+        /// </summary>
+        private string SelectedCandidateWord()
+        {
+            if (_lstWPCandidates?.SelectedItem is not string s) return null;
+            int idx = s.LastIndexOf(" (", StringComparison.Ordinal);
+            return idx > 0 ? s.Substring(0, idx) : s;
+        }
+
+        /// <summary>
+        /// Promotes the selected candidate to a real, predictable word
+        /// immediately, bypassing the usual occurrence-count threshold.
+        /// </summary>
+        private void WPPromoteSelectedCandidate()
+        {
+            string word = SelectedCandidateWord();
+            if (word == null) return;
+            WordDatabase.PromoteCandidate(word);
+            PopulateWPCandidates();
+        }
+
+        /// <summary>
+        /// Discards the selected candidate (e.g. a typo) without promoting it.
+        /// </summary>
+        private void WPRejectSelectedCandidate()
+        {
+            string word = SelectedCandidateWord();
+            if (word == null) return;
+            WordDatabase.RemoveCandidate(word);
+            PopulateWPCandidates();
         }
 
         // ════════════════════════════════════════════════════════════════
@@ -1042,6 +1064,7 @@ namespace OnScreenKeyboard
                 WordDatabase    = _cmbWPDatabase.SelectedItem is WPDbItem selDb
                                   ? System.IO.Path.GetFileName(selDb.Info.FilePath)
                                   : "",
+                WordLearningEnabled = _chkWPLearning.Checked,
                 StickyModifiers = _chkStickyMods.Checked,
                 HoldToEdit      = _chkHoldToEdit.Checked,
                 ToolbarTheme    = (ToolbarTheme)_cmbToolbarTheme.SelectedIndex,

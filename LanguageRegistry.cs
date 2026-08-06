@@ -9,6 +9,11 @@
 //
 // "Peeking" uses XmlReader which reads only the opening tag of the root
 // element — the word data (potentially millions of lines) is never loaded.
+//
+// Overlay files (e.g. "worddb_NL.learned.wfq" — see WordDatabase's learning
+// engine) are NOT databases in their own right; they only ever apply on top
+// of a base file that's already loaded. The scan excludes them so they never
+// show up as if they were independently selectable.
 
 using System;
 using System.Collections.Generic;
@@ -39,22 +44,14 @@ namespace OnScreenKeyboard
 
         /// <summary>
         /// Human-readable name derived from the file name without extension
-        /// (e.g. "worddb_NL", "my_personal_nl").
+        /// (e.g. "worddb_NL").
         /// </summary>
         public string DisplayName { get; }
 
-        /// <summary>
-        /// <c>true</c> when the file carries <c>isPersonal="true"</c> — it is
-        /// a user-owned copy that may contain learned words and adjusted
-        /// frequencies.  <c>false</c> for bundled, read-only base databases.
-        /// </summary>
-        public bool   IsPersonal  { get; }
-
-        internal DatabaseInfo(string filePath, string language, bool isPersonal)
+        internal DatabaseInfo(string filePath, string language)
         {
             FilePath    = filePath;
             Language    = language ?? string.Empty;
-            IsPersonal  = isPersonal;
             DisplayName = Path.GetFileNameWithoutExtension(filePath);
         }
     }
@@ -68,15 +65,18 @@ namespace OnScreenKeyboard
     /// provides lookup by language code.
     ///
     /// <para>
-    /// Only the root-element attributes (<c>language</c>, <c>isPersonal</c>)
-    /// are read during the scan — the word data is never loaded.  This keeps
-    /// the scan fast even when the folder contains multi-hundred-megabyte files.
+    /// Only the root-element <c>language</c> attribute is read during the
+    /// scan — the word data is never loaded. This keeps the scan fast even
+    /// when the folder contains multi-hundred-megabyte files.
     /// </para>
     ///
     /// <para>
-    /// Multiple databases per language are supported: a "general Dutch" base,
-    /// a "children's Dutch" base, and the user's personal copy can all coexist
-    /// with <c>language="nl"</c>.
+    /// Multiple databases per language are supported: a "general Dutch" base
+    /// and a "children's Dutch" base can both coexist with <c>language="nl"</c>;
+    /// the user chooses between them in Edit Keyboard → Word Prediction. Each
+    /// one's learned words live in its own overlay file — see
+    /// <c>WordDatabase</c>'s learning engine — which is not itself a database
+    /// and is excluded from this scan.
     /// </para>
     /// </summary>
     public sealed class LanguageRegistry
@@ -95,8 +95,7 @@ namespace OnScreenKeyboard
         // ── Public API ───────────────────────────────────────────────────
 
         /// <summary>
-        /// All discovered databases, sorted: base files before personal copies,
-        /// then alphabetically by display name within each group.
+        /// All discovered databases, sorted alphabetically by display name.
         /// </summary>
         public IReadOnlyList<DatabaseInfo> All => _all;
 
@@ -124,6 +123,9 @@ namespace OnScreenKeyboard
 
         // ── Private helpers ──────────────────────────────────────────────
 
+        // Overlay files use this suffix (see WordDatabase.DeriveOverlayPath).
+        private const string OverlaySuffix = ".learned.wfq";
+
         private static IReadOnlyList<DatabaseInfo> BuildList(string folder)
         {
             if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder))
@@ -133,10 +135,13 @@ namespace OnScreenKeyboard
             foreach (string path in Directory.GetFiles(folder, "*.wfq")
                                              .OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
             {
+                if (path.EndsWith(OverlaySuffix, StringComparison.OrdinalIgnoreCase))
+                    continue; // an overlay, not a standalone database
+
                 try
                 {
-                    (string lang, bool isPersonal) = PeekMetadata(path);
-                    list.Add(new DatabaseInfo(path, lang, isPersonal));
+                    string lang = PeekLanguage(path);
+                    list.Add(new DatabaseInfo(path, lang));
                 }
                 catch
                 {
@@ -145,24 +150,18 @@ namespace OnScreenKeyboard
                 }
             }
 
-            // Sort: base files (isPersonal=false) before personal copies, then
-            // alphabetically by display name within each group.
-            list.Sort((a, b) =>
-            {
-                int byKind = a.IsPersonal.CompareTo(b.IsPersonal);
-                if (byKind != 0) return byKind;
-                return string.Compare(a.DisplayName, b.DisplayName,
-                                      StringComparison.OrdinalIgnoreCase);
-            });
+            list.Sort((a, b) => string.Compare(a.DisplayName, b.DisplayName,
+                                               StringComparison.OrdinalIgnoreCase));
 
             return list.AsReadOnly();
         }
 
         /// <summary>
-        /// Opens a .wfq file and reads only the root-element attributes.
-        /// Does NOT read the word data — XmlReader stops after the opening tag.
+        /// Opens a .wfq file and reads only the root element's <c>language</c>
+        /// attribute. Does NOT read the word data — XmlReader stops after the
+        /// opening tag.
         /// </summary>
-        private static (string language, bool isPersonal) PeekMetadata(string path)
+        private static string PeekLanguage(string path)
         {
             var settings = new XmlReaderSettings
             {
@@ -171,9 +170,7 @@ namespace OnScreenKeyboard
             };
             using var reader = XmlReader.Create(path, settings);
             reader.MoveToContent();   // advance to the root element opening tag
-            string lang       = reader.GetAttribute("language")   ?? string.Empty;
-            bool   isPersonal = reader.GetAttribute("isPersonal") == "true";
-            return (lang, isPersonal);
+            return reader.GetAttribute("language") ?? string.Empty;
         }
     }
 }

@@ -2,8 +2,6 @@
 
 ## Pending
 
-- [ ] **Priority 2b — Word prediction: learning engine** *(new feature — high)* — While the user types, record word and word-pair frequencies. Known words get their frequency incremented immediately. Unknown words go into a `<Candidates>` buffer and are promoted to the main list only when count > 2 (filters typos). Personal `.wfq` file updated in place; writes batched every 30 s or on app close. Candidate list visible and manageable in the Edit Keyboard → Word Prediction panel.
-
 - [ ] **Priority 2c — Shrink and review the test suite** *(maintenance)* — The test program has grown large. Audit which tests are load-bearing, which are redundant duplicates, and which are deprecated. Goal: smaller, faster, easier to maintain suite without losing meaningful coverage.
 
 - [ ] **Priority 3 — Touch target sizes** *(accessibility)* — The `+` group-edit button and colour swatches are 32 × 26 px. WCAG 2.5.5 recommends 44 × 44 px minimum. Worth addressing if the app is used on a tablet.
@@ -15,6 +13,22 @@
 ---
 
 ## Completed
+
+### Word prediction — learning engine (overlay redesign) ✓
+
+First cut used a full "personal copy" of the base `.wfq` (manual dropdown +
+copy step, learned frequency mixed into the base corpus frequency). Replaced
+after review — too much setup friction, and a +1 frequency bump is invisible
+against base corpus frequencies in the thousands/millions. Redesigned around
+a small overlay file and a separate personal-use ranking tier:
+
+- [x] **Overlay file, not a full copy** ✓ — `worddb_NL.wfq` → `worddb_NL.learned.wfq` (same dir, `WordDatabase.DeriveOverlayPath`/`GetOverlayPath`). Holds only what changed: `<PersonalUse>`/`<PairUse>` deltas for base words/pairs, `<NewWord>`/`<NewPair>` for promoted candidates (with a `<NewWord>`'s own `<Next>` children nested inside it), and `<Candidates>`. `WordDatabase.Load` merges it onto the freshly-parsed base snapshot before publishing (`ApplyOverlay`), reusing the same mutation primitives `RecordWord` uses. `LanguageRegistry` excludes `*.learned.wfq` from its database scan.
+- [x] **`RecordWord`** ✓ — Called from `WordPredictor.CompleteWord` on every finished word (typed or WP-clicked). Known words/pairs: `WordEntry`/`NextEntry.PersonalUseCount` incremented — kept separate from `Frequency` (the base corpus value), never blended. Unknown words go into a candidate buffer, promoted to a real word once seen more than twice. No-op unless `WordDatabase.LearningEnabled` (default **on**; no personal-file setup needed at all).
+- [x] **Personal-use ranking tier** ✓ — `GetPredictionsCore` gained "Step 1.5": words/pairs with `PersonalUseCount > 0` are ranked ahead of raw frequency, capped at `PersonalCap(count)` (≈3/4 of the slots, always leaving ≥1 for a normal suggestion) so personal usage reliably surfaces without ever fully crowding out the base corpus.
+- [x] **Sentence-start normalisation** ✓ — A word is only auto-capitalised because it opened a sentence (display artefact); `WordPredictor` tracks this per-word and learns it lowercase, while a genuine mid-sentence Shift press (proper noun) keeps its capital.
+- [x] **Batched, crash-safe persistence** ✓ — `SaveIfDirty()`/`SaveNow()` (parameterless — always target the overlay paired with whatever base is loaded) build a plain-data copy on the caller's (UI) thread — so a background write never races the UI thread's in-place `RecordWord` mutations — then write via `Task.Run` using the same `.tmp` + `File.Replace` pattern as `SettingsManager`. `KeyboardForm` calls it from a 30 s timer and does a final synchronous `SaveNow` on close.
+- [x] **"Remember typed words" toggle** ✓ — `LayoutMeta.WordLearningEnabled` (default true) replaces the old database-choosing dropdown/copy-dialog UI in Edit Keyboard → Word Prediction with a single checkbox; the database dropdown now only chooses between base language files (no personal/copy concept). Candidate list + Promote/Reject buttons gated on the toggle. Export now exports the (small) overlay file.
+- [x] **Tests** ✓ — 1648/1648 passing: personal-use vs. frequency increments kept separate, candidate buffering and auto-promotion at count > 2, manual promote/reject, overlay merge-at-load (`<PersonalUse>`/`<NewWord>`/`<PairUse>`/`<NewPair>`/`<Candidates>`), personal-use ranking cap, save targets the overlay (never the base file), no-op when `LearningEnabled = false`, `WordPredictor` sentence-start-vs-proper-noun case normalisation, and `LanguageRegistry` excluding overlay files from its scan.
 
 ### Word prediction — multi-language & database ✓
 

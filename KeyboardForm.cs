@@ -195,6 +195,11 @@ namespace OnScreenKeyboard
         /// </summary>
         private string _lastLoadedDbPath = null;
 
+        // Periodically flushes learned word-prediction frequencies (see
+        // WordDatabase.RecordWord) to disk so at most ~30 s of learning can be
+        // lost to a crash; a final save also runs on FormClosing.
+        private System.Windows.Forms.Timer _wpSaveTimer;
+
         // ── Word prediction ──────────────────────────────────────────
         private readonly WordPredictor _predictor = new WordPredictor(7);
 
@@ -345,6 +350,15 @@ namespace OnScreenKeyboard
             void onLangChanged() { _meta.Language = Lang.CurrentCode; RefreshToolbarButtonLabels(); }
             Lang.LanguageChanged += onLangChanged;
 
+            // Batches learned word/word-pair frequencies to disk every 30 s
+            // instead of writing on every keystroke. SaveIfDirty is itself a
+            // fast no-op when nothing changed or no database is loaded; it
+            // always targets the overlay file paired with whatever base
+            // database is currently loaded (see WordDatabase.DeriveOverlayPath).
+            _wpSaveTimer = new System.Windows.Forms.Timer { Interval = 30000 };
+            _wpSaveTimer.Tick += (s, e) => WordDatabase.SaveIfDirty();
+            _wpSaveTimer.Start();
+
             TryAutoLoad();
 
             ResizeEnd   += (s, e) =>
@@ -366,6 +380,11 @@ namespace OnScreenKeyboard
                 _toolTip?.Dispose();
                 _slowTimer?.Stop();  _slowTimer?.Dispose();
                 _dwellTimer?.Stop(); _dwellTimer?.Dispose();
+                _wpSaveTimer?.Stop(); _wpSaveTimer?.Dispose();
+                // Final flush so learning from the last (up to) 30 s isn't lost.
+                // Synchronous: the app is closing anyway, and the overlay file
+                // only ever holds learned deltas, never a full corpus copy.
+                WordDatabase.SaveNow();
                 _window.WindowWidth  = Width;
                 _window.WindowHeight = Height - ToolbarHeightForMode(_mode);
                 AutoSave();
@@ -2400,20 +2419,24 @@ namespace OnScreenKeyboard
 
                 if (!string.IsNullOrEmpty(_meta.Language))
                 {
-                    var match = registry.GetForLanguage(_meta.Language)
-                                        .FirstOrDefault(d => !d.IsPersonal);
+                    var match = registry.GetForLanguage(_meta.Language).FirstOrDefault();
                     if (match != null) path = match.FilePath;
                 }
 
                 if (path == null)
                 {
-                    var any = registry.All.FirstOrDefault(d => !d.IsPersonal)
-                           ?? registry.All.FirstOrDefault();
+                    var any = registry.All.FirstOrDefault();
                     if (any != null) path = any.FilePath;
                 }
             }
 
             if (path == null) return;   // no database found — word prediction stays off
+
+            // Keep the learning engine in sync with the layout's setting even
+            // when the reload below is skipped (e.g. only theme/window settings
+            // changed via Apply). Cheap — just a bool — and independent of
+            // whichever database ends up loaded.
+            WordDatabase.LearningEnabled = _meta.WordLearningEnabled;
 
             // Skip redundant reload: if the same file is already loaded (or loading),
             // starting a new Task would blank WP cells for no reason (finding #7).
