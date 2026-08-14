@@ -52,6 +52,8 @@
 
   <!-- Validation error messages -->
   <String key="err: invalid hex"           value="Voer een geldige hexkleur in (#RRGGBB)" />
+  <String key="err: layout file not found" value="Dit lay-outbestand is niet gevonden." />
+  <String key="warn: font not installed"   value="Het lettertype '{0}' is niet geïnstalleerd op deze computer." />
 
   <!-- Accessible descriptions -->
   <String key="preview: key '{0}', key colour {1}, font colour {2}, {3} {4} pt"
@@ -200,6 +202,7 @@
   <String key="Skip"                   value="Overslaan" />
   <String key="Add"                    value="Toevoegen" />
   <String key="Name 'standard' is reserved." value="De naam 'standard' is gereserveerd." />
+  <String key="A group with this name already exists." value="Er bestaat al een groep met deze naam." />
   <String key="Update standard group style"  value="Standaardgroepstijl bijwerken" />
   <String key="Protected"              value="Beveiligd" />
 
@@ -257,6 +260,7 @@
   <String key="wiz: Select theme file"      value="Selecteer een lay-outbestand om het thema van te kopiëren" />
   <String key="wiz: copy info"              value="Toetsen worden gekopieerd van: {0}" />
   <String key="wiz: err no copy file"       value="Selecteer een lay-outbestand om van te kopiëren." />
+  <String key="wiz: err empty paste"        value="Plak minstens één toets voordat u doorgaat." />
   <String key="wiz: err no theme file"      value="Selecteer een lay-outbestand om het thema van te kopiëren." />
   <String key="wiz: err no name"            value="Voer een bestandsnaam in." />
   <String key="wiz: err bad folder"         value="De geselecteerde map bestaat niet." />
@@ -298,5 +302,7 @@
   <String key="Invalid file title"  value="Bestand kan niet worden geopend" />
   <String key="Invalid file msg"    value="Het bestand kon niet worden geopend omdat het geen geldig toetsenbordlay-outbestand is, of het is gemaakt met een incompatibele versie.&#10;&#10;De toetsenbordindeling is niet gewijzigd." />
   <String key="Invalid file detail" value="Technische details:" />
+  <String key="font missing title"  value="Lettertype niet geïnstalleerd" />
+  <String key="font missing msg"    value="Dit toetsenbord gebruikt de volgende lettertype(n), die niet op deze computer zijn geïnstalleerd: {0}.&#10;&#10;Er wordt een vervangend lettertype gebruikt. Zoek online om het ontbrekende lettertype te downloaden en installeren als u wilt dat het toetsenbord er precies zo uitziet als bedoeld." />
 
 </Language>

@@ -117,6 +117,15 @@ Source: "{#BuildDir}\worddb_EN.wfq";  DestDir: "{app}"; \
 ; ── Translation ──────────────────────────────────────────────────────────
 Source: "{#BuildDir}\lang_nl.xml";                    DestDir: "{app}"; Flags: ignoreversion
 
+; ── Fonts ────────────────────────────────────────────────────────────────
+; SchoolKX_New — used by azertycolor.kbl. Installed into the system Fonts folder so
+; the bundled colourful theme renders correctly out of the box on a fresh machine.
+; onlyifdoesntexist: don't reinstall/overwrite if the user already has it.
+; uninsneveruninstall: a shared system font may be in use by other apps by the time
+; this app is uninstalled — never remove it automatically.
+Source: "fonts\SchoolKX_new.ttf"; DestDir: "{autofonts}"; FontInstall: "SchoolKX_New"; \
+    Flags: onlyifdoesntexist uninsneveruninstall
+
 ; ── [Icons] ─────────────────────────────────────────────────────────────────
 
 [Icons]

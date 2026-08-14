@@ -3592,6 +3592,7 @@ namespace OnScreenKeyboard
                 LoadWordDatabase();
                 RebuildAllButtons();
                 Size = new Size(_window.WindowWidth, _window.WindowHeight);
+                WarnIfFontsMissing(_theme, _layout);
             }
             catch { }
         }
@@ -3744,9 +3745,14 @@ namespace OnScreenKeyboard
             try
             {
                 _meta.LastFile = path;
-                SettingsManager.SaveSettings(_layout, _theme, _window, _meta, path);
+                // allowInvalid: true — AutoSave must bypass the structural-validity guard so a
+                // transiently invalid in-memory layout (mid resize/merge) is never silently
+                // dropped. Without this, SettingsManager.SaveSettings throws on an invalid
+                // layout, the catch below swallows it, and every autosave becomes a no-op until
+                // the user happens to fix the layout — losing everything in between on a crash.
+                SettingsManager.SaveSettings(_layout, _theme, _window, _meta, path, allowInvalid: true);
                 if (path != SettingsManager.DefaultPath)
-                    SettingsManager.SaveSettings(_layout, _theme, _window, _meta, SettingsManager.DefaultPath);
+                    SettingsManager.SaveSettings(_layout, _theme, _window, _meta, SettingsManager.DefaultPath, allowInvalid: true);
             }
             catch { }
         }
@@ -3809,6 +3815,46 @@ namespace OnScreenKeyboard
             RebuildAllButtons();
             Size = new Size(_window.WindowWidth, _window.WindowHeight);
             AutoSave();
+            WarnIfFontsMissing(_theme, _layout);
+        }
+
+        /// <summary>
+        /// Returns the distinct, non-empty font names referenced by <paramref name="theme"/> or
+        /// <paramref name="layout"/> (global theme, every group, every key) that are not
+        /// installed on this machine, sorted for a stable display order. Separated from
+        /// <see cref="WarnIfFontsMissing"/> so the detection logic can be unit-tested without
+        /// triggering the modal warning dialog.
+        /// </summary>
+        internal static List<string> GetMissingFonts(VisualTheme theme, GridLayout layout)
+        {
+            var missing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            void Check(string name)
+            {
+                if (!string.IsNullOrEmpty(name) && !Fluent.IsFontAvailable(name))
+                    missing.Add(name);
+            }
+            Check(theme.FontName);
+            foreach (var g in layout.Groups) Check(g.FontName);
+            foreach (var c in layout.Cells) Check(c.Props.FontName);
+            return missing.OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
+        /// <summary>
+        /// Checks every font name referenced by the just-loaded theme/layout against the fonts
+        /// actually installed on this machine, and — if any are missing — shows a warning
+        /// naming them. Without this, a layout authored with a font that isn't installed here
+        /// renders with a silently substituted font (see KeyboardForm.CreateButton's own Arial
+        /// fallback) with no indication anything's different from what the file's author
+        /// intended.
+        /// </summary>
+        private void WarnIfFontsMissing(VisualTheme theme, GridLayout layout)
+        {
+            var missing = GetMissingFonts(theme, layout);
+            if (missing.Count == 0) return;
+            MessageBox.Show(
+                string.Format(Lang.T("font missing msg"), string.Join(", ", missing)),
+                Lang.T("font missing title"),
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
         /// <summary>

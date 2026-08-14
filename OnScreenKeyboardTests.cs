@@ -57,9 +57,14 @@ namespace OnScreenKeyboard
             T_PaintHandlerAudit();
             T_SlowKeysDwell();
             T_AccessibilityControls();
+            T_ValidationBlocksApply();
+            T_MissingFontHandling();
+            T_FluentDialogBase_DisposeWithoutShow();
             T_WizardKeyParser();
             T_WizardKeyClassifier();
             T_WizardThemePresets();
+            T_WizardBuildLayoutData_ThemeFileMerge();
+            T_WizardThemePage_GroupSwatchColors();
             T_StyleGroups();
             T_XmlRobustness();
 
@@ -520,6 +525,44 @@ namespace OnScreenKeyboard
             {
                 if (File.Exists(badPath)) File.Delete(badPath);
                 if (File.Exists(badTmp))  File.Delete(badTmp);
+            }
+
+            // ── allowInvalid: true — AutoSave's bypass must still persist an invalid layout ──
+            // (regression test for the fix: AutoSave used to call the 5-arg overload, which
+            // throws on an invalid layout; the exception was swallowed by AutoSave's empty
+            // catch, silently turning every autosave into a no-op until the layout became valid
+            // again. allowInvalid must let the write through so in-progress edits are never lost.)
+            string bypassPath = Path.Combine(Path.GetTempPath(), $"osk_allowinvalid_{Guid.NewGuid():N}.kbl");
+            string bypassTmp  = bypassPath + ".tmp";
+            try
+            {
+                var broken2 = new GridLayout(1, 2);
+                broken2.Cells.Add(new GridCell(0, 0, new KeyProps("A", "A")));
+                broken2.Cells.Add(new GridCell(0, 0, new KeyProps("B", "B")));  // duplicate → invalid
+
+                bool threw3 = false;
+                try
+                {
+                    SettingsManager.SaveSettings(broken2, new VisualTheme(), new WindowState(), new LayoutMeta(),
+                                                  bypassPath, allowInvalid: true);
+                }
+                catch (InvalidOperationException) { threw3 = true; }
+
+                Assert(!threw3,              "allowInvalid: true — SaveSettings does not throw on invalid layout");
+                Assert(File.Exists(bypassPath), "allowInvalid: true — file is actually written");
+                Assert(!File.Exists(bypassTmp), "allowInvalid: true — no leftover .tmp");
+
+                // The invalid layout must still round-trip back exactly as written — AutoSave's
+                // whole point is to preserve in-memory state verbatim, not to silently repair it.
+                var reloadedBroken = SettingsManager.LoadSettings(new VisualTheme(), new WindowState(),
+                                                                    new LayoutMeta(), bypassPath);
+                Assert(reloadedBroken != null && reloadedBroken.Cells.Count == 2,
+                       "allowInvalid: true — invalid layout round-trips with both (overlapping) cells intact");
+            }
+            finally
+            {
+                if (File.Exists(bypassPath)) File.Delete(bypassPath);
+                if (File.Exists(bypassTmp))  File.Delete(bypassTmp);
             }
         }
 
@@ -1929,6 +1972,85 @@ namespace OnScreenKeyboard
                 Assert(result9Std.BorderThickness == 1,
                     "Step 6 import Skip: BorderThickness unchanged (Skip was chosen)");
             }
+
+            Section("StyleGroups — Step 6 import: UpdateStandard preserves local casing (case-mismatch regression)");
+
+            {
+                // Regression for the bug found 2026-08-14: importing a group whose name differs
+                // only by case from the local standard group (e.g. "Standard" vs "standard") must
+                // NOT rename the local entry — every other lookup in the app compares
+                // StandardGroupName case-sensitively, so adopting the import's casing would
+                // desync this group from those lookups and cost it its protected status.
+                var importedStd10 = new KeyGroup
+                {
+                    Name      = "Standard", // capitalised, as it would come from another app/file
+                    KeyColor  = Color.FromArgb(255, 5, 6, 7),
+                };
+                var groups10 = new List<KeyGroup>
+                {
+                    new KeyGroup { Name = SettingsManager.StandardGroupName, KeyColor = Color.White },
+                    new KeyGroup { Name = "Regular" },
+                };
+                using var form10 = new GroupEditorForm(groups10);
+
+                form10.ApplyImportDecisions(new[]
+                {
+                    (importedStd10, GroupEditorForm.ImportAction.UpdateStandard),
+                });
+
+                form10.CommitToResult();
+                Assert(form10.ResultGroups.Count == 2,
+                    "Step 6 import case-mismatch: no duplicate group was created");
+                var result10Std = form10.ResultGroups.Find(g => g.Name == SettingsManager.StandardGroupName);
+                Assert(result10Std != null,
+                    "Step 6 import case-mismatch: group is still found under the canonical lowercase name");
+                Assert(result10Std != null && result10Std.KeyColor == Color.FromArgb(255, 5, 6, 7),
+                    "Step 6 import case-mismatch: style was still updated from the import");
+                Assert(!form10.ResultGroups.Exists(g => g.Name == "Standard"),
+                    "Step 6 import case-mismatch: no group is left named 'Standard' (capitalised)");
+            }
+
+            Section("StyleGroups — Step 6: add/rename blocked on case-insensitive collision with a regular group");
+
+            {
+                var groups11 = new List<KeyGroup>
+                {
+                    new KeyGroup { Name = SettingsManager.StandardGroupName },
+                    new KeyGroup { Name = "Klinkers" },
+                };
+                using var form11 = new GroupEditorForm(groups11, initialGroupName: "Klinkers");
+
+                // Adding a name that only differs by case from an existing regular group is rejected.
+                bool addedCaseDup = form11.TryAddGroup("klinkers");
+                Assert(!addedCaseDup, "Step 6 add: 'klinkers' rejected — collides with existing 'Klinkers'");
+                bool addedCaseDupUpper = form11.TryAddGroup("KLINKERS");
+                Assert(!addedCaseDupUpper, "Step 6 add: 'KLINKERS' rejected — collides with existing 'Klinkers'");
+
+                // A genuinely distinct name is still accepted.
+                bool addedDistinct = form11.TryAddGroup("Medeklinkers");
+                Assert(addedDistinct, "Step 6 add: distinct name 'Medeklinkers' is accepted");
+
+                form11.CommitToResult();
+                Assert(form11.ResultGroups.Count == 3,
+                    "Step 6 add: only the distinct group was added (2 case-duplicate attempts rejected)");
+
+                // Renaming one regular group to collide case-insensitively with another is rejected too.
+                var groups11b = new List<KeyGroup>
+                {
+                    new KeyGroup { Name = SettingsManager.StandardGroupName },
+                    new KeyGroup { Name = "Klinkers" },
+                    new KeyGroup { Name = "Cijfers" },
+                };
+                using var form11b = new GroupEditorForm(groups11b, initialGroupName: "Cijfers");
+                bool renamedCaseDup = form11b.TryRenameCurrentGroup("klinkers");
+                Assert(!renamedCaseDup, "Step 6 rename: 'Cijfers' → 'klinkers' rejected — collides with existing 'Klinkers'");
+                Assert(form11b.SelectedGroupName == "Cijfers",
+                    "Step 6 rename: rejected rename left the group's name unchanged");
+
+                // Renaming to a genuinely distinct name is still accepted.
+                bool renamedDistinct = form11b.TryRenameCurrentGroup("Leestekens");
+                Assert(renamedDistinct, "Step 6 rename: distinct name 'Leestekens' is accepted");
+            }
         }
 
         // Inline helpers mirroring KeyboardForm private methods for test isolation
@@ -2702,6 +2824,72 @@ namespace OnScreenKeyboard
             {
                 if (System.IO.File.Exists(mergeBasePath)) System.IO.File.Delete(mergeBasePath);
                 if (System.IO.File.Exists(mergeOverlayPath)) System.IO.File.Delete(mergeOverlayPath);
+            }
+
+            // ── Learning engine — overlay NewWord no longer clobbers a matching base entry ──
+            // Regression for the bug found 2026-08-15: if the base dictionary is later updated
+            // to include a word that was previously only known via a personally-promoted
+            // overlay <NewWord> record, the overlay must not overwrite the base's real
+            // frequency/bigram data — it should fold in as a personal-use bump instead, exactly
+            // like a <PersonalUse> record would for a word that was always in the base.
+            section("WordDatabase — overlay NewWord folds into a matching base entry");
+
+            string clashBasePath = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(), $"osk_clash_{Guid.NewGuid():N}.wfq");
+            string clashOverlayPath = WordDatabase.GetOverlayPath(clashBasePath);
+            try
+            {
+                WordDatabase.LearningEnabled = true;
+                // "zult" is now a real, richly-described base word (as if the base dictionary
+                // was updated after the user had already personally learned it).
+                System.IO.File.WriteAllText(clashBasePath,
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n" +
+                    "<WordDatabase version=\"1\" language=\"nl\">\r\n" +
+                    "  <Word value=\"zult\" frequency=\"500\"><Next value=\"fijn\" frequency=\"50\" /></Word>\r\n" +
+                    "</WordDatabase>",
+                    System.Text.Encoding.UTF8);
+                // A stale overlay <NewWord> record left over from before "zult" was in the base.
+                System.IO.File.WriteAllText(clashOverlayPath,
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n" +
+                    "<WordDatabaseOverlay version=\"1\">\r\n" +
+                    "  <NewWord value=\"zult\" frequency=\"3\" personalUse=\"7\">\r\n" +
+                    "    <Next value=\"fijn\" frequency=\"1\" personalUse=\"1\" />\r\n" +
+                    "  </NewWord>\r\n" +
+                    "</WordDatabaseOverlay>",
+                    System.Text.Encoding.UTF8);
+
+                WordDatabase.Load(clashBasePath);
+                assert(WordDatabase.IsLoaded, "clash: base+overlay loaded");
+
+                var snap = typeof(WordDatabase)
+                    .GetField("_snapshot", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
+                var byExact = (System.Collections.IDictionary)snap.GetType()
+                    .GetField("ByExact", BindingFlags.Public | BindingFlags.Instance).GetValue(snap);
+                assert(byExact.Contains("zult"), "clash: 'zult' is present after merge");
+                var zultEntry = byExact["zult"];
+                int freq         = (int)zultEntry.GetType().GetProperty("Frequency").GetValue(zultEntry);
+                bool isFromBase  = (bool)zultEntry.GetType().GetProperty("IsFromBase").GetValue(zultEntry);
+                int personalUse  = (int)zultEntry.GetType().GetProperty("PersonalUseCount").GetValue(zultEntry);
+
+                assert(freq == 500,
+                    $"clash: base's real Frequency (500) is preserved, not overwritten by the overlay's stale 3 — got {freq}");
+                assert(isFromBase,
+                    "clash: entry is still flagged IsFromBase=true, not replaced by a fresh non-base entry");
+                assert(personalUse == 7,
+                    $"clash: the overlay's PersonalUseCount (7) is folded into the base entry — got {personalUse}");
+
+                var byFreq = (System.Collections.IEnumerable)snap.GetType()
+                    .GetField("ByFrequency", BindingFlags.Public | BindingFlags.Instance).GetValue(snap);
+                int zultCount = 0;
+                foreach (var e in byFreq)
+                    if ((string)e.GetType().GetProperty("Word").GetValue(e) == "zult") zultCount++;
+                assert(zultCount == 1,
+                    $"clash: no orphaned duplicate entry added to ByFrequency — got {zultCount}");
+            }
+            finally
+            {
+                if (System.IO.File.Exists(clashBasePath)) System.IO.File.Delete(clashBasePath);
+                if (System.IO.File.Exists(clashOverlayPath)) System.IO.File.Delete(clashOverlayPath);
             }
 
             // ── Learning engine — personal-tier ranking cap ───────────────────
@@ -4337,6 +4525,313 @@ namespace OnScreenKeyboard
             finally { if (File.Exists(tmp)) File.Delete(tmp); }
         }
 
+        // T_ValidationBlocksApply — regression test for the bug found 2026-08-14: all three
+        // editor dialogs (GroupEditorForm, KeyboardEditorForm, KeyEditorForm) showed an
+        // ErrorProvider warning icon on invalid hex colours but never actually checked it
+        // before Apply/OK, so the warning was purely cosmetic. Fixed with a shared
+        // FluentDialogBase.HasPendingErrors() helper, wired into every Apply/OK handler.
+        // Also covers a second gap found in the same pass: KeyEditorForm's Layout-mode Send
+        // field accepted an unresolvable file path with zero validation at all.
+        private static void T_ValidationBlocksApply()
+        {
+            Section("Validation actually blocks Apply/OK (not just cosmetic)");
+
+            object Field(object form, string fieldName) =>
+                form.GetType().GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance).GetValue(form);
+            // GroupEditorForm stores the hex TextBox field directly (e.g. _txtKeyColorHex).
+            TextBox HexBox(object form, string fieldName) => (TextBox)Field(form, fieldName);
+            // KeyboardEditorForm/KeyEditorForm use FluentDialogBase.AddColorRow, which only
+            // exposes the swatch Button — the paired TextBox hangs off its .Tag.
+            TextBox SwatchHexBox(object form, string fieldName) => ((Button)Field(form, fieldName)).Tag as TextBox;
+            bool HasPendingErrors(object form) =>
+                (bool)form.GetType().GetMethod("HasPendingErrors", BindingFlags.NonPublic | BindingFlags.Instance)
+                    .Invoke(form, new object[] { null });
+
+            // ── GroupEditorForm: invalid hex blocks the OK click ───────────
+            {
+                var groups = new List<KeyGroup> { new KeyGroup { Name = SettingsManager.StandardGroupName } };
+                using var f = new GroupEditorForm(groups);
+                // Button.PerformClick() requires CanSelect, which requires the whole ancestor
+                // chain to be Visible — a Form that's never been shown reports Visible=false
+                // for all its children, silently no-opping every PerformClick() below.
+                f.Show();
+                var hexBox = HexBox(f, "_txtKeyColorHex");
+                Assert(hexBox != null, "GroupEditorForm: found the Key color hex TextBox");
+
+                hexBox.Text = "not-a-color";
+                Assert(HasPendingErrors(f), "GroupEditorForm: invalid hex is flagged as a pending error");
+                Assert(f.ResultGroups == null,
+                    "GroupEditorForm: ResultGroups not set before OK is clicked");
+
+                var btnOk = (Button)typeof(GroupEditorForm)
+                    .GetField("_btnOK", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(f);
+                btnOk.PerformClick();
+                Assert(f.DialogResult != DialogResult.OK,
+                    "GroupEditorForm: OK click is refused while the hex field is invalid");
+                Assert(f.ResultGroups == null,
+                    "GroupEditorForm: ResultGroups still not set after the refused OK click");
+
+                hexBox.Text = "FF8800";
+                Assert(!HasPendingErrors(f), "GroupEditorForm: valid hex clears the pending error");
+                btnOk.PerformClick();
+                Assert(f.DialogResult == DialogResult.OK,
+                    "GroupEditorForm: OK click succeeds once the hex field is valid");
+            }
+
+            // ── KeyboardEditorForm: invalid hex blocks Apply(), fallback uses the prior colour ──
+            {
+                var srcTheme = new VisualTheme { BackgroundColor = Color.FromArgb(255, 10, 20, 30) };
+                using var f = new KeyboardEditorForm(srcTheme, new WindowState(), new LayoutMeta(), owner: null);
+                var hexBox = SwatchHexBox(f, "_pnlBgColor");
+                Assert(hexBox != null, "KeyboardEditorForm: found the Background color hex TextBox");
+
+                var applyMi = typeof(KeyboardEditorForm)
+                    .GetMethod("Apply", BindingFlags.NonPublic | BindingFlags.Instance);
+
+                hexBox.Text = "zzz";
+                Assert(HasPendingErrors(f), "KeyboardEditorForm: invalid background hex is flagged");
+                bool applied1 = (bool)applyMi.Invoke(f, null);
+                Assert(!applied1, "KeyboardEditorForm: Apply() refuses to proceed with an invalid hex");
+                Assert(f.DialogResult != DialogResult.OK,
+                    "KeyboardEditorForm: dialog does not close on a refused Apply()");
+
+                hexBox.Text = "112233";
+                bool applied2 = (bool)applyMi.Invoke(f, null);
+                Assert(applied2, "KeyboardEditorForm: Apply() succeeds once the hex is valid");
+                Assert(f.ResultTheme.BackgroundColor == Color.FromArgb(255, 0x11, 0x22, 0x33),
+                    "KeyboardEditorForm: valid hex is applied");
+            }
+
+            // ── KeyEditorForm: invalid hex blocks Apply() ──────────────────
+            {
+                var props = new KeyProps("A", "A");
+                using var f = new KeyEditorForm(props, owner: null,
+                    layoutDir: AppDomain.CurrentDomain.BaseDirectory);
+                var hexBox = SwatchHexBox(f, "_pnlKeyColor");
+                Assert(hexBox != null, "KeyEditorForm: found the Key color hex TextBox");
+
+                var applyMi = typeof(KeyEditorForm)
+                    .GetMethod("Apply", BindingFlags.NonPublic | BindingFlags.Instance);
+
+                hexBox.Text = "not-a-color";
+                Assert(HasPendingErrors(f), "KeyEditorForm: invalid key-colour hex is flagged");
+                applyMi.Invoke(f, null);
+                // Result is initialised to a clone of the constructor's KeyProps, so it's never
+                // null — DialogResult staying off OK is the correct signal that Apply() bailed.
+                Assert(f.DialogResult != DialogResult.OK,
+                    "KeyEditorForm: dialog does not close while the hex field is invalid");
+
+                hexBox.Text = "";
+                Assert(!HasPendingErrors(f), "KeyEditorForm: clearing the field back out clears the error");
+            }
+
+            // ── KeyEditorForm: Layout-mode Send field validates the path live ──
+            {
+                var props = new KeyProps("A", "A");
+                using var f = new KeyEditorForm(props, owner: null,
+                    layoutDir: AppDomain.CurrentDomain.BaseDirectory);
+                f.Show(); // see note above — PerformClick() needs a visible ancestor chain
+
+                var btnModeLayout = (FluentButton)typeof(KeyEditorForm)
+                    .GetField("_btnModeLayout", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(f);
+                var txtSend = (TextBox)typeof(KeyEditorForm)
+                    .GetField("_txtSend", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(f);
+                btnModeLayout.PerformClick();
+
+                txtSend.Text = "does_not_exist.kbl";
+                Assert(HasPendingErrors(f), "KeyEditorForm: unresolvable layout path is flagged live");
+
+                txtSend.Text = "azerty.kbl"; // ships next to the test binary (CopyToOutputDirectory)
+                Assert(!HasPendingErrors(f), "KeyEditorForm: an existing layout file clears the error");
+
+                var applyMi = typeof(KeyEditorForm)
+                    .GetMethod("Apply", BindingFlags.NonPublic | BindingFlags.Instance);
+                txtSend.Text = "still_missing.kbl";
+                applyMi.Invoke(f, null);
+                Assert(f.DialogResult != DialogResult.OK,
+                    "KeyEditorForm: Apply() refuses to save an unresolvable layout path");
+
+                // Switching away from Layout mode must not leave a stale error behind.
+                var btnModeText = (FluentButton)typeof(KeyEditorForm)
+                    .GetField("_btnModeText", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(f);
+                btnModeText.PerformClick();
+                Assert(!HasPendingErrors(f),
+                    "KeyEditorForm: leaving Layout mode clears the stale layout-path error");
+            }
+        }
+
+        // T_MissingFontHandling — regression test for the bug found 2026-08-14: a font that
+        // isn't installed on the current machine used to get silently discarded (GroupEditorForm
+        // reset it to "(inherit standard)"; KeyEditorForm's font combo fell back to whatever was
+        // alphabetically first, which then looked like a deliberate user edit and auto-detached
+        // the key from its group). Fixed via FluentDialogBase.SelectOrInsertFont (preserves the
+        // real name in the combo) and KeyEditorForm's _fontUserChanged dirty flag (tracks real
+        // user interaction instead of comparing the combo's display value).
+        private static void T_MissingFontHandling()
+        {
+            Section("Missing/uninstalled font handling");
+
+            const string FakeFont = "ZZZ_Definitely_Not_A_Real_Font_12345";
+            Assert(!Fluent.IsFontAvailable(FakeFont), "sanity: fake font name is not installed");
+            Assert(Fluent.IsFontAvailable("Arial"), "sanity: Arial is installed (assumed throughout this app)");
+
+            // ── KeyboardForm.GetMissingFonts ────────────────────────────────
+            {
+                var theme = new VisualTheme { FontName = "Arial" };
+                var layout = new GridLayout(1, 1);
+                layout.Cells.Add(new GridCell(0, 0, new KeyProps("a", "a") { FontName = FakeFont }));
+                var missing = KeyboardForm.GetMissingFonts(theme, layout);
+                Assert(missing.Contains(FakeFont), "GetMissingFonts: finds a font used only by a key");
+                Assert(!missing.Contains("Arial"), "GetMissingFonts: installed fonts are not reported");
+            }
+
+            // ── FluentDialogBase.SelectOrInsertFont ─────────────────────────
+            {
+                var combo = new ComboBox();
+                combo.Items.Add("(none)");
+                combo.Items.Add("Arial");
+                combo.Items.Add("Calibri");
+                var mi = typeof(FluentDialogBase).GetMethod("SelectOrInsertFont",
+                    BindingFlags.NonPublic | BindingFlags.Static);
+
+                mi.Invoke(null, new object[] { combo, FakeFont });
+                Assert(combo.SelectedItem?.ToString() == FakeFont,
+                    "SelectOrInsertFont: an uninstalled font is selected, not substituted");
+                Assert(combo.SelectedIndex != 0,
+                    "SelectOrInsertFont: doesn't land on index 0 (reserved for a '(none)'-style placeholder)");
+
+                mi.Invoke(null, new object[] { combo, "Arial" });
+                Assert(combo.SelectedItem?.ToString() == "Arial",
+                    "SelectOrInsertFont: an installed font is still just selected normally");
+                int arialCount = 0;
+                foreach (var item in combo.Items) if (item.ToString() == "Arial") arialCount++;
+                Assert(arialCount == 1, "SelectOrInsertFont: doesn't duplicate an already-listed font");
+            }
+
+            // ── GroupEditorForm: uninstalled font survives commit untouched ─
+            {
+                var groups = new List<KeyGroup>
+                {
+                    new KeyGroup { Name = SettingsManager.StandardGroupName },
+                    new KeyGroup { Name = "Klinkers", FontName = FakeFont },
+                };
+                using var f = new GroupEditorForm(groups, initialGroupName: "Klinkers");
+                f.CommitToResult();
+                var result = f.ResultGroups.Find(g => g.Name == "Klinkers");
+                Assert(result != null && result.FontName == FakeFont,
+                    "GroupEditorForm: uninstalled font is preserved through commit, not cleared to '(inherit standard)'");
+            }
+
+            // ── KeyEditorForm: staying in a group whose font isn't installed ─
+            {
+                var groups = new List<KeyGroup>
+                {
+                    new KeyGroup { Name = SettingsManager.StandardGroupName },
+                    new KeyGroup { Name = "Klinkers", FontName = FakeFont },
+                };
+                var props = new KeyProps("a", "a") { GroupName = "Klinkers" };
+                using var f = new KeyEditorForm(props, owner: null, groups: groups);
+                var applyMi = typeof(KeyEditorForm).GetMethod("Apply", BindingFlags.NonPublic | BindingFlags.Instance);
+                applyMi.Invoke(f, null);
+                Assert(f.Result.GroupName == "Klinkers",
+                    "KeyEditorForm: stays in the group when its font isn't installed and nothing was touched");
+                Assert(f.Result.FontName == "",
+                    "KeyEditorForm: FontName stays empty (inherits from the group) instead of getting baked in");
+                Assert(f.DialogResult == DialogResult.OK, "KeyEditorForm: Apply() still succeeds normally");
+            }
+
+            // ── UpdateFontAvailabilityWarning: informational only, never blocks Apply ──
+            {
+                bool HasPendingErrors(object form) =>
+                    (bool)form.GetType().GetMethod("HasPendingErrors", BindingFlags.NonPublic | BindingFlags.Instance)
+                        .Invoke(form, new object[] { null });
+
+                var groups = new List<KeyGroup> { new KeyGroup { Name = SettingsManager.StandardGroupName } };
+                using var f = new GroupEditorForm(groups);
+                var cmbFont = (ComboBox)typeof(GroupEditorForm)
+                    .GetField("_cmbFont", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(f);
+                var fontWarn = (ErrorProvider)typeof(FluentDialogBase)
+                    .GetField("_fontWarn", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(f);
+                var updateMi = typeof(FluentDialogBase).GetMethod("UpdateFontAvailabilityWarning",
+                    BindingFlags.NonPublic | BindingFlags.Instance);
+
+                updateMi.Invoke(f, new object[] { cmbFont, FakeFont });
+                Assert(!string.IsNullOrEmpty(fontWarn.GetError(cmbFont)),
+                    "UpdateFontAvailabilityWarning: flags an uninstalled font");
+                Assert(!HasPendingErrors(f),
+                    "UpdateFontAvailabilityWarning: the warning never counts as a pending (blocking) error");
+
+                updateMi.Invoke(f, new object[] { cmbFont, "Arial" });
+                Assert(string.IsNullOrEmpty(fontWarn.GetError(cmbFont)),
+                    "UpdateFontAvailabilityWarning: clears once an installed font is set");
+
+                updateMi.Invoke(f, new object[] { cmbFont, "" });
+                Assert(string.IsNullOrEmpty(fontWarn.GetError(cmbFont)),
+                    "UpdateFontAvailabilityWarning: an empty name (placeholder selected) is never flagged");
+            }
+        }
+
+        // T_FluentDialogBase_DisposeWithoutShow — regression test for the bug found 2026-08-12
+        // (fixed 2026-08-15): FluentDialogBase's static event subscriptions (Lang.LanguageChanged,
+        // SystemEvents.UserPreferenceChanged) and shared ToolTip/ErrorProvider/Icon fields were
+        // only released in the FormClosed handler — never raised for a form that's constructed
+        // and disposed without ever being shown via ShowDialog()/Show(), exactly the pattern used
+        // 15+ times elsewhere in this test suite (`using var f = new ...Form()`). Fixed with a
+        // Dispose(bool) override that shares an idempotent cleanup path with FormClosed.
+        private static void T_FluentDialogBase_DisposeWithoutShow()
+        {
+            Section("FluentDialogBase — Dispose() without ShowDialog() releases shared resources");
+
+            var langChangedField = typeof(Lang).GetField("LanguageChanged", BindingFlags.NonPublic | BindingFlags.Static);
+            int CountLangSubscribers()
+            {
+                var del = (Delegate)langChangedField.GetValue(null);
+                return del?.GetInvocationList().Length ?? 0;
+            }
+
+            int before = CountLangSubscribers();
+
+            var f = new GroupEditorForm(new List<KeyGroup> { new KeyGroup { Name = SettingsManager.StandardGroupName } });
+            Assert(CountLangSubscribers() == before + 1,
+                "FluentDialogBase: constructing a form subscribes to Lang.LanguageChanged");
+
+            var releasedField = typeof(FluentDialogBase)
+                .GetField("_resourcesReleased", BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert(!(bool)releasedField.GetValue(f),
+                "FluentDialogBase: resources not yet released before Dispose()");
+
+            f.Dispose();   // never shown — no ShowDialog()/Show() call, so FormClosed never fires
+
+            Assert((bool)releasedField.GetValue(f),
+                "FluentDialogBase: Dispose() alone releases resources even without ShowDialog()");
+            Assert(CountLangSubscribers() == before,
+                "FluentDialogBase: Lang.LanguageChanged subscription is removed by Dispose() alone");
+
+            // Disposing twice (e.g. an explicit Dispose() followed by a `using` block's implicit
+            // one) must not throw.
+            Exception thrown = null;
+            try { f.Dispose(); } catch (Exception ex) { thrown = ex; }
+            Assert(thrown == null, $"FluentDialogBase: disposing twice does not throw — got {thrown}");
+
+            // ── KeyEditorForm: the same gap for its own FormClosed-only cleanup ─────
+            // (uninstalling the low-level keyboard hook used while recording, and disposing
+            // the preview font) — found while fixing FluentDialogBase, same shape, own fix.
+            {
+                var props = new KeyProps("A", "A");
+                var kef = new KeyEditorForm(props, owner: null);
+
+                var hookField = typeof(KeyEditorForm)
+                    .GetField("_hookHandle", BindingFlags.NonPublic | BindingFlags.Instance);
+                // Simulate "recording in progress" without installing a real system-wide hook.
+                hookField.SetValue(kef, (IntPtr)12345);
+
+                kef.Dispose(); // never shown — no ShowDialog()/Show() call, so FormClosed never fires
+
+                Assert((IntPtr)hookField.GetValue(kef) == IntPtr.Zero,
+                    "KeyEditorForm: Dispose() alone clears a simulated in-progress recording hook handle");
+            }
+        }
+
         // ══════════════════════════════════════════════════════════════════
         // T_WizardKeyParser — parser logic for the New Keyboard Wizard
         // ══════════════════════════════════════════════════════════════════
@@ -4646,6 +5141,133 @@ namespace OnScreenKeyboard
                 double r = WizardThemeValidator.ContrastRatio(Color.Red, Color.Red);
                 Assert(Math.Abs(r - 1.0) < 0.001, "ContrastRatio: identical = 1");
             }
+        }
+
+        // T_WizardBuildLayoutData_ThemeFileMerge — regression test for two bugs found
+        // 2026-08-14: (1) "theme from file" silently discarded its colours when the copied
+        // layout already had same-named groups, and (2) pasted labels never got classified
+        // into groups (Klinkers/Medeklinkers/...) when a from-file theme was chosen instead
+        // of a built-in preset. Drives the real NewKeyboardWizard via reflection (private
+        // fields/method) exactly as the GUI would, then calls the same private
+        // BuildLayoutData() the Save button calls.
+        private static void T_WizardBuildLayoutData_ThemeFileMerge()
+        {
+            Section("Wizard BuildLayoutData — theme-from-file group merge + paste classification");
+
+            string azerty      = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "azerty.kbl");
+            string azertyColor = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "azertycolor.kbl");
+            if (!File.Exists(azerty) || !File.Exists(azertyColor))
+            { Assert(false, "wizard merge: azerty.kbl / azertycolor.kbl not found next to test binary"); return; }
+
+            var wizType = typeof(NewKeyboardWizard);
+
+            RadioButton Rb(NewKeyboardWizard w, string name) =>
+                (RadioButton)wizType.GetField(name, BindingFlags.NonPublic | BindingFlags.Instance).GetValue(w);
+            TextBox Tb(NewKeyboardWizard w, string name) =>
+                (TextBox)wizType.GetField(name, BindingFlags.NonPublic | BindingFlags.Instance).GetValue(w);
+            void SetPreset(NewKeyboardWizard w, int v) =>
+                wizType.GetField("_selectedPreset", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(w, v);
+            (GridLayout layout, VisualTheme theme, WindowState window, LayoutMeta meta) Build(NewKeyboardWizard w) =>
+                ((GridLayout, VisualTheme, WindowState, LayoutMeta))
+                wizType.GetMethod("BuildLayoutData", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(w, null);
+
+            // ── Case 1: copy azerty.kbl + theme from azertycolor.kbl ───────────
+            // Both files use the same group names (Standaard/Klinkers/Medeklinkers/...).
+            // The theme file's colours must win, not azerty's own.
+            using (var w = new NewKeyboardWizard())
+            {
+                Rb(w, "_rbCopy").Checked = true;
+                Tb(w, "_txtCopyFile").Text = azerty;
+                SetPreset(w, -1);
+                Tb(w, "_txtThemeFile").Text = azertyColor;
+
+                var (layout, _, _, _) = Build(w);
+                var medeklinkers = layout.Groups.Find(g => g.Name == "Medeklinkers");
+                Assert(medeklinkers != null, "merge: copied layout still has a Medeklinkers group");
+                // azertycolor.kbl's Medeklinkers KeyColor is #1A4E8A — azerty.kbl's own is #3E6C60.
+                var expected = SettingsManager.ParseColor("1A4E8A", Color.Empty);
+                Assert(medeklinkers != null && medeklinkers.KeyColor.ToArgb() == expected.ToArgb(),
+                    $"merge: Medeklinkers KeyColor comes from the theme file (azertycolor), not the copied file (azerty) — got {medeklinkers?.KeyColor}");
+            }
+
+            // ── Case 2: paste labels + theme from azertycolor.kbl (not a built-in preset) ──
+            // Pasted keys must still be auto-classified into groups.
+            using (var w = new NewKeyboardWizard())
+            {
+                Rb(w, "_rbPaste").Checked = true;
+                Tb(w, "_txtPaste").Text = "a b";
+                SetPreset(w, -1);
+                Tb(w, "_txtThemeFile").Text = azertyColor;
+
+                var (layout, _, _, _) = Build(w);
+                var cellA = layout.Cells.Find(c => c.Props.Label == "a");
+                var cellB = layout.Cells.Find(c => c.Props.Label == "b");
+                Assert(cellA != null && cellA.Props.GroupName == "Klinkers",
+                    $"classify: pasted 'a' assigned to Klinkers even with a from-file theme — got '{cellA?.Props.GroupName}'");
+                Assert(cellB != null && cellB.Props.GroupName == "Medeklinkers",
+                    $"classify: pasted 'b' assigned to Medeklinkers even with a from-file theme — got '{cellB?.Props.GroupName}'");
+            }
+
+            // ── Case 3: copy azerty.kbl + built-in preset (High Contrast) ──────
+            // Regression for the sibling bug found 2026-08-15: a copied layout's pre-existing
+            // groups must be restyled by the chosen preset, not left at the copied file's
+            // original colours (NewKeyboardWizard.ApplyPreset only used to *add* a preset's
+            // ExtraGroups entry when missing, never overwrite one that already existed).
+            using (var w = new NewKeyboardWizard())
+            {
+                Rb(w, "_rbCopy").Checked = true;
+                Tb(w, "_txtCopyFile").Text = azerty;
+                SetPreset(w, 2); // Presets[2] = High Contrast
+
+                var (layout, _, _, _) = Build(w);
+                var medeklinkers = layout.Groups.Find(g => g.Name == "Medeklinkers");
+                Assert(medeklinkers != null, "preset: copied layout still has a Medeklinkers group");
+                // High Contrast's Medeklinkers KeyColor is #FFE535 — azerty.kbl's own is #3E6C60.
+                var expected = SettingsManager.ParseColor("FFE535", Color.Empty);
+                Assert(medeklinkers != null && medeklinkers.KeyColor.ToArgb() == expected.ToArgb(),
+                    $"preset: Medeklinkers KeyColor comes from the High Contrast preset, not azerty's own #3E6C60 — got {medeklinkers?.KeyColor}");
+            }
+        }
+
+        // T_WizardThemePage_GroupSwatchColors — regression test for a bug found 2026-08-14:
+        // GetGroupKeyColor/GetGroupFontColor ignored the groupName parameter entirely when a
+        // from-file theme was selected, always returning the file's single global <Theme>
+        // colour — so every example swatch on the theme page (Klinkers, Medeklinkers, Cijfers,
+        // ...) rendered identically instead of picking up each group's own colour.
+        private static void T_WizardThemePage_GroupSwatchColors()
+        {
+            Section("Wizard theme page — per-group swatch colours for a from-file theme");
+
+            string azertyColor = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "azertycolor.kbl");
+            if (!File.Exists(azertyColor))
+            { Assert(false, "swatch colours: azertycolor.kbl not found next to test binary"); return; }
+
+            var wizType = typeof(NewKeyboardWizard);
+            TextBox Tb(NewKeyboardWizard w, string name) =>
+                (TextBox)wizType.GetField(name, BindingFlags.NonPublic | BindingFlags.Instance).GetValue(w);
+            void SetPreset(NewKeyboardWizard w, int v) =>
+                wizType.GetField("_selectedPreset", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(w, v);
+            Color GroupKeyColor(NewKeyboardWizard w, string groupName) =>
+                (Color)wizType.GetMethod("GetGroupKeyColor", BindingFlags.NonPublic | BindingFlags.Instance)
+                    .Invoke(w, new object[]{ groupName });
+
+            using var w2 = new NewKeyboardWizard();
+            SetPreset(w2, -1);
+            Tb(w2, "_txtThemeFile").Text = azertyColor;
+
+            Color klinkers     = GroupKeyColor(w2, "Klinkers");
+            Color medeklinkers = GroupKeyColor(w2, "Medeklinkers");
+            Color cijfers      = GroupKeyColor(w2, "Cijfers");
+
+            // azertycolor.kbl: Klinkers KeyColor=4A8FD4, Medeklinkers=1A4E8A, Cijfers=B52535 — all distinct.
+            Assert(klinkers.ToArgb() != medeklinkers.ToArgb(),
+                $"swatch colours: Klinkers and Medeklinkers must differ — both got {klinkers}");
+            Assert(medeklinkers.ToArgb() != cijfers.ToArgb(),
+                $"swatch colours: Medeklinkers and Cijfers must differ — both got {medeklinkers}");
+            Assert(klinkers.ToArgb() == SettingsManager.ParseColor("4A8FD4", Color.Empty).ToArgb(),
+                $"swatch colours: Klinkers reads its own <Group> KeyColor from the theme file — got {klinkers}");
+            Assert(medeklinkers.ToArgb() == SettingsManager.ParseColor("1A4E8A", Color.Empty).ToArgb(),
+                $"swatch colours: Medeklinkers reads its own <Group> KeyColor from the theme file — got {medeklinkers}");
         }
 
         private static void T_PaintHandlerAudit()

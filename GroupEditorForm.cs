@@ -168,6 +168,25 @@ namespace OnScreenKeyboard
             string.Equals(name?.Trim(), SettingsManager.StandardGroupName,
                           StringComparison.OrdinalIgnoreCase);
 
+        /// <summary>
+        /// Returns <c>true</c> when <paramref name="name"/> case-insensitively matches
+        /// another existing group's name (any group but the one at <paramref name="excludeIdx"/>,
+        /// if given). Without this, adding or renaming a group to a name that differs only by
+        /// case from an existing one (e.g. "klinkers" when "Klinkers" already exists) would let
+        /// two groups coexist that every case-sensitive lookup elsewhere in the app treats as
+        /// unrelated — silently splitting one logical group into two.
+        /// </summary>
+        private bool NameCollides(string name, int excludeIdx = -1)
+        {
+            for (int i = 0; i < _groups.Count; i++)
+            {
+                if (i == excludeIdx) continue;
+                if (string.Equals(_groups[i].Name, name, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
+        }
+
         // ── Constructor ───────────────────────────────────────────────
 
         /// <summary>
@@ -385,6 +404,11 @@ namespace OnScreenKeyboard
             _cmbFont.Items.Add(Lang.T("(inherit standard)"));
             _cmbFont.Items.AddRange(Fluent.InstalledFontNames());
             _cmbFont.SelectedIndex = 0;
+            _cmbFont.SelectedIndexChanged += (s, e) =>
+            {
+                string current = _cmbFont.SelectedIndex > 0 ? _cmbFont.SelectedItem?.ToString() ?? "" : "";
+                UpdateFontAvailabilityWarning(_cmbFont, current);
+            };
             pnlDetail.Controls.Add(_cmbFont); gy += ROW;
 
             // Font size: 0 means "auto / inherit".
@@ -435,6 +459,10 @@ namespace OnScreenKeyboard
             _btnCancel.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
             _btnOK.Click     += (s, e) =>
             {
+                // Refuse to close while any field is flagged invalid (e.g. bad hex) — the
+                // ErrorProvider icon already sitting on that field is the feedback; no need
+                // for a second, blocking MessageBox on top of it.
+                if (HasPendingErrors()) return;
                 CommitCurrent();
                 ResultGroups = _groups;
                 DialogResult = DialogResult.OK;
@@ -514,10 +542,14 @@ namespace OnScreenKeyboard
             _nudBorderThickness.Minimum = _isStandard ? 0 : -1;
             _nudBorderThickness.Value   = Math.Clamp(g.BorderThickness, _isStandard ? 0 : -1, 10);
 
-            // IndexOf returns -1 if the font name isn't in the list (e.g. font was uninstalled).
-            // In that case we fall back to index 0 ("inherit standard" or "none / auto").
-            int fi = _cmbFont.Items.IndexOf(g.FontName ?? "");
-            _cmbFont.SelectedIndex = fi > 0 ? fi : 0;
+            // A font name that isn't installed must not be silently discarded to "(inherit
+            // standard)" — that would clear the group's real FontName the moment this dialog
+            // is opened and OK'd, even without the font field ever being touched. Preserve it.
+            if (string.IsNullOrEmpty(g.FontName))
+                _cmbFont.SelectedIndex = 0;
+            else
+                SelectOrInsertFont(_cmbFont, g.FontName);
+            UpdateFontAvailabilityWarning(_cmbFont, g.FontName ?? "");
 
             _nudFontSize.Value = Math.Clamp(g.FontSize, 0, 72);
             _loading = false;
@@ -564,11 +596,12 @@ namespace OnScreenKeyboard
             if (idx < 0 || idx >= _groups.Count) return;
             var g = _groups[idx];
             // Standard group name is protected — never overwrite it from the (disabled) text box.
-            // Also reject any attempted rename to a reserved name (safety net behind SaveCurrentName).
+            // Also reject any attempted rename to a reserved or already-used name
+            // (safety net behind SaveCurrentName).
             if (g.Name != SettingsManager.StandardGroupName)
             {
                 string proposed = _txtName.Text.Trim();
-                if (!IsReservedGroupName(proposed))
+                if (!IsReservedGroupName(proposed) && !NameCollides(proposed, idx))
                     g.Name = proposed;
             }
             g.KeyColor        = GetSwatchColor(_pnlKeyColor);
@@ -609,6 +642,13 @@ namespace OnScreenKeyboard
             if (IsReservedGroupName(newName))
             {
                 _lblNameError.Text    = Lang.T("Name 'standard' is reserved.");
+                _lblNameError.Visible = true;
+                return;
+            }
+            // Block a name that only differs by case from another existing group.
+            if (NameCollides(newName, idx))
+            {
+                _lblNameError.Text    = Lang.T("A group with this name already exists.");
                 _lblNameError.Visible = true;
                 return;
             }
@@ -724,6 +764,12 @@ namespace OnScreenKeyboard
                 if (IsReservedGroupName(name))
                 {
                     errLbl.Text    = Lang.T("Name 'standard' is reserved.");
+                    errLbl.Visible = true;
+                    return;
+                }
+                if (NameCollides(name))
+                {
+                    errLbl.Text    = Lang.T("A group with this name already exists.");
                     errLbl.Visible = true;
                     return;
                 }
@@ -1109,7 +1155,18 @@ namespace OnScreenKeyboard
                         // Find the existing group with the same name (case-insensitive) and replace it.
                         int idx = _groups.FindIndex(g =>
                             string.Equals(g.Name, group.Name, StringComparison.OrdinalIgnoreCase));
-                        if (idx >= 0) _groups[idx] = group.Clone();
+                        if (idx >= 0)
+                        {
+                            var clone = group.Clone();
+                            // Overwrite means "restyle this existing group", not "rename it" —
+                            // keep the local entry's own casing. This matters most for the
+                            // protected standard group: every other lookup in the app compares
+                            // StandardGroupName case-sensitively, so adopting an imported file's
+                            // casing (e.g. "Standard") would desync this entry from those lookups
+                            // and let it silently lose its protected status.
+                            clone.Name = _groups[idx].Name;
+                            _groups[idx] = clone;
+                        }
                         break;
                     }
                     case ImportAction.AddNew:
@@ -1367,6 +1424,7 @@ namespace OnScreenKeyboard
             name = name?.Trim() ?? "";
             if (string.IsNullOrWhiteSpace(name)) return false;
             if (IsReservedGroupName(name)) return false;
+            if (NameCollides(name)) return false;
             CommitCurrent();
             var std      = _groups.Find(g => g.Name == SettingsManager.StandardGroupName);
             var newGroup = std?.Clone() ?? new KeyGroup { BorderThickness = -1 };
@@ -1393,6 +1451,8 @@ namespace OnScreenKeyboard
             // Block renaming any group to the reserved name "standard".
             if (IsReservedGroupName(name)) return false;
             if (string.IsNullOrWhiteSpace(name)) return false;
+            // Block renaming to a name that only differs by case from another existing group.
+            if (NameCollides(name, idx)) return false;
             _groups[idx].Name = name;
             _loading = true;
             _lstGroups.Items[idx] = name;

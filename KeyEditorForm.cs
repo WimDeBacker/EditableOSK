@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Text;
+using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 using Microsoft.Win32;
@@ -85,6 +86,14 @@ namespace OnScreenKeyboard
         private Color  _groupFontColor, _groupKeyColor, _groupBorderColor;
         private string _groupFontName  = "";
         private int    _groupFontSize, _groupBorderThickness;
+
+        // True once the user has actually interacted with _cmbFont (as opposed to it being
+        // set programmatically by RefreshAppearanceFromGroup). Apply() uses this — rather than
+        // comparing the combo's current text against _groupFontName — to decide whether the
+        // font was deliberately changed away from the group, since a font that isn't installed
+        // on this machine can't be displayed/selected at all, which would otherwise always look
+        // like a "change" under a plain value comparison and silently detach the key.
+        private bool _fontUserChanged;
 
         // The keyboard window's current theme settings (font, colors, etc.).
         // Cached at construction time because the Owner property is null until ShowDialog().
@@ -369,6 +378,10 @@ namespace OnScreenKeyboard
         /// </summary>
         private void RefreshAppearanceFromGroupCore()
         {
+            // A fresh baseline: switching groups (or the initial load) resets what counts as
+            // "the user changed the font" — only an edit made after this point should count.
+            _fontUserChanged = false;
+
             // Standard group is the resolution root (Step 2 of gear-button styling).
             // Fall back to _ownerGlobal only for layouts that pre-date the standard group
             // (kept as a safety net; should not occur in practice after auto-creation).
@@ -457,8 +470,11 @@ namespace OnScreenKeyboard
             SetSwatchHex(_pnlKeyColor,    SettingsManager.Hex(_loadedKeyColor));
             SetSwatchHex(_pnlBorderColor, SettingsManager.Hex(_loadedBorderColor));
 
-            int fi = _cmbFont.Items.IndexOf(_loadedFontName);
-            _cmbFont.SelectedIndex = fi >= 0 ? fi : (_cmbFont.Items.Count > 0 ? 0 : -1);
+            // Preserve the real font name even if it isn't installed here — falling back to
+            // whatever's alphabetically first would make Apply()'s change-detection see a
+            // mismatch and silently detach the key from its group (see _fontUserChanged).
+            SelectOrInsertFont(_cmbFont, _loadedFontName);
+            UpdateFontAvailabilityWarning(_cmbFont, _loadedFontName);
 
             int clampedSize = Math.Clamp(_loadedFontSize, 0, (int)_nudFontSize.Maximum);
             if (clampedSize > 0)
@@ -523,21 +539,34 @@ namespace OnScreenKeyboard
 
             // Form-specific cleanup: uninstall the keyboard hook and dispose the preview font.
             // Base FormClosed handles Lang.LanguageChanged, UserPreferenceChanged, and _err.
-            FormClosed += (s, e) =>
-            {
-                if (_hookHandle != IntPtr.Zero)
-                {
-                    UnhookWindowsHookEx(_hookHandle);
-                    _hookHandle = IntPtr.Zero;
-                }
-                _previewFont?.Dispose();
-            };
+            // Also released from Dispose(bool) below — FormClosed only fires for a form that
+            // was actually shown via ShowDialog()/Show(); a form constructed and disposed
+            // without ever being shown (e.g. `using var f = new KeyEditorForm(...)`) previously
+            // never uninstalled the low-level keyboard hook if recording happened to be in
+            // progress, leaking a hook that intercepts every keystroke system-wide.
+            FormClosed += (s, e) => ReleaseFormResources();
 
             // Stop recording if the user switches to another window while the hook is live.
             Deactivate += (s, e) =>
             {
                 if (_recording) StopRecording(cancelled: true);
             };
+        }
+
+        private void ReleaseFormResources()
+        {
+            if (_hookHandle != IntPtr.Zero)
+            {
+                UnhookWindowsHookEx(_hookHandle);
+                _hookHandle = IntPtr.Zero;
+            }
+            _previewFont?.Dispose();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) ReleaseFormResources();
+            base.Dispose(disposing);
         }
 
         /// <summary>Re-applies dialog theme, passing <see cref="_pnlPreview"/> as an exclusion.</summary>
@@ -626,6 +655,10 @@ namespace OnScreenKeyboard
             _txtSend = AddInput(grpKey, vx, gy, vw); _txtSend.TabIndex = ti++;
             // Send field has a dynamic label — set initial accessible name here; SetSendMode updates it.
             _txtSend.AccessibleName = Lang.StripMnemonic(Lang.T("Send"));
+            // In Layout mode, flag an unresolvable path live instead of only failing silently
+            // at runtime (KeyboardForm.HandleNormalClick already flashes an error there, but
+            // that's the first the user would ever hear about a typo).
+            _txtSend.TextChanged += (s, e) => ValidateSendLayoutField();
 
             // Word-prediction slot spinner — overlays Send field, visible only in WP mode.
             // The slot number (0-9) determines which prediction suggestion this key displays.
@@ -732,7 +765,14 @@ namespace OnScreenKeyboard
                 AccessibleName = Lang.StripMnemonic(Lang.T("Font")),
             };
             _cmbFont.Items.AddRange(Fluent.InstalledFontNames());
-            _cmbFont.SelectedIndexChanged += (s, e) => Refresh2();
+            _cmbFont.SelectedIndexChanged += (s, e) =>
+            {
+                // Only a real user click sets this — RefreshAppearanceFromGroupCore's own
+                // programmatic selection always runs with _initialising = true.
+                if (!_initialising) _fontUserChanged = true;
+                UpdateFontAvailabilityWarning(_cmbFont, _cmbFont.SelectedItem?.ToString() ?? "");
+                Refresh2();
+            };
             grpStyle.Controls.Add(_cmbFont); gy += ROW_H;
 
             // Font size: a numeric spinner plus an "Auto" checkbox.
@@ -1260,6 +1300,40 @@ namespace OnScreenKeyboard
             }
             if (applyPicker && isLayout)
                 _txtSend.Text = "";
+
+            // Re-validate (or clear) the layout-path error now that the mode may have changed —
+            // switching away from Layout must not leave a stale error blocking Apply.
+            ValidateSendLayoutField();
+        }
+
+        /// <summary>
+        /// Flags <see cref="_txtSend"/> with an ErrorProvider message when the current send mode
+        /// is <see cref="SendMode.Layout"/> and the typed path does not resolve to an existing
+        /// file. A no-op (clears any error) in every other mode.
+        /// </summary>
+        private void ValidateSendLayoutField()
+        {
+            if (_sendMode != SendMode.Layout) { _err.SetError(_txtSend, ""); return; }
+            string path = _txtSend.Text.Trim();
+            bool bad = !string.IsNullOrEmpty(path) && !File.Exists(ResolveLayoutPath(path));
+            _err.SetError(_txtSend, bad ? Lang.T("err: layout file not found") : "");
+        }
+
+        /// <summary>
+        /// Resolves a (possibly relative) layout file path the same way
+        /// <c>KeyboardForm.ResolveLayoutPath</c> does at runtime: absolute as-is, relative to
+        /// this layout's own directory, or relative to the app directory.
+        /// </summary>
+        private string ResolveLayoutPath(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return null;
+            if (Path.IsPathRooted(path)) return path;
+            if (_layoutDir != null)
+            {
+                string candidate = Path.Combine(_layoutDir, path);
+                if (File.Exists(candidate)) return candidate;
+            }
+            return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, path);
         }
 
         // ── Recording ─────────────────────────────────────────────────
@@ -1827,6 +1901,11 @@ namespace OnScreenKeyboard
         /// </summary>
         private void Apply()
         {
+            // Refuse to proceed while any field is flagged invalid (e.g. bad hex, an
+            // unresolvable layout path) — the ErrorProvider icon already on that field is
+            // the feedback; no need for a second, blocking MessageBox on top of it.
+            if (HasPendingErrors()) return;
+
             string label = _txtLabel.Text.Trim();
 
             // Use the cached owner theme (consistent with PopulateFields and Refresh2)
@@ -1858,7 +1937,7 @@ namespace OnScreenKeyboard
                     (!parsedFc.IsEmpty && !ColorsMatchRgb(parsedFc, _groupFontColor))   ||
                     (!parsedKc.IsEmpty && !ColorsMatchRgb(parsedKc, _groupKeyColor))    ||
                     (!parsedBc.IsEmpty && !ColorsMatchRgb(parsedBc, _groupBorderColor)) ||
-                    (!string.IsNullOrEmpty(curFont) && curFont != _groupFontName)       ||
+                    _fontUserChanged                                                     ||
                     rawFs != _groupFontSize                                              ||
                     rawBt != _groupBorderThickness;
 

@@ -591,6 +591,10 @@ namespace OnScreenKeyboard
                     Filter="Keyboard layouts (*.kbl)|*.kbl|All files (*.*)|*.*" };
                 if (dlg.ShowDialog(this)==DialogResult.OK) _txtThemeFile.Text=dlg.FileName;
             };
+            // Repaint the example swatches once a theme file is actually chosen/typed —
+            // SelectPreset() only invalidates once, when "From file" is first clicked,
+            // while the path is still empty.
+            _txtThemeFile.TextChanged+=(s,e)=>_pnlThemePreview?.Invalidate();
 
             // Theme preview strip
             _pnlThemePreview = new Panel
@@ -680,9 +684,15 @@ namespace OnScreenKeyboard
 
         private bool ValidatePage(int page)
         {
-            if (page==PAGE_START && _rbCopy.Checked && string.IsNullOrWhiteSpace(_txtCopyFile.Text))
+            if (page==PAGE_START && _rbCopy.Checked &&
+                (string.IsNullOrWhiteSpace(_txtCopyFile.Text) || !File.Exists(_txtCopyFile.Text)))
             { MessageBox.Show(Lang.T("wiz: err no copy file"),"",MessageBoxButtons.OK,MessageBoxIcon.Warning);
               _txtCopyFile.Focus(); return false; }
+
+            if (page==PAGE_GRID && _rbPaste.Checked &&
+                WizardKeyParser.Parse(_txtPaste.Text, IsDutch()).Count==0)
+            { MessageBox.Show(Lang.T("wiz: err empty paste"),"",MessageBoxButtons.OK,MessageBoxIcon.Warning);
+              _txtPaste.Focus(); return false; }
 
             if (page==PAGE_THEME && _selectedPreset==-1 && string.IsNullOrWhiteSpace(_txtThemeFile.Text))
             { MessageBox.Show(Lang.T("wiz: err no theme file"),"",MessageBoxButtons.OK,MessageBoxIcon.Warning);
@@ -865,7 +875,7 @@ namespace OnScreenKeyboard
                 return GetPreviewKeyColor();
             }
             if (_selectedPreset==-1&&File.Exists(_txtThemeFile?.Text??""))
-                return LoadThemeColor(_txtThemeFile.Text,"KeyColor",Color.DimGray);
+                return LoadThemeGroupColor(_txtThemeFile.Text,groupName,"KeyColor",Color.DimGray);
             return Color.DimGray;
         }
 
@@ -879,7 +889,7 @@ namespace OnScreenKeyboard
                 return GetPreviewFontColor();
             }
             if (_selectedPreset==-1&&File.Exists(_txtThemeFile?.Text??""))
-                return LoadThemeColor(_txtThemeFile.Text,"FontColor",Color.White);
+                return LoadThemeGroupColor(_txtThemeFile.Text,groupName,"FontColor",Color.White);
             return Color.White;
         }
 
@@ -950,6 +960,35 @@ namespace OnScreenKeyboard
             return fallback;
         }
 
+        // Reads a per-group colour (e.g. Klinkers' KeyColor) from a theme file's
+        // <Theme><Group Name="..."> entries. Falls back to the file's global <Theme>
+        // colour when the group isn't present or the attribute is blank/missing —
+        // same fallback shape as the built-in-preset branch (GetPreviewKeyColor()
+        // for a group name with no matching ExtraGroups entry).
+        private static Color LoadThemeGroupColor(string path, string groupName, string attr, Color fallback)
+        {
+            if (!string.IsNullOrEmpty(groupName))
+            {
+                try
+                {
+                    var doc=new System.Xml.XmlDocument();
+                    doc.Load(path);
+                    var groups=doc.SelectNodes("/OnScreenKeyboard/Theme/Group");
+                    if (groups!=null)
+                        foreach (System.Xml.XmlNode g in groups)
+                            if (string.Equals(g.Attributes?["Name"]?.Value, groupName, StringComparison.Ordinal))
+                            {
+                                var val=g.Attributes?[attr]?.Value;
+                                if (!string.IsNullOrEmpty(val))
+                                    return SettingsManager.ParseColor(val, fallback);
+                                break;
+                            }
+                }
+                catch { }
+            }
+            return LoadThemeColor(path, attr, fallback);
+        }
+
         // ── Create ────────────────────────────────────────────────────────
         private void TryCreate()
         {
@@ -999,11 +1038,6 @@ namespace OnScreenKeyboard
             if (_selectedPreset>=0&&_selectedPreset<Presets.Length)
             {
                 ApplyPreset(Presets[_selectedPreset], theme, layout);
-                // Auto-assign group names for paste-generated layouts.
-                // Blank and copied layouts are left as-is (blank has no keys;
-                // copied layouts already carry their own group assignments).
-                if (_rbPaste.Checked)
-                    AutoClassifyLayout(layout);
             }
             else if (_selectedPreset==-1&&File.Exists(_txtThemeFile.Text))
             {
@@ -1011,9 +1045,32 @@ namespace OnScreenKeyboard
                 var tmpL=SettingsManager.LoadSettings(tmpT,tmpW,tmpM,_txtThemeFile.Text);
                 theme.CopyFrom(tmpT);
                 foreach (var g in tmpL.Groups)
-                    if (!layout.Groups.Exists(x=>string.Equals(x.Name,g.Name,StringComparison.Ordinal)))
+                {
+                    // Re-style a group the layout already has (e.g. copying azerty.kbl and
+                    // applying azertycolor.kbl's theme — both share group names) instead of
+                    // skipping it, which used to silently discard the theme file's colours.
+                    var existing = layout.Groups.Find(x=>string.Equals(x.Name,g.Name,StringComparison.Ordinal));
+                    if (existing != null)
+                    {
+                        existing.KeyColor        = g.KeyColor;
+                        existing.FontColor       = g.FontColor;
+                        existing.BorderColor     = g.BorderColor;
+                        existing.BorderThickness = g.BorderThickness;
+                        existing.FontName        = g.FontName;
+                        existing.FontSize        = g.FontSize;
+                    }
+                    else
+                    {
                         layout.Groups.Add(g.Clone());
+                    }
+                }
             }
+
+            // Auto-assign group names for paste-generated layouts, regardless of which
+            // theme source was chosen. Blank and copied layouts are left as-is (blank has
+            // no keys; copied layouts already carry their own group assignments).
+            if (_rbPaste.Checked)
+                AutoClassifyLayout(layout);
 
             var screen=System.Windows.Forms.Screen.PrimaryScreen.WorkingArea;
             int keyW=Math.Max(60,Math.Min(120,screen.Width/Math.Max(1,layout.Cols)));
@@ -1071,14 +1128,31 @@ namespace OnScreenKeyboard
             std.KeyColor=theme.KeyColor; std.FontColor=theme.FontColor;
             std.BorderColor=theme.BorderColor; std.BorderThickness=p.BorderThickness;
 
+            // Picking a preset means "restyle whatever groups exist to match it" — not "only
+            // fill in groups that happen to be missing". A copied layout (e.g. azerty.kbl)
+            // already has groups named Klinkers/Medeklinkers/etc.; those must take the preset's
+            // colours too, not keep the copied file's original ones. Harmless for Blank/Paste,
+            // where layout.Groups is still empty at this point — existing is always null there.
             foreach (var (name,key,font,border,thick) in p.ExtraGroups)
-                if (!layout.Groups.Exists(g=>string.Equals(g.Name,name,StringComparison.Ordinal)))
+            {
+                var existing = layout.Groups.Find(g=>string.Equals(g.Name,name,StringComparison.Ordinal));
+                if (existing != null)
+                {
+                    existing.KeyColor        = SettingsManager.ParseColor(key,   Color.Empty);
+                    existing.FontColor       = SettingsManager.ParseColor(font,  Color.Empty);
+                    existing.BorderColor     = SettingsManager.ParseColor(border,Color.Empty);
+                    existing.BorderThickness = thick;
+                }
+                else
+                {
                     layout.Groups.Add(new KeyGroup
                     { Name=name,
                       KeyColor    =SettingsManager.ParseColor(key,   Color.Empty),
                       FontColor   =SettingsManager.ParseColor(font,  Color.Empty),
                       BorderColor =SettingsManager.ParseColor(border,Color.Empty),
                       BorderThickness=thick });
+                }
+            }
         }
 
         // ── Universal key classification (all themes) ─────────────────────

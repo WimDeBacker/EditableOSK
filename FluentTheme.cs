@@ -267,7 +267,7 @@ namespace OnScreenKeyboard
 
         /// <param name="name">The font family name to look for (case-insensitive).</param>
         /// <returns><c>true</c> if the font is found; <c>false</c> otherwise.</returns>
-        private static bool IsFontAvailable(string name)
+        internal static bool IsFontAvailable(string name)
         {
             try
             {

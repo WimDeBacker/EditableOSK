@@ -440,8 +440,8 @@ namespace OnScreenKeyboard
 
             // Save / Save As: first commit the current UI state to ResultTheme etc.,
             // then hand off to the caller's file-writing callback.
-            _btnSaveFile.Click   += (s, e) => { Apply(); _onSave?.Invoke(); };
-            _btnSaveAsFile.Click += (s, e) => { Apply(); _onSaveAs?.Invoke(); };
+            _btnSaveFile.Click   += (s, e) => { if (Apply()) _onSave?.Invoke(); };
+            _btnSaveAsFile.Click += (s, e) => { if (Apply()) _onSaveAs?.Invoke(); };
 
             // Load: let the caller read a file, then re-sync our controls to
             // whatever the caller has loaded.
@@ -1017,15 +1017,22 @@ namespace OnScreenKeyboard
         /// Fields that this editor does not expose (e.g. window size) are
         /// copied verbatim from the original so they are not accidentally reset.
         /// </summary>
-        private void Apply()
+        private bool Apply()
         {
+            // Refuse to proceed while any field is flagged invalid (e.g. bad background hex) —
+            // the ErrorProvider icon already on that field is the feedback.
+            if (HasPendingErrors()) return false;
+
             // Key style fields (font, colors, border) are now managed exclusively
             // through the standard group in GroupEditorForm.  Only window-level
             // theme fields (background color, opacity) are edited here; pass all
             // style fields through unchanged from the source theme.
             var theme = new VisualTheme
             {
-                BackgroundColor = ParseColor(GetSwatchHex(_pnlBgColor), ColorTranslator.FromHtml("#1A1A2E")),
+                // Fall back to the prior background — never a hardcoded, unrelated colour —
+                // so an invalid hex silently keeps the current look instead of jumping to
+                // something the user never chose.
+                BackgroundColor = ParseColor(GetSwatchHex(_pnlBgColor), _srcTheme.BackgroundColor),
 
                 // Convert slider value back to an opacity fraction.
                 // Slider 0 → opacity 1.0 (opaque); slider 80 → opacity 0.2 (most transparent).
@@ -1080,6 +1087,7 @@ namespace OnScreenKeyboard
 
             DialogResult = DialogResult.OK;
             Close();
+            return true;
         }
 
         // ════════════════════════════════════════════════════════════════

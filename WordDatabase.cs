@@ -518,6 +518,22 @@ namespace OnScreenKeyboard
                             if (string.IsNullOrEmpty(value)) { current = null; break; }
                             int.TryParse(reader.GetAttribute("frequency"),   out int freq);
                             int.TryParse(reader.GetAttribute("personalUse"), out int use);
+
+                            // The base dictionary may have been updated since this word was
+                            // first learned and promoted into the overlay — if a real base
+                            // entry now exists, it must win (real corpus frequency + bigram
+                            // data). Fold the personal signal into it instead of overwriting
+                            // it, exactly like a <PersonalUse> record would for a word that was
+                            // always in the base. On the next save, BuildSaveData will then
+                            // naturally emit this as <PersonalUse> instead of <NewWord> — this
+                            // record retires itself, no separate cleanup needed.
+                            if (snap.ByExact.TryGetValue(value, out var existing) && existing.IsFromBase)
+                            {
+                                if (use > 0) BumpPersonalUse(snap, existing, use);
+                                current = existing;
+                                break;
+                            }
+
                             var entry = new WordEntry(value, freq) { IsFromBase = false };
                             snap.ByExact[value] = entry;
                             snap.ByFrequency.Add(entry);
