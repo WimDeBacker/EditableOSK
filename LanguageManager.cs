@@ -110,6 +110,8 @@ namespace OnScreenKeyboard
 
             // ── Validation error messages ────────────────────────────
             ["err: invalid hex"]           = "Enter a valid hex colour (#RRGGBB)",
+            ["err: layout file not found"] = "This layout file could not be found.",
+            ["warn: font not installed"]   = "The font '{0}' is not installed on this computer.",
 
             // ── Accessible descriptions ──────────────────────────────
             // Preview panel — updated live in Refresh2(); screen readers announce it on focus.
@@ -245,6 +247,8 @@ namespace OnScreenKeyboard
             ["Invalid file title"]   = "Unable to Open File",
             ["Invalid file msg"]     = "The file could not be opened because it is not a valid keyboard layout file, or it was created by an incompatible version.\n\nThe keyboard layout was not changed.",
             ["Invalid file detail"]  = "Technical details:",
+            ["font missing title"]   = "Font Not Installed",
+            ["font missing msg"]     = "This keyboard uses the following font(s), which are not installed on this computer: {0}.\n\nA substitute font is being used instead. Search online to download and install the missing font(s) if you want the keyboard to look exactly as intended.",
             // ── New UI strings ─────────────────────────────────────────────
             ["Language"]             = "Language",
             ["Hide title bar"]       = "H&ide title bar",
@@ -328,6 +332,7 @@ namespace OnScreenKeyboard
             ["Delete group msg"]        = "Delete group \"{0}\"?\n\nKeys assigned to this group will revert to global style.",
             ["New Group"]               = "New Group",
             ["Name 'standard' is reserved."] = "Name 'standard' is reserved.",
+            ["A group with this name already exists."] = "A group with this name already exists.",
             ["Update standard group style"]  = "Update standard group style",
             ["Protected"]               = "Protected",
 
@@ -388,6 +393,7 @@ namespace OnScreenKeyboard
             // Errors
             ["wiz: copy info"]                  = "Keys will be copied from: {0}",
             ["wiz: err no copy file"]           = "Please select a layout file to copy from.",
+            ["wiz: err empty paste"]            = "Please paste at least one key before continuing.",
             ["wiz: err no theme file"]          = "Please select a layout file to copy the theme from.",
             ["wiz: err no name"]                = "Please enter a file name.",
             ["wiz: err bad folder"]             = "The selected folder does not exist.",

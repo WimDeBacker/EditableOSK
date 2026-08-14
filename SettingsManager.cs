@@ -372,13 +372,24 @@ namespace OnScreenKeyboard
         /// <param name="window">Window size and chrome settings.</param>
         /// <param name="meta">Behavioural settings and gear-button position.</param>
         /// <param name="path">Absolute path of the XML file to write.</param>
+        /// <param name="allowInvalid">
+        /// If <c>false</c> (the default), a structurally broken <paramref name="layout"/>
+        /// (overlapping or missing cells) is rejected with an <see cref="InvalidOperationException"/>
+        /// instead of being written, so a good file on disk is never overwritten with a bad one.
+        /// Pass <c>true</c> only for background/auto-save paths that intentionally persist
+        /// whatever is currently in memory — including a transiently invalid layout — so an
+        /// in-progress edit is never silently lost if the app closes unexpectedly before the
+        /// user returns the layout to a valid state. Interactive Save/Save As should always use
+        /// the default so the user gets an explicit warning instead of a silently-invalid file.
+        /// </param>
         public static void SaveSettings(GridLayout layout,
                                         VisualTheme theme, WindowState window, LayoutMeta meta,
-                                        string path)
+                                        string path, bool allowInvalid = false)
         {
             // Validate before touching any file — an invalid layout must never overwrite
-            // a good file on disk, even if the caller forgot to check.
-            if (!layout.IsValid())
+            // a good file on disk, even if the caller forgot to check. Callers that need to
+            // preserve in-memory state no matter what (e.g. AutoSave) opt out via allowInvalid.
+            if (!allowInvalid && !layout.IsValid())
                 throw new InvalidOperationException(
                     "Cannot save: the layout contains overlapping or missing cells.");
 

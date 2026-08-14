@@ -18,6 +18,13 @@ namespace OnScreenKeyboard
         protected readonly bool          _dark;
         protected readonly ToolTip       _tip;
         protected readonly ErrorProvider _err;
+        // Separate from _err on purpose: "this font isn't installed" is informational, not a
+        // reason to block Apply/OK, so it must never be seen by HasPendingErrors().
+        protected readonly ErrorProvider _fontWarn;
+        // A resized copy of SystemIcons.Warning — the stock icon renders too large next to a
+        // combo box. Owned by this class (unlike the shared SystemIcons.Warning), so it must
+        // be disposed on FormClosed.
+        private readonly Icon _fontWarnIcon;
 
         private UserPreferenceChangedEventHandler _onPrefChanged;
 
@@ -50,6 +57,13 @@ namespace OnScreenKeyboard
 
             _tip = new ToolTip { InitialDelay = 400, AutoPopDelay = 10000, ShowAlways = true };
             _err = new ErrorProvider { ContainerControl = this, BlinkStyle = ErrorBlinkStyle.BlinkIfDifferentError };
+            // Warning-triangle icon (vs. _err's default) so the two read as different severities.
+            // Sized down 10% from the stock SystemIcons.Warning, which renders too large to sit
+            // comfortably to the right of a combo box.
+            _fontWarnIcon = new Icon(SystemIcons.Warning,
+                (int)(SystemIcons.Warning.Width * 0.9), (int)(SystemIcons.Warning.Height * 0.9));
+            _fontWarn = new ErrorProvider
+            { ContainerControl = this, BlinkStyle = ErrorBlinkStyle.BlinkIfDifferentError, Icon = _fontWarnIcon };
 
             Load += (s, e) =>
             {
@@ -72,13 +86,40 @@ namespace OnScreenKeyboard
 
             Lang.LanguageChanged += OnLanguageChanged;
 
-            FormClosed += (s, e) =>
-            {
-                Lang.LanguageChanged               -= OnLanguageChanged;
-                SystemEvents.UserPreferenceChanged -= _onPrefChanged;
-                _tip?.Dispose();
-                _err?.Dispose();
-            };
+            // Also released from Dispose(bool) below — a form that's constructed and disposed
+            // without ever being shown (ShowDialog()/Show()) never raises FormClosed, so relying
+            // on FormClosed alone leaked the static event subscriptions and the ToolTip/
+            // ErrorProvider/Icon every time (the test suite's `using var f = new ...Form()`
+            // pattern hits this on every run).
+            FormClosed += (s, e) => ReleaseSharedResources();
+        }
+
+        // ── Cleanup ──────────────────────────────────────────────────────
+
+        private bool _resourcesReleased;
+
+        /// <summary>
+        /// Unsubscribes the static event handlers and disposes the shared ToolTip/ErrorProvider/
+        /// Icon fields. Idempotent — safe to call from both <see cref="FormClosed"/> (the normal
+        /// ShowDialog() path) and <see cref="Dispose(bool)"/> (a form disposed without ever being
+        /// shown), whichever happens first.
+        /// </summary>
+        private void ReleaseSharedResources()
+        {
+            if (_resourcesReleased) return;
+            _resourcesReleased = true;
+            Lang.LanguageChanged               -= OnLanguageChanged;
+            SystemEvents.UserPreferenceChanged -= _onPrefChanged;
+            _tip?.Dispose();
+            _err?.Dispose();
+            _fontWarn?.Dispose();
+            _fontWarnIcon?.Dispose();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) ReleaseSharedResources();
+            base.Dispose(disposing);
         }
 
         // ── Virtual hooks ────────────────────────────────────────────────
@@ -231,6 +272,65 @@ namespace OnScreenKeyboard
         /// <summary>Parses a hex colour string; returns <paramref name="fallback"/> on failure.</summary>
         protected static Color ParseColor(string hex, Color fallback) =>
             SettingsManager.ParseColor(hex, fallback);
+
+        /// <summary>
+        /// Selects <paramref name="fontName"/> in <paramref name="combo"/>. If the name isn't
+        /// installed (so it's not already one of the combo's items), it's inserted rather than
+        /// silently substituted for whatever happens to be first in the list — a layout authored
+        /// on a machine that had this font must keep saying so on one that doesn't, or the real
+        /// font name gets permanently overwritten the next time the form is applied. Inserted at
+        /// index 1, not 0, so it never collides with a reserved "(inherit standard)" / "(none)"
+        /// placeholder some callers keep at index 0 — harmless for callers with no such
+        /// placeholder, since the list is otherwise just alphabetically sorted installed fonts.
+        /// </summary>
+        protected static void SelectOrInsertFont(ComboBox combo, string fontName)
+        {
+            if (string.IsNullOrEmpty(fontName))
+            {
+                combo.SelectedIndex = combo.Items.Count > 0 ? 0 : -1;
+                return;
+            }
+            int idx = combo.Items.IndexOf(fontName);
+            if (idx < 0)
+            {
+                idx = Math.Min(1, combo.Items.Count);
+                combo.Items.Insert(idx, fontName);
+            }
+            combo.SelectedIndex = idx;
+        }
+
+        /// <summary>
+        /// Shows (or clears) a warning-triangle icon on <paramref name="combo"/> when
+        /// <paramref name="fontName"/> is set but isn't installed on this machine. Purely
+        /// informational — uses <see cref="_fontWarn"/>, never <see cref="_err"/>, so it can
+        /// never block Apply/OK via <see cref="HasPendingErrors"/>. Pass <c>""</c> for
+        /// <paramref name="fontName"/> when the combo is showing a non-font placeholder like
+        /// "(inherit standard)" so it isn't itself flagged as a missing font.
+        /// </summary>
+        protected void UpdateFontAvailabilityWarning(ComboBox combo, string fontName)
+        {
+            bool missing = !string.IsNullOrEmpty(fontName) && !Fluent.IsFontAvailable(fontName);
+            _fontWarn.SetError(combo, missing
+                ? string.Format(Lang.T("warn: font not installed"), fontName)
+                : "");
+        }
+
+        /// <summary>
+        /// Returns <c>true</c> if any control under <paramref name="root"/> (the whole form, by
+        /// default) currently has a non-empty <see cref="_err"/> message set on it — e.g. an
+        /// invalid hex colour flagged by <see cref="AddColorRow"/>. Call this from Apply/OK
+        /// handlers so the ErrorProvider icon actually blocks committing invalid data instead of
+        /// being purely decorative.
+        /// </summary>
+        protected bool HasPendingErrors(Control root = null)
+        {
+            foreach (Control c in (root ?? this).Controls)
+            {
+                if (!string.IsNullOrEmpty(_err.GetError(c))) return true;
+                if (HasPendingErrors(c)) return true;
+            }
+            return false;
+        }
 
         /// <summary>
         /// Creates an action button (Apply / Cancel) and adds it directly to the form.
