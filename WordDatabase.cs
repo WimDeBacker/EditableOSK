@@ -132,6 +132,26 @@ namespace OnScreenKeyboard
             // RecordWord's thread-safety remarks.
             public readonly List<WordEntry> ByPersonalUse = new List<WordEntry>();
 
+            // Per-file learning state, published WITH the snapshot rather than as separate
+            // statics: Load() runs on a background thread while the UI thread reads these, and
+            // four independently-assigned fields (snapshot, candidates, overlay path, dirty)
+            // could be observed half-updated — e.g. one language's candidates written to the
+            // other language's overlay file. Because they live on the snapshot, the single
+            // volatile `_snapshot = snap` write publishes them together, and any caller that
+            // captured the snapshot once keeps a consistent view of ONE language throughout.
+            //
+            // Candidates: unknown words the user has typed, not yet promoted to a WordEntry
+            // (key = word as recorded, value = times seen). Mutated only on the UI thread
+            // (see RecordWord's remarks). Assigned by Load() before the snapshot is published,
+            // while it is still unreachable from any other thread, and never re-assigned after.
+            public Dictionary<string, int> Candidates =
+                new Dictionary<string, int>(StringComparer.Ordinal);
+
+            // Companion overlay file paired with the base file this snapshot was parsed from
+            // (see DeriveOverlayPath). Null for Empty, i.e. before the first successful Load().
+            // Same assign-before-publish rule as Candidates.
+            public string OverlayPath;
+
             public DbSnapshot(Dictionary<string, WordEntry> byExact,
                               List<WordEntry>               byFrequency,
                               string                        language)
@@ -161,28 +181,20 @@ namespace OnScreenKeyboard
 
         // ── Learning engine state ───────────────────────────────────────
         //
-        // Unknown words the user has typed, not yet promoted to a full WordEntry.
-        // Key = the word as recorded (see RecordWord's case-normalisation rule),
-        // value = how many times it has been seen. Reset on every Load() (each
-        // file has its own <Candidates> section). Only ever touched from the UI
-        // thread (RecordWord is called synchronously from key-press handling),
-        // so no locking is needed — see RecordWord's remarks.
-        private static Dictionary<string, int> _candidates =
-            new Dictionary<string, int>(StringComparer.Ordinal);
+        // The candidate buffer and the overlay path are per-file state and live on
+        // DbSnapshot (Candidates / OverlayPath), so they are published atomically with
+        // the database they belong to — see the remarks there. Only the flags below are
+        // process-wide.
 
         // True when RecordWord/PromoteCandidate/RemoveCandidate has changed
-        // in-memory state since the last successful save.
+        // in-memory state since it was last handed to a save. Cleared BEFORE the save's
+        // plain-data copy is taken (see SaveIfDirty), so a change made while the write is
+        // still running re-sets it instead of being wiped when the write completes.
         private static volatile bool _dirty = false;
 
         // Guards against overlapping background saves if SaveIfDirty is called
         // again (e.g. by a periodic timer) while a previous save is still writing.
         private static volatile bool _saving = false;
-
-        // Companion overlay file path for whatever base file is currently loaded
-        // (see DeriveOverlayPath). Null before the first successful Load(). Read
-        // by SaveNow/SaveIfDirty, which no longer take a path parameter — the
-        // overlay is always the one paired with the currently loaded base file.
-        private static volatile string _overlayPath = null;
 
         // Master switch for the learning engine. RecordWord/PromoteCandidate are
         // no-ops while this is false. Defaults to true (learning starts working
@@ -299,24 +311,23 @@ namespace OnScreenKeyboard
                 // not reachable from anywhere else yet, so mutating it here needs
                 // no thread-safety beyond what Load already provides.
                 string overlayPath = DeriveOverlayPath(path);
-                var    candidates  = ApplyOverlay(snap, overlayPath);
+                snap.Candidates  = ApplyOverlay(snap, overlayPath);
+                snap.OverlayPath = overlayPath;
 
                 // Atomically publish the new snapshot.  The volatile write to
                 // _snapshot acts as a release fence — any thread that subsequently
                 // reads _snapshot with an acquire fence (all volatile reads do)
-                // is guaranteed to see the fully-constructed snapshot contents.
+                // is guaranteed to see the fully-constructed snapshot contents —
+                // including its Candidates and OverlayPath, which belong to this file
+                // and so can never be observed paired with another file's database.
                 _snapshot = snap;   // volatile write (release fence)
                 LoadError = null;
                 // _isLoaded is set AFTER the finally block so the IsLoading flag
                 // is already false when IsLoaded becomes true — no window where
                 // both flags are true simultaneously (fixes finding #8).
 
-                // Reset the learning engine's state for the newly loaded file.
-                // Candidates and the overlay path are per-file; any unsaved state
-                // from a previous file must not leak across.
-                _candidates  = candidates;
-                _overlayPath = overlayPath;
-                _dirty       = false;
+                // Nothing loaded from the previous file is unsaved any more.
+                _dirty = false;
             }
             finally
             {
@@ -929,16 +940,18 @@ namespace OnScreenKeyboard
             }
             else
             {
-                _candidates.TryGetValue(word, out int count);
+                // snap.Candidates, not a static: it belongs to the same file as snap.
+                var candidates = snap.Candidates;
+                candidates.TryGetValue(word, out int count);
                 count++;
                 if (count > CandidatePromotionThreshold)
                 {
-                    _candidates.Remove(word);
+                    candidates.Remove(word);
                     entry = PromoteInternal(snap, word, count);
                 }
                 else
                 {
-                    _candidates[word] = count;
+                    candidates[word] = count;
                 }
                 _dirty = true;
             }
@@ -1048,7 +1061,7 @@ namespace OnScreenKeyboard
         /// has been typed yet.
         /// </summary>
         public static IReadOnlyList<(string Word, int Count)> GetCandidates() =>
-            _candidates
+            _snapshot.Candidates
                 .OrderByDescending(kv => kv.Value)
                 .ThenBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
                 .Select(kv => (kv.Key, kv.Value))
@@ -1064,10 +1077,11 @@ namespace OnScreenKeyboard
         {
             if (string.IsNullOrEmpty(word)) return false;
             if (!_isLoaded) return false;
-            if (!_candidates.TryGetValue(word, out int count)) return false;
+            var snap = _snapshot;
+            if (!snap.Candidates.TryGetValue(word, out int count)) return false;
 
-            _candidates.Remove(word);
-            PromoteInternal(_snapshot, word, count);
+            snap.Candidates.Remove(word);
+            PromoteInternal(snap, word, count);
             _dirty = true;
             return true;
         }
@@ -1081,7 +1095,9 @@ namespace OnScreenKeyboard
         public static bool RemoveCandidate(string word)
         {
             if (string.IsNullOrEmpty(word)) return false;
-            bool removed = _candidates.Remove(word);
+            // Captured once: removes from the candidate buffer of the file that is loaded
+            // right now, never one half-way between two files.
+            bool removed = _snapshot.Candidates.Remove(word);
             if (removed) _dirty = true;
             return removed;
         }
@@ -1121,9 +1137,11 @@ namespace OnScreenKeyboard
             }
         }
 
-        private static SaveData BuildSaveData()
+        // Takes the snapshot as a parameter instead of reading _snapshot itself: the caller
+        // decides which file's data is being saved and passes that same snapshot's OverlayPath
+        // to the writer, so the data and the destination can never come from different files.
+        private static SaveData BuildSaveData(DbSnapshot snap)
         {
-            var snap        = _snapshot;
             var personalUse = new List<(string, int)>();
             var newWords    = new List<(string, int, int, List<(string, int, int)>)>();
             var pairUse     = new List<(string, string, int)>();
@@ -1159,8 +1177,8 @@ namespace OnScreenKeyboard
                 }
             }
 
-            var candidates = new List<(string, int)>(_candidates.Count);
-            foreach (var kv in _candidates) candidates.Add((kv.Key, kv.Value));
+            var candidates = new List<(string, int)>(snap.Candidates.Count);
+            foreach (var kv in snap.Candidates) candidates.Add((kv.Key, kv.Value));
 
             return new SaveData(personalUse, newWords, pairUse, newPair, candidates);
         }
@@ -1266,8 +1284,9 @@ namespace OnScreenKeyboard
         /// </summary>
         public static void SaveNow()
         {
-            if (!_isLoaded || _overlayPath == null) return;
-            WriteSaveData(BuildSaveData(), _overlayPath);
+            var snap = _snapshot;
+            if (!_isLoaded || snap.OverlayPath == null) return;
+            WriteSaveData(BuildSaveData(snap), snap.OverlayPath);
             _dirty = false;
         }
 
@@ -1280,19 +1299,28 @@ namespace OnScreenKeyboard
         public static void SaveIfDirty()
         {
             if (_saving || !_dirty) return;
-            if (!_isLoaded || _overlayPath == null) return;
+            // One capture: the data and the file it is written to come from the same snapshot.
+            var snap = _snapshot;
+            if (!_isLoaded || snap.OverlayPath == null) return;
 
             _saving = true;
-            string path = _overlayPath;
+            string path = snap.OverlayPath;
+            // Clear the flag BEFORE taking the copy (all mutation is on this UI thread, so
+            // nothing can slip in between). Clearing it after the write finished — as this
+            // used to — also wiped any change made while the write was running, leaving it
+            // unsaved until the next change or app close.
+            _dirty = false;
             // Build the plain-data copy here, on the caller's (UI) thread —
             // see BuildSaveData's remarks on why the background thread must not
             // touch the live WordEntry/NextEntry objects directly.
-            SaveData data = BuildSaveData();
+            SaveData data;
+            try   { data = BuildSaveData(snap); }
+            catch { _dirty = true; _saving = false; throw; }
 
             System.Threading.Tasks.Task.Run(() =>
             {
-                try   { WriteSaveData(data, path); _dirty = false; }
-                catch { /* best-effort — stays dirty, retried on the next cycle */ }
+                try   { WriteSaveData(data, path); }
+                catch { _dirty = true; /* best-effort — still unsaved, retried on the next cycle */ }
                 finally { _saving = false; }
             });
         }

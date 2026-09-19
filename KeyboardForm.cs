@@ -164,6 +164,11 @@ namespace OnScreenKeyboard
 
         // ── Selection (Edit mode) ─────────────────────────────────────
         private GridCell      _selectedCell = null;
+        // The cell whose button had the selection ring at the end of the last
+        // RefreshAllButtons(). The ring is painted in OnButtonPaint from _selectedCell, so
+        // when the selection moves, the old and new buttons must be invalidated explicitly —
+        // see the ring-change check at the end of RefreshAllButtons.
+        private GridCell      _ringCell = null;
 
         // ── Keyboard navigation in Edit mode ──────────────────────────
         // 2-D map [row, col] → the GridCell whose bounds cover that grid square.
@@ -2128,9 +2133,32 @@ namespace OnScreenKeyboard
                 }
             }
             finally { ResumeLayout(false); }
+
+            // The selection ring is painted in OnButtonPaint from _selectedCell, but nothing
+            // above repaints a button just because the selection moved: the loop only
+            // repaints as a side effect of a property changing, and the ring path sets
+            // BorderSize to 0. A key whose own border thickness is 0 therefore sets 0 -> 0 on
+            // deselect (no change, no repaint) and the old ring stays drawn; likewise a ring
+            // may not appear when moving onto such a key. Invalidate the two affected
+            // buttons explicitly whenever the ring actually moves.
+            var ringCell = _mode == Mode.Edit ? _selectedCell : null;
+            if (!ReferenceEquals(ringCell, _ringCell))
+            {
+                InvalidateCellButton(_ringCell);
+                InvalidateCellButton(ringCell);
+                _ringCell = ringCell;
+            }
+
             // When skipFontCalc is true, LayoutButtons() already ran ApplyWPTags() —
             // no need to run it a second time.
             if (!skipFontCalc) ApplyWPTags();
+        }
+
+        /// <summary>Repaints the button for <paramref name="cell"/>, if it has one.</summary>
+        private void InvalidateCellButton(GridCell cell)
+        {
+            if (cell != null && _buttons.TryGetValue(cell, out var btn))
+                btn.Invalidate();
         }
 
         /// <summary>Returns the gear button's grid row and column.</summary>
@@ -2452,7 +2480,30 @@ namespace OnScreenKeyboard
 
             // Run the parse on a background thread so the keyboard opens immediately.
             // OnWordDatabaseLoaded() is invoked via WordDatabase.Loaded when done.
-            System.Threading.Tasks.Task.Run(() => WordDatabase.Load(path));
+            // The guard above is set before the result is known, so a failed load must
+            // release it again — otherwise a single transient failure (base file locked by
+            // an antivirus scan at startup, half-written file) would block every retry for
+            // this path until the app restarts, leaving prediction off with no way back.
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                bool failed;
+                try   { WordDatabase.Load(path); failed = !WordDatabase.IsLoaded && WordDatabase.LoadError != null; }
+                catch { failed = true; }
+                ReleaseLoadGuardOnFailure(ref _lastLoadedDbPath, path, failed);
+            });
+        }
+
+        /// <summary>
+        /// Clears <paramref name="lastLoadedPath"/> if it still equals <paramref name="path"/>
+        /// and the load failed, so the next <c>LoadWordDatabase()</c> call retries instead of
+        /// being skipped as "already loaded". Atomic compare-and-swap: this runs on a
+        /// background thread while the UI thread may already have moved on to another path,
+        /// in which case the newer value must be left alone.
+        /// </summary>
+        internal static void ReleaseLoadGuardOnFailure(ref string lastLoadedPath, string path, bool loadFailed)
+        {
+            if (loadFailed)
+                System.Threading.Interlocked.CompareExchange(ref lastLoadedPath, null, path);
         }
 
         /// <summary>

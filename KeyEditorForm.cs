@@ -589,7 +589,7 @@ namespace OnScreenKeyboard
             _btnModeKey.Text    = Lang.T("Key/Shortcut");
             _btnModeMod.Text    = Lang.T("Modifier");
             _btnModeWP.Text     = "&" + Lang.T("Word prediction");
-            _btnModeLayout.Text = "&" + Lang.T("Layout");
+            _btnModeLayout.Text = Lang.T("Layout");
             _btnGroupEdit.Text  = Lang.T("Manage Groups…");
             UpdateBrowseLabel();
         }
@@ -634,7 +634,7 @@ namespace OnScreenKeyboard
             // so that Alt+mnemonic jumps focus from the label to its input (WCAG 2.1 AA §2.4.7).
             int ti = 0;
 
-            AddFieldLabel(grpKey, () => "&" + Lang.T("Label"), lx, gy).TabIndex = ti++;
+            AddFieldLabel(grpKey, () => Lang.T("Label"), lx, gy).TabIndex = ti++;
             _txtLabel = AddInput(grpKey, vx, gy, vw); _txtLabel.TabIndex = ti++;
             gy += ROW_H;
 
@@ -709,7 +709,7 @@ namespace OnScreenKeyboard
             gy += ROW_H;
 
             // ColSpan: how many grid columns the key occupies (1 = normal width)
-            AddFieldLabel(grpKey, () => "&" + Lang.T("Key width"), lx, gy).TabIndex = ti++;
+            AddFieldLabel(grpKey, () => Lang.T("Key width"), lx, gy).TabIndex = ti++;
             _nudColSpan = new NumericUpDown
             {
                 Left = vx, Top = gy, Width = 65, Minimum = 1, Maximum = _maxCols,
@@ -808,14 +808,14 @@ namespace OnScreenKeyboard
             AddFieldLabel(grpStyle, () => Lang.T("Font color"), slx, gy).TabIndex = ti++;
             _pnlFontColor = AddColorRow(grpStyle, svx, gy, svw, ref ti, Refresh2); gy += ROW_H;
 
-            AddFieldLabel(grpStyle, () => "&" + Lang.T("Key color"), slx, gy).TabIndex = ti++;
+            AddFieldLabel(grpStyle, () => Lang.T("Key color"), slx, gy).TabIndex = ti++;
             _pnlKeyColor = AddColorRow(grpStyle, svx, gy, svw, ref ti, Refresh2); gy += ROW_H;
 
             AddFieldLabel(grpStyle, () => "&" + Lang.T("Border color"), slx, gy).TabIndex = ti++;
             _pnlBorderColor = AddColorRow(grpStyle, svx, gy, svw, ref ti, Refresh2); gy += ROW_H;
 
             // Border thickness: -1 means "inherit from standard group", 0 means no border
-            AddFieldLabel(grpStyle, () => "&" + Lang.T("Border thickness"), slx, gy).TabIndex = ti++;
+            AddFieldLabel(grpStyle, () => Lang.T("Border thickness"), slx, gy).TabIndex = ti++;
             _nudBorderThickness = new NumericUpDown
             {
                 Left = svx, Top = gy, Width = 65, Minimum = -1, Maximum = 10,
@@ -957,7 +957,7 @@ namespace OnScreenKeyboard
             _btnModeKey    = MakeModeBtn(parent, Lang.T("Key/Shortcut"),          lx + bw + 4, gy,             bw);
             _btnModeMod    = MakeModeBtn(parent, Lang.T("Modifier"),              lx,          gy + ROW_H,     bw);
             _btnModeWP     = MakeModeBtn(parent, "&" + Lang.T("Word prediction"), lx + bw + 4, gy + ROW_H,     bw);
-            _btnModeLayout = MakeModeBtn(parent, "&" + Lang.T("Layout"),          lx,          gy + ROW_H * 2, fullW);
+            _btnModeLayout = MakeModeBtn(parent, Lang.T("Layout"),          lx,          gy + ROW_H * 2, fullW);
 
             // Wire each button to switch the editor into its corresponding mode
             _btnModeText.Click   += (s, e) => SetSendMode(SendMode.Text,           applyPicker: true);
@@ -1102,7 +1102,7 @@ namespace OnScreenKeyboard
 
             var lblMod = new Label
             {
-                Text = Lang.T("Modifier"), Left = 0, Top = 4, AutoSize = true,
+                Text = Lang.StripMnemonic(Lang.T("Modifier")), Left = 0, Top = 4, AutoSize = true,
                 ForeColor = C_LBL, BackColor = Color.Transparent, Font = F_LABEL,
             };
             _pnlModPicker.Controls.Add(lblMod);

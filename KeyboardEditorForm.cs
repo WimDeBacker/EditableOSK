@@ -246,7 +246,7 @@ namespace OnScreenKeyboard
             Text                  = Lang.T("Edit Keyboard");
             _btnApply.Text        = Lang.T("Apply");
             _btnCancel.Text       = Lang.T("Cancel");
-            _chkAlwaysOnTop.Text  = "&" + Lang.T("Always on top");
+            _chkAlwaysOnTop.Text  = Lang.T("Always on top");
             _chkStickyMods.Text   = Lang.T("Sticky modifiers");
             _chkHoldToEdit.Text   = Lang.T("Hold to edit");
             _chkHideTitlebar.Text = Lang.T("Hide title bar");
@@ -384,7 +384,7 @@ namespace OnScreenKeyboard
             // "Always on top" keeps the keyboard window above all other windows.
             _chkAlwaysOnTop = new CheckBox
             {
-                Text = "&" + Lang.T("Always on top"),
+                Text = Lang.T("Always on top"),
                 Left = lx, Top = gy + 8, AutoSize = true,
                 ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent,
                 Font = F_LABEL, TabIndex = ti++,

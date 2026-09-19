@@ -367,7 +367,7 @@ namespace OnScreenKeyboard
             // Name → Font → Font size → Font color → Key color → Border color → Border thickness
 
             // Name field
-            AddFieldLabel(pnlDetail, () => "&" + Lang.T("Name"), lx, gy).TabIndex = ti++;
+            AddFieldLabel(pnlDetail, () => Lang.T("Name"), lx, gy).TabIndex = ti++;
             _txtName = new TextBox
             {
                 Left = vx, Top = gy, Width = vw,
@@ -430,7 +430,7 @@ namespace OnScreenKeyboard
             AddFieldLabel(pnlDetail, () => Lang.T("Font color"), lx, gy).TabIndex = ti++;
             (_pnlFontColor, _txtFontColorHex, _ctxClearFontColor) = AddColorRow(pnlDetail, vx, gy, vw, ref ti); gy += ROW;
 
-            AddFieldLabel(pnlDetail, () => "&" + Lang.T("Key color"), lx, gy).TabIndex = ti++;
+            AddFieldLabel(pnlDetail, () => Lang.T("Key color"), lx, gy).TabIndex = ti++;
             (_pnlKeyColor, _txtKeyColorHex, _ctxClearKeyColor) = AddColorRow(pnlDetail, vx, gy, vw, ref ti); gy += ROW;
 
             AddFieldLabel(pnlDetail, () => "&" + Lang.T("Border color"), lx, gy).TabIndex = ti++;
@@ -438,7 +438,7 @@ namespace OnScreenKeyboard
 
             // Border thickness: -1 means "inherit from standard group" for non-standard groups.
             // The standard group itself uses Minimum=0 (no inheritance) and the hint is hidden.
-            AddFieldLabel(pnlDetail, () => "&" + Lang.T("Border thickness"), lx, gy).TabIndex = ti++;
+            AddFieldLabel(pnlDetail, () => Lang.T("Border thickness"), lx, gy).TabIndex = ti++;
             _nudBorderThickness = new NumericUpDown
             {
                 Left = vx, Top = gy, Width = 65, Minimum = -1, Maximum = 10,

@@ -57,6 +57,7 @@ namespace OnScreenKeyboard
             T_PaintHandlerAudit();
             T_SlowKeysDwell();
             T_AccessibilityControls();
+            T_Accelerators();
             T_ValidationBlocksApply();
             T_MissingFontHandling();
             T_FluentDialogBase_DisposeWithoutShow();
@@ -794,11 +795,11 @@ namespace OnScreenKeyboard
             Assert(Lang.T("✖ Cancel")       == "✖  Cancel",     "English: Cancel");
             Assert(Lang.T("Edit Key")       == "Edit Key",      "English: Edit Key");
             Assert(Lang.T("Preview")        == "Preview",       "English: Preview");
-            Assert(Lang.T("Key width")     == "Key width","English: Width (columns)");
+            Assert(Lang.StripMnemonic(Lang.T("Key width")) == "Key width","English: Width (columns)");
             Assert(Lang.T("Key height")    == "Key &height", "English: Height (rows)");
             Assert(Lang.T("Accessibility")  == "Accessibility", "English: Accessibility");
             Assert(Lang.T("Sticky modifiers")== "Stic&ky modifiers","English: Sticky modifiers");
-            Assert(Lang.T("Always on top")  == "Always on top", "English: Always on top");
+            Assert(Lang.StripMnemonic(Lang.T("Always on top")) == "Always on top", "English: Always on top");
             Assert(Lang.T("Hide title bar") == "H&ide title bar","English: Hide title bar");
             Assert(Lang.T("Language")       == "Language",      "English: Language");
             Assert(Lang.T("Layout file")    == "Layout file",   "English: Layout file");
@@ -844,10 +845,10 @@ namespace OnScreenKeyboard
                 Assert(Lang.T("Language")    == "Taal",             "Dutch: Language");
                 Assert(Lang.T("Layout file") == "Lay-outbestand",   "Dutch: Layout file");
                 Assert(Lang.T("Accessibility")== "Toegankelijkheid","Dutch: Accessibility");
-                Assert(Lang.T("Sticky modifiers")=="&Plaktoetsen (Sticky Keys)","Dutch: Sticky modifiers");
-                Assert(Lang.T("Always on top")=="Altijd bovenaan",  "Dutch: Always on top");
+                Assert(Lang.StripMnemonic(Lang.T("Sticky modifiers"))=="Plaktoetsen (Sticky Keys)","Dutch: Sticky modifiers");
+                Assert(Lang.StripMnemonic(Lang.T("Always on top"))=="Altijd bovenaan",  "Dutch: Always on top");
                 Assert(Lang.T("Hide title bar")=="Titelbalk &verbergen","Dutch: Hide title bar");
-                Assert(Lang.T("Key width")=="Toets breedte","Dutch: Key width");
+                Assert(Lang.StripMnemonic(Lang.T("Key width"))=="Toets breedte","Dutch: Key width");
                 Assert(Lang.T("Key height")=="Toets &hoogte",   "Dutch: Key height");
                 // Removed keys must NOT be in Dutch file
                 Assert(Lang.T("nonexistent_key_xyz") == "nonexistent_key_xyz",
@@ -2892,6 +2893,156 @@ namespace OnScreenKeyboard
                 if (System.IO.File.Exists(clashOverlayPath)) System.IO.File.Delete(clashOverlayPath);
             }
 
+            // ── A failed load must release KeyboardForm's "already loaded" guard ──
+            // Regression: LoadWordDatabase set _lastLoadedDbPath before the background load's
+            // result was known and never cleared it, so one transient failure of the base file
+            // blocked every retry for that path until app restart.
+            section("KeyboardForm — failed word-database load releases the retry guard");
+
+            {
+                string guard = "C:\\db\\worddb_NL.wfq";
+                KeyboardForm.ReleaseLoadGuardOnFailure(ref guard, "C:\\db\\worddb_NL.wfq", loadFailed: true);
+                assert(guard == null, "guard: a failed load clears the guard so the next call retries");
+
+                guard = "C:\\db\\worddb_NL.wfq";
+                KeyboardForm.ReleaseLoadGuardOnFailure(ref guard, "C:\\db\\worddb_NL.wfq", loadFailed: false);
+                assert(guard == "C:\\db\\worddb_NL.wfq", "guard: a successful load keeps the guard (no redundant reload)");
+
+                // The UI thread may already have moved on to another database by the time a
+                // slow background load fails — the newer path must not be clobbered.
+                guard = "C:\\db\\worddb_EN.wfq";
+                KeyboardForm.ReleaseLoadGuardOnFailure(ref guard, "C:\\db\\worddb_NL.wfq", loadFailed: true);
+                assert(guard == "C:\\db\\worddb_EN.wfq", "guard: a stale failure never clears a newer path's guard");
+            }
+
+            string retryPath = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(), $"osk_retry_{Guid.NewGuid():N}.wfq");
+            try
+            {
+                System.IO.File.WriteAllText(retryPath, "this is not xml <<<", System.Text.Encoding.UTF8);
+                WordDatabase.Load(retryPath);
+                assert(!WordDatabase.IsLoaded && WordDatabase.LoadError != null,
+                    "retry: a corrupt base file leaves IsLoaded=false and LoadError set (what KeyboardForm keys the release on)");
+
+                System.IO.File.WriteAllText(retryPath,
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n" +
+                    "<WordDatabase version=\"1\" language=\"nl\">\r\n" +
+                    "  <Word value=\"de\" frequency=\"100\" />\r\n" +
+                    "</WordDatabase>",
+                    System.Text.Encoding.UTF8);
+                WordDatabase.Load(retryPath);
+                assert(WordDatabase.IsLoaded && WordDatabase.LoadError == null,
+                    "retry: loading the same path again succeeds once the file is readable");
+            }
+            finally
+            {
+                if (System.IO.File.Exists(retryPath)) System.IO.File.Delete(retryPath);
+            }
+
+            // ── Per-file learning state is published atomically with its snapshot ──
+            // Regression: the candidate buffer and overlay path used to be separate statics,
+            // assigned one by one by the background Load() while the UI thread read them — so a
+            // reader could see one language's candidates against the other language's overlay
+            // path. They now live on the snapshot, published with a single volatile write.
+            // The dirty flag is also cleared BEFORE a save's copy is taken, not after the write.
+            section("WordDatabase — candidates and overlay path belong to their snapshot");
+
+            string lsA = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"osk_lsA_{Guid.NewGuid():N}.wfq");
+            string lsB = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"osk_lsB_{Guid.NewGuid():N}.wfq");
+            string lsAOv = WordDatabase.GetOverlayPath(lsA);
+            string lsBOv = WordDatabase.GetOverlayPath(lsB);
+
+            object LsSnapshot() => typeof(WordDatabase)
+                .GetField("_snapshot", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
+            Dictionary<string, int> LsCands(object snapObj) => (Dictionary<string, int>)snapObj.GetType()
+                .GetField("Candidates", BindingFlags.Public | BindingFlags.Instance).GetValue(snapObj);
+            string LsOverlay(object snapObj) => (string)snapObj.GetType()
+                .GetField("OverlayPath", BindingFlags.Public | BindingFlags.Instance).GetValue(snapObj);
+            void LsWaitSaved()
+            {
+                var savingField = typeof(WordDatabase).GetField("_saving", BindingFlags.NonPublic | BindingFlags.Static);
+                var until = DateTime.UtcNow.AddSeconds(10);
+                while ((bool)savingField.GetValue(null) && DateTime.UtcNow < until)
+                    System.Threading.Thread.Sleep(10);
+            }
+
+            try
+            {
+                WordDatabase.LearningEnabled = true;
+                string lsBase =
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n" +
+                    "<WordDatabase version=\"1\" language=\"nl\">\r\n" +
+                    "  <Word value=\"de\" frequency=\"100\" />\r\n" +
+                    "</WordDatabase>";
+                System.IO.File.WriteAllText(lsA, lsBase, System.Text.Encoding.UTF8);
+                System.IO.File.WriteAllText(lsB, lsBase, System.Text.Encoding.UTF8);
+                System.IO.File.WriteAllText(lsAOv,
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n" +
+                    "<WordDatabaseOverlay version=\"1\">\r\n" +
+                    "  <Candidates><Candidate value=\"aaa\" count=\"2\" /></Candidates>\r\n" +
+                    "</WordDatabaseOverlay>",
+                    System.Text.Encoding.UTF8);
+                System.IO.File.WriteAllText(lsBOv,
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n" +
+                    "<WordDatabaseOverlay version=\"1\">\r\n" +
+                    "  <Candidates><Candidate value=\"bbb\" count=\"2\" /></Candidates>\r\n" +
+                    "</WordDatabaseOverlay>",
+                    System.Text.Encoding.UTF8);
+
+                WordDatabase.Load(lsA);
+                var snapA = LsSnapshot();
+                assert(LsCands(snapA).ContainsKey("aaa"), "snapshot: file A's snapshot carries A's candidates");
+                assert(LsOverlay(snapA) == lsAOv, "snapshot: file A's snapshot carries A's overlay path");
+
+                WordDatabase.Load(lsB);
+                var snapB = LsSnapshot();
+                assert(!ReferenceEquals(snapA, snapB), "snapshot: loading B publishes a new snapshot object");
+                assert(LsCands(snapB).ContainsKey("bbb") && !LsCands(snapB).ContainsKey("aaa"),
+                    "snapshot: B's candidates are only B's — nothing bleeds across from A");
+                assert(LsOverlay(snapB) == lsBOv, "snapshot: B's snapshot carries B's overlay path");
+                assert(LsCands(snapA).ContainsKey("aaa") && !LsCands(snapA).ContainsKey("bbb"),
+                    "snapshot: A's snapshot is untouched by loading B (a stale caller stays consistent)");
+                assert(WordDatabase.GetCandidates().Select(c => c.Word).SequenceEqual(new[] { "bbb" }),
+                    "snapshot: GetCandidates() lists only the currently loaded file's candidates");
+
+                // A save writes the loaded file's data to the loaded file's overlay — never the other's.
+                string ovABefore = System.IO.File.ReadAllText(lsAOv);
+                WordDatabase.RecordWord(null, "cccc");
+                WordDatabase.SaveNow();
+                assert(System.IO.File.ReadAllText(lsAOv) == ovABefore,
+                    "save: the other file's overlay is left untouched");
+                string ovBAfter = System.IO.File.ReadAllText(lsBOv);
+                assert(ovBAfter.Contains("cccc") && ovBAfter.Contains("bbb") && !ovBAfter.Contains("aaa"),
+                    "save: the loaded file's overlay gets its own candidates only");
+
+                // Dirty flag: cleared before the copy, so a change made while the write is
+                // still running survives instead of being wiped when the write completes.
+                WordDatabase.RecordWord(null, "dddd");
+                assert(WordDatabase.IsDirty, "dirty: a recorded word marks the database dirty");
+                WordDatabase.SaveIfDirty();
+                assert(!WordDatabase.IsDirty, "dirty: SaveIfDirty clears the flag immediately, before the write finishes");
+                WordDatabase.RecordWord(null, "eeee");   // change made while the write may still be running
+                LsWaitSaved();
+                assert(WordDatabase.IsDirty,
+                    "dirty: a change made while the write was running is still dirty afterwards");
+                WordDatabase.SaveNow();                   // flush it
+                assert(!WordDatabase.IsDirty, "dirty: SaveNow clears it again");
+
+                // A failed background write must leave the database dirty so it is retried.
+                System.IO.File.Delete(lsBOv);
+                System.IO.Directory.CreateDirectory(lsBOv);   // a directory where the file should go: the write throws
+                WordDatabase.RecordWord(null, "ffff");
+                WordDatabase.SaveIfDirty();
+                LsWaitSaved();
+                assert(WordDatabase.IsDirty, "dirty: a failed write leaves the database dirty for the next cycle");
+            }
+            finally
+            {
+                foreach (var f in new[] { lsA, lsB, lsAOv, lsBOv, lsAOv + ".bak", lsBOv + ".bak", lsAOv + ".tmp", lsBOv + ".tmp" })
+                    if (System.IO.File.Exists(f)) System.IO.File.Delete(f);
+                if (System.IO.Directory.Exists(lsBOv)) System.IO.Directory.Delete(lsBOv, true);
+            }
+
             // ── Learning engine — personal-tier ranking cap ───────────────────
             // Personally-used words may fill at most PersonalCap(count) slots —
             // see WordDatabase.PersonalCap — so normal frequency suggestions are
@@ -4835,6 +4986,67 @@ namespace OnScreenKeyboard
         // ══════════════════════════════════════════════════════════════════
         // T_WizardKeyParser — parser logic for the New Keyboard Wizard
         // ══════════════════════════════════════════════════════════════════
+
+        // ── Accelerator (Alt+letter) audit ────────────────────────────────
+        // Collects every "&x" mnemonic on every control of a dialog, in English and Dutch.
+        // Many labels are built as "&" + Lang.T(...), so the accelerator is the FIRST LETTER
+        // of the translation and differs per language — a clash can exist in one language only.
+        private static List<(char Key, string Ctrl, string Text)> CollectAccelerators(Control root)
+        {
+            var found = new List<(char, string, string)>();
+            void Walk(Control c)
+            {
+                string t = c.Text ?? "";
+                for (int i = 0; i < t.Length - 1; i++)
+                {
+                    if (t[i] != '&') continue;
+                    if (t[i + 1] == '&') { i++; continue; }          // "&&" = literal ampersand
+                    found.Add((char.ToUpperInvariant(t[i + 1]), c.GetType().Name, t));
+                    break;
+                }
+                foreach (Control child in c.Controls) Walk(child);
+            }
+            Walk(root);
+            return found;
+        }
+
+        private static void T_Accelerators()
+        {
+            Section("Accelerators — no duplicate Alt+letter within a dialog, English and Dutch");
+
+            foreach (string lang in new[] { "en", "nl" })
+            {
+                Lang.Load(lang);
+                var dialogs = new List<(string Name, Form F)>
+                {
+                    ("GroupEditorForm",    new GroupEditorForm(new List<KeyGroup> { new KeyGroup { Name = SettingsManager.StandardGroupName } })),
+                    ("KeyEditorForm",      new KeyEditorForm(new KeyProps("A", "A"), owner: null)),
+                    ("KeyboardEditorForm", new KeyboardEditorForm(new VisualTheme(), new WindowState(), new LayoutMeta(), owner: null)),
+                };
+                try
+                {
+                    foreach (var (name, form) in dialogs)
+                    {
+                        var accels = CollectAccelerators(form);
+                        // Guard against the collector silently finding nothing.
+                        Assert(accels.Count >= 10,
+                            $"accelerators [{lang}] {name}: found {accels.Count} mnemonics (expected at least 10)");
+
+                        var clashes = accels.GroupBy(a => a.Key).Where(g => g.Count() > 1).ToList();
+                        Assert(clashes.Count == 0,
+                            $"accelerators [{lang}] {name}: no letter is used twice" +
+                            (clashes.Count == 0 ? "" : " — duplicated: " + string.Join("; ",
+                                clashes.Select(g => g.Key + " = " + string.Join(" / ",
+                                    g.Select(a => a.Text.Replace("&", "&")))))));
+                    }
+                }
+                finally
+                {
+                    foreach (var (_, form) in dialogs) form.Dispose();
+                    Lang.Load("en");
+                }
+            }
+        }
 
         private static void T_WizardKeyParser()
         {

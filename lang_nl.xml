@@ -91,7 +91,7 @@
   <String key="📌 Move gear button…" value="📌 Tandwielknop verplaatsen…" />
 
   <!-- Dialog buttons (clean keys, no emoji) -->
-  <String key="Apply"      value="To&amp;epassen" />
+  <String key="Apply"      value="Toe&amp;passen" />
   <String key="Cancel"     value="Ann&amp;uleren" />
   <String key="Save"       value="Opslaan" />
   <String key="Save As…"   value="Op&amp;slaan als…" />
@@ -101,20 +101,20 @@
   <!-- Key editor — Key Content group -->
   <String key="Edit Key"      value="Toets bewerken" />
   <String key="Key Content"   value="Toetsinhoud" />
-  <String key="Label"         value="Label" />
+  <String key="Label"         value="La&amp;bel" />
   <String key="Send"          value="Verzenden" />
   <String key="Shift label"   value="Shi&amp;ft-label" />
-  <String key="Shift send"    value="Shift-verzen&amp;den" />
+  <String key="Shift send"    value="Sh&amp;ift-verzenden" />
   <String key="AltGr label"   value="AltGr-label" />
   <String key="AltGr send"    value="AltGr-verzenden" />
-  <String key="Key width"     value="Toets breedte" />
+  <String key="Key width"     value="Toets bree&amp;dte" />
   <String key="Key height"    value="Toets &amp;hoogte" />
 
   <!-- Key editor — Send mode -->
   <String key="Text"                        value="Tekst" />
   <String key="Key/Shortcut"                value="Toets/&amp;Sneltoets" />
-  <String key="Modifier"                    value="M&amp;odifier" />
-  <String key="Layout"                      value="Lay-out" />
+  <String key="Modifier"                    value="&amp;Modifier" />
+  <String key="Layout"                      value="La&amp;y-out" />
   <String key="Word prediction"             value="Woordvoorspelling" />
   <String key="Prediction cell"             value="Voorspellingstoets" />
   <String key="WP all slots full"           value="⚠ Alle 10 voorspellingsslots zijn al in gebruik — deze toets werkt niet" />
@@ -137,9 +137,9 @@
   <String key="Font size"         value="Lettergr&amp;ootte" />
   <String key="Auto"              value="Auto" />
   <String key="Font color"        value="L&amp;etterkleur" />
-  <String key="Key color"         value="Toetskleur" />
+  <String key="Key color"         value="Toets&amp;kleur" />
   <String key="Border color"      value="Randkleur" />
-  <String key="Border thickness"  value="Dikte (px)" />
+  <String key="Border thickness"  value="Dikte (p&amp;x)" />
   <String key="Preview"           value="Voorbeeld" />
 
   <!-- Keyboard editor -->
@@ -151,16 +151,16 @@
   <String key="Background"         value="Achtergrond" />
   <String key="Default Key Style"  value="Standaard toetsstijl" />
   <String key="Apply to all keys"  value="Stijl nu op alle toetsen toepassen" />
-  <String key="Always on top"      value="Altijd bovenaan" />
+  <String key="Always on top"      value="Altijd &amp;bovenaan" />
   <String key="Hide title bar"     value="Titelbalk &amp;verbergen" />
   <String key="Accessibility"      value="Toegankelijkheid" />
-  <String key="Sticky modifiers"   value="&amp;Plaktoetsen (Sticky Keys)" />
+  <String key="Sticky modifiers"   value="Plaktoetsen (Sticky &amp;Keys)" />
   <String key="Hold to edit"       value="&amp;Ingedrukt houden voor bewerkingsmodus" />
-  <String key="Slow keys"          value="&amp;Langzame toetsen" />
+  <String key="Slow keys"          value="La&amp;ngzame toetsen" />
   <String key="Dwell click"        value="Automatis&amp;che klik" />
   <String key="tip: Slow keys"     value="Houd een toets zo lang ingedrukt (in milliseconden) voordat deze wordt geregistreerd. Voorkomt onbedoelde toetsaanslagen." />
   <String key="tip: Dwell click"          value="Zweef over een toets gedurende dit aantal milliseconden om deze automatisch te activeren, zonder klikken." />
-  <String key="Show timing animation"     value="Voortgangsanimatie &amp;tonen" />
+  <String key="Show timing animation"     value="Voo&amp;rtgangsanimatie tonen" />
   <String key="tip: Show timing animation" value="Toont een visuele animatie op toetsen terwijl langzame toetsen of automatische klik aftelt. Vink uit als u de animatie afleidend vindt." />
   <String key="Toolbar theme"      value="&amp;Werkbalkthema" />
   <String key="Dark"               value="Donker" />
@@ -169,7 +169,7 @@
 
   <!-- Group editor -->
   <String key="Key Groups"             value="Toetsgroepen" />
-  <String key="Manage Groups…"         value="&amp;Groepen beheren…" />
+  <String key="Manage Groups…"         value="Groepe&amp;n beheren…" />
   <String key="Group"                  value="Groep" />
   <String key="(no group)"             value="(geen groep)" />
   <String key="Manage Groups"          value="Groepen beheren" />
@@ -177,7 +177,7 @@
   <String key="Style"                  value="Stijl" />
   <String key="+ Add group"            value="+ &amp;Toevoegen" />
   <String key="− Delete group"         value="− &amp;Verwijderen" />
-  <String key="Name"                   value="Naam" />
+  <String key="Name"                   value="&amp;Naam" />
   <String key="(inherit)"              value="(overnemen)" />
   <String key="0 = auto / inherit"     value="0 = auto / overnemen" />
   <String key="(inherit standard)"     value="(standaard)" />
