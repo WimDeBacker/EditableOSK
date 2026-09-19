@@ -208,7 +208,7 @@ namespace OnScreenKeyboard
         /// <param name="hdrH">Height of the painted header strip in pixels (default 42).</param>
         protected Panel AddGroup(Func<string> getTitle, int x, int y, int w, int h, Color accentColor, int hdrH = 42)
         {
-            Color bg = _dark ? Color.FromArgb(48, 48, 48) : Fluent.BgCard;
+            Color bg = _dark ? Fluent.DialogDarkCard : Fluent.BgCard;
             var pnl = new Panel { Left = x, Top = y, Width = w, Height = h, BackColor = bg };
             bool dark = _dark;
             pnl.Paint += (s, e) =>
@@ -410,7 +410,7 @@ namespace OnScreenKeyboard
         /// [section buttons] / [body that scrolls only if the screen is too small] / [footer].
         /// Add the body with <see cref="AddSection"/>; the footer comes from <see cref="MakeFooter"/>.
         /// </summary>
-        protected void BuildFrame(Control footer, bool withSections)
+        protected void BuildFrame(Control footer, bool withSections, Control headerRight = null)
         {
             var root = new TableLayoutPanel
             {
@@ -424,7 +424,20 @@ namespace OnScreenKeyboard
                 Sections = new SectionBar { Anchor = AnchorStyles.Left | AnchorStyles.Right };
                 Sections.SelectedIndexChanged += (s, e) => _host.ShowSection(Sections.SelectedIndex);
                 root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-                root.Controls.Add(Sections, 0, row++);
+                Control top = Sections;
+                if (headerRight != null)
+                {
+                    // Section buttons on the left, a fixed control (e.g. the preview key) on the right.
+                    var t = new TableLayoutPanel { ColumnCount = 2, RowCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Anchor = AnchorStyles.Left | AnchorStyles.Right };
+                    t.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+                    t.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+                    Sections.Dock = DockStyle.Fill;
+                    headerRight.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+                    t.Controls.Add(Sections, 0, 0);
+                    t.Controls.Add(headerRight, 1, 0);
+                    top = t;
+                }
+                root.Controls.Add(top, 0, row++);
             }
             _host = new SectionHost { Dock = DockStyle.Fill };
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));

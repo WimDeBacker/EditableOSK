@@ -367,6 +367,62 @@ namespace OnScreenKeyboard
         }
 
         // ════════════════════════════════════════════════════════════════
+        // WCAG 2.1 AAA colour contrast of the dialog palette, light and dark
+        //   1.4.6  text                        >= 7 : 1
+        //   1.4.11 boundary of a control/focus >= 3 : 1
+        // Disabled text is exempt from both rules.
+        // ════════════════════════════════════════════════════════════════
+        private static void T_ColourContrastAaa()
+        {
+            Section("WCAG AAA — colour contrast of the dialog palette (light and dark)");
+
+            double Ratio(Color a, Color b) => WizardThemeValidator.ContrastRatio(a, b);
+            Color Darken(Color c, float amount) =>
+                Color.FromArgb(c.A, (int)(c.R * (1f - amount)), (int)(c.G * (1f - amount)), (int)(c.B * (1f - amount)));
+
+            var lightBgs = new[] { ("BgPage", Fluent.BgPage), ("BgCard", Fluent.BgCard), ("BgInput", Fluent.BgInput) };
+            var darkBgs  = new[] { ("DarkBg", Fluent.DarkBg), ("DialogDarkCard", Fluent.DialogDarkCard), ("DialogDarkInput", Fluent.DialogDarkInput) };
+
+            void Check(string what, double min, (string Name, Color Fg)[] foregrounds, (string Name, Color Bg)[] backgrounds)
+            {
+                var pairs = new List<(string Text, double Ratio)>();
+                foreach (var f in foregrounds)
+                    foreach (var b in backgrounds)
+                        pairs.Add(($"{f.Name} on {b.Name}", Ratio(f.Fg, b.Bg)));
+                AssertAll(pairs, p => p.Ratio >= min, p => $"{p.Text} = {p.Ratio:F2}:1", $"{what} >= {min}:1");
+            }
+
+            // ── Text (AAA 1.4.6): 7 : 1 ──
+            Check("light: text", 7.0,
+                new[] { ("TextPrimary", Fluent.TextPrimary), ("TextSecondary", Fluent.TextSecondary),
+                        ("TextHint", Fluent.TextHint), ("Danger", Fluent.Danger) }, lightBgs);
+            Check("dark: text", 7.0,
+                new[] { ("DialogDarkText", Fluent.DialogDarkText), ("DialogDarkTextDim", Fluent.DialogDarkTextDim),
+                        ("DialogDarkDanger", Fluent.DialogDarkDanger) }, darkBgs);
+
+            // Button labels: white on the coloured fills (a hover or pressed fill is darker, so only rises), dark on Neutral.
+            Check("button labels: white on Accent / Success / Danger", 7.0,
+                new[] { ("White", Color.White) },
+                new[] { ("Accent", Fluent.Accent), ("Success", Fluent.Success), ("Danger", Fluent.Danger) });
+            Check("button labels: TextPrimary on Neutral (rest, hover, pressed)", 7.0,
+                new[] { ("TextPrimary", Fluent.TextPrimary) },
+                new[] { ("Neutral", Fluent.Neutral), ("Neutral hover", Darken(Fluent.Neutral, 0.07f)), ("Neutral pressed", Darken(Fluent.Neutral, 0.12f)) });
+
+            // ── Boundaries and focus (1.4.11): 3 : 1 ──
+            Check("light: control boundary", 3.0,
+                new[] { ("ControlBorder", Fluent.ControlBorder), ("ControlBorderHover", Fluent.ControlBorderHover) }, lightBgs);
+            Check("dark: control boundary", 3.0,
+                new[] { ("DialogDarkBorder", Fluent.DialogDarkBorder) }, darkBgs);
+            Check("focus ring / selection (Accent) on the light surfaces and on a Neutral button", 3.0,
+                new[] { ("Accent", Fluent.Accent) },
+                new[] { ("BgPage", Fluent.BgPage), ("BgCard", Fluent.BgCard), ("Neutral", Fluent.Neutral) });
+
+            // The pale greys stay for grouping lines only; make sure nobody uses one as a control border again.
+            Assert(Ratio(Fluent.ControlBorder, Fluent.BgPage) > Ratio(Fluent.BorderCard, Fluent.BgPage) * 2,
+                "the control border is much stronger than the pale grouping line (BorderCard)");
+        }
+
+        // ════════════════════════════════════════════════════════════════
         // Baseline: how far the existing editors are from the guards
         // ════════════════════════════════════════════════════════════════
         private static void T_UiGuardBaseline()

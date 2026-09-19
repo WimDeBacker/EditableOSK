@@ -59,36 +59,48 @@ namespace OnScreenKeyboard
         // Near-black for body text — softer than pure black (0,0,0), which can look harsh.
         internal static readonly Color TextPrimary   = Color.FromArgb(28,  28,  28);
 
-        // Medium grey for supporting text (labels, descriptions).
-        internal static readonly Color TextSecondary = Color.FromArgb(96,  94,  92);
+        // ── WCAG 2.1 AAA ───────────────────────────────────────────────────
+        // Every colour pair below is chosen for AAA, and OnScreenKeyboardTests checks it:
+        //   text                          >= 7 : 1   (1.4.6 Contrast (Enhanced))
+        //   boundary of a control / focus >= 3 : 1   (1.4.11 Non-text Contrast)
+        // Text on the coloured buttons is white, so the button colours are dark enough for 7 : 1.
 
-        // Grey for placeholder / hint text inside empty input fields.
-        // #646464 gives 5.9 : 1 on BgCard (white) and 5.3 : 1 on BgPage (#F3F3F3) — passes WCAG AA.
-        internal static readonly Color TextHint      = Color.FromArgb(100, 100, 100);
+        // Medium grey for supporting text (labels, descriptions): 8.6 : 1 on BgCard, 7.7 : 1 on BgPage.
+        internal static readonly Color TextSecondary = Color.FromArgb(78,  76,  74);
 
-        // Microsoft's standard blue — used for primary action buttons and focused borders.
-        internal static readonly Color Accent        = Color.FromArgb(0,   120, 212);
+        // Grey for placeholder / hint text: 8.1 : 1 on BgCard (white), 7.3 : 1 on BgPage (#F3F3F3).
+        internal static readonly Color TextHint      = Color.FromArgb(80,  80,  80);
+
+        // Blue for primary action buttons and focus rings: white on it is 7.8 : 1.
+        internal static readonly Color Accent        = Color.FromArgb(0,   84,  150);
 
         // Darker blue for the "pressed" state of an accent button.
-        internal static readonly Color AccentDark    = Color.FromArgb(0,   102, 180);
+        internal static readonly Color AccentDark    = Color.FromArgb(0,   66,  120);
 
-        // Red for destructive actions (delete, remove). Slightly muted — not fire-engine red.
-        internal static readonly Color Danger        = Color.FromArgb(196,  43,  28);
+        // Red for destructive actions and error text: white on it 8.4 : 1, on BgPage 7.6 : 1.
+        internal static readonly Color Danger        = Color.FromArgb(150,  30,  20);
 
         // Darker red for the pressed state of a danger button.
-        internal static readonly Color DangerDark    = Color.FromArgb(168,  36,  24);
+        internal static readonly Color DangerDark    = Color.FromArgb(124,  24,  16);
 
-        // Green for confirmations and success states.
-        internal static readonly Color Success       = Color.FromArgb(16,  124,  16);
+        // Green for confirmations and success states: white on it 7.4 : 1.
+        internal static readonly Color Success       = Color.FromArgb(10,  100,  10);
 
         // Darker green for the pressed state of a success button.
-        internal static readonly Color SuccessDark   = Color.FromArgb(13,  105,  13);
+        internal static readonly Color SuccessDark   = Color.FromArgb(8,    80,   8);
 
         // Very light grey for neutral / secondary buttons in the resting state.
         internal static readonly Color Neutral       = Color.FromArgb(242, 242, 242);
 
         // Border colour for neutral buttons.
         internal static readonly Color NeutralBorder = Color.FromArgb(196, 196, 196);
+
+        // Boundary of an interactive control (a button, a flyout): 4.5 : 1 on white, 4.1 : 1 on BgPage.
+        // The pale BorderCard / BorderInput / NeutralBorder greys are only fine for grouping lines.
+        internal static readonly Color ControlBorder      = Color.FromArgb(118, 118, 118);
+
+        // The same boundary while the pointer is over the control.
+        internal static readonly Color ControlBorderHover = Color.FromArgb(80,  80,  80);
 
         // ── Dark (toolbar) palette ─────────────────────────────────────
         //
@@ -124,6 +136,21 @@ namespace OnScreenKeyboard
 
         // Solid Microsoft blue — highlights the currently active keyboard layout tab.
         internal static readonly Color DarkActive  = Color.FromArgb(0,   120, 212);
+
+        // ── Dark theme for dialogs ─────────────────────────────────────
+        //
+        // Dialogs in the dark theme (cards on DarkBg). AAA: text >= 7 : 1 and control
+        // boundaries >= 3 : 1 against DarkBg, DialogDarkCard and DialogDarkInput.
+        internal static readonly Color DialogDarkCard    = Color.FromArgb(48,  48,  48);
+        internal static readonly Color DialogDarkInput   = Color.FromArgb(58,  58,  58);
+        // Body text: 13.1 : 1 on DarkBg, 9.1 : 1 on DialogDarkInput.
+        internal static readonly Color DialogDarkText    = Color.FromArgb(230, 230, 230);
+        // Supporting text (descriptions, captions): 10.8 : 1 on DarkBg, 7.5 : 1 on DialogDarkInput.
+        internal static readonly Color DialogDarkTextDim = Color.FromArgb(210, 210, 210);
+        // Boundary of a control or flyout: 5.5 : 1 on DarkBg, 3.9 : 1 on DialogDarkInput.
+        internal static readonly Color DialogDarkBorder  = Color.FromArgb(150, 150, 150);
+        // Error text on the dark dialog colours: 7.2 : 1 on DialogDarkInput.
+        internal static readonly Color DialogDarkDanger  = Color.FromArgb(255, 190, 180);
 
         // ── Fonts ──────────────────────────────────────────────────────
         //

@@ -191,10 +191,114 @@ namespace OnScreenKeyboard
                     using (var f = new GroupEditorForm(groups))                                     { Show(f); Save(f, Path.Combine(outDir, $"groupeditor_{tag}.png")); }
                     using (var f = new KeyboardEditorForm(new VisualTheme(), new WindowState(), new LayoutMeta(), null))
                     { Show(f); Save(f, Path.Combine(outDir, $"keyboardeditor_{tag}.png")); }
+
+                    // Mock-ups for the Key Editor layout decision (see KeyEditorMockups.cs); no Dutch needed.
+                    if (tag != "nl") SaveMockups(outDir, tag);
+                    SaveMockupD(outDir, tag);
+                    if (tag != "nl") SaveMockupE(outDir, tag);
                 }
             }
             finally { Lang.PseudoExpansion = 0; Lang.Load("en"); }
             return 0;
+        }
+
+        /// <summary>One screenshot per state worth judging of each Key Editor mock-up option.</summary>
+        private static void SaveMockups(string outDir, string tag)
+        {
+            using (var a = new KeyEditorMockupA())
+            {
+                Show(a);
+                Save(a, Path.Combine(outDir, $"mockup_A1_normal_{tag}.png"));
+                a.SelectLayer(1);
+                Save(a, Path.Combine(outDir, $"mockup_A2_shift_{tag}.png"));
+            }
+            using (var b = new KeyEditorMockupB())
+            {
+                Show(b);
+                Save(b, Path.Combine(outDir, $"mockup_B_{tag}.png"));
+            }
+            using (var c = new KeyEditorMockupC())
+            {
+                Show(c);
+                Save(c, Path.Combine(outDir, $"mockup_C_{tag}.png"));
+            }
+        }
+
+        /// <summary>Option D: the Key section, the open action flyout, and the Appearance section.</summary>
+        private static void SaveMockupD(string outDir, string tag)
+        {
+            using var d = new KeyEditorMockupD();
+            Show(d);
+            Save(d, Path.Combine(outDir, $"mockup_D1_key_{tag}.png"));
+
+            // The flyout is a window of its own, so it is photographed separately and pasted onto the dialog.
+            var popup = d.Choosers[1].OpenPopup(keepOpen: true);
+            Application.DoEvents();
+            SaveWithPopup(d, popup, Path.Combine(outDir, $"mockup_D2_flyout_{tag}.png"));
+            popup.Close();
+
+            d.ShowAppearanceSection();
+            Application.DoEvents();
+            d.Refit();
+            Save(d, Path.Combine(outDir, $"mockup_D3_appearance_{tag}.png"));
+        }
+
+        /// <summary>Photographs a dialog with one of its flyouts, including any part of the flyout that hangs outside the dialog.</summary>
+        internal static void SaveWithPopup(Form f, Form popup, string path)
+        {
+            var union = Rectangle.Union(new Rectangle(f.Left, f.Top, f.Width, f.Height),
+                                        new Rectangle(popup.Left, popup.Top, popup.Width, popup.Height));
+            using var fb = new Bitmap(f.Width, f.Height);
+            f.DrawToBitmap(fb, new Rectangle(0, 0, f.Width, f.Height));
+            using var pb = new Bitmap(popup.Width, popup.Height);
+            popup.DrawToBitmap(pb, new Rectangle(0, 0, popup.Width, popup.Height));
+            using var bmp = new Bitmap(union.Width, union.Height);
+            using (var g = Graphics.FromImage(bmp))
+            {
+                g.Clear(Color.FromArgb(200, 200, 200));           // the desktop, where the flyout leaves the dialog
+                g.DrawImage(fb, f.Left - union.Left, f.Top - union.Top);
+                g.DrawImage(pb, popup.Left - union.Left, popup.Top - union.Top);
+            }
+            bmp.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+        }
+
+        /// <summary>Option E in both themes: both sections, plus the Group, Font and colour flyouts open.</summary>
+        private static void SaveMockupE(string outDir, string tag)
+        {
+            bool wasLight = ToolbarButton.IsLightTheme;
+            try
+            {
+                foreach (bool light in new[] { true, false })
+                {
+                    ToolbarButton.IsLightTheme = light;       // read when a dialog is created, so set it first
+                    string theme = light ? "light" : "dark";
+                    using var d = new KeyEditorMockupE();
+                    Show(d);
+                    Save(d, Path.Combine(outDir, $"mockup_E1_key_{theme}_{tag}.png"));
+
+                    d.ShowAppearanceSection();
+                    Application.DoEvents();
+                    d.Refit();
+                    Save(d, Path.Combine(outDir, $"mockup_E2_appearance_{theme}_{tag}.png"));
+
+                    var group = d.GroupChooser.OpenPopup(keepOpen: true);
+                    Application.DoEvents();
+                    SaveWithPopup(d, group, Path.Combine(outDir, $"mockup_E3_group_{theme}_{tag}.png"));
+                    group.Close();
+
+                    // A small screen: the font list gets only 420 px, so it scrolls instead of growing past the screen.
+                    var font = d.FontChooser.OpenPopup(keepOpen: true, maxHeightOverride: 420);
+                    Application.DoEvents();
+                    SaveWithPopup(d, font, Path.Combine(outDir, $"mockup_E4_font_{theme}_{tag}.png"));
+                    font.Close();
+
+                    var colour = d.KeyChip.OpenPicker(keepOpen: true);
+                    Application.DoEvents();
+                    SaveWithPopup(d, colour, Path.Combine(outDir, $"mockup_E5_colour_{theme}_{tag}.png"));
+                    colour.Close();
+                }
+            }
+            finally { ToolbarButton.IsLightTheme = wasLight; }
         }
 
         /// <summary>Shows a dialog invisibly (opacity 0) so it lays out at its real size, then lets it settle.</summary>

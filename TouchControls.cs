@@ -103,6 +103,24 @@ namespace OnScreenKeyboard
         {
             base.WndProc(ref m);
             if (m.Msg == WM_SIZE) CenterText();
+            else if (m.Msg == WM_PAINT && Text.Length == 0 && !string.IsNullOrEmpty(Hint)) PaintHint(IntPtr.Zero);
+            else if (m.Msg == WM_PRINTCLIENT && Text.Length == 0 && !string.IsNullOrEmpty(Hint)) PaintHint(m.WParam);
+        }
+
+        private const int WM_PAINT = 0x000F;
+        private const int WM_PRINTCLIENT = 0x0318;    // DrawToBitmap / screenshots paint through this message
+
+        /// <summary>Grey text shown while the box is empty (a multi-line TextBox has no PlaceholderText of its own).</summary>
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public string Hint { get; set; }
+
+        private void PaintHint(IntPtr hdc)
+        {
+            using var g = hdc == IntPtr.Zero ? CreateGraphics() : Graphics.FromHdc(hdc);
+            TextRenderer.DrawText(g, Hint, Font, new Rectangle(6, 0, Math.Max(0, ClientSize.Width - 12), ClientSize.Height),
+                SystemInformation.HighContrast ? SystemColors.GrayText
+                    : ToolbarButton.IsLightTheme ? Fluent.TextHint : Fluent.DialogDarkTextDim,   // >= 7 : 1 on either theme
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
         }
 
         /// <summary>Insets the edit control's text rectangle so a single line sits in the middle.</summary>

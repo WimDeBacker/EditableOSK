@@ -522,9 +522,18 @@ namespace OnScreenKeyboard
             // to define their shape, similar to a "secondary" button style.
             if (style == FluentButton.Variant.Neutral)
             {
-                // Use a slightly darker border on hover to reinforce the interactive feel.
-                var bc = hovered ? Fluent.BorderInput : Fluent.BorderCard;
+                // WCAG 1.4.11: the boundary of a control needs 3 : 1 against its surroundings, so the
+                // border is a real grey (ControlBorder), not the pale BorderCard used for grouping lines.
+                // Darker on hover to reinforce the interactive feel.
+                var bc = hovered ? Fluent.ControlBorderHover : Fluent.ControlBorder;
                 using var pen = new Pen(bc);
+                g.DrawPath(pen, path);
+            }
+            else if ((parentBg == default ? Fluent.BgPage : parentBg).GetBrightness() < 0.4f)
+            {
+                // The coloured fills are dark enough for white text at 7 : 1, which on a dark parent leaves
+                // them under 3 : 1 against the background — so they get a light outline there.
+                using var pen = new Pen(Fluent.DialogDarkBorder);
                 g.DrawPath(pen, path);
             }
 
@@ -818,9 +827,9 @@ namespace OnScreenKeyboard
             g.SmoothingMode     = SmoothingMode.AntiAlias;
             g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
 
-            Color cardFill   = dark ? Color.FromArgb(48, 48, 48)    : Fluent.BgCard;
-            Color cardBorder = dark ? Color.FromArgb(72, 72, 72)    : Fluent.BorderCard;
-            Color titleColor = dark ? Color.FromArgb(230, 230, 230) : Fluent.TextPrimary;
+            Color cardFill   = dark ? Fluent.DialogDarkCard          : Fluent.BgCard;
+            Color cardBorder = dark ? Color.FromArgb(72, 72, 72)    : Fluent.BorderCard;    // grouping line only, not a control
+            Color titleColor = dark ? Fluent.DialogDarkText         : Fluent.TextPrimary;
 
             // Draw the card background with a rounded outline.
             var cardRect = new Rectangle(0, 0, w - 1, h - 1);
@@ -883,9 +892,9 @@ namespace OnScreenKeyboard
             }
 
             Color formBg  = dark ? Fluent.DarkBg                 : Fluent.BgPage;
-            Color cardBg  = dark ? Color.FromArgb(48, 48, 48)    : Fluent.BgCard;
-            Color inputBg = dark ? Color.FromArgb(58, 58, 58)    : Fluent.BgInput;
-            Color fg      = dark ? Color.FromArgb(230, 230, 230) : Fluent.TextPrimary;
+            Color cardBg  = dark ? Fluent.DialogDarkCard  : Fluent.BgCard;
+            Color inputBg = dark ? Fluent.DialogDarkInput : Fluent.BgInput;
+            Color fg      = dark ? Fluent.DialogDarkText  : Fluent.TextPrimary;
 
             root.BackColor = formBg;
             ApplyThemeChildren(root, cardBg, inputBg, fg, skipSet);

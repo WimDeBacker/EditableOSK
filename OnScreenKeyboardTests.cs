@@ -61,6 +61,7 @@ namespace OnScreenKeyboard
             T_TouchControls();
             T_TouchDialogFrame();
             T_UiGuardBaseline();
+            T_ColourContrastAaa();
             T_ValidationBlocksApply();
             T_MissingFontHandling();
             T_FluentDialogBase_DisposeWithoutShow();
@@ -1599,53 +1600,7 @@ namespace OnScreenKeyboard
                 }
             }
 
-            Section("Priority 6 — Colour contrast (WCAG 2.1 AA)");
-
-            // WCAG relative-luminance and contrast-ratio helpers.
-            // Uses the standard IEC 61966-2-1 sRGB linearisation formula.
-            static double SrgbLinear(int channel)
-            {
-                double c = channel / 255.0;
-                return c <= 0.04045 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4);
-            }
-            static double Luminance(Color col) =>
-                0.2126 * SrgbLinear(col.R) +
-                0.7152 * SrgbLinear(col.G) +
-                0.0722 * SrgbLinear(col.B);
-            static double ContrastRatio(Color fg, Color bg)
-            {
-                double l1 = Luminance(fg), l2 = Luminance(bg);
-                double lighter = Math.Max(l1, l2), darker = Math.Min(l1, l2);
-                return (lighter + 0.05) / (darker + 0.05);
-            }
-
-            // TextHint on BgCard (white) — visible hint labels in KeyEditorForm / GroupEditorForm.
-            Assert(ContrastRatio(Fluent.TextHint, Fluent.BgCard) >= 4.5,
-                $"TextHint on BgCard >= 4.5:1  (actual {ContrastRatio(Fluent.TextHint, Fluent.BgCard):F2}:1)");
-
-            // TextHint on BgPage (#F3F3F3) — for any hint text directly on the form background.
-            Assert(ContrastRatio(Fluent.TextHint, Fluent.BgPage) >= 4.5,
-                $"TextHint on BgPage >= 4.5:1  (actual {ContrastRatio(Fluent.TextHint, Fluent.BgPage):F2}:1)");
-
-            // TextPrimary on BgCard — body / label text in dialogs.
-            Assert(ContrastRatio(Fluent.TextPrimary, Fluent.BgCard) >= 4.5,
-                $"TextPrimary on BgCard >= 4.5:1  (actual {ContrastRatio(Fluent.TextPrimary, Fluent.BgCard):F2}:1)");
-
-            // TextSecondary on BgCard — supporting / secondary labels.
-            Assert(ContrastRatio(Fluent.TextSecondary, Fluent.BgCard) >= 4.5,
-                $"TextSecondary on BgCard >= 4.5:1  (actual {ContrastRatio(Fluent.TextSecondary, Fluent.BgCard):F2}:1)");
-
-            // White text on coloured action-button backgrounds.
-            Assert(ContrastRatio(Color.White, Fluent.Accent) >= 4.5,
-                $"White on Accent >= 4.5:1  (actual {ContrastRatio(Color.White, Fluent.Accent):F2}:1)");
-            Assert(ContrastRatio(Color.White, Fluent.Danger) >= 4.5,
-                $"White on Danger >= 4.5:1  (actual {ContrastRatio(Color.White, Fluent.Danger):F2}:1)");
-            Assert(ContrastRatio(Color.White, Fluent.Success) >= 4.5,
-                $"White on Success >= 4.5:1  (actual {ContrastRatio(Color.White, Fluent.Success):F2}:1)");
-
-            // Danger (red) on BgCard — WP-full warning label text.
-            Assert(ContrastRatio(Fluent.Danger, Fluent.BgCard) >= 4.5,
-                $"Danger on BgCard >= 4.5:1  (actual {ContrastRatio(Fluent.Danger, Fluent.BgCard):F2}:1)");
+            // (Colour contrast is checked to WCAG AAA in T_ColourContrastAaa, UiGuardTests.cs.)
 
             Section("Priority 7 — Rich widget descriptions");
 
