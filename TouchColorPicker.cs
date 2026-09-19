@@ -33,12 +33,12 @@ namespace OnScreenKeyboard
             Text        = caption;
             Font        = Fluent.FontLabel;
             Tag         = "notheme";                       // the dialog theme must not repaint the text colour
-            FlatAppearance.BorderSize  = 2;                // the chip is a control whatever colour it holds (a white chip on white)
-            FlatAppearance.BorderColor = ToolbarButton.IsLightTheme ? Fluent.ControlBorder : Fluent.DialogDarkBorder;
-            MinimumSize = new Size(104, Touch.Target);
-            Size        = new Size(116, Touch.Target);
-            Margin      = new Padding(0, 0, Touch.Gap, 0);
-            Value       = initial;
+            AutoSize     = true;                           // grows with a long caption (another language)
+            AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            Padding      = new Padding(14, 0, 14, 0);
+            MinimumSize  = new Size(104, Touch.Target);
+            Margin       = new Padding(0, 0, Touch.Gap, 0);
+            Value        = initial;
         }
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
@@ -59,6 +59,42 @@ namespace OnScreenKeyboard
         {
             base.OnClick(e);
             OpenPicker();
+        }
+
+        private bool _hovered;
+        protected override void OnMouseEnter(EventArgs e) { _hovered = true;  Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { _hovered = false; Invalidate(); base.OnMouseLeave(e); }
+
+        /// <summary>
+        /// Paints the chip like the neutral buttons: the same rounded shape and the same one-pixel outline (a
+        /// chip is a control whatever colour it holds, e.g. a white chip on a white dialog), the colour as its fill.
+        /// </summary>
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode   = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;   // pixel centres at .5, as in FluentPainter
+            g.Clear(Parent?.BackColor ?? Fluent.BgPage);
+
+            bool hc = SystemInformation.HighContrast;
+            Color border = hc ? SystemColors.ControlText
+                         : !ToolbarButton.IsLightTheme ? Fluent.DialogDarkBorder
+                         : _hovered ? Fluent.ControlBorderHover : Fluent.ControlBorder;
+            using (var path = Fluent.RoundedRectF(Fluent.CrispBorderRect(Width, Height), Fluent.RadiusBtn))
+            {
+                using (var fill = new SolidBrush(BackColor)) g.FillPath(fill, path);
+                using (var pen = new Pen(border)) g.DrawPath(pen, path);
+            }
+            TextRenderer.DrawText(g, Text, Font, ClientRectangle, ForeColor,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
+
+            // Two-tone focus ring, visible on any chip colour (WCAG 2.4.7).
+            if (Focused)
+            {
+                // Rounded like the chip itself; a dark 1 px line outside a white 2 px line shows on any chip colour.
+                FluentPainter.DrawRoundedRing(g, Width, Height, Fluent.RadiusBtn, 2.5f, 1f, Color.FromArgb(30, 30, 30));
+                FluentPainter.DrawRoundedRing(g, Width, Height, Fluent.RadiusBtn, 4f,   2f, Color.White);
+            }
         }
 
         /// <summary>Opens the flyout under the chip (above it when there is no room below).</summary>
@@ -140,7 +176,7 @@ namespace OnScreenKeyboard
             _hex = new TouchTextBox
             {
                 Bounds = new Rectangle(pad, y, gridW - cell - gap, cell), MinimumSize = Size.Empty,
-                Font = Fluent.FontCourier, Text = "#" + SettingsManager.Hex(current), AccessibleName = "Hex color",
+                Font = Fluent.FontCourier, Text = "#" + SettingsManager.Hex(current), AccessibleName = Lang.T("Hex color"),
                 BackColor = _dark ? Fluent.DialogDarkInput : Fluent.BgInput,
                 ForeColor = _dark ? Fluent.DialogDarkText  : Fluent.TextPrimary,
             };
@@ -159,7 +195,7 @@ namespace OnScreenKeyboard
             y += cell + gap;
             _more = new FluentButton
             {
-                Text = "More colours…", Style = FluentButton.Variant.Neutral, TabStop = true,
+                Text = Lang.T("More colours…"), Style = FluentButton.Variant.Neutral, TabStop = true,
                 Bounds = new Rectangle(pad, y, gridW, cell),
             };
             _more.Click += (s, e) => MoreColours();
@@ -253,7 +289,7 @@ namespace OnScreenKeyboard
                 SetStyle(ControlStyles.Selectable | ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
                          ControlStyles.OptimizedDoubleBuffer, true);
                 TabStop = true;
-                AccessibleName = "Colour palette";
+                AccessibleName = Lang.T("Colour palette");
             }
 
             private Rectangle CellRect(int i) =>

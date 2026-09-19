@@ -74,6 +74,10 @@ namespace OnScreenKeyboard
         [DllImport("user32.dll")]
         private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, ref RECT lParam);
 
+        /// <summary>Removes the clip region of a device context (the edit control clips its painting to its text rectangle).</summary>
+        [DllImport("gdi32.dll")]
+        private static extern int SelectClipRgn(IntPtr hdc, IntPtr hrgn);
+
         private bool _stripping;
 
         public TouchTextBox()
@@ -83,11 +87,14 @@ namespace OnScreenKeyboard
             AcceptsReturn = false;
             AcceptsTab    = false;
             ScrollBars    = ScrollBars.None;
-            BorderStyle   = BorderStyle.FixedSingle;
+            BorderStyle   = BorderStyle.None;      // the border is drawn in PaintOverlay, in the same grey as the buttons
             Font          = Fluent.FontInput;
             MinimumSize   = new Size(0, Touch.Target);
             Height        = Touch.Target;
         }
+
+        protected override void OnGotFocus(EventArgs e)  { base.OnGotFocus(e);  Invalidate(); }
+        protected override void OnLostFocus(EventArgs e) { base.OnLostFocus(e); Invalidate(); }
 
         private const int WM_SIZE = 0x0005;
 
@@ -103,8 +110,8 @@ namespace OnScreenKeyboard
         {
             base.WndProc(ref m);
             if (m.Msg == WM_SIZE) CenterText();
-            else if (m.Msg == WM_PAINT && Text.Length == 0 && !string.IsNullOrEmpty(Hint)) PaintHint(IntPtr.Zero);
-            else if (m.Msg == WM_PRINTCLIENT && Text.Length == 0 && !string.IsNullOrEmpty(Hint)) PaintHint(m.WParam);
+            else if (m.Msg == WM_PAINT) PaintOverlay(IntPtr.Zero);
+            else if (m.Msg == WM_PRINTCLIENT) PaintOverlay(m.WParam);
         }
 
         private const int WM_PAINT = 0x000F;
@@ -114,9 +121,32 @@ namespace OnScreenKeyboard
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string Hint { get; set; }
 
-        private void PaintHint(IntPtr hdc)
+        /// <summary>
+        /// Draws what the edit control does not: the border (one pixel wide, the same grey as the buttons, so a text
+        /// box and a button look alike; a 2 px focus ring while it has the keyboard focus) and the hint text.
+        /// </summary>
+        private void PaintOverlay(IntPtr hdc)
         {
+            // When printing (DrawToBitmap) the edit control's device context is clipped to its text rectangle,
+            // which would hide the border, so the clip is removed first.
+            if (hdc != IntPtr.Zero) SelectClipRgn(hdc, IntPtr.Zero);
             using var g = hdc == IntPtr.Zero ? CreateGraphics() : Graphics.FromHdc(hdc);
+            g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;   // pixel centres at .5, as in FluentPainter
+            bool hc = SystemInformation.HighContrast;
+            using (var pen = new Pen(hc ? SystemColors.WindowText : ToolbarButton.IsLightTheme ? Fluent.ControlBorder : Fluent.DialogDarkBorder))
+                g.DrawRectangle(pen, 0.5f, 0.5f, Width - 1, Height - 1);
+            if (Focused)
+            {
+                // The ring must stand out from the input's own background: the accent blue on light, a light grey on dark.
+                Color ring = hc ? SystemColors.Highlight : ToolbarButton.IsLightTheme ? Fluent.Accent : Fluent.DialogDarkText;
+                using var pen = new Pen(ring, 2f);
+                g.DrawRectangle(pen, 1f, 1f, Width - 2, Height - 2);
+            }
+            if (Text.Length == 0 && !string.IsNullOrEmpty(Hint)) PaintHint(g);
+        }
+
+        private void PaintHint(Graphics g)
+        {
             TextRenderer.DrawText(g, Hint, Font, new Rectangle(6, 0, Math.Max(0, ClientSize.Width - 12), ClientSize.Height),
                 SystemInformation.HighContrast ? SystemColors.GrayText
                     : ToolbarButton.IsLightTheme ? Fluent.TextHint : Fluent.DialogDarkTextDim,   // >= 7 : 1 on either theme
@@ -223,13 +253,82 @@ namespace OnScreenKeyboard
     /// </summary>
     public class TouchCheckBox : CheckBox
     {
+        private const int GlyphSize = 24;          // the tick box itself, in design pixels
+        private const int GlyphLeft = 14;
+        private bool _hovered;
+
         public TouchCheckBox()
         {
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
+                     ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
             AutoSize    = true;
             MinimumSize = new Size(Touch.Target, Touch.Target);
             TextAlign   = ContentAlignment.MiddleLeft;
             Font        = Fluent.FontLabel;
-            Padding     = new Padding(2, 0, 8, 0);
+            // The text starts after the tick box; the guards measure the text against the client area minus this padding.
+            Padding     = new Padding(GlyphLeft + GlyphSize + 10, 0, 16, 0);
+            Cursor      = Cursors.Hand;
+        }
+
+        public override Size GetPreferredSize(Size proposedSize)
+        {
+            int textW = string.IsNullOrEmpty(Text) ? 0
+                : TextRenderer.MeasureText(Text, Font, new Size(int.MaxValue, int.MaxValue),
+                    TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding).Width;
+            return new Size(Padding.Horizontal + textW, Math.Max(Touch.Target, MinimumSize.Height));
+        }
+
+        protected override void OnMouseEnter(EventArgs e) { _hovered = true;  Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { _hovered = false; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnGotFocus(EventArgs e)   { Invalidate(); base.OnGotFocus(e); }
+        protected override void OnLostFocus(EventArgs e)  { Invalidate(); base.OnLostFocus(e); }
+
+        /// <summary>
+        /// Drawn as one button-shaped 44 px target (same shape and outline as every other button) holding a large
+        /// tick box, so the whole row visibly is the control. The state is shown by a tick, not only by colour.
+        /// </summary>
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode   = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;   // pixel centres at .5, as in FluentPainter
+            g.Clear(Parent?.BackColor ?? Fluent.BgPage);
+            bool hc = SystemInformation.HighContrast;
+
+            Color fill   = hc ? SystemColors.Control : _hovered ? Color.FromArgb(225, 225, 225) : Fluent.Neutral;
+            Color border = hc ? SystemColors.ControlText : _hovered ? Fluent.ControlBorderHover : Fluent.ControlBorder;
+            using (var path = Fluent.RoundedRectF(Fluent.CrispBorderRect(Width, Height), Fluent.RadiusBtn))
+            {
+                using (var b = new SolidBrush(fill)) g.FillPath(b, path);
+                using (var p = new Pen(border))      g.DrawPath(p, path);
+                if (!Enabled) using (var wash = new SolidBrush(Color.FromArgb(100, 255, 255, 255))) g.FillPath(wash, path);
+            }
+
+            // The tick box.
+            int y = (Height - GlyphSize) / 2;
+            var box = new Rectangle(GlyphLeft, y, GlyphSize, GlyphSize);
+            using (var path = Fluent.RoundedRectF(new RectangleF(box.X + 0.5f, box.Y + 0.5f, box.Width - 1, box.Height - 1), 4))
+            {
+                Color boxFill = Checked ? (hc ? SystemColors.Highlight : Fluent.Accent) : (hc ? SystemColors.Window : Color.White);
+                using (var b = new SolidBrush(boxFill)) g.FillPath(b, path);
+                using (var p = new Pen(hc ? SystemColors.ControlText : Fluent.ControlBorderHover, 2f)) g.DrawPath(p, path);
+            }
+            if (Checked)
+                using (var tick = new Pen(hc ? SystemColors.HighlightText : Color.White, 3f) { StartCap = System.Drawing.Drawing2D.LineCap.Round, EndCap = System.Drawing.Drawing2D.LineCap.Round, LineJoin = System.Drawing.Drawing2D.LineJoin.Round })
+                    g.DrawLines(tick, new[] { new Point(box.X + 6, box.Y + 12), new Point(box.X + 10, box.Y + 17), new Point(box.X + 18, box.Y + 7) });
+
+            TextRenderer.DrawText(g, Text, Font, new Rectangle(Padding.Left, 0, Math.Max(0, Width - Padding.Horizontal), Height),
+                hc ? SystemColors.ControlText : Enabled ? Fluent.TextPrimary : Fluent.TextHint,
+                // NoPadding, as when the width was measured in GetPreferredSize: otherwise the text is a few pixels too
+                // wide for its rectangle and gets an ellipsis ("A…").
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis |
+                TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
+
+            if (Focused)
+            {
+                if (hc) ControlPaint.DrawFocusRectangle(g, new Rectangle(2, 2, Width - 5, Height - 5));
+                else FluentPainter.DrawRoundedRing(g, Width, Height, Fluent.RadiusBtn, 3f, 2f, Fluent.Accent);
+            }
         }
     }
 

@@ -162,6 +162,10 @@ namespace OnScreenKeyboard
             ["Key Content"]          = "Key Content",
             ["Label"]                = "&Label",
             ["Layout"]               = "Layo&ut",
+            // Captions of the three colour chips in the Key Editor (short: the chip is a button).
+            ["chip: Font"]           = "Font",
+            ["chip: Key"]            = "Key",
+            ["chip: Border"]         = "Border",
             ["Send"]                 = "Send",
             ["Shift label"]          = "Sh&ift label",
             ["Shift send"]           = "Shift sen&d",

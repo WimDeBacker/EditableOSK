@@ -367,6 +367,262 @@ namespace OnScreenKeyboard
         }
 
         // ════════════════════════════════════════════════════════════════
+        // Strict UI guards for a migrated dialog: every section, in English, Dutch and two "long language"
+        // stress cases, in the light and the dark theme.
+        // ════════════════════════════════════════════════════════════════
+        private static void CheckDialogGuards(string dialog, Func<FluentDialogBase> make)
+        {
+            var cases = new (string Name, string Code, double Pseudo)[]
+                { ("en", "en", 0), ("nl", "nl", 0), ("+40%", "en", 0.4), ("+80%", "en", 0.8) };
+            bool wasLight = ToolbarButton.IsLightTheme;
+            try
+            {
+                foreach (bool light in new[] { true, false })
+                {
+                    ToolbarButton.IsLightTheme = light;          // read when a dialog is created
+                    foreach (var (name, code, pseudo) in cases)
+                    {
+                        Lang.Load(code);
+                        Lang.PseudoExpansion = pseudo;
+                        string tag = $"{dialog} [{name}, {(light ? "light" : "dark")}]";
+                        using var d = make();
+                        DevGallery.Show(d);
+
+                        int nonClient = d.Height - d.ClientSize.Height;
+                        int need = d.MeasureContent().Height + nonClient;
+                        Assert(need <= 728, $"{tag}: needs {need}px, fits a 1366x768 screen (728px usable)");
+
+                        var bar = d.SectionBarAccess;
+                        int sections = bar?.Count ?? 1;
+                        for (int i = 0; i < sections; i++)
+                        {
+                            bar?.Select(i, focus: false);
+                            Application.DoEvents();
+                            d.PerformLayout();
+                            var t = UiGuard.TargetViolations(d, visibleOnly: true);
+                            var c = UiGuard.ClippedText(d, visibleOnly: true);
+                            var o = UiGuard.Overflow(d, visibleOnly: true);
+                            Assert(t.Count == 0, $"{tag}, section {i + 1}: all controls >= 44x44 {(t.Count > 0 ? "— " + t[0] : "")}");
+                            Assert(c.Count == 0, $"{tag}, section {i + 1}: no clipped text {(c.Count > 0 ? "— " + c[0] : "")}");
+                            Assert(o.Count == 0, $"{tag}, section {i + 1}: nothing sticks out {(o.Count > 0 ? "— " + o[0] : "")}");
+                        }
+                    }
+                }
+            }
+            finally { ToolbarButton.IsLightTheme = wasLight; Lang.PseudoExpansion = 0; Lang.Load("en"); }
+        }
+
+        private static void T_KeyEditorGuards()
+        {
+            Section("Key Editor — strict UI guards (all sections, languages and themes)");
+            var groups = new List<KeyGroup> { new KeyGroup { Name = SettingsManager.StandardGroupName }, new KeyGroup { Name = "Klinkers" } };
+            // A key that uses every part of the dialog: a shortcut, a Shift layout jump and an AltGr text.
+            var props = new KeyProps("Ctrl+c", "^c", "A", "layout:azerty.kbl", "€", "€") { GroupName = "Klinkers" };
+            CheckDialogGuards("KeyEditorForm", () => new KeyEditorForm(props, null, groups: groups, layoutDir: AppDomain.CurrentDomain.BaseDirectory));
+        }
+
+        // ════════════════════════════════════════════════════════════════
+        // Borders: the same on all four sides, one pixel wide, the same colour on every kind of control.
+        // Found 2026-09-19: a 1 px pen on whole coordinates covers half a pixel on the left/top and two half
+        // pixels on the right/bottom, so some edges looked thin and faint and others wide and blurred.
+        // ════════════════════════════════════════════════════════════════
+        private static void T_ControlBorders()
+        {
+            Section("Control borders — identical on all four sides, 1 px, one colour for every control");
+
+            static bool Near(Color a, Color b) => Math.Abs(a.R - b.R) <= 2 && Math.Abs(a.G - b.G) <= 2 && Math.Abs(a.B - b.B) <= 2;
+
+            // The middle of each side (left, right, top, bottom) — away from the rounded corners.
+            static Color[] Sides(Bitmap b) => new[]
+            {
+                b.GetPixel(0, b.Height / 2), b.GetPixel(b.Width - 1, b.Height / 2),
+                b.GetPixel(b.Width / 2, 0),  b.GetPixel(b.Width / 2, b.Height - 1),
+            };
+
+            void CheckSides(string what, Bitmap b, Color expected)
+            {
+                var s = Sides(b);
+                string[] names = { "left", "right", "top", "bottom" };
+                AssertAll(Enumerable.Range(0, 4), i => Near(s[i], expected),
+                    i => $"{names[i]} side is {s[i]} instead of {expected}", $"{what}: all four sides have the border colour");
+            }
+
+            Bitmap Render(Control c, int w, int h)
+            {
+                using var host = new Form();
+                host.Controls.Add(c);
+                c.AutoSize = false;                    // keep the size we ask for (chips and check boxes size to their text)
+                c.SetBounds(0, 0, w, h);
+                _ = host.Handle;
+                var bmp = new Bitmap(w, h);
+                c.DrawToBitmap(bmp, new Rectangle(0, 0, w, h));
+                return bmp;
+            }
+
+            bool wasLight = ToolbarButton.IsLightTheme;
+            try
+            {
+                ToolbarButton.IsLightTheme = true;
+
+                // ── Neutral button, from the real painter ──
+                using (var bmp = new Bitmap(120, 44))
+                {
+                    using (var g = Graphics.FromImage(bmp))
+                        FluentPainter.PaintLight(g, new Rectangle(0, 0, 120, 44), "OK", "", Fluent.FontBtnLg,
+                            FluentButton.Variant.Neutral, false, false, true, Fluent.RadiusBtn, Fluent.BgPage);
+                    CheckSides("neutral button", bmp, Fluent.ControlBorder);
+                    Assert(Near(bmp.GetPixel(1, 22), Fluent.Neutral) && Near(bmp.GetPixel(118, 22), Fluent.Neutral),
+                        "neutral button: the border is one pixel wide (the pixel inside it is the fill)");
+                }
+                using (var bmp = new Bitmap(120, 44))
+                {
+                    using (var g = Graphics.FromImage(bmp))
+                        FluentPainter.PaintLight(g, new Rectangle(0, 0, 120, 44), "OK", "", Fluent.FontBtnLg,
+                            FluentButton.Variant.Neutral, true, false, true, Fluent.RadiusBtn, Fluent.BgPage);
+                    CheckSides("neutral button (hover)", bmp, Fluent.ControlBorderHover);
+                }
+
+                // ── Coloured button on a dark parent: it gets the light outline, equally on every side ──
+                using (var bmp = new Bitmap(120, 44))
+                {
+                    using (var g = Graphics.FromImage(bmp))
+                        FluentPainter.PaintLight(g, new Rectangle(0, 0, 120, 44), "OK", "", Fluent.FontBtnLg,
+                            FluentButton.Variant.Primary, false, false, true, Fluent.RadiusBtn, Fluent.DialogDarkCard);
+                    CheckSides("primary button on a dark parent", bmp, Fluent.DialogDarkBorder);
+                }
+
+                // ── The other controls draw the same border (light theme) ──
+                using (var bmp = Render(new ColorChip("Key", Color.White), 116, 44))
+                    CheckSides("colour chip", bmp, Fluent.ControlBorder);
+                using (var bmp = Render(new TouchTextBox(), 200, 44))
+                    CheckSides("text box", bmp, Fluent.ControlBorder);
+                using (var bmp = Render(new TouchCheckBox { Text = "Auto" }, 120, 44))
+                    CheckSides("check box", bmp, Fluent.ControlBorder);
+
+                // ── Dark theme: chips and text boxes use the dark border colour ──
+                ToolbarButton.IsLightTheme = false;
+                using (var bmp = Render(new ColorChip("Key", Color.Black), 116, 44))
+                    CheckSides("colour chip (dark theme)", bmp, Fluent.DialogDarkBorder);
+                using (var bmp = Render(new TouchTextBox(), 200, 44))
+                    CheckSides("text box (dark theme)", bmp, Fluent.DialogDarkBorder);
+            }
+            finally { ToolbarButton.IsLightTheme = wasLight; }
+
+            // ── The focus ring follows the rounded corners (a square ring over a rounded button looked wrong) ──
+            using (var bmp = new Bitmap(120, 44))
+            {
+                using (var g = Graphics.FromImage(bmp))
+                {
+                    g.Clear(Color.Black);
+                    FluentPainter.DrawRoundedRing(g, 120, 44, Fluent.RadiusBtn, 3f, 2f, Color.White);
+                }
+                Assert(bmp.GetPixel(60, 3).R > 200 && bmp.GetPixel(3, 22).R > 200 && bmp.GetPixel(116, 22).R > 200 && bmp.GetPixel(60, 40).R > 200,
+                    "focus ring: all four sides are drawn");
+                Assert(bmp.GetPixel(2, 2).R < 80 && bmp.GetPixel(117, 2).R < 80 && bmp.GetPixel(2, 41).R < 80 && bmp.GetPixel(117, 41).R < 80,
+                    "focus ring: the four corners are rounded, not square");
+            }
+
+            // ── The check box is a real 44 px target with a large tick box ──
+            using (var host = new Form())
+            {
+                var ck = new TouchCheckBox { Text = "Auto" };
+                host.Controls.Add(ck);
+                _ = host.Handle;
+                Assert(ck.GetPreferredSize(Size.Empty).Height >= Touch.Target, "check box: the whole row is at least 44 px tall");
+                Assert(ck.GetPreferredSize(Size.Empty).Width >= Touch.Target * 2, "check box: wide enough for the tick box and its text");
+                ck.Checked = true;
+                Assert(ck.Checked, "check box: still toggles");
+            }
+        }
+
+        // ════════════════════════════════════════════════════════════════
+        // Key Editor behaviour: every action type survives load + Apply
+        // ════════════════════════════════════════════════════════════════
+        private static void T_KeyEditorRoundTrip()
+        {
+            Section("Key Editor — every action type survives load and Apply; layers behave");
+
+            var applyMi = typeof(KeyEditorForm).GetMethod("Apply", BindingFlags.NonPublic | BindingFlags.Instance);
+            T Field<T>(object f, string name) => (T)typeof(KeyEditorForm).GetField(name, BindingFlags.NonPublic | BindingFlags.Instance).GetValue(f);
+            const int Text = 0, Key = 1, Modifier = 2, WordPrediction = 3, Layout = 4;
+
+            KeyProps Apply(KeyProps p, Action<KeyEditorForm> edit = null, HashSet<int> usedWp = null, List<KeyGroup> groups = null)
+            {
+                using var f = new KeyEditorForm(p, null, usedWpSlots: usedWp, groups: groups, layoutDir: AppDomain.CurrentDomain.BaseDirectory);
+                edit?.Invoke(f);
+                applyMi.Invoke(f, null);
+                return f.DialogResult == DialogResult.OK ? f.Result : null;
+            }
+
+            // ── Normal layer: each type comes back exactly as it went in ──
+            var r = Apply(new KeyProps("a", "a"));
+            Assert(r != null && r.Label == "a" && r.Send == "a", "text: label and send unchanged");
+            r = Apply(new KeyProps("(", "{(}"));
+            Assert(r.Send == "{(}", "special character: an already-escaped send is unchanged");
+            r = Apply(new KeyProps("Ctrl+c", "^c"));
+            Assert(r.Send == "^c", "key sequence: '^c' unchanged (shown as {Ctrl}c, stored as ^c)");
+            r = Apply(new KeyProps("Alt+F4", "%{F4}"));
+            Assert(r.Send == "%{F4}", "key sequence: '%{F4}' unchanged");
+            r = Apply(new KeyProps("Win+D", "win:d"));
+            Assert(r.Send == "win:d", "key sequence: 'win:d' unchanged");
+            r = Apply(new KeyProps("Shift", ""));
+            Assert(r.Label == "Shift" && r.Send == "", "modifier: label kept, send stays empty");
+            r = Apply(new KeyProps("w", "wp:3"));
+            Assert(r.Send == "wp:3", "word prediction: slot 3 unchanged");
+            r = Apply(new KeyProps("Nl", "layout:azerty.kbl"));
+            Assert(r.Send == "layout:azerty.kbl", "layout jump: 'layout:azerty.kbl' unchanged");
+
+            // ── Shift / AltGr: an untouched layer is kept byte for byte, even where the readable form is lossy ──
+            r = Apply(new KeyProps("a", "a", "A", "+(ab)", "€", "layout:azerty.kbl"));
+            Assert(r.ShiftSend == "+(ab)", "Shift layer untouched: a grouped send is not rewritten");
+            Assert(r.AltGrSend == "layout:azerty.kbl", "AltGr layer untouched: layout jump kept");
+            Assert(r.ShiftLabel == "A" && r.AltGrLabel == "€", "Shift / AltGr labels kept");
+
+            // ── Editing the layers ──
+            r = Apply(new KeyProps("a", "a"), f => { var t = Field<TouchChoiceButton[]>(f, "_types"); var v = Field<TouchTextBox[]>(f, "_values");
+                t[1].SelectedIndex = Key;    v[1].Text = "{Ctrl}v"; });
+            Assert(r.ShiftSend == "^v", "Shift layer: a typed shortcut is stored in SendKeys syntax");
+            r = Apply(new KeyProps("a", "a"), f => { var t = Field<TouchChoiceButton[]>(f, "_types"); var v = Field<TouchTextBox[]>(f, "_values");
+                t[2].SelectedIndex = Layout; v[2].Text = "azerty.kbl"; });
+            Assert(r.AltGrSend == "layout:azerty.kbl", "AltGr layer: a chosen layout gets its 'layout:' prefix");
+            r = Apply(new KeyProps("a", "a"), f => { var t = Field<TouchChoiceButton[]>(f, "_types"); var v = Field<TouchTextBox[]>(f, "_values");
+                t[1].SelectedIndex = Text;   v[1].Text = "B"; });
+            Assert(r.ShiftSend == "B", "Shift layer: plain text is stored as typed");
+
+            // ── Modifier and Word prediction belong to the whole key: refused on Shift / AltGr ──
+            using (var f = new KeyEditorForm(new KeyProps("a", "a"), null))
+            {
+                var t = Field<TouchChoiceButton[]>(f, "_types");
+                t[1].SelectedIndex = Modifier;
+                t[2].SelectedIndex = WordPrediction;
+                Assert(t[1].SelectedIndex == Text && t[2].SelectedIndex == Text, "Modifier / Word prediction cannot be chosen on Shift or AltGr");
+                Assert(!t[1].Items[Modifier].Enabled && !string.IsNullOrEmpty(t[1].Items[Modifier].DisabledReason),
+                    "the disabled types say why");
+                Assert(t[0].Items[Modifier].Enabled && t[0].Items[WordPrediction].Enabled, "on the Normal layer all five types are available");
+            }
+
+            // ── Choosing a type resets the value for it; word prediction takes the first free slot ──
+            r = Apply(new KeyProps("a", "a"), f => Field<TouchChoiceButton[]>(f, "_types")[0].SelectedIndex = WordPrediction, usedWp: new HashSet<int> { 0, 1 });
+            Assert(r.Send == "wp:2", $"word prediction: the first free slot is assigned ({r.Send})");
+            r = Apply(new KeyProps("a", "a"), f => Field<TouchChoiceButton[]>(f, "_types")[0].SelectedIndex = Modifier);
+            Assert(r.Label == "Shift" && r.Send == "", $"modifier: the first modifier is chosen and becomes the label ({r.Label})");
+
+            // ── Size ──
+            using (var f = new KeyEditorForm(new KeyProps("a", "a"), null, colSpan: 3, rowSpan: 2, maxCols: 5, maxRows: 4))
+            {
+                applyMi.Invoke(f, null);
+                Assert(f.ResultColSpan == 3 && f.ResultRowSpan == 2, "width and height come back unchanged");
+            }
+
+            // ── Appearance: a key in a group stays in it until a field is changed ──
+            var groups = new List<KeyGroup> { new KeyGroup { Name = SettingsManager.StandardGroupName }, new KeyGroup { Name = "Klinkers", KeyColor = Color.Red } };
+            r = Apply(new KeyProps("a", "a") { GroupName = "Klinkers" }, groups: groups);
+            Assert(r.GroupName == "Klinkers" && r.KeyColor.IsEmpty, "untouched key stays in its group and keeps no colour of its own");
+            r = Apply(new KeyProps("a", "a") { GroupName = "Klinkers" }, f => Field<ColorChip>(f, "_chipKey").Value = Color.Blue, groups: groups);
+            Assert(r.GroupName == "" && r.KeyColor.ToArgb() == Color.Blue.ToArgb(), "changing a colour detaches the key and keeps the new colour");
+        }
+
+        // ════════════════════════════════════════════════════════════════
         // WCAG 2.1 AAA colour contrast of the dialog palette, light and dark
         //   1.4.6  text                        >= 7 : 1
         //   1.4.11 boundary of a control/focus >= 3 : 1
@@ -433,7 +689,6 @@ namespace OnScreenKeyboard
             var groups = new List<KeyGroup> { new KeyGroup { Name = "standard" } };
             var forms = new (string Name, Func<Form> Make)[]
             {
-                ("KeyEditorForm",      () => new KeyEditorForm(new KeyProps("a", "a"), null, groups: groups)),
                 ("GroupEditorForm",    () => new GroupEditorForm(groups)),
                 ("KeyboardEditorForm", () => new KeyboardEditorForm(new VisualTheme(), new WindowState(), new LayoutMeta(), null)),
             };

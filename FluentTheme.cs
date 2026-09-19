@@ -246,6 +246,29 @@ namespace OnScreenKeyboard
         }
 
         /// <summary>
+        /// The rectangle to outline a control of size <paramref name="w"/> x <paramref name="h"/> with a 1 px pen
+        /// so that all four sides come out identical: the pen runs through pixel CENTRES (x.5), so it covers exactly
+        /// one pixel column/row on each side (0 and w-1, 0 and h-1). A pen on whole coordinates, as used before,
+        /// covers half a pixel on the left and top and two half pixels on the right and bottom: the border then looks
+        /// thin and faint on one side and wide and blurred on the other.
+        /// </summary>
+        internal static RectangleF CrispBorderRect(int w, int h) => new RectangleF(0.5f, 0.5f, w - 1, h - 1);
+
+        /// <summary>A rounded rectangle from float coordinates (see <see cref="CrispBorderRect"/>).</summary>
+        internal static GraphicsPath RoundedRectF(RectangleF r, float radius)
+        {
+            var p = new GraphicsPath();
+            if (radius <= 0) { p.AddRectangle(r); return p; }
+            float d = radius * 2;
+            p.AddArc(r.Left,      r.Top,        d, d, 180, 90);
+            p.AddArc(r.Right - d, r.Top,        d, d, 270, 90);
+            p.AddArc(r.Right - d, r.Bottom - d, d, d,   0, 90);
+            p.AddArc(r.Left,      r.Bottom - d, d, d,  90, 90);
+            p.CloseFigure();
+            return p;
+        }
+
+        /// <summary>
         /// Creates a <see cref="Region"/> (a clipping mask) shaped like a
         /// rounded rectangle that fills the given dimensions.
         /// </summary>

@@ -62,6 +62,9 @@ namespace OnScreenKeyboard
             T_TouchDialogFrame();
             T_UiGuardBaseline();
             T_ColourContrastAaa();
+            T_ControlBorders();
+            T_KeyEditorGuards();
+            T_KeyEditorRoundTrip();
             T_ValidationBlocksApply();
             T_MissingFontHandling();
             T_FluentDialogBase_DisposeWithoutShow();
@@ -335,6 +338,14 @@ namespace OnScreenKeyboard
                 ("{ENTER}",   "{ENTER}"),
                 ("{F5}",      "{F5}"),
                 ("{LEFT}",    "{LEFT}"),
+                // An escaped special character is one token: not a group, not a modifier (found 2026-09-19:
+                // "{(}" used to become "{}", so editing a "(" key silently broke it).
+                ("{(}",       "{(}"),
+                ("{)}",       "{)}"),
+                ("{+}",       "{+}"),
+                ("{^}",       "{^}"),
+                ("{%}",       "{%}"),
+                ("{}}",       "{}}"),
                 ("win:m",     "{Win}m"),
                 ("win:d",     "{Win}d"),
                 ("win:{LEFT}","{Win}{LEFT}"),
@@ -1657,9 +1668,8 @@ namespace OnScreenKeyboard
                 using var kef = new KeyEditorForm(kp, null);
                 Assert(kef.FormBorderStyle == FormBorderStyle.Sizable,
                     "KeyEditorForm: FormBorderStyle is Sizable");
-                bool kefScroll = false;
-                foreach (Control ctrl in kef.Controls) { if (ctrl is Panel kefP && kefP.AutoScroll) { kefScroll = true; break; } }
-                Assert(kefScroll, "KeyEditorForm: has AutoScroll panel wrapper");
+                // The section host (inside the dialog frame) scrolls only when the screen is too small.
+                Assert(UiGuard.All(kef).Any(c => c is Panel kefP && kefP.AutoScroll), "KeyEditorForm: has an AutoScroll panel (the section host)");
             }
 
             // GroupEditorForm
@@ -4343,6 +4353,8 @@ namespace OnScreenKeyboard
                 {
                     if (child is NumericUpDown n && !string.IsNullOrEmpty(n.AccessibleDescription))
                         found = true;
+                    if (child is TouchStepper st && !string.IsNullOrEmpty(st.AccessibleDescription))
+                        found = true;
                     Walk(child);
                 }
             }
@@ -4584,61 +4596,46 @@ namespace OnScreenKeyboard
                     "KeyboardEditorForm: valid hex is applied");
             }
 
-            // ── KeyEditorForm: invalid hex blocks Apply() ──────────────────
+            // ── KeyEditorForm: colours are chosen, never typed into the form, so they cannot be invalid ──
+            // (an invalid hex code can only exist inside the colour flyout: see T_TouchColorPicker)
             {
                 var props = new KeyProps("A", "A");
-                using var f = new KeyEditorForm(props, owner: null,
-                    layoutDir: AppDomain.CurrentDomain.BaseDirectory);
-                var hexBox = SwatchHexBox(f, "_pnlKeyColor");
-                Assert(hexBox != null, "KeyEditorForm: found the Key color hex TextBox");
-
-                var applyMi = typeof(KeyEditorForm)
-                    .GetMethod("Apply", BindingFlags.NonPublic | BindingFlags.Instance);
-
-                hexBox.Text = "not-a-color";
-                Assert(HasPendingErrors(f), "KeyEditorForm: invalid key-colour hex is flagged");
-                applyMi.Invoke(f, null);
-                // Result is initialised to a clone of the constructor's KeyProps, so it's never
-                // null — DialogResult staying off OK is the correct signal that Apply() bailed.
-                Assert(f.DialogResult != DialogResult.OK,
-                    "KeyEditorForm: dialog does not close while the hex field is invalid");
-
-                hexBox.Text = "";
-                Assert(!HasPendingErrors(f), "KeyEditorForm: clearing the field back out clears the error");
+                using var f = new KeyEditorForm(props, owner: null, layoutDir: AppDomain.CurrentDomain.BaseDirectory);
+                Assert(UiGuard.All(f).OfType<ColorChip>().Count() == 3, "KeyEditorForm: the three colours are chips (font, key, border)");
+                Assert(!HasPendingErrors(f), "KeyEditorForm: a fresh dialog has no pending errors");
             }
 
-            // ── KeyEditorForm: Layout-mode Send field validates the path live ──
+            // ── KeyEditorForm: a layout jump validates its path live, on every layer ──
             {
                 var props = new KeyProps("A", "A");
-                using var f = new KeyEditorForm(props, owner: null,
-                    layoutDir: AppDomain.CurrentDomain.BaseDirectory);
-                f.Show(); // see note above — PerformClick() needs a visible ancestor chain
+                using var f = new KeyEditorForm(props, owner: null, layoutDir: AppDomain.CurrentDomain.BaseDirectory);
+                f.Show();
 
-                var btnModeLayout = (FluentButton)typeof(KeyEditorForm)
-                    .GetField("_btnModeLayout", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(f);
-                var txtSend = (TextBox)typeof(KeyEditorForm)
-                    .GetField("_txtSend", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(f);
-                btnModeLayout.PerformClick();
+                var types  = (TouchChoiceButton[])Field(f, "_types");
+                var values = (TouchTextBox[])Field(f, "_values");
+                const int Layout = 4, Text = 0;
+                var applyMi = typeof(KeyEditorForm).GetMethod("Apply", BindingFlags.NonPublic | BindingFlags.Instance);
 
-                txtSend.Text = "does_not_exist.kbl";
-                Assert(HasPendingErrors(f), "KeyEditorForm: unresolvable layout path is flagged live");
+                // The Normal layer (row 0) and the Shift layer (row 1) behave the same.
+                foreach (int layer in new[] { 0, 1 })
+                {
+                    string where = layer == 0 ? "Normal" : "Shift";
+                    types[layer].SelectedIndex = Layout;
 
-                txtSend.Text = "azerty.kbl"; // ships next to the test binary (CopyToOutputDirectory)
-                Assert(!HasPendingErrors(f), "KeyEditorForm: an existing layout file clears the error");
+                    values[layer].Text = "does_not_exist.kbl";
+                    Assert(HasPendingErrors(f), $"KeyEditorForm ({where}): unresolvable layout path is flagged live");
 
-                var applyMi = typeof(KeyEditorForm)
-                    .GetMethod("Apply", BindingFlags.NonPublic | BindingFlags.Instance);
-                txtSend.Text = "still_missing.kbl";
-                applyMi.Invoke(f, null);
-                Assert(f.DialogResult != DialogResult.OK,
-                    "KeyEditorForm: Apply() refuses to save an unresolvable layout path");
+                    values[layer].Text = "azerty.kbl"; // ships next to the test binary (CopyToOutputDirectory)
+                    Assert(!HasPendingErrors(f), $"KeyEditorForm ({where}): an existing layout file clears the error");
 
-                // Switching away from Layout mode must not leave a stale error behind.
-                var btnModeText = (FluentButton)typeof(KeyEditorForm)
-                    .GetField("_btnModeText", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(f);
-                btnModeText.PerformClick();
-                Assert(!HasPendingErrors(f),
-                    "KeyEditorForm: leaving Layout mode clears the stale layout-path error");
+                    values[layer].Text = "still_missing.kbl";
+                    applyMi.Invoke(f, null);
+                    Assert(f.DialogResult != DialogResult.OK, $"KeyEditorForm ({where}): Apply() refuses to save an unresolvable layout path");
+
+                    // Switching away from Layout must not leave a stale error behind.
+                    types[layer].SelectedIndex = Text;
+                    Assert(!HasPendingErrors(f), $"KeyEditorForm ({where}): leaving Layout clears the stale layout-path error");
+                }
             }
         }
 
@@ -4860,8 +4857,11 @@ namespace OnScreenKeyboard
                     {
                         var accels = CollectAccelerators(form);
                         // Guard against the collector silently finding nothing.
-                        Assert(accels.Count >= 10,
-                            $"accelerators [{lang}] {name}: found {accels.Count} mnemonics (expected at least 10)");
+                        // The Key Editor has fewer labelled rows since the layers share one grid (its action types are
+                        // chosen from a flyout, which has no accelerators).
+                        int min = name == "KeyEditorForm" ? 6 : 10;
+                        Assert(accels.Count >= min,
+                            $"accelerators [{lang}] {name}: found {accels.Count} mnemonics (expected at least {min})");
 
                         var clashes = accels.GroupBy(a => a.Key).Where(g => g.Count() > 1).ToList();
                         Assert(clashes.Count == 0,

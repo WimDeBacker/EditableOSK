@@ -331,7 +331,7 @@ namespace OnScreenKeyboard
         /// <paramref name="fontName"/> when the combo is showing a non-font placeholder like
         /// "(inherit standard)" so it isn't itself flagged as a missing font.
         /// </summary>
-        protected void UpdateFontAvailabilityWarning(ComboBox combo, string fontName)
+        protected void UpdateFontAvailabilityWarning(Control combo, string fontName)
         {
             bool missing = !string.IsNullOrEmpty(fontName) && !Fluent.IsFontAvailable(fontName);
             _fontWarn.SetError(combo, missing
@@ -460,6 +460,9 @@ namespace OnScreenKeyboard
             Sections?.Add(title);
             return t;
         }
+
+        /// <summary>The section buttons, for the UI guard tests (which switch section on any dialog).</summary>
+        internal SectionBar SectionBarAccess => Sections;
 
         /// <summary>Index of the visible section.</summary>
         protected int SelectedSection => Sections?.SelectedIndex ?? 0;

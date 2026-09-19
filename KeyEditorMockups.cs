@@ -451,64 +451,6 @@ namespace OnScreenKeyboard
         }
     }
 
-    /// <summary>The preview key: a card with the caption "Preview" above a sample key, so it is clearly the example and not a control.</summary>
-    internal sealed class KeyPreviewCard : Panel
-    {
-        private string _label = "a";
-        private Color  _key = Color.FromArgb(45, 45, 74), _font = Color.FromArgb(224, 224, 255), _border = Color.FromArgb(120, 120, 140);
-
-        public KeyPreviewCard()
-        {
-            Size           = new Size(136, 100);
-            Margin         = new Padding(Touch.Gap, 0, 0, Touch.Gap);
-            Tag            = "notheme";                 // paints itself; the dialog theme must not recolour it
-            DoubleBuffered = true;
-            AccessibleName = "Preview";
-            AccessibleRole = AccessibleRole.Graphic;
-        }
-
-        /// <summary>Shows a key with these colours.</summary>
-        public void Set(string label, Color key, Color font, Color border)
-        {
-            _label = label; _key = key; _font = font; _border = border;
-            Invalidate();
-        }
-
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            var g = e.Graphics;
-            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            g.Clear(Parent?.BackColor ?? BackColor);
-
-            bool dark = !ToolbarButton.IsLightTheme;
-            Color cardBg = dark ? Fluent.DialogDarkInput : Color.FromArgb(250, 250, 250);
-            Color cardBorder = dark ? Fluent.DialogDarkBorder : Fluent.ControlBorder;
-            Color caption = dark ? Fluent.DialogDarkTextDim : Fluent.TextSecondary;
-
-            var card = new Rectangle(0, 0, Width - 1, Height - 1);
-            using (var path = Fluent.RoundedRect(card, 8))
-            using (var fill = new SolidBrush(cardBg))
-            using (var pen = new Pen(cardBorder, 1f))
-            {
-                g.FillPath(fill, path);
-                g.DrawPath(pen, path);
-            }
-
-            TextRenderer.DrawText(g, Lang.T("Preview"), Fluent.FontBtnSm, new Point(12, 8), caption, TextFormatFlags.NoPadding);
-            int top = 8 + Fluent.FontBtnSm.Height + 8;
-            var key = new Rectangle(14, top, Width - 29, Height - top - 14);
-            using (var path = Fluent.RoundedRect(key, 6))
-            using (var fill = new SolidBrush(_key))
-            using (var pen = new Pen(_border, 2f))
-            {
-                g.FillPath(fill, path);
-                g.DrawPath(pen, path);
-            }
-            TextRenderer.DrawText(g, _label, Fluent.FontPreviewKey, key, _font,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
-        }
-    }
-
     // ════════════════════════════════════════════════════════════════════
     //  Option E — Option D with the second round of feedback
     //   • Key width / Key height are back on the Key section (there is room now)

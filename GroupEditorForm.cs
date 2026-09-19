@@ -288,7 +288,8 @@ namespace OnScreenKeyboard
             {
                 Left = PAD, Top = 36 + PAD,
                 Width = lstW, Height = lstH,
-                BackColor = Fluent.BorderInput,   // default: subtle grey border
+                // The list is a control, so its boundary needs 3 : 1 (the pale BorderInput grey has 1.7 : 1).
+                BackColor = _dark ? Fluent.DialogDarkBorder : Fluent.ControlBorder,
             };
             _lstGroups = new ListBox
             {
@@ -299,8 +300,9 @@ namespace OnScreenKeyboard
                 TabIndex = 0,
                 AccessibleName = Lang.StripMnemonic(Lang.T("Groups")),
             };
-            _lstGroups.GotFocus  += (s, e) => focusWrap.BackColor = Fluent.Accent;
-            _lstGroups.LostFocus += (s, e) => focusWrap.BackColor = Fluent.BorderInput;
+            // Focus: the accent blue on light, a light grey on dark (the darker AAA accent would not show on a dark card).
+            _lstGroups.GotFocus  += (s, e) => focusWrap.BackColor = _dark ? Fluent.DialogDarkText : Fluent.Accent;
+            _lstGroups.LostFocus += (s, e) => focusWrap.BackColor = _dark ? Fluent.DialogDarkBorder : Fluent.ControlBorder;
             _lstGroups.SelectedIndexChanged += (s, e) =>
             {
                 // Do nothing while the code itself is programmatically selecting items.

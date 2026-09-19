@@ -196,6 +196,7 @@ namespace OnScreenKeyboard
                     if (tag != "nl") SaveMockups(outDir, tag);
                     SaveMockupD(outDir, tag);
                     if (tag != "nl") SaveMockupE(outDir, tag);
+                    SaveKeyEditor(outDir, tag);
                 }
             }
             finally { Lang.PseudoExpansion = 0; Lang.Load("en"); }
@@ -260,6 +261,39 @@ namespace OnScreenKeyboard
                 g.DrawImage(pb, popup.Left - union.Left, popup.Top - union.Top);
             }
             bmp.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+        }
+
+        /// <summary>The real Key Editor in both themes: both sections and the Shift layer's action chooser open.</summary>
+        private static void SaveKeyEditor(string outDir, string tag)
+        {
+            bool wasLight = ToolbarButton.IsLightTheme;
+            var groups = new List<KeyGroup> { new KeyGroup { Name = SettingsManager.StandardGroupName }, new KeyGroup { Name = "Klinkers" } };
+            var props = new KeyProps("Ctrl+c", "^c", "A", "layout:azerty.kbl", "€", "€");
+            try
+            {
+                foreach (bool light in new[] { true, false })
+                {
+                    ToolbarButton.IsLightTheme = light;
+                    string theme = light ? "light" : "dark";
+                    using var d = new KeyEditorForm(props, null, groups: groups, layoutDir: AppDomain.CurrentDomain.BaseDirectory);
+                    Show(d);
+                    Save(d, Path.Combine(outDir, $"keyeditor_real_key_{theme}_{tag}.png"));
+                    if (tag == "en") SaveCrop(d, d.SectionBarAccess.Tabs[0], Path.Combine(outDir, $"zoom_active_tab_{theme}.png"));
+
+                    var shiftType = ((TouchChoiceButton[])typeof(KeyEditorForm)
+                        .GetField("_types", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).GetValue(d))[1];
+                    var popup = shiftType.OpenPopup(keepOpen: true);
+                    Application.DoEvents();
+                    SaveWithPopup(d, popup, Path.Combine(outDir, $"keyeditor_real_action_{theme}_{tag}.png"));
+                    popup.Close();
+
+                    d.SectionBarAccess.Select(1, focus: false);
+                    Application.DoEvents();
+                    d.PerformLayout();
+                    Save(d, Path.Combine(outDir, $"keyeditor_real_appearance_{theme}_{tag}.png"));
+                }
+            }
+            finally { ToolbarButton.IsLightTheme = wasLight; }
         }
 
         /// <summary>Option E in both themes: both sections, plus the Group, Font and colour flyouts open.</summary>

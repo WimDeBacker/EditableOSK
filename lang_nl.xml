@@ -10,6 +10,29 @@
   <String key="Decrease"                value="Verlagen" />
   <String key="Increase"                value="Verhogen" />
   <String key="contains an error"       value="bevat een fout" />
+  <String key="Search"                  value="Zoeken" />
+  <String key="Type to search…"         value="Typ om te zoeken…" />
+  <String key="No matches"              value="Geen resultaten" />
+  <String key="More colours…"           value="Meer kleuren…" />
+  <String key="Colour palette"          value="Kleurenpalet" />
+  <String key="Hex color"               value="Hexkleur" />
+
+  <!-- Key editor: layers, actions, colours -->
+  <String key="Action"                  value="Actie" />
+  <String key="Normal"                  value="Normaal" />
+  <String key="Browse…"                 value="Bladeren…" />
+  <String key="Record…"                 value="Opnemen…" />
+  <String key="Colors"                  value="Kleuren" />
+  <String key="chip: Font"              value="Letters" />
+  <String key="chip: Key"               value="Toets" />
+  <String key="chip: Border"            value="Rand" />
+  <String key="Types these characters"  value="Typt deze tekens" />
+  <String key="Presses a key or a shortcut, e.g. Ctrl+C" value="Drukt op een toets of sneltoets, bv. Ctrl+C" />
+  <String key="Holds Shift, Ctrl or Alt for the next key" value="Houdt Shift, Ctrl of Alt vast voor de volgende toets" />
+  <String key="Shows a word suggestion to tap" value="Toont een woordsuggestie om aan te tikken" />
+  <String key="Jumps to another layout file" value="Springt naar een ander lay-outbestand" />
+  <String key="Whole key only: set it on the Normal layer" value="Alleen voor de hele toets: stel het in op Normaal" />
+  <String key="Prediction slot {0} (assigned automatically)" value="Voorspelling {0} (automatisch toegewezen)" />
 
   <!-- Toolbar tooltips -->
   <String key="tip: Load"               value="Lay-outbestand laden" />

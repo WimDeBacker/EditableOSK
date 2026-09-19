@@ -220,15 +220,12 @@ namespace OnScreenKeyboard
             // Ring colour: accent blue on Neutral (grey) buttons, white on coloured variants.
             if (Focused)
             {
-                var ring = new Rectangle(2, 2, Width - 5, Height - 5);
                 if (SystemInformation.HighContrast)
-                    ControlPaint.DrawFocusRectangle(e.Graphics, ring);
+                    ControlPaint.DrawFocusRectangle(e.Graphics, new Rectangle(2, 2, Width - 5, Height - 5));
                 else
-                {
-                    var ringColor = (Style == Variant.Neutral) ? Fluent.Accent : Color.White;
-                    using var pen = new Pen(ringColor, 2f);
-                    e.Graphics.DrawRectangle(pen, ring);
-                }
+                    // A rounded ring that follows the button's own corners (a square ring over rounded corners looks wrong).
+                    FluentPainter.DrawRoundedRing(e.Graphics, Width, Height, CornerRadius, inset: 3f, penWidth: 2f,
+                        color: (Style == Variant.Neutral) ? Fluent.Accent : Color.White);
             }
         }
     }
@@ -376,14 +373,13 @@ namespace OnScreenKeyboard
             // keyboard-nav target inside the toolbar (HasNavFocus is set by KeyboardForm).
             if (HasNavFocus)
             {
-                var ring = new Rectangle(2, 2, Width - 5, Height - 5);
                 if (SystemInformation.HighContrast)
-                    ControlPaint.DrawFocusRectangle(e.Graphics, ring);
+                    ControlPaint.DrawFocusRectangle(e.Graphics, new Rectangle(2, 2, Width - 5, Height - 5));
                 else
-                {
-                    using var pen = new Pen(Fluent.Accent, 2f);
-                    e.Graphics.DrawRectangle(pen, ring);
-                }
+                    // Rounded like the button itself. The colour must show on the dark toolbar: the accent blue only
+                    // does on the light theme (the AAA accent is dark), so the dark theme gets a light ring (>= 3 : 1).
+                    FluentPainter.DrawRoundedRing(e.Graphics, Width, Height, Fluent.RadiusBtn, inset: 2.5f, penWidth: 2f,
+                        color: IsLightTheme ? Fluent.Accent : Fluent.DialogDarkText);
             }
         }
     }
@@ -511,8 +507,9 @@ namespace OnScreenKeyboard
             // We use r.Width - 1 / r.Height - 1 because GDI+ draws the bottom-right
             // pixel one unit outside the given rectangle — subtracting 1 keeps
             // everything inside the control's bounds and avoids clipping artefacts.
-            var paint = new Rectangle(0, 0, r.Width - 1, r.Height - 1);
-            using var path = Fluent.RoundedRect(paint, radius);
+            // The outline runs through pixel centres so all four sides are one identical pixel wide
+            // (see Fluent.CrispBorderRect); the fill uses the same shape.
+            using var path = Fluent.RoundedRectF(Fluent.CrispBorderRect(r.Width, r.Height), radius);
 
             using (var br = new SolidBrush(bg))
                 g.FillPath(br, path);
@@ -1022,6 +1019,22 @@ namespace OnScreenKeyboard
                 if (c.HasChildren)
                     ApplyThemeChildren(c, cardBg, inputBg, fg, skip);
             }
+        }
+
+        /// <summary>
+        /// Draws a rounded ring inside a control of size <paramref name="w"/> x <paramref name="h"/>: the ring's centre
+        /// line runs <paramref name="inset"/> pixels from the edge, and its corners are concentric with the control's own
+        /// corners (radius <paramref name="cornerRadius"/> minus the inset). Used for keyboard-focus rings, which must
+        /// follow rounded corners instead of cutting across them as a square ring does.
+        /// </summary>
+        internal static void DrawRoundedRing(Graphics g, int w, int h, float cornerRadius, float inset, float penWidth, Color color)
+        {
+            g.SmoothingMode   = SmoothingMode.AntiAlias;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            var r = new RectangleF(inset, inset, w - 2 * inset, h - 2 * inset);
+            using var path = Fluent.RoundedRectF(r, Math.Max(0f, cornerRadius - inset));
+            using var pen  = new Pen(color, penWidth);
+            g.DrawPath(pen, path);
         }
 
         // ── Helper ────────────────────────────────────────────────────

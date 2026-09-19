@@ -115,6 +115,28 @@ namespace OnScreenKeyboard
 
         public TouchChoice SelectedItem => _selected >= 0 && _selected < Items.Count ? Items[_selected] : null;
 
+        /// <summary>
+        /// Selects an item without raising <see cref="SelectedIndexChanged"/> — for loading values into the
+        /// button, where the change is not something the user did. Unlike <see cref="SelectedIndex"/> it
+        /// also accepts an unavailable (disabled) row and the row that is already selected.
+        /// </summary>
+        public void SelectSilently(int index)
+        {
+            if (index < 0 || index >= Items.Count) return;
+            _selected = index;
+            ShowSelection();
+        }
+
+        /// <summary>Replaces all items and selects one, without raising <see cref="SelectedIndexChanged"/>.</summary>
+        public void SetItems(IEnumerable<TouchChoice> items, int selectedIndex)
+        {
+            var list = new List<TouchChoice>(items);      // a copy: the caller may pass Items itself
+            Items.Clear();
+            Items.AddRange(list);
+            _selected = Math.Max(-1, Math.Min(selectedIndex, Items.Count - 1));
+            ShowSelection();
+        }
+
         /// <summary>Call after filling <see cref="Items"/> (and again when an item's text changes).</summary>
         public void ShowSelection()
         {
@@ -241,7 +263,7 @@ namespace OnScreenKeyboard
                     Bounds = new Rectangle(1, 1, width - 2, _searchH), MinimumSize = Size.Empty,
                     BackColor = _dark ? Fluent.DialogDarkInput : Fluent.BgInput,
                     ForeColor = _dark ? Fluent.DialogDarkText  : Fluent.TextPrimary,
-                    AccessibleName = "Search", Hint = "Type to search…",
+                    AccessibleName = Lang.T("Search"), Hint = Lang.T("Type to search…"),
                 };
                 _search.TextChanged += (s, e) => ApplyFilter();
                 _search.KeyDown += (s, e) => { if (HandleKey(e)) e.Handled = e.SuppressKeyPress = true; };
@@ -353,7 +375,7 @@ namespace OnScreenKeyboard
             g.Restore(saved);
 
             if (_view.Count == 0)
-                TextRenderer.DrawText(g, "No matches", Fluent.FontLabel, _viewport.IsEmpty ? ClientRectangle : _viewport, dim,
+                TextRenderer.DrawText(g, Lang.T("No matches"), Fluent.FontLabel, _viewport.IsEmpty ? ClientRectangle : _viewport, dim,
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
             if (_scrollable)
             {
