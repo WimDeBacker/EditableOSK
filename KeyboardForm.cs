@@ -384,7 +384,14 @@ namespace OnScreenKeyboard
                 // Final flush so learning from the last (up to) 30 s isn't lost.
                 // Synchronous: the app is closing anyway, and the overlay file
                 // only ever holds learned deltas, never a full corpus copy.
-                WordDatabase.SaveNow();
+                // Wrapped: WriteSaveData can throw on I/O failure (locked file,
+                // full disk), and an uncaught exception here would abort the
+                // rest of this handler — skipping the window-size save, the
+                // layout AutoSave, and the font/button disposal loops below.
+                // Best-effort, same as SaveIfDirty's own catch: losing the last
+                // ~30 s of learned words is acceptable, losing the layout/window
+                // state and leaking GDI handles on every failed shutdown is not.
+                try { WordDatabase.SaveNow(); } catch { }
                 _window.WindowWidth  = Width;
                 _window.WindowHeight = Height - ToolbarHeightForMode(_mode);
                 AutoSave();
