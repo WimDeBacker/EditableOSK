@@ -13,7 +13,7 @@ namespace OnScreenKeyboard
     {
         // ── Theme preset data ────────────────────────────────────────────
 
-        private sealed class ThemePreset
+        internal sealed class ThemePreset
         {
             public string Id;
             public string DisplayName;
@@ -22,7 +22,7 @@ namespace OnScreenKeyboard
             public (string Name, string Key, string Font, string Border, int Thick)[] ExtraGroups;
         }
 
-        private static readonly ThemePreset[] Presets = new[]
+        internal static readonly ThemePreset[] Presets = new[]
         {
             // ── Dark ─────────────────────────────────────────────────────
             // Standard: dark navy.  Groups: subtle hue shifts — same near-white

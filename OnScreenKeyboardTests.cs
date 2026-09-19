@@ -58,6 +58,9 @@ namespace OnScreenKeyboard
             T_AccessibilityControls();
             T_Accelerators();
             T_SvgIconLoader_Cache();
+            T_TouchControls();
+            T_TouchDialogFrame();
+            T_UiGuardBaseline();
             T_ValidationBlocksApply();
             T_MissingFontHandling();
             T_FluentDialogBase_DisposeWithoutShow();
@@ -4049,72 +4052,67 @@ namespace OnScreenKeyboard
             mc.GearRow = 99;
             Assert(m.GearRow == 3, "LayoutMeta.Clone: mutation independent");
 
-            // ── Undo stack cap at 50 ──────────────────────────────────
-            var layout = KeyLayout.BuildDefaultQwerty();
-            var undoStack = new Stack<(GridLayout, VisualTheme, WindowState, LayoutMeta)>();
-            var redoStack = new Stack<(GridLayout, VisualTheme, WindowState, LayoutMeta)>();
-            var theme0 = new VisualTheme(); var window0 = new WindowState(); var meta0 = new LayoutMeta();
-
-            for (int i = 0; i < 55; i++)
+            // ── UndoHistory — the real state machine KeyboardForm uses ──
             {
-                undoStack.Push((layout.Clone(), theme0.Clone(), window0.Clone(), meta0.Clone()));
-                redoStack.Clear();
-                if (undoStack.Count > 50)
-                {
-                    var arr = undoStack.ToArray(); // [0]=newest
-                    undoStack.Clear();
-                    for (int j = arr.Length - 2; j >= 0; j--) undoStack.Push(arr[j]);
-                }
-            }
-            Assert(undoStack.Count == 50, "UndoStack capped at 50 after 55 pushes");
+                var h = new UndoHistory<int>();
+                Assert(!h.CanUndo && !h.CanRedo,              "UndoHistory: empty at start");
+                Assert(!h.TryUndo(0, out _) && !h.TryRedo(0, out _), "UndoHistory: undo/redo on empty do nothing");
+                Assert(h.UndoCount == 0 && h.RedoCount == 0,  "UndoHistory: failed undo/redo leave both sides empty");
 
-            // ── Undo stack cap — LinkedList (mirrors KeyboardForm.PushUndo exactly) ──
-            // KeyboardForm uses LinkedList with AddFirst (newest at front) and
-            // RemoveLast (drops oldest) — both O(1).  This test verifies that
-            // exact algorithm rather than the Stack-based simulation above.
-            var ll = new LinkedList<int>();
-            for (int i = 0; i < 60; i++)
+                // Cap: 60 pushes keep the newest MaxDepth; undoing walks back newest-first.
+                for (int i = 0; i < 60; i++) h.Push(i);
+                Assert(h.UndoCount == UndoHistory<int>.MaxDepth, "UndoHistory: capped after 60 pushes");
+                Assert(UndoHistory<int>.MaxDepth == 50,          "UndoHistory: cap is 50");
+                var order = new List<int>();
+                while (h.TryUndo(-1, out int got)) order.Add(got);
+                Assert(order.Count == 50 && order[0] == 59 && order[49] == 10,
+                    "UndoHistory: undo yields the newest 50 snapshots, newest first (59 … 10)");
+                Assert(h.RedoCount == 50, "UndoHistory: every undone step became redoable");
+
+                // Undo / redo round trip with the current state swapped in each direction.
+                h.Clear();
+                h.Push(1);                                   // state was 1, edited to 2
+                Assert(h.TryUndo(2, out int back) && back == 1, "UndoHistory: undo restores the pre-edit state");
+                Assert(h.CanRedo && !h.CanUndo,                 "UndoHistory: after undo only redo is available");
+                Assert(h.TryRedo(1, out int fwd) && fwd == 2,   "UndoHistory: redo re-applies the undone state");
+                Assert(h.CanUndo && !h.CanRedo,                 "UndoHistory: after redo only undo is available");
+
+                // A new edit throws the redo side away.
+                h.Clear();
+                h.Push(1); h.TryUndo(2, out _);
+                Assert(h.CanRedo, "UndoHistory: redo available before a new edit");
+                h.Push(3);
+                Assert(!h.CanRedo && h.UndoCount == 1, "UndoHistory: a new edit clears redo");
+
+                h.Clear();
+                h.Push(1); h.Push(2); h.TryUndo(3, out _);
+                h.Clear();
+                Assert(h.UndoCount == 0 && h.RedoCount == 0, "UndoHistory: Clear empties both sides");
+            }
+
+            // ── UndoHistory with the real snapshot tuple: undo really restores content ──
             {
-                ll.AddFirst(i);       // newest entry at front  (= _undoStack.AddFirst(...))
-                if (ll.Count > 50)
-                    ll.RemoveLast();  // drop oldest in O(1)    (= _undoStack.RemoveLast())
+                var h = new UndoHistory<(GridLayout Layout, VisualTheme Theme, WindowState Window, LayoutMeta Meta)>();
+                var live = KeyLayout.BuildDefaultQwerty();
+                var liveTheme = new VisualTheme { FontName = "Before-Font" };
+                var liveWindow = new WindowState(); var liveMeta = new LayoutMeta();
+                (GridLayout, VisualTheme, WindowState, LayoutMeta) Capture() =>
+                    (live.Clone(), liveTheme.Clone(), liveWindow.Clone(), liveMeta.Clone());
+
+                live.Cells[0].Props.Label = "BEFORE";
+                h.Push(Capture());                           // snapshot taken before the edit
+                live.Cells[0].Props.Label = "AFTER";         // the edit (would also mutate an aliased snapshot)
+                liveTheme.FontName = "After-Font";
+
+                Assert(h.TryUndo(Capture(), out var undone), "snapshot undo: available");
+                Assert(undone.Layout.Cells[0].Props.Label == "BEFORE",  "snapshot undo restores the layout label");
+                Assert(undone.Theme.FontName              == "Before-Font", "snapshot undo restores the theme font");
+                Assert(!ReferenceEquals(undone.Layout, live),           "snapshot undo: restored layout is not the live object");
+
+                Assert(h.TryRedo(undone, out var redone), "snapshot redo: available");
+                Assert(redone.Layout.Cells[0].Props.Label == "AFTER",   "snapshot redo re-applies the layout label");
+                Assert(redone.Theme.FontName              == "After-Font", "snapshot redo re-applies the theme font");
             }
-            Assert(ll.Count            == 50, "LinkedList undo cap: count stays at 50 after 60 pushes");
-            Assert(ll.First!.Value     == 59, "LinkedList undo cap: First (newest) is push #59");
-            Assert(ll.Last!.Value      == 10, "LinkedList undo cap: Last (oldest) is push #10 (60-50)");
-
-            // ── Redo clears on new action ─────────────────────────────
-            undoStack.Clear();
-            redoStack.Push((layout.Clone(), theme0.Clone(), window0.Clone(), meta0.Clone()));
-            redoStack.Push((layout.Clone(), theme0.Clone(), window0.Clone(), meta0.Clone()));
-            Assert(redoStack.Count == 2, "Redo has 2 entries before new push");
-
-            undoStack.Push((layout.Clone(), theme0.Clone(), window0.Clone(), meta0.Clone()));
-            redoStack.Clear();
-            Assert(redoStack.Count == 0, "Redo cleared after new push");
-
-            // ── Undo / Redo round-trip (snapshot content) ─────────────
-            var before = KeyLayout.BuildDefaultQwerty();
-            before.Cells[0].Props.Label = "BEFORE";
-            var snapshotTheme = new VisualTheme { FontName = "Before-Font" };
-            undoStack.Clear(); redoStack.Clear();
-
-            undoStack.Push((before.Clone(), snapshotTheme.Clone(), window0.Clone(), meta0.Clone()));
-
-            before.Cells[0].Props.Label = "AFTER";
-            var afterTheme = new VisualTheme { FontName = "After-Font" };
-
-            redoStack.Push((before.Clone(), afterTheme.Clone(), window0.Clone(), meta0.Clone()));
-            var (restoredLayout, restoredTheme, _, _) = undoStack.Pop();
-
-            Assert(restoredLayout.Cells[0].Props.Label == "BEFORE",    "Undo restores layout label");
-            Assert(restoredTheme.FontName              == "Before-Font","Undo restores theme FontName");
-
-            undoStack.Push((restoredLayout.Clone(), restoredTheme.Clone(), window0.Clone(), meta0.Clone()));
-            var (redoneLayout, redoneTheme, _, _) = redoStack.Pop();
-
-            Assert(redoneLayout.Cells[0].Props.Label == "AFTER",     "Redo re-applies layout label");
-            Assert(redoneTheme.FontName              == "After-Font", "Redo re-applies theme FontName");
         }
 
         // ════════════════════════════════════════════════════════════════
@@ -5243,94 +5241,62 @@ namespace OnScreenKeyboard
         {
             Section("Wizard theme preset contrast");
 
-            // Each assertion: font-on-key ≥ 4.5 : 1  (WCAG AA normal text)
-            // and font-on-background ≥ 3 : 1  (WCAG AA large text / focus ring)
+            // Reads the wizard's REAL preset data (NewKeyboardWizard.Presets), so changing a preset
+            // colour is checked here instead of silently passing against a copy.
             //
-            // Values match NewKeyboardWizard.Presets static data.
-
-            void CheckPreset(string name, string bgHex, string keyHex, string fontHex, double minFontOnKey, double minFontOnBg)
+            // Per preset: font-on-key >= minFontOnKey and font-on-background >= minFontOnBg for the
+            // standard key, and font-on-key >= minGroupFontOnKey for every group. 4.5:1 is WCAG AA
+            // for normal text; the thresholds are set to each preset's design values.
+            // (Key-on-background contrast is intentionally low in Dark and Light: the key is told
+            // apart by its border, not by colour.)
+            var limits = new Dictionary<string, (double FontOnKey, double FontOnBg, double GroupFontOnKey)>
             {
-                Color bg   = SettingsManager.ParseColor(bgHex,   Color.Black);
-                Color key  = SettingsManager.ParseColor(keyHex,  Color.Gray);
-                Color font = SettingsManager.ParseColor(fontHex, Color.White);
+                ["dark"]     = (10.0, 10.0, 4.5),
+                ["light"]    = (14.0, 13.0, 4.5),
+                ["hc"]       = (19.0,  1.0,  7.0),   // font on bg = black on black = 1:1 (intentional); groups >= AAA
+                // Colorful (from the azertycolor design): Klinkers is 3.4:1 and Leestekens 3.8:1, i.e.
+                // below AA for normal text. Pinned at the 3:1 large-text floor; raise it when the
+                // preset colours are improved.
+                ["colorful"] = ( 4.5,  3.0,  3.0),
+            };
+            string[] groupNames = { "Klinkers", "Medeklinkers", "Cijfers", "Besturing", "Leestekens", "Woord" };
 
-                double ratioFontKey = WizardThemeValidator.ContrastRatio(font, key);
-                double ratioFontBg  = WizardThemeValidator.ContrastRatio(font, bg);
+            // A hex string is valid when parsing it does not depend on the fallback colour.
+            bool ValidHex(string hex) =>
+                SettingsManager.ParseColor(hex, Color.Black) == SettingsManager.ParseColor(hex, Color.White);
 
-                // WCAG AA requires 4.5:1; our thresholds are set higher to the actual design values.
-                Assert(ratioFontKey >= minFontOnKey,
-                    $"{name}: font-on-key contrast {ratioFontKey:F1} < {minFontOnKey} (WCAG AA)");
-                Assert(ratioFontBg >= minFontOnBg,
-                    $"{name}: font-on-bg  contrast {ratioFontBg:F1}  < {minFontOnBg}");
-                // Note: key-on-background ratio is intentionally low in Dark and Light because
-                // the key is distinguished by its border, not by colour contrast with the background.
-            }
+            var presets = NewKeyboardWizard.Presets;
+            Assert(presets.Length == limits.Count && presets.All(pr => limits.ContainsKey(pr.Id)),
+                "presets: every wizard preset has contrast limits in this test (add one when adding a preset)");
+            Assert(presets.Select(pr => pr.Id).Distinct().Count() == presets.Length, "presets: ids are unique");
 
-            // Dark preset: near-white (#EFEFFF) on dark navy (#2C2C42) — design values 10-12:1
-            CheckPreset("Dark",
-                bgHex: "1C1C28", keyHex: "2C2C42", fontHex: "EFEFFF",
-                minFontOnKey: 10.0, minFontOnBg: 10.0);
-
-            // Light preset: near-black (#1A1A1A) on white (#FFFFFF) — design values 14-17:1
-            CheckPreset("Light",
-                bgHex: "EBEBEB", keyHex: "FFFFFF", fontHex: "1A1A1A",
-                minFontOnKey: 14.0, minFontOnBg: 13.0);
-
-            // High Contrast preset: black on pure yellow
-            CheckPreset("High Contrast",
-                bgHex: "000000", keyHex: "FFFF00", fontHex: "000000",
-                minFontOnKey: 19.0, minFontOnBg: 1.0); // font on bg = black on black = 1:1 (intentional)
-
-            // HC — Accent 1: black on gold
+            foreach (var pr in presets)
             {
-                Color gold = SettingsManager.ParseColor("FFD700", Color.White);
-                Color blk  = SettingsManager.ParseColor("000000", Color.Black);
-                double r   = WizardThemeValidator.ContrastRatio(blk, gold);
-                Assert(r >= 14.0, $"HC Accent 1 (gold) black-on-gold: {r:F1} < 14");
-            }
+                if (!limits.TryGetValue(pr.Id, out var lim)) continue;
 
-            // Dark theme groups — all use near-white #EFEFFF font
-            foreach (var (name, keyHex) in new[]{
-                ("Dark Klinkers",     "3A3A5A"),
-                ("Dark Cijfers",      "243050"),
-                ("Dark Besturing",    "1C1C2E"),
-                ("Dark Leestekens",   "38283C"),
-                ("Dark Woord",        "263826"),
-            })
-            {
-                Color key  = SettingsManager.ParseColor(keyHex, Color.Gray);
-                // Besturing uses a muted font #9090A8; all others use #EFEFFF
-                Color font = name.Contains("Besturing")
-                    ? SettingsManager.ParseColor("9090A8", Color.Gray)
-                    : SettingsManager.ParseColor("EFEFFF", Color.White);
-                double r = WizardThemeValidator.ContrastRatio(font, key);
-                Assert(r >= 4.5, $"{name}: font-on-key {r:F1} < 4.5 (WCAG AA)");
-            }
+                Assert(new[] { pr.Background, pr.KeyColor, pr.FontColor, pr.BorderColor }.All(ValidHex),
+                    $"{pr.DisplayName}: standard colours are valid hex");
+                Assert(pr.BorderThickness >= 0, $"{pr.DisplayName}: border thickness is not negative");
 
-            // Light theme groups — all use near-black #1A1A1A font
-            // (Besturing uses darker font #505050)
-            foreach (var (name, keyHex) in new[]{
-                ("Light Klinkers",     "DFF0FF"),
-                ("Light Cijfers",      "FFF3DC"),
-                ("Light Besturing",    "EAEAEA"),
-                ("Light Leestekens",   "F4F0FF"),
-                ("Light Woord",        "EAFAEA"),
-            })
-            {
-                Color key  = SettingsManager.ParseColor(keyHex, Color.White);
-                Color font = name.Contains("Besturing")
-                    ? SettingsManager.ParseColor("505050", Color.DarkGray)
-                    : SettingsManager.ParseColor("1A1A1A", Color.Black);
-                double r = WizardThemeValidator.ContrastRatio(font, key);
-                Assert(r >= 4.5, $"{name}: font-on-key {r:F1} < 4.5 (WCAG AA)");
-            }
+                Color bg   = SettingsManager.ParseColor(pr.Background, Color.Black);
+                Color key  = SettingsManager.ParseColor(pr.KeyColor,   Color.Gray);
+                Color font = SettingsManager.ParseColor(pr.FontColor,  Color.White);
+                double fontKey = WizardThemeValidator.ContrastRatio(font, key);
+                double fontBg  = WizardThemeValidator.ContrastRatio(font, bg);
+                Assert(fontKey >= lim.FontOnKey, $"{pr.DisplayName}: font-on-key contrast {fontKey:F1} < {lim.FontOnKey}");
+                Assert(fontBg  >= lim.FontOnBg,  $"{pr.DisplayName}: font-on-bg contrast {fontBg:F1} < {lim.FontOnBg}");
 
-            // HC — Accent 2: black on amber
-            {
-                Color amber = SettingsManager.ParseColor("FFA500", Color.White);
-                Color blk   = SettingsManager.ParseColor("000000", Color.Black);
-                double r    = WizardThemeValidator.ContrastRatio(blk, amber);
-                Assert(r >= 10.0, $"HC Accent 2 (amber) black-on-amber: {r:F1} < 10");
+                Assert(groupNames.All(n => pr.ExtraGroups.Any(g => g.Name == n)),
+                    $"{pr.DisplayName}: has all six wizard groups");
+                AssertAll(pr.ExtraGroups,
+                    g => new[] { g.Key, g.Font, g.Border }.All(ValidHex) && g.Thick >= 0,
+                    g => g.Name, $"{pr.DisplayName}: group colours are valid hex");
+                AssertAll(pr.ExtraGroups,
+                    g => WizardThemeValidator.ContrastRatio(
+                            SettingsManager.ParseColor(g.Font, Color.White),
+                            SettingsManager.ParseColor(g.Key,  Color.Gray)) >= lim.GroupFontOnKey,
+                    g => $"{g.Name} (font {g.Font} on key {g.Key})",
+                    $"{pr.DisplayName}: every group font-on-key contrast >= {lim.GroupFontOnKey}");
             }
 
             // WizardThemeValidator.ContrastRatio is symmetric.

@@ -6,6 +6,11 @@
 -->
 <Language code="nl" name="Nederlands">
 
+  <!-- Touch-friendly controls (steppers, section bar) -->
+  <String key="Decrease"                value="Verlagen" />
+  <String key="Increase"                value="Verhogen" />
+  <String key="contains an error"       value="bevat een fout" />
+
   <!-- Toolbar tooltips -->
   <String key="tip: Load"               value="Lay-outbestand laden" />
   <String key="tip: Save"               value="Lay-outbestand opslaan" />

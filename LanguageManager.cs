@@ -569,6 +569,12 @@ namespace OnScreenKeyboard
         /// <returns>The best available translation for <paramref name="key"/>.</returns>
         public static string T(string key)
         {
+            string text = Lookup(key);
+            return PseudoExpansion > 0 ? Pseudo(text) : text;
+        }
+
+        private static string Lookup(string key)
+        {
             // Check language-specific overrides first — they have the highest priority.
             if (_overrides.TryGetValue(key, out var ov)) return ov;
 
@@ -579,6 +585,18 @@ namespace OnScreenKeyboard
             // this guarantees the UI always shows something human-readable.
             return key;
         }
+
+        /// <summary>
+        /// Test / gallery hook (pseudo-localisation). When greater than 0, every string from
+        /// <see cref="T"/> is lengthened by this fraction (0.4 = 40 % longer), which stands in for
+        /// a language whose words are longer than English or Dutch. Used to check that dialogs
+        /// size themselves from their text instead of relying on empty space. 0 = off (normal).
+        /// </summary>
+        internal static double PseudoExpansion { get; set; }
+
+        /// <summary>Appends filler at the end, so mnemonics (&amp;) and {n} placeholders stay intact.</summary>
+        private static string Pseudo(string text) =>
+            text + new string('x', (int)Math.Ceiling(text.Length * PseudoExpansion));
 
         /// <summary>
         /// Strips the WinForms mnemonic marker (<c>&amp;</c>) from a text string so it

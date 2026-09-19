@@ -132,8 +132,7 @@ namespace OnScreenKeyboard
         // LinkedList is used instead of Stack so we can drop the oldest entry in O(1)
         // via RemoveLast() — Stack.ToArray+rebuild would be O(n) every 50 edits.
         // Convention: newest snapshot is always at the front (First); oldest at the back (Last).
-        private readonly LinkedList<(GridLayout Layout, VisualTheme Theme, WindowState Window, LayoutMeta Meta)> _undoStack = new();
-        private readonly LinkedList<(GridLayout Layout, VisualTheme Theme, WindowState Window, LayoutMeta Meta)> _redoStack = new();
+        private readonly UndoHistory<(GridLayout Layout, VisualTheme Theme, WindowState Window, LayoutMeta Meta)> _history = new();
 
         private Button _gearBtn;
         private System.Windows.Forms.Timer _holdTimer;  // fires after 1 s when HoldToEdit is on
@@ -2375,8 +2374,7 @@ namespace OnScreenKeyboard
                     return;
                 }
                 SetMode(Mode.Normal);
-                _undoStack.Clear();
-                _redoStack.Clear();
+                _history.Clear();
                 RefreshUndoRedoState();
                 ApplyLoadedSettings(filePath);
                 return;
@@ -3590,8 +3588,7 @@ namespace OnScreenKeyboard
             if (wiz.ShowDialog(this) == System.Windows.Forms.DialogResult.OK &&
                 !string.IsNullOrEmpty(wiz.CreatedFilePath))
             {
-                _undoStack.Clear();
-                _redoStack.Clear();
+                _history.Clear();
                 RefreshUndoRedoState();
                 ApplyLoadedSettings(wiz.CreatedFilePath);
             }
@@ -3660,17 +3657,17 @@ namespace OnScreenKeyboard
         /// <summary>
         /// Captures the current layout + global settings onto the undo stack and
         /// clears the redo stack. Call this immediately before any destructive edit.
-        /// The stack is capped at 50 snapshots; the oldest entry is discarded when full.
+        /// The history is capped (see <see cref="UndoHistory{T}.MaxDepth"/>); the oldest entry is discarded when full.
         /// </summary>
         private void PushUndo()
         {
-            _undoStack.AddFirst((_layout.Clone(), _theme.Clone(), _window.Clone(), _meta.Clone()));
-            _redoStack.Clear();
-            // Drop the oldest entry when the cap is exceeded — O(1) with LinkedList.
-            if (_undoStack.Count > 50)
-                _undoStack.RemoveLast();
+            _history.Push(CaptureSnapshot());
             RefreshUndoRedoState();
         }
+
+        /// <summary>Deep copy of everything an undo step has to restore.</summary>
+        private (GridLayout Layout, VisualTheme Theme, WindowState Window, LayoutMeta Meta) CaptureSnapshot()
+            => (_layout.Clone(), _theme.Clone(), _window.Clone(), _meta.Clone());
 
         /// <summary>
         /// Pops the most recent snapshot from the undo stack, saves the current state to the
@@ -3678,11 +3675,9 @@ namespace OnScreenKeyboard
         /// </summary>
         private void Undo()
         {
-            if (_undoStack.Count == 0) return;
-            _redoStack.AddFirst((_layout.Clone(), _theme.Clone(), _window.Clone(), _meta.Clone()));
-            var (layout, theme, window, meta) = _undoStack.First.Value;
-            _undoStack.RemoveFirst();
-            ApplySnapshot(layout, theme, window, meta);
+            if (!_history.CanUndo) return;
+            _history.TryUndo(CaptureSnapshot(), out var restored);
+            ApplySnapshot(restored.Layout, restored.Theme, restored.Window, restored.Meta);
             // RefreshUndoRedoState() is called inside ApplySnapshot via RebuildAllButtons chain,
             // but call it again here to be safe after the stack mutates.
             RefreshUndoRedoState();
@@ -3694,11 +3689,9 @@ namespace OnScreenKeyboard
         /// </summary>
         private void Redo()
         {
-            if (_redoStack.Count == 0) return;
-            _undoStack.AddFirst((_layout.Clone(), _theme.Clone(), _window.Clone(), _meta.Clone()));
-            var (layout, theme, window, meta) = _redoStack.First.Value;
-            _redoStack.RemoveFirst();
-            ApplySnapshot(layout, theme, window, meta);
+            if (!_history.CanRedo) return;
+            _history.TryRedo(CaptureSnapshot(), out var restored);
+            ApplySnapshot(restored.Layout, restored.Theme, restored.Window, restored.Meta);
             RefreshUndoRedoState();
         }
 
@@ -3706,8 +3699,8 @@ namespace OnScreenKeyboard
         private void RefreshUndoRedoState()
         {
             if (_btnUndo == null) return;
-            _btnUndo.Enabled = _undoStack.Count > 0; _btnUndo.Invalidate();
-            _btnRedo.Enabled = _redoStack.Count > 0; _btnRedo.Invalidate();
+            _btnUndo.Enabled = _history.CanUndo; _btnUndo.Invalidate();
+            _btnRedo.Enabled = _history.CanRedo; _btnRedo.Invalidate();
         }
 
         /// <summary>

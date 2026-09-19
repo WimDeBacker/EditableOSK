@@ -62,6 +62,11 @@ namespace OnScreenKeyboard
         [STAThread]  // Required by Windows Forms: the main thread must be a Single-Threaded Apartment
         static int Main(string[] args)
         {
+            // Developer tool: "--gallery <folder>" saves PNGs of the editor dialogs (see DevGallery).
+            int galleryAt = Array.IndexOf(args, "--gallery");
+            if (galleryAt >= 0)
+                return DevGallery.Run(galleryAt + 1 < args.Length ? args[galleryAt + 1] : "gallery");
+
             // Check whether the user launched the app with the "--test" flag.
             // Array.IndexOf returns -1 when the item is not found, so >= 0 means "found".
             if (Array.IndexOf(args, "--test") >= 0)

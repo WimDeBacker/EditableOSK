@@ -35,9 +35,27 @@ namespace OnScreenKeyboard
         protected readonly List<(Control Ctrl,  Func<string> GetTip)>   _transTooltips
             = new List<(Control, Func<string>)>();
 
+        // Text of buttons / check boxes / any control whose Text is a translated string.
+        protected readonly List<(Control Ctrl, Func<string> GetText)> _transTexts
+            = new List<(Control, Func<string>)>();
+
         protected string _pendingAccessibleName;
 
+        // ── Content-sized dialogs (touch-friendly editors) ───────────────
+        // A dialog built with the parameterless constructor and BuildFrame() sizes itself from its
+        // content when it opens (FitToContent), instead of taking a constant size.
+        private bool         _contentSized;
+        private Control      _sizingRoot;
+        private SectionHost  _host;
+        private int          _nextTab;
+
         // ── Constructor ──────────────────────────────────────────────────
+
+        /// <summary>
+        /// Content-sized dialog: build the body with <see cref="BuildFrame"/>; the window opens at
+        /// the size its content needs (limited to the screen) rather than at a fixed size.
+        /// </summary>
+        protected FluentDialogBase() : this(new Size(480, 320)) { _contentSized = true; }
 
         protected FluentDialogBase(Size size)
         {
@@ -67,6 +85,7 @@ namespace OnScreenKeyboard
 
             Load += (s, e) =>
             {
+                if (_contentSized && _sizingRoot != null) FitToContent();
                 var wa = Screen.FromControl(this).WorkingArea;
                 if (Width > wa.Width - 10 || Height > wa.Height - 10)
                 {
@@ -142,9 +161,14 @@ namespace OnScreenKeyboard
         protected virtual void OnLanguageChanged()
         {
             foreach (var (ctrl, getText) in _transLabels)   ctrl.Text = getText();
+            foreach (var (ctrl, getText) in _transTexts)    ctrl.Text = getText();
             foreach (var (pnl,  _)       in _transGroups)   pnl.Invalidate();
             foreach (var (ctrl, getTip)  in _transTooltips) _tip.SetToolTip(ctrl, getTip());
+            Sections?.RefreshTitles();
             Invalidate(true);
+            // A longer translation may need more room: grow (never shrink) once layout has settled.
+            if (_contentSized && _sizingRoot != null && IsHandleCreated)
+                BeginInvoke((Action)GrowToContent);
         }
 
         // ── Shared UI-builder helpers ────────────────────────────────────
@@ -369,6 +393,323 @@ namespace OnScreenKeyboard
             }
             Controls.Add(sp);
             return sp;
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        //  Content-sized, sectioned, touch-friendly layout
+        // ══════════════════════════════════════════════════════════════════
+
+        /// <summary>The section buttons (null for a dialog built without sections).</summary>
+        protected SectionBar Sections { get; private set; }
+
+        /// <summary>Widest the content may grow before it is limited, in design pixels.</summary>
+        protected const int MaxContentWidth = 760;
+
+        /// <summary>
+        /// Builds the standard frame of a content-sized dialog and adds it to the form:
+        /// [section buttons] / [body that scrolls only if the screen is too small] / [footer].
+        /// Add the body with <see cref="AddSection"/>; the footer comes from <see cref="MakeFooter"/>.
+        /// </summary>
+        protected void BuildFrame(Control footer, bool withSections)
+        {
+            var root = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill, ColumnCount = 1, RowCount = withSections ? 3 : 2,
+                Padding = new Padding(Fluent.Pad), AutoSize = false,
+            };
+            root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            int row = 0;
+            if (withSections)
+            {
+                Sections = new SectionBar { Anchor = AnchorStyles.Left | AnchorStyles.Right };
+                Sections.SelectedIndexChanged += (s, e) => _host.ShowSection(Sections.SelectedIndex);
+                root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                root.Controls.Add(Sections, 0, row++);
+            }
+            _host = new SectionHost { Dock = DockStyle.Fill };
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            root.Controls.Add(_host, 0, row++);
+            footer.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.Controls.Add(footer, 0, row);
+            Controls.Add(root);
+            _sizingRoot = root;
+        }
+
+        /// <summary>
+        /// Adds a section (a tab of the dialog, or the whole body when there is no section bar) and
+        /// returns its two-column table: label column sized to the longest label, input column filling.
+        /// </summary>
+        protected TableLayoutPanel AddSection(Func<string> title)
+        {
+            var t = NewTable();
+            _host.Add(t);
+            Sections?.Add(title);
+            return t;
+        }
+
+        /// <summary>Index of the visible section.</summary>
+        protected int SelectedSection => Sections?.SelectedIndex ?? 0;
+
+        protected void ShowSection(int index) => Sections?.Select(index, focus: false);
+
+        /// <summary>
+        /// Puts a warning marker on every section that holds a validation error, and switches to
+        /// the first of them. Returns false (and does nothing) when no section has an error. Call
+        /// from Apply so an error on a hidden section is never overlooked.
+        /// </summary>
+        protected bool ShowFirstSectionWithError()
+        {
+            if (Sections == null) return HasPendingErrors();
+            int first = -1;
+            for (int i = 0; i < _host.SectionCount; i++)
+            {
+                bool bad = HasPendingErrors(_host.SectionAt(i));
+                Sections.SetError(i, bad);
+                if (bad && first < 0) first = i;
+            }
+            if (first >= 0 && first != Sections.SelectedIndex) Sections.Select(first, focus: false);
+            return first >= 0;
+        }
+
+        /// <summary>A section table: labels in an auto-sized column, inputs in the rest, rows sized by content.</summary>
+        protected TableLayoutPanel NewTable()
+        {
+            var t = new TableLayoutPanel
+            {
+                ColumnCount = 2, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Padding = new Padding(Fluent.Pad), Dock = DockStyle.Top,
+            };
+            t.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            t.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            return t;
+        }
+
+        /// <summary>
+        /// Adds "label | input" as a new row. The label sizes to its text (wrapping past
+        /// <see cref="Touch.LabelMaxWidth"/>); the input is at least 44 px tall and fills the column,
+        /// or keeps its own width when <paramref name="fill"/> is false (steppers, short fields).
+        /// </summary>
+        protected Label AddRow(TableLayoutPanel t, Func<string> label, Control input, bool fill = true)
+        {
+            var lbl = new Label
+            {
+                Text = label(), AutoSize = true, UseMnemonic = true,
+                Anchor = AnchorStyles.Left, TextAlign = ContentAlignment.MiddleLeft,
+                Margin = new Padding(0, 4, Fluent.Pad, 4),
+                MaximumSize = new Size(Touch.LabelMaxWidth, 0),
+                ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent, Font = Fluent.FontLabel,
+                TabIndex = _nextTab++,
+            };
+            _transLabels.Add((lbl, label));
+            NameInput(input, Lang.StripMnemonic(label()));
+            _pendingAccessibleName = Lang.StripMnemonic(label());
+
+            PrepareInput(input, fill);
+            input.TabIndex = _nextTab++;
+            int r = t.RowCount++;
+            t.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            t.Controls.Add(lbl,   0, r);
+            t.Controls.Add(input, 1, r);
+            return lbl;
+        }
+
+        /// <summary>Adds a control spanning both columns (a check box, a button row, a heading).</summary>
+        protected void AddWideRow(TableLayoutPanel t, Control c, bool fill = true)
+        {
+            PrepareInput(c, fill);
+            c.TabIndex = _nextTab++;
+            int r = t.RowCount++;
+            t.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            t.Controls.Add(c, 0, r);
+            t.SetColumnSpan(c, 2);
+        }
+
+        /// <summary>A touch-sized check box whose text follows language changes; add it with <see cref="AddWideRow"/>.</summary>
+        protected TouchCheckBox NewCheck(Func<string> text)
+        {
+            var c = new TouchCheckBox { Text = text() };
+            _transTexts.Add((c, text));
+            return c;
+        }
+
+        private static void NameInput(Control input, string name)
+        {
+            if (input is TouchStepper st) { if (string.IsNullOrEmpty(st.AccessibleName)) st.AccessibleName = name; }
+            else if (string.IsNullOrEmpty(input.AccessibleName)) input.AccessibleName = name;
+        }
+
+        private static void PrepareInput(Control input, bool fill)
+        {
+            input.Margin = new Padding(0, 4, 0, 4);
+            if (fill)
+            {
+                if (input is TextBoxBase || input is ComboBox)
+                    input.MinimumSize = new Size(Math.Max(input.MinimumSize.Width, Touch.InputMinWidth), Touch.Target);
+                input.Dock = DockStyle.Fill;
+            }
+            else input.Anchor = AnchorStyles.Left;
+        }
+
+        /// <summary>A 44 px button for a footer or button row; the text follows language changes.</summary>
+        protected FluentButton MakeTouchButton(Func<string> text, FluentButton.Variant style = FluentButton.Variant.Neutral)
+        {
+            var b = new FluentButton
+            {
+                Text = text(), Style = style, TabStop = true, AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(16, 0, 16, 0),
+                MinimumSize = new Size(120, Touch.Target), Margin = new Padding(Touch.Gap, 0, 0, 0),
+            };
+            _transTexts.Add((b, text));
+            return b;
+        }
+
+        /// <summary>
+        /// Footer row: an optional <paramref name="leftSlot"/> (e.g. the live preview), flexible
+        /// space, then the buttons right-aligned in the order given.
+        /// </summary>
+        protected TableLayoutPanel MakeFooter(Control leftSlot, params Control[] buttons)
+        {
+            var f = new TableLayoutPanel
+            {
+                ColumnCount = 2 + buttons.Length, RowCount = 1, AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(0, Touch.Gap, 0, 0),
+            };
+            f.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            f.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            for (int i = 0; i < buttons.Length; i++) f.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            if (leftSlot != null) { leftSlot.Anchor = AnchorStyles.Left; f.Controls.Add(leftSlot, 0, 0); }
+            for (int i = 0; i < buttons.Length; i++)
+            {
+                buttons[i].Anchor = AnchorStyles.Right;
+                f.Controls.Add(buttons[i], 2 + i, 0);
+            }
+            return f;
+        }
+
+        /// <summary>
+        /// A colour row for a section table: a 44 px hex box that fills the row plus a 44 x 44
+        /// swatch. Same behaviour and error handling as <see cref="AddColorRow"/>; the returned
+        /// row is placed with <see cref="AddRow"/>, the swatch works with <see cref="GetSwatchHex"/> /
+        /// <see cref="SetSwatchHex"/>.
+        /// </summary>
+        protected Control MakeColorRow(out Button swatch, Action onChanged = null)
+        {
+            var txtHex = new TouchTextBox { Font = Fluent.FontCourier };
+            var sw = new ColorSwatchButton
+            {
+                BackColor = Color.Gray, Size = new Size(Touch.Target, Touch.Target),
+                MinimumSize = new Size(Touch.Target, Touch.Target), TabStop = true,
+            };
+            string colorName = _pendingAccessibleName;
+            _pendingAccessibleName = null;
+            if (colorName != null)
+            {
+                txtHex.AccessibleName = colorName + " hex";
+                sw.AccessibleName     = colorName + " swatch";
+            }
+            SetTip(txtHex, () => Lang.T("tip: Hex color"));
+            SetTip(sw,     () => Lang.T("tip: Color swatch"));
+            // The error icon sits inside the hex box's right end instead of outside the row.
+            _err.SetIconAlignment(txtHex, ErrorIconAlignment.MiddleRight);
+            _err.SetIconPadding(txtHex, -24);
+            txtHex.TextChanged += (s, e) =>
+            {
+                var parsed = ParseColor(txtHex.Text, Color.Empty);
+                sw.BackColor = parsed.IsEmpty ? sw.BackColor : parsed;
+                if (!_suppressOnChanged) onChanged?.Invoke();
+                bool bad = !string.IsNullOrWhiteSpace(txtHex.Text) && parsed.IsEmpty;
+                if (!_suppressOnChanged) _err.SetError(txtHex, bad ? Lang.T("err: invalid hex") : "");
+            };
+            sw.Click += (s, e) =>
+            {
+                using var dlg = new ColorDialog { Color = sw.BackColor };
+                if (dlg.ShowDialog() == DialogResult.OK) txtHex.Text = SettingsManager.Hex(dlg.Color);
+            };
+            sw.Tag = txtHex;
+
+            var row = new TableLayoutPanel { ColumnCount = 2, RowCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink };
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            txtHex.Dock   = DockStyle.Fill;
+            txtHex.Margin = new Padding(0, 0, Touch.Gap, 0);
+            sw.Margin     = Padding.Empty;
+            txtHex.MinimumSize = new Size(140, Touch.Target);
+            row.Controls.Add(txtHex, 0, 0);
+            row.Controls.Add(sw, 1, 0);
+            swatch = sw;
+            return row;
+        }
+
+        // ── Sizing ───────────────────────────────────────────────────────
+
+        /// <summary>
+        /// The client size the content wants, for a given available width, in the pixels of the
+        /// current display scaling. <paramref name="maxWidth"/> defaults to
+        /// <see cref="MaxContentWidth"/> scaled to this form.
+        /// </summary>
+        internal Size MeasureContent(int? maxWidth = null)
+        {
+            if (_sizingRoot == null) return ClientSize;
+            int w = maxWidth ?? (int)Math.Round(MaxContentWidth * DeviceDpi / 96.0);
+
+            // A TableLayoutPanel ignores the content of a percent-sized row when asked for its
+            // preferred size (the body row is percent-sized so it can shrink and scroll), so the
+            // frame is measured explicitly: padding + every stacked child + its margins.
+            var pad   = _sizingRoot.Padding;
+            int avail = Math.Max(0, w - pad.Horizontal);
+            int width = 0, height = pad.Vertical;
+            foreach (Control c in _sizingRoot.Controls)
+            {
+                var p = c.GetPreferredSize(new Size(Math.Max(0, avail - c.Margin.Horizontal), 0));
+                width   = Math.Max(width, p.Width + c.Margin.Horizontal);
+                height += p.Height + c.Margin.Vertical;
+            }
+            return new Size(width + pad.Horizontal, height);
+        }
+
+        /// <summary>Sizes the window to its content, limited to the screen's working area, and centres it on its parent.</summary>
+        protected void FitToContent()
+        {
+            if (_sizingRoot == null) return;
+            var wa   = Screen.FromControl(this).WorkingArea;
+            var nonC = new Size(Width - ClientSize.Width, Height - ClientSize.Height);
+            int maxW = wa.Width  - 10 - nonC.Width;
+            int maxH = wa.Height - 10 - nonC.Height;
+            var pref = MeasureContent(Math.Min((int)Math.Round(MaxContentWidth * DeviceDpi / 96.0), maxW));
+            ClientSize = new Size(Math.Min(pref.Width, maxW), Math.Min(pref.Height, maxH));
+            if (Owner != null || StartPosition == FormStartPosition.CenterParent)
+            {
+                var anchor = Owner != null ? Owner.Bounds : wa;
+                Location = new Point(
+                    Math.Max(wa.Left, Math.Min(anchor.Left + (anchor.Width  - Width)  / 2, wa.Right  - Width)),
+                    Math.Max(wa.Top,  Math.Min(anchor.Top  + (anchor.Height - Height) / 2, wa.Bottom - Height)));
+            }
+        }
+
+        /// <summary>After a content change (language, font): grows the window if the content no longer fits; never shrinks it.</summary>
+        private void GrowToContent()
+        {
+            if (IsDisposed || _sizingRoot == null) return;
+            var wa   = Screen.FromControl(this).WorkingArea;
+            var nonC = new Size(Width - ClientSize.Width, Height - ClientSize.Height);
+            var pref = MeasureContent(ClientSize.Width);
+            int w = Math.Min(Math.Max(ClientSize.Width,  pref.Width),  wa.Width  - 10 - nonC.Width);
+            int h = Math.Min(Math.Max(ClientSize.Height, pref.Height), wa.Height - 10 - nonC.Height);
+            if (w != ClientSize.Width || h != ClientSize.Height) ClientSize = new Size(w, h);
+        }
+
+        /// <summary>Ctrl+Tab / Ctrl+Shift+Tab (and Ctrl+PageDown / PageUp) switch section from anywhere in the dialog.</summary>
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if (Sections != null && Sections.Count > 1)
+            {
+                if (keyData == (Keys.Control | Keys.Tab) || keyData == (Keys.Control | Keys.PageDown))
+                { Sections.SelectNext(+1, focus: false); return true; }
+                if (keyData == (Keys.Control | Keys.Shift | Keys.Tab) || keyData == (Keys.Control | Keys.PageUp))
+                { Sections.SelectNext(-1, focus: false); return true; }
+            }
+            return base.ProcessCmdKey(ref msg, keyData);
         }
     }
 }
