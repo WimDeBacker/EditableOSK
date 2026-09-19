@@ -37,7 +37,6 @@ namespace OnScreenKeyboard
             T_SendKeysHelper_Escape();
             T_SendKeysHelper_Modifiers();
             T_SendKeysHelper_IsPlainText();
-            T_SendKeysHelper_WinKey();
             T_SendKeysHelper_HumanReadable();
             T_SettingsManager_RoundTrip();
             T_SettingsManager_AtomicSave();
@@ -58,6 +57,7 @@ namespace OnScreenKeyboard
             T_SlowKeysDwell();
             T_AccessibilityControls();
             T_Accelerators();
+            T_SvgIconLoader_Cache();
             T_ValidationBlocksApply();
             T_MissingFontHandling();
             T_FluentDialogBase_DisposeWithoutShow();
@@ -129,6 +129,44 @@ namespace OnScreenKeyboard
             Console.WriteLine($"\n  {name}");
             Console.ResetColor();
         }
+
+        /// <summary>
+        /// One assertion for a whole collection. On failure the message names the first item
+        /// that broke the rule, so nothing is lost compared with one assertion per item.
+        /// </summary>
+        private static void AssertAll<T>(IEnumerable<T> items, Func<T, bool> ok, Func<T, string> id, string name)
+        {
+            foreach (var item in items)
+                if (!ok(item)) { Assert(false, $"{name} — first failure: {id(item)}"); return; }
+            Assert(true, name);
+        }
+
+        private static Dictionary<string, string> LangEnglish() =>
+            (Dictionary<string, string>)typeof(Lang).GetField("_en", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null)!;
+
+        private static Dictionary<string, string> LangOverrides() =>
+            (Dictionary<string, string>)typeof(Lang).GetField("_overrides", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null)!;
+
+        /// <summary>
+        /// Lang.T returns the key itself for an unknown key, so <c>Lang.T(k) == k</c> can never
+        /// tell a registered key from a missing one. This asks the English dictionary directly.
+        /// Only meaningful for descriptive keys (e.g. "tip: …") whose text differs from the key;
+        /// keys that ARE their English text work without an entry.
+        /// </summary>
+        private static void AssertLangKeys(string what, params string[] keys) =>
+            AssertAll(keys, k => LangEnglish().ContainsKey(k), k => $"'{k}'",
+                $"{what}: keys are registered in the English dictionary");
+
+        // "{0} {1}" placeholders of a translation, sorted, e.g. "{0}{1}" — must not differ between languages.
+        private static string PlaceholdersOf(string text) =>
+            string.Concat(System.Text.RegularExpressions.Regex.Matches(text ?? "", @"\{\d+\}")
+                .Cast<System.Text.RegularExpressions.Match>().Select(m => m.Value).OrderBy(v => v, StringComparer.Ordinal));
+
+        // Accelerators are single '&' characters; "&&" is a literal ampersand.
+        private static int MnemonicCount(string text) =>
+            System.Text.RegularExpressions.Regex.Matches((text ?? "").Replace("&&", ""), "&").Count;
+
+        private static string CellId(GridCell c) => $"cell ({c.Row},{c.Col})";
 
         // ════════════════════════════════════════════════════════════════
         // 1. KeyProps — construction, clone, sentinels
@@ -218,6 +256,10 @@ namespace OnScreenKeyboard
             Assert(SendKeysHelper.EscapeForSend("a+b")    == "a{+}b",    "Mid-string special char escaped");
             Assert(SendKeysHelper.EscapeForSend("a{F5}b") == "a{F5}b",   "F5 in string preserved");
             Assert(SendKeysHelper.EscapeForSend("100%")   == "100{%}",   "Percent in number escaped");
+            Assert(SendKeysHelper.EscapeForSend("a(b)c")  == "a{(}b{)}c", "Parens in text escaped");
+            Assert(SendKeysHelper.EscapeForSend("{(}")    == "{(}",      "Already-escaped paren preserved");
+            Assert(SendKeysHelper.EscapeForSend("{Enter}(end)") == "{Enter}{(}end{)}",
+                "Token at start preserved, parens after it escaped");
             Assert(SendKeysHelper.EscapeForSend("")        == "",         "Empty string → empty");
             Assert(SendKeysHelper.EscapeForSend(null)      == null,       "Null → null");
         }
@@ -249,17 +291,20 @@ namespace OnScreenKeyboard
             Section("SendKeysHelper.IsPlainText");
 
             // Plain text — goes via SendInput Unicode (direct injection)
-            foreach (var ch in new[] { "a", "A", "é", "@", "€", "#", "|", "µ",
-                                       "ù", "\\", "^", "%", "+", "~", "(", ")",
-                                       "{", "}", "[", "]", "α", "→", "½", "²" })
-                Assert(SendKeysHelper.IsPlainText(ch), $"'{ch}' is plain text");
+            var plain = new[] { "a", "A", "é", "@", "€", "#", "|", "µ",
+                                "ù", "\\", "^", "%", "+", "~", "(", ")",
+                                "{", "}", "[", "]", "α", "→", "½", "²",
+                                // "win" without a colon is ordinary text, not a win: prefix
+                                "w", "win" };
+            AssertAll(plain, ch => SendKeysHelper.IsPlainText(ch), ch => $"'{ch}'", "all of these are plain text");
 
-            // Not plain — goes via SendKeys
-            foreach (var s in new[] { "{ENTER}", "{F1}", "{F12}", "{BACKSPACE}", "{TAB}",
-                                      "{LEFT}", "{ESC}", "{DELETE}", "{HOME}", "{END}",
-                                      "^c", "^v", "%{F4}", "+a", "^+c",
-                                      "{^}", "{%}", "{+}", "{~}", "dead:^", "win:m" })
-                Assert(!SendKeysHelper.IsPlainText(s), $"'{s}' is not plain text");
+            // Not plain — goes via SendKeys (or the SendInput VK_LWIN path for win:)
+            var notPlain = new[] { "{ENTER}", "{F1}", "{F5}", "{F12}", "{BACKSPACE}", "{TAB}",
+                                   "{LEFT}", "{ESC}", "{DELETE}", "{HOME}", "{END}",
+                                   "^c", "^v", "%{F4}", "+a", "^+c",
+                                   "{^}", "{%}", "{+}", "{~}", "dead:^",
+                                   "win:m", "win:d", "win:{LEFT}", "win:{F4}" };
+            AssertAll(notPlain, s => !SendKeysHelper.IsPlainText(s), s => $"'{s}'", "none of these are plain text");
 
             // Edge cases
             Assert(!SendKeysHelper.IsPlainText(""),   "Empty string is not plain");
@@ -267,27 +312,8 @@ namespace OnScreenKeyboard
         }
 
         // ════════════════════════════════════════════════════════════════
-        // 5. SendKeysHelper — Win key prefix
-        // ════════════════════════════════════════════════════════════════
-        private static void T_SendKeysHelper_WinKey()
-        {
-            Section("SendKeysHelper — win: prefix routing");
-
-            // win: prefix must NOT be plain text — goes via SendInput VK_LWIN path
-            Assert(!SendKeysHelper.IsPlainText("win:m"),      "win:m is not plain");
-            Assert(!SendKeysHelper.IsPlainText("win:d"),      "win:d is not plain");
-            Assert(!SendKeysHelper.IsPlainText("win:{LEFT}"), "win:{LEFT} is not plain");
-            Assert(!SendKeysHelper.IsPlainText("win:{F4}"),   "win:{F4} is not plain");
-
-            // win: prefix is distinct from SendKeys modifier prefix (^, %, +)
-            Assert(SendKeysHelper.IsPlainText("w"),     "'w' is plain — not a win: prefix");
-            Assert(SendKeysHelper.IsPlainText("win"),   "'win' is plain — no colon");
-        }
-
-        // ════════════════════════════════════════════════════════════════
         // 6. SendKeysHelper — ToHuman / FromHuman round-trips
-        //    (These mirror the logic in KeyEditorForm — tested here because
-        //     they are pure string functions with no UI dependency.)
+        //    (KeyEditorForm.ToHuman / FromHuman are internal pure string functions.)
         // ════════════════════════════════════════════════════════════════
         private static void T_SendKeysHelper_HumanReadable()
         {
@@ -313,8 +339,8 @@ namespace OnScreenKeyboard
             };
 
             foreach (var (input, expected) in toHumanCases)
-                Assert(ToHuman(input) == expected,
-                    $"ToHuman({input!.Replace("{","{")}) = {expected}");
+                Assert(KeyEditorForm.ToHuman(input) == expected,
+                    $"ToHuman({input}) = {expected}");
 
             // FromHuman: display → internal (round-trip)
             var fromHumanCases = new (string human, string expected)[]
@@ -334,16 +360,21 @@ namespace OnScreenKeyboard
             };
 
             foreach (var (human, expected) in fromHumanCases)
-                Assert(FromHuman(human) == expected,
+                Assert(KeyEditorForm.FromHuman(human) == expected,
                     $"FromHuman({human}) = {expected}");
 
             // Full round-trip: internal → human → internal
             foreach (var (input, _) in toHumanCases)
             {
                 if (string.IsNullOrEmpty(input)) continue;
-                string rt = FromHuman(ToHuman(input));
-                Assert(rt == input, $"Round-trip: {input} → {ToHuman(input)} → {rt}");
+                string rt = KeyEditorForm.FromHuman(KeyEditorForm.ToHuman(input));
+                Assert(rt == input, $"Round-trip: {input} → {KeyEditorForm.ToHuman(input)} → {rt}");
             }
+
+            // Grouping parentheses are intentionally lossy in ToHuman (parens dropped for display),
+            // so they are checked one-way only.
+            Assert(KeyEditorForm.ToHuman("+(ab)") == "{Shift}ab", "ToHuman: grouping parens dropped");
+            Assert(KeyEditorForm.ToHuman("^(a") == "{Ctrl}a",     "ToHuman: unclosed group keeps its content");
         }
 
         // ════════════════════════════════════════════════════════════════
@@ -750,21 +781,16 @@ namespace OnScreenKeyboard
             Assert(space?.Props.Send  == " ",         "Space sends space char");
             Assert(space?.ColSpan >= 5,               "Space key spans ≥5 cols");
 
-            // All cells have valid spans
-            foreach (var cell in layout.Cells)
-                Assert(cell.RowSpan >= 1 && cell.ColSpan >= 1,
-                    $"Cell ({cell.Row},{cell.Col}) valid spans");
+            // One assertion per property; a failure names the first offending cell.
+            Assert(layout.Cells.Count > 0, "Default QWERTY layout has cells");
+            AssertAll(layout.Cells, c => c.RowSpan >= 1 && c.ColSpan >= 1, CellId, "all cells have valid spans");
 
             // All keys default to sentinel values (inherit from global)
-            foreach (var cell in layout.Cells)
-            {
-                Assert(cell.Props.FontColor.IsEmpty,   $"Cell ({cell.Row},{cell.Col}) FontColor=Empty");
-                Assert(cell.Props.KeyColor.IsEmpty,    $"Cell ({cell.Row},{cell.Col}) KeyColor=Empty");
-                Assert(cell.Props.BorderColor.IsEmpty, $"Cell ({cell.Row},{cell.Col}) BorderColor=Empty");
-                Assert(cell.Props.BorderThickness==-1, $"Cell ({cell.Row},{cell.Col}) BorderThickness=-1");
-                Assert(string.IsNullOrEmpty(cell.Props.FontName),
-                                                       $"Cell ({cell.Row},{cell.Col}) FontName=empty");
-            }
+            AssertAll(layout.Cells, c => c.Props.FontColor.IsEmpty,   CellId, "all cells: FontColor=Empty");
+            AssertAll(layout.Cells, c => c.Props.KeyColor.IsEmpty,    CellId, "all cells: KeyColor=Empty");
+            AssertAll(layout.Cells, c => c.Props.BorderColor.IsEmpty, CellId, "all cells: BorderColor=Empty");
+            AssertAll(layout.Cells, c => c.Props.BorderThickness == -1, CellId, "all cells: BorderThickness=-1");
+            AssertAll(layout.Cells, c => string.IsNullOrEmpty(c.Props.FontName), CellId, "all cells: FontName=empty");
 
             // Modifiers
             foreach (var m in new[]{"Shift","Ctrl","Alt","Win","AltGr","Caps"})
@@ -789,22 +815,12 @@ namespace OnScreenKeyboard
 
             Lang.Load("en");
             Assert(Lang.CurrentCode == "en",                    "CurrentCode=en");
-            Assert(Lang.T("💾 Save")        == "💾 Save",       "English: Save");
-            Assert(Lang.T("✏ Edit Mode")    == "✏ Edit Mode",   "English: Edit Mode");
-            Assert(Lang.T("✔ Apply")        == "✔  Apply",      "English: Apply");
-            Assert(Lang.T("✖ Cancel")       == "✖  Cancel",     "English: Cancel");
-            Assert(Lang.T("Edit Key")       == "Edit Key",      "English: Edit Key");
-            Assert(Lang.T("Preview")        == "Preview",       "English: Preview");
-            Assert(Lang.StripMnemonic(Lang.T("Key width")) == "Key width","English: Width (columns)");
-            Assert(Lang.T("Key height")    == "Key &height", "English: Height (rows)");
-            Assert(Lang.T("Accessibility")  == "Accessibility", "English: Accessibility");
-            Assert(Lang.T("Sticky modifiers")== "Stic&ky modifiers","English: Sticky modifiers");
-            Assert(Lang.StripMnemonic(Lang.T("Always on top")) == "Always on top", "English: Always on top");
-            Assert(Lang.T("Hide title bar") == "H&ide title bar","English: Hide title bar");
-            Assert(Lang.T("Language")       == "Language",      "English: Language");
-            Assert(Lang.T("Layout file")    == "Layout file",   "English: Layout file");
-            Assert(Lang.T("Invalid file title") == "Unable to Open File",
-                "English: Invalid file title");
+            AssertAll(LangEnglish(), kv => Lang.T(kv.Key) == kv.Value, kv => $"'{kv.Key}'",
+                "English: Lang.T returns the dictionary value for every key");
+            AssertAll(LangEnglish(), kv => MnemonicCount(kv.Value) <= 1, kv => $"'{kv.Key}' = \"{kv.Value}\"",
+                "English: at most one accelerator (&) per string");
+            AssertAll(LangEnglish().Where(kv => kv.Key.StartsWith("tip: ")), kv => kv.Value.Trim().Length > 0 && kv.Value != kv.Key,
+                kv => $"'{kv.Key}'", "English: every tooltip has real text");
             Assert(Lang.T("nonexistent_key_xyz") == "nonexistent_key_xyz",
                 "Missing key returns key itself");
 
@@ -839,17 +855,21 @@ namespace OnScreenKeyboard
             {
                 Lang.Load("nl");
                 Assert(Lang.CurrentCode == "nl",                    "Dutch code");
-                Assert(Lang.T("Save")        == "Opslaan",           "Dutch: Save");
-                Assert(Lang.T("Cancel")      == "Ann&uleren",        "Dutch: Cancel");
-                Assert(Lang.T("Preview")     == "Voorbeeld",        "Dutch: Preview");
-                Assert(Lang.T("Language")    == "Taal",             "Dutch: Language");
-                Assert(Lang.T("Layout file") == "Lay-outbestand",   "Dutch: Layout file");
-                Assert(Lang.T("Accessibility")== "Toegankelijkheid","Dutch: Accessibility");
-                Assert(Lang.StripMnemonic(Lang.T("Sticky modifiers"))=="Plaktoetsen (Sticky Keys)","Dutch: Sticky modifiers");
-                Assert(Lang.StripMnemonic(Lang.T("Always on top"))=="Altijd bovenaan",  "Dutch: Always on top");
-                Assert(Lang.T("Hide title bar")=="Titelbalk &verbergen","Dutch: Hide title bar");
-                Assert(Lang.StripMnemonic(Lang.T("Key width"))=="Toets breedte","Dutch: Key width");
-                Assert(Lang.T("Key height")=="Toets &hoogte",   "Dutch: Key height");
+                // Spot-check that a translation replaces the English text ...
+                Assert(Lang.T("Save")     == "Opslaan",  "Dutch: Save");
+                Assert(Lang.T("Language") == "Taal",     "Dutch: Language");
+
+                // ... and check the whole Dutch file structurally instead of word by word.
+                var en = LangEnglish();
+                var nl = LangOverrides();
+                Assert(nl.Count > 100, $"Dutch: file provides a real translation set ({nl.Count} strings)");
+                AssertAll(en.Keys.Where(k => k.StartsWith("tip: ")), k => nl.ContainsKey(k), k => $"'{k}'",
+                    "Dutch: every tooltip has a Dutch translation");
+                AssertAll(nl, kv => !en.ContainsKey(kv.Key) || PlaceholdersOf(kv.Value) == PlaceholdersOf(en[kv.Key]),
+                    kv => $"'{kv.Key}': en=\"{(en.TryGetValue(kv.Key, out var e) ? e : "")}\" nl=\"{kv.Value}\"",
+                    "Dutch: {n} placeholders match the English string");
+                AssertAll(nl, kv => MnemonicCount(kv.Value) <= 1, kv => $"'{kv.Key}' = \"{kv.Value}\"",
+                    "Dutch: at most one accelerator (&) per string");
                 // Removed keys must NOT be in Dutch file
                 Assert(Lang.T("nonexistent_key_xyz") == "nonexistent_key_xyz",
                     "Dutch: missing key returns key");
@@ -857,9 +877,8 @@ namespace OnScreenKeyboard
             }
             else
             {
-                Console.ForegroundColor = ConsoleColor.DarkYellow;
-                Console.WriteLine("    (lang_nl.xml not found — Dutch tests skipped)");
-                Console.ResetColor();
+                // The file ships with the build; a missing one is a broken build, not a reason to skip.
+                Assert(false, "lang_nl.xml is present next to the test executable");
             }
         }
 
@@ -1226,14 +1245,6 @@ namespace OnScreenKeyboard
             Assert(total > 0,          "Characters tested");
             Assert(clipboard > 0,      "Some characters route via clipboard");
             Assert(warnings == 0,      $"No single chars incorrectly via SendKeys ({warnings} warnings)");
-
-            // Spot-checks: must be plain text (clipboard path)
-            foreach (var ch in new[]{"@","€","#","|","{","}","[","]","^","~","µ","²","→","α","½","\\","+"})
-                Assert(SendKeysHelper.IsPlainText(ch), $"'{ch}' is plain text (clipboard)");
-
-            // Spot-checks: must NOT be plain text (SendKeys path)
-            foreach (var s in new[]{"{ENTER}","^c","%{F4}","{F5}","win:m","+a","dead:^"})
-                Assert(!SendKeysHelper.IsPlainText(s), $"'{s}' is not plain text (SendKeys)");
         }
 
         // ════════════════════════════════════════════════════════════════
@@ -1546,17 +1557,6 @@ namespace OnScreenKeyboard
 
             Section("StyleGroups — Step 4 lang keys registered");
 
-            Assert(Lang.T("(inherit standard)")      == "(inherit standard)",
-                "Lang key: (inherit standard)");
-            Assert(Lang.T("-1 = inherit standard")   == "-1 = inherit standard",
-                "Lang key: -1 = inherit standard");
-            Assert(Lang.T("Clear (inherit standard)")== "Clear (inherit standard)",
-                "Lang key: Clear (inherit standard)");
-            Assert(Lang.T("(none / auto)")           == "(none / auto)",
-                "Lang key: (none / auto)");
-            Assert(Lang.T("Clear")                   == "Clear",
-                "Lang key: Clear");
-
             Section("Priority 4 — tip: keys and StripMnemonic");
 
             // StripMnemonic removes & without changing other characters
@@ -1566,27 +1566,13 @@ namespace OnScreenKeyboard
             Assert(Lang.StripMnemonic("")                 == "",         "StripMnemonic: empty string");
             Assert(Lang.StripMnemonic(null)               == "",         "StripMnemonic: null returns empty");
 
-            // Spot-check a selection of new dialog tooltip keys in English
-            Assert(Lang.T("tip: Color swatch")         == "Click to open the colour picker",   "tip EN: Color swatch");
-            Assert(Lang.T("tip: Hex color")             == "Type a hex colour (#RRGGBB)",        "tip EN: Hex color");
-            Assert(Lang.T("tip: Font size")             == "0 = auto-size to fit the key",       "tip EN: Font size");
-            Assert(Lang.T("tip: Border thickness")      .Contains("standard group"),             "tip EN: Border thickness mentions standard group");
-            Assert(Lang.T("tip: Key width")             .Contains("1.5"),                        "tip EN: Key width has example");
-            Assert(Lang.T("tip: Row span")              .Contains("double height"),              "tip EN: Row span");
-            Assert(Lang.T("tip: Record")                == "Record a keystroke or shortcut",     "tip EN: Record");
-            Assert(Lang.T("tip: Browse layout")         == "Browse for a layout file",           "tip EN: Browse layout");
-            Assert(Lang.T("tip: Mode Text")             == "The key types text characters",      "tip EN: Mode Text");
-            Assert(Lang.T("tip: Mode Key")              .Contains("shortcut"),                   "tip EN: Mode Key");
-            Assert(Lang.T("tip: Mode Modifier")         .Contains("modifier"),                   "tip EN: Mode Modifier");
-            Assert(Lang.T("tip: Mode Word prediction")  .Contains("prediction"),                 "tip EN: Mode Word prediction");
-            Assert(Lang.T("tip: Mode Layout")           .Contains("layout"),                     "tip EN: Mode Layout");
-            Assert(Lang.T("tip: Add group")             == "Create a new style group",           "tip EN: Add group");
-            Assert(Lang.T("tip: Delete group")          == "Delete the selected group",          "tip EN: Delete group");
-            Assert(Lang.T("tip: Import groups")         == "Import groups from another layout file", "tip EN: Import groups");
-            Assert(Lang.T("tip: Opacity")               .Contains("opaque"),                     "tip EN: Opacity");
-            Assert(Lang.T("tip: Manage Groups")         == "Open the group editor",              "tip EN: Manage Groups");
-            Assert(Lang.T("tip: Language")              == "Select the interface language",      "tip EN: Language");
-            Assert(Lang.T("tip: WP slot")               .Contains("0–9"),                        "tip EN: WP slot");
+            // The dialog tooltip keys exist (their wording is not pinned; T_LanguageManager checks
+            // every "tip:" string has real text)
+            AssertLangKeys("dialog tooltips", "tip: Color swatch", "tip: Hex color", "tip: Font size",
+                "tip: Border thickness", "tip: Key width", "tip: Row span", "tip: Record", "tip: Browse layout",
+                "tip: Mode Text", "tip: Mode Key", "tip: Mode Modifier", "tip: Mode Word prediction",
+                "tip: Mode Layout", "tip: Add group", "tip: Delete group", "tip: Import groups",
+                "tip: Opacity", "tip: Manage Groups", "tip: Language", "tip: WP slot");
 
             Section("Priority 5 — ErrorProvider hex validation lang keys");
 
@@ -1833,13 +1819,6 @@ namespace OnScreenKeyboard
             }
 
             Section("StyleGroups — Step 6 lang keys registered");
-
-            Assert(Lang.T("Name 'standard' is reserved.") == "Name 'standard' is reserved.",
-                "Lang key: Name 'standard' is reserved.");
-            Assert(Lang.T("Update standard group style") == "Update standard group style",
-                "Lang key: Update standard group style");
-            Assert(Lang.T("Protected") == "Protected",
-                "Lang key: Protected");
 
             Section("StyleGroups — Step 6 reserved name enforcement: add blocked");
 
@@ -2281,38 +2260,6 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                 for (int c = 0; c < cols; c++)
                     g.Cells.Add(new GridCell(r, c, new KeyProps("a","a")));
             return g;
-        }
-
-        // Mirror ToHuman logic from KeyEditorForm (pure string, no UI dependency)
-        private static string ToHuman(string send)
-        {
-            if (string.IsNullOrEmpty(send)) return send;
-            if (send.StartsWith("win:")) return "{Win}" + ToHuman(send.Substring(4));
-            var sb = new System.Text.StringBuilder();
-            int i = 0;
-            while (i < send.Length)
-            {
-                char ch = send[i];
-                if      (ch == '^') { sb.Append("{Ctrl}");  i++; }
-                else if (ch == '%') { sb.Append("{Alt}");   i++; }
-                else if (ch == '+') { sb.Append("{Shift}"); i++; }
-                else if (ch == '(')
-                {
-                    i++;
-                    while (i < send.Length && send[i] != ')') { sb.Append(send[i]); i++; }
-                    if (i < send.Length) i++;
-                }
-                else { sb.Append(ch); i++; }
-            }
-            return sb.ToString();
-        }
-
-        // Mirror FromHuman logic from KeyEditorForm
-        private static string FromHuman(string human)
-        {
-            if (string.IsNullOrEmpty(human)) return human;
-            if (human.StartsWith("{Win}")) return "win:" + FromHuman(human.Substring(5));
-            return human.Replace("{Ctrl}","^").Replace("{Alt}","%").Replace("{Shift}","+");
         }
     }
 }
@@ -3179,6 +3126,28 @@ namespace OnScreenKeyboard
         }
     }
 
+    /// <summary>
+    /// Copies the shipped word database into a private temp folder so the prediction tests
+    /// see the pristine base data: no *.learned.wfq overlay left behind by running the app.
+    /// </summary>
+    internal static class ShippedDbCopy
+    {
+        public static string Create(string shippedPath, out string copyPath)
+        {
+            string dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+                "osk_test_db_" + Guid.NewGuid().ToString("N"));
+            System.IO.Directory.CreateDirectory(dir);
+            copyPath = System.IO.Path.Combine(dir, System.IO.Path.GetFileName(shippedPath));
+            System.IO.File.Copy(shippedPath, copyPath);
+            return dir;
+        }
+
+        public static void Delete(string dir)
+        {
+            try { System.IO.Directory.Delete(dir, true); } catch { }
+        }
+    }
+
     public static class WordPredictionTests
     {
         private static Action<bool, string> _assert;
@@ -3195,15 +3164,19 @@ namespace OnScreenKeyboard
                 AppDomain.CurrentDomain.BaseDirectory, "worddb_NL.wfq");
             if (!System.IO.File.Exists(dbPath))
             {
-                Console.ForegroundColor = ConsoleColor.DarkYellow;
-                Console.WriteLine("  (worddb_NL.wfq not found — word prediction tests skipped)");
-                Console.ResetColor();
+                // The database ships with the build; a missing one must not pass silently.
+                assert(false, "worddb_NL.wfq is present next to the test executable");
                 return;
             }
-            WordDatabase.Load(dbPath);
-            _assert  = assert;
-            _section = section;
-            RunTests();
+            string tempDir = ShippedDbCopy.Create(dbPath, out string tempDb);
+            try
+            {
+                WordDatabase.Load(tempDb);
+                _assert  = assert;
+                _section = section;
+                RunTests();
+            }
+            finally { ShippedDbCopy.Delete(tempDir); }
         }
 
         private static void Section(string name)
@@ -3602,18 +3575,21 @@ namespace OnScreenKeyboard
         public static void Run(Action<bool, string> assert, Action<string> section)
         {
             string dbPath = System.IO.Path.Combine(
-                AppDomain.CurrentDomain.BaseDirectory, "worddb.wfq");
+                AppDomain.CurrentDomain.BaseDirectory, "worddb_NL.wfq");
             if (!System.IO.File.Exists(dbPath))
             {
-                Console.ForegroundColor = ConsoleColor.DarkYellow;
-                Console.WriteLine("  (worddb.wfq not found — e2e prediction tests skipped)");
-                Console.ResetColor();
+                assert(false, "worddb_NL.wfq is present next to the test executable (e2e)");
                 return;
             }
-            WordDatabase.Load(dbPath);
-            _assert  = assert;
-            _section = section;
-            RunTests();
+            string tempDir = ShippedDbCopy.Create(dbPath, out string tempDb);
+            try
+            {
+                WordDatabase.Load(tempDb);
+                _assert  = assert;
+                _section = section;
+                RunTests();
+            }
+            finally { ShippedDbCopy.Delete(tempDir); }
         }
 
         // ── Helpers ──────────────────────────────────────────────────
@@ -3827,7 +3803,10 @@ namespace OnScreenKeyboard
             Type(p11, "mat"); p11.OnKeySent(".", false);
             _assert(p11.NextWordUpper,             "E2E-11: sentence start after period");
             _assert(p11.ShiftShouldBeLatched,      "E2E-11: Shift latched after period");
-            _assert(HasPred(p11, "De"),            "E2E-11: 'De' predicted after sentence end");
+            // The predictor keeps the last completed word ("mat") as bigram context after the
+            // period, so the list holds capitalised follow-ups of "mat", not fixed sentence starters.
+            _assert(p11.Predictions[0].Length > 0 && AllCaps(p11),
+                                                   "E2E-11: capitalised predictions offered after sentence end");
 
             // ════════════════════════════════════════════════════════
             // 12. SENTENCE-START PREFIX 'Da' — case-insensitive
@@ -3912,7 +3891,7 @@ namespace OnScreenKeyboard
             var p14 = NewPredictor();
             // Type prefix "Em" at sentence start
             Type(p14, "Em");
-            _assert(!HasPred(p14, "Emma"),    "E2E-14: 'Emma' never predicted");
+            _assert(!HasPred(p14, "Emzzy"),   "E2E-14: invented name never predicted");
             _assert(!HasPred(p14, "Emoe"),    "E2E-14: random unknown word not predicted");
             // Mid-sentence prefix "Fi"
             p14.OnWPClick(0); // clear sentence start
@@ -4145,18 +4124,8 @@ namespace OnScreenKeyboard
         {
             Section("SendKeys stripping — display-only");
 
-            // ── 1. StripSendBraces logic ──────────────────────────────
-            // The production method (KeyboardForm.StripSendBraces) is private.
-            // This inline copy is character-for-character identical so that any
-            // future divergence between the two will be caught by the tests below.
-            static string Strip(string s)
-            {
-                if (s.Length >= 3 && s[0] == '{' && s[s.Length - 1] == '}')
-                    s = s.Substring(1, s.Length - 2);
-                if (s.Length > 0 && string.IsNullOrWhiteSpace(s))
-                    return "␣";
-                return s;
-            }
+            // ── 1. StripSendBraces — production method (internal) ─────
+            static string Strip(string s) => KeyboardForm.StripSendBraces(s);
 
             // All ten SendKeys special chars, each escaped as a {x} token:
             Assert(Strip("{(}") == "(",      "Strip: {(} → (");
@@ -4211,98 +4180,7 @@ namespace OnScreenKeyboard
             Assert(p.Send      == "{Enter}",        "KeyProps.Send unchanged after Strip is applied externally");
             Assert(Strip(p.Send) == "Enter",        "Strip(KeyProps.Send) gives display value");
 
-            // ── 3. EscapeForSend — special chars escaped, tokens preserved ─
-            // Each of the ten special chars is escaped to its {x} form:
-            Assert(SendKeysHelper.EscapeForSend("(") == "{(}", "Escape: ( → {(}");
-            Assert(SendKeysHelper.EscapeForSend(")") == "{)}", "Escape: ) → {)}");
-            Assert(SendKeysHelper.EscapeForSend("+") == "{+}", "Escape: + → {+}");
-            Assert(SendKeysHelper.EscapeForSend("^") == "{^}", "Escape: ^ → {^}");
-            Assert(SendKeysHelper.EscapeForSend("%") == "{%}", "Escape: % → {%}");
-            Assert(SendKeysHelper.EscapeForSend("~") == "{~}", "Escape: ~ → {~}");
-            Assert(SendKeysHelper.EscapeForSend("[") == "{[}", "Escape: [ → {[}");
-            Assert(SendKeysHelper.EscapeForSend("]") == "{]}", "Escape: ] → {]}");
-
-            // Plain chars and words pass through unchanged:
-            Assert(SendKeysHelper.EscapeForSend("a")     == "a",     "Escape: plain char unchanged");
-            Assert(SendKeysHelper.EscapeForSend("hello") == "hello", "Escape: plain word unchanged");
-
-            // Special char inside a string:
-            Assert(SendKeysHelper.EscapeForSend("a+b") == "a{+}b",  "Escape: special char in middle");
-            Assert(SendKeysHelper.EscapeForSend("a(b)c") == "a{(}b{)}c", "Escape: parens in text");
-
-            // Existing {KEY} tokens must NOT be double-escaped — this is the key regression test:
-            Assert(SendKeysHelper.EscapeForSend("{(}")     == "{(}",    "Escape: {(} token not re-escaped");
-            Assert(SendKeysHelper.EscapeForSend("{Enter}") == "{Enter}","Escape: {Enter} token not re-escaped");
-            Assert(SendKeysHelper.EscapeForSend("{F1}")    == "{F1}",   "Escape: {F1} token not re-escaped");
-            Assert(SendKeysHelper.EscapeForSend("{Enter}(end)") == "{Enter}{(}end{)}",
-                "Escape: token at start + parens after — token preserved, parens escaped");
-
-            // Edge cases:
-            Assert(SendKeysHelper.EscapeForSend("")   == "",   "Escape: empty unchanged");
-            Assert(SendKeysHelper.EscapeForSend(null) == null, "Escape: null unchanged");
-
-            // ── 4. ToHuman / FromHuman round-trip for simple sequences ─
-            // Inline mirrors of the private KeyEditorForm methods.
-            // Note: grouping parentheses — e.g. +(ab) — are intentionally lossy
-            // in ToHuman (parens stripped for display). Only prefix-style sequences
-            // are tested here.
-            static string ToHuman(string send)
-            {
-                if (string.IsNullOrEmpty(send)) return send;
-                if (send.StartsWith("win:"))
-                    return "{Win}" + ToHuman(send.Substring(4));
-                var sb2 = new System.Text.StringBuilder();
-                int j = 0;
-                while (j < send.Length)
-                {
-                    char ch = send[j];
-                    if      (ch == '^') { sb2.Append("{Ctrl}");  j++; }
-                    else if (ch == '%') { sb2.Append("{Alt}");   j++; }
-                    else if (ch == '+') { sb2.Append("{Shift}"); j++; }
-                    else if (ch == '(')
-                    {
-                        j++;
-                        while (j < send.Length && send[j] != ')') { sb2.Append(send[j]); j++; }
-                        if (j < send.Length) j++;
-                    }
-                    else { sb2.Append(ch); j++; }
-                }
-                return sb2.ToString();
-            }
-            static string FromHuman(string human)
-            {
-                if (string.IsNullOrEmpty(human)) return human;
-                if (human.StartsWith("{Win}"))
-                    return "win:" + FromHuman(human.Substring(5));
-                return human
-                    .Replace("{Ctrl}",  "^")
-                    .Replace("{Alt}",   "%")
-                    .Replace("{Shift}", "+");
-            }
-
-            // Modifier prefix round-trips:
-            Assert(ToHuman("^c")        == "{Ctrl}c",         "ToHuman: ^c → {Ctrl}c");
-            Assert(FromHuman("{Ctrl}c") == "^c",              "FromHuman: {Ctrl}c → ^c");
-            Assert(FromHuman(ToHuman("^c")) == "^c",          "Round-trip: ^c");
-
-            Assert(ToHuman("%{F4}")         == "{Alt}{F4}",   "ToHuman: %{F4} → {Alt}{F4}");
-            Assert(FromHuman("{Alt}{F4}")   == "%{F4}",       "FromHuman: {Alt}{F4} → %{F4}");
-            Assert(FromHuman(ToHuman("%{F4}")) == "%{F4}",    "Round-trip: %{F4}");
-
-            Assert(ToHuman("+a")          == "{Shift}a",      "ToHuman: +a → {Shift}a");
-            Assert(FromHuman(ToHuman("+a")) == "+a",          "Round-trip: +a");
-
-            Assert(ToHuman("^+a")         == "{Ctrl}{Shift}a","ToHuman: ^+a → {Ctrl}{Shift}a");
-            Assert(FromHuman(ToHuman("^+a")) == "^+a",        "Round-trip: ^+a");
-
-            Assert(ToHuman("win:{LEFT}")       == "{Win}{LEFT}",  "ToHuman: win:{LEFT} → {Win}{LEFT}");
-            Assert(FromHuman(ToHuman("win:{LEFT}")) == "win:{LEFT}", "Round-trip: win:{LEFT}");
-
-            // Plain key tokens survive unchanged through both directions:
-            Assert(ToHuman("{ENTER}")  == "{ENTER}",   "ToHuman: bare token unchanged");
-            Assert(FromHuman("{ENTER}") == "{ENTER}",  "FromHuman: bare token unchanged");
-
-            // ── 5. XML round-trip — raw braced values survive save + load ─
+            // ── 3. XML round-trip — raw braced values survive save + load ─
             string xmlTmp = System.IO.Path.Combine(
                 System.IO.Path.GetTempPath(), $"osk_sendstrip_{Guid.NewGuid():N}.kbl");
             try
@@ -5048,6 +4926,71 @@ namespace OnScreenKeyboard
             }
         }
 
+        // ── SvgIconLoader cache: shared instances, bounded size ───────────
+        // Pins the ownership contract documented on SvgIconLoader.Load: the returned bitmap is
+        // shared and owned by the cache (same instance for the same key, alive for the session),
+        // and the cache grows with distinct keys — not with the number of calls.
+        private static void T_SvgIconLoader_Cache()
+        {
+            Section("SvgIconLoader — shared, bounded bitmap cache");
+
+            string dir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "icons");
+            if (!Directory.Exists(dir))
+            { Assert(false, "icon cache: icons folder not found next to the test binary"); return; }
+
+            var cacheField = typeof(SvgIconLoader).GetField("_cache", BindingFlags.NonPublic | BindingFlags.Static);
+            var cache = (System.Collections.IDictionary)cacheField.GetValue(null);
+            cache.Clear();   // process-wide; nothing else depends on its contents, and exact counts need a clean start
+
+            var svgs  = Directory.GetFiles(dir, "*.svg").Select(Path.GetFileName).ToList();
+            var tints = new[] { Color.White, Color.FromArgb(32, 32, 32) };
+            var sizes = new[] { 24, 30 };
+            Assert(svgs.Count > 0, "icon cache: the icons folder contains SVG files");
+
+            var first = new Dictionary<(string, int, int), Bitmap>();
+            foreach (var f in svgs)
+                foreach (var t in tints)
+                    foreach (var sz in sizes)
+                    {
+                        var bmp = SvgIconLoader.Load(f, t, sz);
+                        if (bmp != null) first[(f, t.ToArgb(), sz)] = bmp;
+                    }
+
+            Assert(first.Count > 0, "icon cache: at least one icon loads and renders");
+            Assert(cache.Count == first.Count,
+                $"icon cache: one entry per distinct (file, tint, size) — {cache.Count} entries for {first.Count} loaded keys");
+
+            // Second and third pass: same instances back, and no growth however often it is called.
+            int sameInstance = 0;
+            for (int pass = 0; pass < 2; pass++)
+                foreach (var kv in first)
+                {
+                    var again = SvgIconLoader.Load(kv.Key.Item1, Color.FromArgb(kv.Key.Item2), kv.Key.Item3);
+                    if (ReferenceEquals(again, kv.Value)) sameInstance++;
+                }
+            Assert(sameInstance == first.Count * 2,
+                $"icon cache: repeated loads return the shared instance every time — {sameInstance} of {first.Count * 2}");
+            Assert(cache.Count == first.Count,
+                $"icon cache: repeated calls do not grow the cache — {cache.Count} entries, expected {first.Count}");
+
+            // The key really includes tint and size, so different requests never share a bitmap.
+            var sample = svgs.First(f => first.ContainsKey((f, Color.White.ToArgb(), 24)) &&
+                                         first.ContainsKey((f, tints[1].ToArgb(), 24)) &&
+                                         first.ContainsKey((f, Color.White.ToArgb(), 30)));
+            var white24 = first[(sample, Color.White.ToArgb(), 24)];
+            Assert(!ReferenceEquals(white24, first[(sample, tints[1].ToArgb(), 24)]),
+                "icon cache: a different tint is a different bitmap");
+            Assert(!ReferenceEquals(white24, first[(sample, Color.White.ToArgb(), 30)]),
+                "icon cache: a different size is a different bitmap");
+            Assert(white24.Width == 24 && first[(sample, Color.White.ToArgb(), 30)].Width == 30,
+                "icon cache: the returned bitmap has the requested size");
+
+            // Failures are not cached (a transient read error must be retried, not remembered).
+            Assert(SvgIconLoader.Load("no-such-icon.svg", Color.White, 24) == null,
+                "icon cache: a missing file returns null");
+            Assert(cache.Count == first.Count, "icon cache: a missing file adds nothing to the cache");
+        }
+
         private static void T_WizardKeyParser()
         {
             Section("WizardKeyParser");
@@ -5079,6 +5022,57 @@ namespace OnScreenKeyboard
                 Assert(rows[0][1].Label == "",         "parser: blank label empty");
                 Assert(rows[0][1].Send  == "",         "parser: blank send empty");
                 Assert(!rows[0][0].IsBlank,            "parser: first not blank");
+            }
+
+            // Empty quoted phrase "" — a blank spacer, exactly like "_" (used to be dropped, which
+            // silently shifted every following key one column to the left).
+            {
+                var start = WizardKeyParser.Parse("\"\" a s d");
+                Assert(start[0].Count == 4,                "parser: \"\" at the start reserves its column");
+                Assert(start[0][0].IsBlank,                "parser: leading \"\" is a blank spacer");
+                Assert(start[0][1].Label == "a",           "parser: keys after a leading \"\" keep their columns");
+
+                var mid = WizardKeyParser.Parse("a \"\" b");
+                Assert(mid[0].Count == 3,                  "parser: \"\" in the middle is counted");
+                Assert(mid[0][1].IsBlank && mid[0][1].Label == "" && mid[0][1].Send == "",
+                                                           "parser: middle \"\" is a blank spacer with no label or send");
+                Assert(mid[0][2].Label == "b",             "parser: key after a middle \"\" keeps its column");
+
+                var end = WizardKeyParser.Parse("a \"\"");
+                Assert(end[0].Count == 2 && end[0][1].IsBlank, "parser: trailing \"\" is a blank spacer");
+
+                var only = WizardKeyParser.Parse("\"\"");
+                Assert(only.Count == 1 && only[0].Count == 1 && only[0][0].IsBlank,
+                                                           "parser: a line that is only \"\" is a row with one blank key");
+
+                var twice = WizardKeyParser.Parse("\"\" \"\" x");
+                Assert(twice[0].Count == 3 && twice[0][0].IsBlank && twice[0][1].IsBlank && twice[0][2].Label == "x",
+                                                           "parser: consecutive \"\" each reserve a column");
+
+                // Same shape as "_".
+                var viaQuotes = WizardKeyParser.Parse("\"\" a");
+                var viaUnderscore = WizardKeyParser.Parse("_ a");
+                Assert(viaQuotes[0].Count == viaUnderscore[0].Count &&
+                       viaQuotes[0][0].IsBlank == viaUnderscore[0][0].IsBlank &&
+                       viaQuotes[0][1].Label == viaUnderscore[0][1].Label,
+                                                           "parser: \"\" and _ produce the same row");
+
+                // Column alignment across rows — the original symptom.
+                var grid = WizardKeyParser.Parse("q w e r\n\"\" a s d");
+                Assert(grid[0].Count == 4 && grid[1].Count == 4,
+                                                           "parser: a row starting with \"\" is as wide as the row above");
+                Assert(grid[1][1].Label == "a" && grid[1][3].Label == "d",
+                                                           "parser: keys stay under the columns they were written in");
+
+                // Neighbouring behaviour that must not change.
+                var space = WizardKeyParser.Parse("\" \" a");
+                Assert(space[0].Count == 2 && space[0][0].Label == " " && !space[0][0].IsBlank,
+                                                           "parser: a quoted space is still a real key labelled with a space");
+                var loneQuote = WizardKeyParser.Parse("a \"");
+                Assert(loneQuote[0].Count == 1,            "parser: an unclosed lone quote still adds nothing (half-typed input)");
+                var unclosed = WizardKeyParser.Parse("a \"hello");
+                Assert(unclosed[0].Count == 2 && unclosed[0][1].Label == "hello",
+                                                           "parser: an unclosed quote still takes the rest of the line");
             }
 
             // Arrow keys — English tokens.

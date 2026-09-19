@@ -3244,7 +3244,7 @@ namespace OnScreenKeyboard
         /// Examples: <c>{(}</c> → <c>(</c>, <c>{Enter}</c> → <c>Enter</c>.
         /// Strings without braces are returned unchanged.
         /// </summary>
-        private static string StripSendBraces(string s)
+        internal static string StripSendBraces(string s)
         {
             if (s.Length >= 3 && s[0] == '{' && s[s.Length - 1] == '}')
                 s = s.Substring(1, s.Length - 2);

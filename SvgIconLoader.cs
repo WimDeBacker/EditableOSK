@@ -32,6 +32,17 @@ namespace OnScreenKeyboard
     internal static class SvgIconLoader
     {
         // Cache key: filename + tint ARGB + pixel size → rendered Bitmap.
+        //
+        // Never evicts, deliberately: the key space is small and fixed. The icons folder holds
+        // a few dozen files; the app asks for them at two sizes (24 px toolbars, 30 px gear)
+        // and in only a handful of tints (white on the dark toolbar, the theme's primary text
+        // colour on the light one — which can differ under high contrast). That is on the order
+        // of 100–150 bitmaps of ~2 KB each, well under half a megabyte, and switching themes
+        // re-uses existing entries rather than adding new ones once each tint has been seen.
+        // Eviction would be actively harmful: buttons keep drawing the bitmap they were given,
+        // and drawing a disposed bitmap throws (see the ownership contract on Load).
+        //
+        // Not thread-safe: every caller is on the UI thread.
         private static readonly Dictionary<(string, int, int), Bitmap> _cache = new();
 
         // Absolute path to the icons directory (next to the executable).
@@ -55,6 +66,25 @@ namespace OnScreenKeyboard
         /// A cached <see cref="Bitmap"/>, or <c>null</c> if the file is missing
         /// or the SVG cannot be parsed.
         /// </returns>
+        /// <remarks>
+        /// <para>
+        /// <b>Ownership: the returned bitmap is shared and owned by this cache.</b> Every call
+        /// with the same (filename, tint, size) returns the <em>same instance</em>, and it
+        /// stays alive for the whole session. Callers must therefore:
+        /// </para>
+        /// <list type="bullet">
+        ///   <item>never <see cref="IDisposable.Dispose"/> it — that would leave every other
+        ///   button using the same icon holding a disposed bitmap, and drawing it throws;</item>
+        ///   <item>never draw into it, resize it, or otherwise modify it in place;</item>
+        ///   <item>call <see cref="Bitmap.Clone()"/> first if they need a bitmap they can
+        ///   change or dispose — the clone is then theirs to dispose.</item>
+        /// </list>
+        /// <para>
+        /// Assigning the result to <c>Button.Image</c> or <c>ToolbarButton.IconImage</c> is
+        /// fine: neither takes ownership. Failures (missing file, unparseable SVG) are not
+        /// cached, so a transient read error is retried on the next call.
+        /// </para>
+        /// </remarks>
         internal static Bitmap Load(string filename, Color tint, int size = 24)
         {
             var key = (filename, tint.ToArgb(), size);

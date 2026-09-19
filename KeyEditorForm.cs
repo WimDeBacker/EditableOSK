@@ -1621,7 +1621,7 @@ namespace OnScreenKeyboard
         /// </summary>
         /// <param name="send">Internal send string (e.g. "^c", "%{F4}").</param>
         /// <returns>Human-readable string (e.g. "{Ctrl}c", "{Alt}{F4}").</returns>
-        private static string ToHuman(string send)
+        internal static string ToHuman(string send)
         {
             if (string.IsNullOrEmpty(send)) return send;
             // Handle the win: prefix recursively so the rest of the string is also converted
@@ -1654,7 +1654,7 @@ namespace OnScreenKeyboard
         /// </summary>
         /// <param name="human">Human-readable string (e.g. "{Ctrl}c", "{Win}{LEFT}").</param>
         /// <returns>Internal send string (e.g. "^c", "win:{LEFT}").</returns>
-        private static string FromHuman(string human)
+        internal static string FromHuman(string human)
         {
             if (string.IsNullOrEmpty(human)) return human;
             // {Win} must be handled first because it becomes a prefix for the whole rest,

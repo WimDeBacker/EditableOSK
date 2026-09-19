@@ -14,6 +14,9 @@ namespace OnScreenKeyboard
     //   [up]          → arrow key  (see SpecialKeys table)
     //   [omhoog]      → same as [up] (Dutch alias)
     //   _             → blank spacer (no label, no send)
+    //   ""            → same as _ (an empty quoted phrase is a blank spacer, so a gap written
+    //                   the CSV / spreadsheet way keeps its column instead of shifting the
+    //                   rest of the row left)
     //   Empty lines are silently skipped.
     // ══════════════════════════════════════════════════════════════════════
     internal static class WizardKeyParser
@@ -156,7 +159,12 @@ namespace OnScreenKeyboard
                     }
                     string quoted = line[(i + 1)..close];
                     i = close + 1;
-                    if (quoted.Length > 0) row.Add(new KeySpec(quoted, quoted));
+                    // A closed empty phrase ("") is a deliberate gap, not nothing: reserve its
+                    // column exactly like "_" does. Dropping it silently shifted every key after
+                    // it one column to the left. (An unclosed lone quote, above, is left alone:
+                    // the preview re-parses on every keystroke and half-typed input must not
+                    // flicker a blank key into the row.)
+                    row.Add(quoted.Length > 0 ? new KeySpec(quoted, quoted) : KeySpec.Blank);
                 }
                 else
                 {
