@@ -254,6 +254,33 @@ namespace OnScreenKeyboard
         /// </summary>
         internal static RectangleF CrispBorderRect(int w, int h) => new RectangleF(0.5f, 0.5f, w - 1, h - 1);
 
+        /// <summary>
+        /// Draws a square ring of <paramref name="penWidth"/> whole pixels whose OUTER edge lies <paramref name="inset"/> pixels inside
+        /// a control of size <paramref name="w"/> x <paramref name="h"/>. The pen runs through the middle of those pixels, so the
+        /// ring is exactly the same width on all four sides (a pen on whole coordinates, with a width of 2 or more, ends up one
+        /// pixel further from the edge on the right and bottom than on the left and top), and nothing is anti-aliased.
+        /// </summary>
+        internal static void DrawSquareRing(Graphics g, int w, int h, int inset, int penWidth, Color color)
+        {
+            // Four filled strips that do not overlap (top and bottom full width, left and right between them), not a pen:
+            // a GDI+ pen leaves odd pixels at the corners, and a translucent colour would be blended twice where strips meet.
+            int x0 = inset, y0 = inset, x1 = w - inset, y1 = h - inset;      // outer edge: [x0, x1) x [y0, y1)
+            if (x1 - x0 < 2 * penWidth || y1 - y0 < 2 * penWidth) return;
+            var smoothing = g.SmoothingMode;
+            var offset    = g.PixelOffsetMode;
+            g.SmoothingMode   = SmoothingMode.None;
+            g.PixelOffsetMode = PixelOffsetMode.None;
+            using (var br = new SolidBrush(color))
+            {
+                g.FillRectangle(br, x0, y0, x1 - x0, penWidth);                                       // top
+                g.FillRectangle(br, x0, y1 - penWidth, x1 - x0, penWidth);                            // bottom
+                g.FillRectangle(br, x0, y0 + penWidth, penWidth, y1 - y0 - 2 * penWidth);             // left
+                g.FillRectangle(br, x1 - penWidth, y0 + penWidth, penWidth, y1 - y0 - 2 * penWidth);  // right
+            }
+            g.SmoothingMode   = smoothing;
+            g.PixelOffsetMode = offset;
+        }
+
         /// <summary>A rounded rectangle from float coordinates (see <see cref="CrispBorderRect"/>).</summary>
         internal static GraphicsPath RoundedRectF(RectangleF r, float radius)
         {

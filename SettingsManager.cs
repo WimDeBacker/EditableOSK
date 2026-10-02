@@ -250,6 +250,13 @@ namespace OnScreenKeyboard
         public bool ShowTimingAnimation { get; set; } = true;
 
         /// <summary>
+        /// When true (the default) a key shows its Shift label in its top right corner and its AltGr label in its top left
+        /// corner, next to the main label. Set to false for users who find so many signs overstimulating: only the main
+        /// label is drawn. This only changes what is drawn; the Shift and AltGr actions of the keys are untouched.
+        /// </summary>
+        public bool ShowCornerLabels { get; set; } = true;
+
+        /// <summary>
         /// Filename (without path) of the .wfq word-frequency database to load
         /// when this layout is active, e.g. "worddb_NL.wfq".
         /// Empty string = auto-select the first available database whose
@@ -284,6 +291,7 @@ namespace OnScreenKeyboard
             SlowKeysMs             = SlowKeysMs,
             DwellMs                = DwellMs,
             ShowTimingAnimation    = ShowTimingAnimation,
+            ShowCornerLabels       = ShowCornerLabels,
             WordDatabase           = WordDatabase,
             WordLearningEnabled    = WordLearningEnabled,
         };
@@ -305,6 +313,7 @@ namespace OnScreenKeyboard
             SlowKeysMs          = src.SlowKeysMs;
             DwellMs             = src.DwellMs;
             ShowTimingAnimation = src.ShowTimingAnimation;
+            ShowCornerLabels    = src.ShowCornerLabels;
             WordDatabase        = src.WordDatabase;
             WordLearningEnabled = src.WordLearningEnabled;
         }
@@ -496,6 +505,8 @@ namespace OnScreenKeyboard
             w.WriteAttributeString("SlowKeysMs",          m.SlowKeysMs.ToString());
             w.WriteAttributeString("DwellMs",             m.DwellMs.ToString());
             w.WriteAttributeString("ShowTimingAnimation", m.ShowTimingAnimation ? "1" : "0");
+            // Written only when switched off: a file without the attribute (every file from before this option) keeps the labels.
+            if (!m.ShowCornerLabels) w.WriteAttributeString("ShowCornerLabels", "0");
             w.WriteAttributeString("LastFile",        m.LastFile ?? "");
             w.WriteAttributeString("ToolbarTheme",    m.ToolbarTheme.ToString());
             if (!string.IsNullOrEmpty(m.WordDatabase))
@@ -674,7 +685,8 @@ namespace OnScreenKeyboard
             if (int.TryParse(Attr(lNode,"DwellMs","0"),    out int dwMs) && dwMs >= 0) meta.DwellMs    = Math.Min(dwMs, 5000);
             if (meta.SlowKeysMs > 0) meta.DwellMs = 0;  // enforce mutual exclusivity for hand-edited XML
             meta.ShowTimingAnimation = Attr(lNode,"ShowTimingAnimation","1") == "1";
-            meta.WordDatabase        = Attr(lNode,"WordDatabase","");
+            meta.ShowCornerLabels    = Attr(lNode,"ShowCornerLabels","1") == "1";
+            meta.WordDatabase       = Attr(lNode,"WordDatabase","");
             meta.WordLearningEnabled = Attr(lNode,"WordLearningEnabled","1") == "1";
 
             // Sanity-clamp window size to reasonable display boundaries

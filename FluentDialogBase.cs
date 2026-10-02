@@ -324,6 +324,23 @@ namespace OnScreenKeyboard
         }
 
         /// <summary>
+        /// The <see cref="TouchChoiceButton"/> version of <see cref="SelectOrInsertFont(ComboBox, string)"/>: selects
+        /// <paramref name="name"/> without raising the change event; a font that isn't installed is inserted (at index 1,
+        /// after a possible "(inherit)" placeholder at index 0), not substituted. An empty name selects index 0.
+        /// </summary>
+        internal static void SelectOrInsertFont(TouchChoiceButton chooser, string name)
+        {
+            if (string.IsNullOrEmpty(name)) { chooser.SelectSilently(0); return; }
+            int idx = chooser.Items.FindIndex(i => i.Text == name);
+            if (idx < 0)
+            {
+                idx = Math.Min(1, chooser.Items.Count);
+                chooser.Items.Insert(idx, new TouchChoice { Text = name });
+            }
+            chooser.SelectSilently(idx);
+        }
+
+        /// <summary>
         /// Shows (or clears) a warning-triangle icon on <paramref name="combo"/> when
         /// <paramref name="fontName"/> is set but isn't installed on this machine. Purely
         /// informational — uses <see cref="_fontWarn"/>, never <see cref="_err"/>, so it can
@@ -402,8 +419,11 @@ namespace OnScreenKeyboard
         /// <summary>The section buttons (null for a dialog built without sections).</summary>
         protected SectionBar Sections { get; private set; }
 
-        /// <summary>Widest the content may grow before it is limited, in design pixels.</summary>
+        /// <summary>Widest the content may grow before it is limited, in design pixels (the default for <see cref="ContentMaxWidth"/>).</summary>
         protected const int MaxContentWidth = 760;
+
+        /// <summary>The widest this dialog may grow in design pixels; a dialog with two columns (the Group Editor) allows more.</summary>
+        protected virtual int ContentMaxWidth => MaxContentWidth;
 
         /// <summary>
         /// Builds the standard frame of a content-sized dialog and adds it to the form:
@@ -667,7 +687,7 @@ namespace OnScreenKeyboard
         internal Size MeasureContent(int? maxWidth = null)
         {
             if (_sizingRoot == null) return ClientSize;
-            int w = maxWidth ?? (int)Math.Round(MaxContentWidth * DeviceDpi / 96.0);
+            int w = maxWidth ?? (int)Math.Round(ContentMaxWidth * DeviceDpi / 96.0);
 
             // A TableLayoutPanel ignores the content of a percent-sized row when asked for its
             // preferred size (the body row is percent-sized so it can shrink and scroll), so the
@@ -692,7 +712,7 @@ namespace OnScreenKeyboard
             var nonC = new Size(Width - ClientSize.Width, Height - ClientSize.Height);
             int maxW = wa.Width  - 10 - nonC.Width;
             int maxH = wa.Height - 10 - nonC.Height;
-            var pref = MeasureContent(Math.Min((int)Math.Round(MaxContentWidth * DeviceDpi / 96.0), maxW));
+            var pref = MeasureContent(Math.Min((int)Math.Round(ContentMaxWidth * DeviceDpi / 96.0), maxW));
             ClientSize = new Size(Math.Min(pref.Width, maxW), Math.Min(pref.Height, maxH));
             if (Owner != null || StartPosition == FormStartPosition.CenterParent)
             {

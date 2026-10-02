@@ -151,12 +151,13 @@
   <String key="WP paste full msg"           value="Plakken niet mogelijk: er zijn al 10 woordvoorspellingstoetsen in deze indeling. Verwijder er eerst een voordat u er een plakt." />
   <String key="WP paste full title"         value="Plakken geannuleerd" />
   <String key="Record key / shortcut"       value="Toets / sneltoets opnemen" />
-  <String key="Press key now…"              value="Druk nu op uw toets of sneltoets…" />
-  <String key="Press Escape to cancel"      value="Druk op Escape om te annuleren" />
+  <String key="Perform the key combination you want on the keyboard." value="Voer de gewenste toetscombinatie uit op het toetsenbord." />
+  <String key="Stop recording"              value="Opnemen stoppen" />
+  <String key="tip: Stop recording"         value="Opnemen stoppen (er wordt niets gewijzigd)" />
   <String key="Cancelled"                   value="Geannuleerd" />
   <String key="Recorded — edit if needed"   value="Opgenomen — bewerk indien nodig" />
-  <String key="Press Record to record, or type directly"    value="Druk op Opnemen, of typ zelf" />
-  <String key="Press Record to re-record, or edit directly" value="Druk op Opnemen om opnieuw op te nemen, of bewerk zelf" />
+  <String key="Press the record button to record, or type directly"    value="Druk op de opnameknop om op te nemen, of typ zelf" />
+  <String key="Press the record button to record again, or edit directly" value="Druk op de opnameknop om opnieuw op te nemen, of bewerk zelf" />
   <String key="Browse (Send)"               value="Bladeren (Verzenden)" />
   <String key="Browse (Shift-send)"         value="Bladeren (Shift-verzenden)" />
   <String key="Browse (AltGr-send)"         value="Bladeren (AltGr-verzenden)" />
@@ -190,6 +191,8 @@
   <String key="Dwell click"        value="Automatis&amp;che klik" />
   <String key="tip: Slow keys"     value="Houd een toets zo lang ingedrukt (in milliseconden) voordat deze wordt geregistreerd. Voorkomt onbedoelde toetsaanslagen." />
   <String key="tip: Dwell click"          value="Zweef over een toets gedurende dit aantal milliseconden om deze automatisch te activeren, zonder klikken." />
+  <String key="Show Shift and AltGr labels"      value="Shift- en AltGr-labels tonen" />
+  <String key="tip: Show Shift and AltGr labels" value="Toont de kleine Shift- en AltGr-labels in de hoeken van de toetsen. Vink uit om minder te zien: alleen het hoofdlabel wordt getekend. De toetsen werken precies hetzelfde." />
   <String key="Show timing animation"     value="Voo&amp;rtgangsanimatie tonen" />
   <String key="tip: Show timing animation" value="Toont een visuele animatie op toetsen terwijl langzame toetsen of automatische klik aftelt. Vink uit als u de animatie afleidend vindt." />
   <String key="Toolbar theme"      value="&amp;Werkbalkthema" />
@@ -213,6 +216,10 @@
   <String key="(inherit standard)"     value="(standaard)" />
   <String key="-1 = inherit standard"  value="-1 = standaard overnemen" />
   <String key="Clear (inherit standard)" value="Wissen (standaard overnemen)" />
+  <String key="Inherit from standard"  value="Standaard overnemen" />
+  <String key="Inherit"                value="Overnemen" />
+  <String key="Import..."              value="Importeren..." />
+  <String key="inherited"              value="overgenomen" />
   <String key="(none / auto)"          value="(geen / auto)" />
   <String key="Clear"                  value="Wissen" />
   <String key="Delete Group"           value="Groep verwijderen" />

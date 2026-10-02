@@ -470,8 +470,11 @@ namespace OnScreenKeyboard
             int dir    = delta >= 0 ? 1 : -1;
             int start  = _hot < 0 ? (dir > 0 ? -1 : _view.Count) : _hot;
             int target = Math.Max(0, Math.Min(_view.Count - 1, start + delta));
-            // The first available row at or beyond the target in the direction of travel; none = stay.
+            // The first available row at or beyond the target in the direction of travel; failing that the nearest one
+            // before it (Home with the first rows unavailable lands on the first available row, not nowhere).
             for (int i = target; i >= 0 && i < _view.Count; i += dir)
+                if (_items[_view[i]].Enabled) { _hot = i; EnsureVisible(i); Invalidate(); return; }
+            for (int i = target - dir; i >= 0 && i < _view.Count; i -= dir)
                 if (_items[_view[i]].Enabled) { _hot = i; EnsureVisible(i); Invalidate(); return; }
         }
 

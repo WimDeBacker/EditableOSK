@@ -79,6 +79,7 @@ namespace OnScreenKeyboard
         private CheckBox        _chkDwell;
         private NumericUpDown   _nudDwell;
         private CheckBox        _chkTimingAnimation;
+        private CheckBox        _chkCornerLabels;     // "Show Shift and AltGr labels" (LayoutMeta.ShowCornerLabels)
 
         // Word prediction database
         private CheckBox        _chkWPLearning;       // "Remember typed words"
@@ -253,6 +254,7 @@ namespace OnScreenKeyboard
             _chkSlowKeys.Text           = Lang.T("Slow keys");
             _chkDwell.Text              = Lang.T("Dwell click");
             _chkTimingAnimation.Text    = Lang.T("Show timing animation");
+            _chkCornerLabels.Text       = Lang.T("Show Shift and AltGr labels");
             _nudSlowKeys.AccessibleName = Lang.StripMnemonic(Lang.T("Slow keys"));
             _nudDwell.AccessibleName    = Lang.StripMnemonic(Lang.T("Dwell click"));
             _btnSaveFile.Text     = "&" + Lang.T("Save");
@@ -463,7 +465,7 @@ namespace OnScreenKeyboard
             };
 
             // ── Accessibility card ─────────────────────────────────────────
-            int accH = HDR_H + PAD + ROW_H * 5 + PAD;
+            int accH = HDR_H + PAD + ROW_H * 6 + PAD;
             var grpAcc = AddGroup(() => Lang.T("Accessibility"), rightX, rightY, rightW, accH,
                                   Color.FromArgb(155, 89, 182));
             grpAcc.TabIndex = 3;
@@ -567,6 +569,19 @@ namespace OnScreenKeyboard
             };
             grpAcc.Controls.Add(_chkTimingAnimation);
             SetTip(_chkTimingAnimation, () => Lang.T("tip: Show timing animation"));
+
+            // Show corner labels: the small Shift (top right) and AltGr (top left) labels on the keys. Switching them off
+            // leaves only the main label, for people who find so many signs on the keyboard overstimulating.
+            int cornerY = HDR_H + PAD + ROW_H * 5;
+            _chkCornerLabels = new CheckBox
+            {
+                Text = Lang.T("Show Shift and AltGr labels"),
+                Left = PAD, Top = cornerY + 8, AutoSize = true,
+                ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent, Font = F_LABEL,
+                TabIndex = 7, Checked = true,
+            };
+            grpAcc.Controls.Add(_chkCornerLabels);
+            SetTip(_chkCornerLabels, () => Lang.T("tip: Show Shift and AltGr labels"));
 
             // ── Word Prediction card ──────────────────────────────────────
             // Rows: "Remember typed words" checkbox, combo (label + dropdown),
@@ -765,6 +780,7 @@ namespace OnScreenKeyboard
             _nudDwell.Enabled           = _chkDwell.Checked;
             _chkTimingAnimation.Enabled = m.SlowKeysMs > 0 || m.DwellMs > 0;
             _chkTimingAnimation.Checked = m.ShowTimingAnimation;
+            _chkCornerLabels.Checked    = m.ShowCornerLabels;
 
             // Word prediction: learning toggle + database combo
             _chkWPLearning.Checked = m.WordLearningEnabled;
@@ -1078,6 +1094,7 @@ namespace OnScreenKeyboard
                 SlowKeysMs           = _chkSlowKeys.Checked ? (int)_nudSlowKeys.Value : 0,
                 DwellMs              = _chkDwell.Checked    ? (int)_nudDwell.Value    : 0,
                 ShowTimingAnimation  = _chkTimingAnimation.Checked,
+                ShowCornerLabels     = _chkCornerLabels.Checked,
             };
 
             ResultTheme  = theme;

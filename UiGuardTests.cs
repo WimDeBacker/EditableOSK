@@ -426,6 +426,94 @@ namespace OnScreenKeyboard
         // Found 2026-09-19: a 1 px pen on whole coordinates covers half a pixel on the left/top and two half
         // pixels on the right/bottom, so some edges looked thin and faint and others wide and blurred.
         // ════════════════════════════════════════════════════════════════
+        // ════════════════════════════════════════════════════════════════
+        // Rings drawn with whole-coordinate pens (key selection ring, swatch focus ring): the same width on all four sides.
+        // Found 2026-10-02: the 2 px white band of the key selection ring sat one pixel nearer the edge on the left and top
+        // than on the right and bottom.
+        // ════════════════════════════════════════════════════════════════
+        private static void T_KeyRings()
+        {
+            Section("Key selection ring and swatch focus ring — identical on all four sides");
+
+            var bg = Color.FromArgb(128, 128, 128);
+            Bitmap Draw(int w, int h, Action<Graphics> paint)
+            {
+                var bmp = new Bitmap(w, h);
+                using var g = Graphics.FromImage(bmp);
+                g.Clear(bg);
+                paint(g);
+                return bmp;
+            }
+            static bool Same(Color a, Color b) => a.ToArgb() == b.ToArgb();
+
+            // Layer i (0 = the pixel on the edge): the pixel at distance i from each of the four edges, and from each of the four corners.
+            void Symmetric(string what, Bitmap b, int layers)
+            {
+                for (int i = 0; i < layers; i++)
+                {
+                    var l = b.GetPixel(i, b.Height / 2);
+                    var r = b.GetPixel(b.Width - 1 - i, b.Height / 2);
+                    var t = b.GetPixel(b.Width / 2, i);
+                    var d = b.GetPixel(b.Width / 2, b.Height - 1 - i);
+                    Assert(Same(l, r) && Same(l, t) && Same(l, d), $"{what}: pixel {i} from the edge is the same on all four sides (left {l}, right {r}, top {t}, bottom {d})");
+                    var c1 = b.GetPixel(i, i); var c2 = b.GetPixel(b.Width - 1 - i, i);
+                    var c3 = b.GetPixel(i, b.Height - 1 - i); var c4 = b.GetPixel(b.Width - 1 - i, b.Height - 1 - i);
+                    Assert(Same(c1, c2) && Same(c1, c3) && Same(c1, c4), $"{what}: pixel {i} of the four corners is the same");
+                }
+            }
+
+            foreach (var (w, h) in new[] { (60, 40), (61, 41), (27, 18) })
+            {
+                using var sel = Draw(w, h, g => KeyboardForm.DrawSelectionRing(g, w, h));
+                Symmetric($"selection ring {w}x{h}", sel, 5);
+                var white = Color.FromArgb(255, 255, 255);
+                Assert(Same(sel.GetPixel(0, h / 2), white) && Same(sel.GetPixel(1, h / 2), white) &&
+                       !Same(sel.GetPixel(2, h / 2), bg) && !Same(sel.GetPixel(3, h / 2), bg) && !Same(sel.GetPixel(2, h / 2), white) &&
+                       Same(sel.GetPixel(4, h / 2), bg),
+                    $"selection ring {w}x{h}: 2 px white band on the edge, 2 px dark band inside it, then nothing");
+
+                using var foc = Draw(w, h, g => ColorSwatchButton.DrawFocusRing(g, w, h));
+                Symmetric($"swatch focus ring {w}x{h}", foc, 6);
+                Assert(Same(foc.GetPixel(1, h / 2), bg) && Same(foc.GetPixel(2, h / 2), Color.FromArgb(255, 255, 255)) &&
+                       Same(foc.GetPixel(3, h / 2), Color.FromArgb(255, 255, 255)) && !Same(foc.GetPixel(4, h / 2), bg) && Same(foc.GetPixel(5, h / 2), bg),
+                    $"swatch focus ring {w}x{h}: 2 px white band, then a dark line, nothing around them");
+            }
+
+            // The border of a key itself is the native flat border (FlatAppearance): check it too, at every thickness the app uses.
+            foreach (int thick in new[] { 0, 1, 2, 3 })
+            {
+                using var host = new Form();
+                var key = new Button { FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(40, 100, 160), Text = "", UseVisualStyleBackColor = false };
+                key.FlatAppearance.BorderColor = Color.Red;
+                key.FlatAppearance.BorderSize  = thick;
+                host.Controls.Add(key);
+                key.SetBounds(0, 0, 61, 41);
+                _ = host.Handle;
+                using var bmp = new Bitmap(61, 41);
+                key.DrawToBitmap(bmp, new Rectangle(0, 0, 61, 41));
+                bool IsBorder(Color c) => c.R > 150 && c.G < 90;
+                int Width(Func<int, Color> at) { int n = 0; for (int i = 0; i < 8 && IsBorder(at(i)); i++) n++; return n; }
+                int left = Width(i => bmp.GetPixel(i, 20)), right = Width(i => bmp.GetPixel(60 - i, 20));
+                int top  = Width(i => bmp.GetPixel(30, i)), bottom = Width(i => bmp.GetPixel(30, 40 - i));
+                Assert(left == thick && right == thick && top == thick && bottom == thick,
+                    $"key border {thick} px: left {left}, right {right}, top {top}, bottom {bottom} px wide");
+            }
+
+            // Every layer of the key selection ring must be visible against both a dark and a pale key (the reason for the sandwich).
+            foreach (var key in new[] { Color.Black, Color.FromArgb(20, 40, 120), Color.White, Color.FromArgb(240, 240, 200) })
+            {
+                using var bmp = new Bitmap(40, 30);
+                using (var g = Graphics.FromImage(bmp)) { g.Clear(key); KeyboardForm.DrawSelectionRing(g, 40, 30); }
+                double Ratio(Color a, Color b)
+                {
+                    double L(Color c) { double F(int v) { double s = v / 255.0; return s <= 0.03928 ? s / 12.92 : Math.Pow((s + 0.055) / 1.055, 2.4); } return 0.2126 * F(c.R) + 0.7152 * F(c.G) + 0.0722 * F(c.B); }
+                    double x = L(a), y = L(b); return (Math.Max(x, y) + 0.05) / (Math.Min(x, y) + 0.05);
+                }
+                double best = new[] { 0, 2 }.Max(i => Ratio(bmp.GetPixel(i, 15), key));
+                Assert(best >= 3.0, $"selection ring on key {key.Name}/{key}: the ring contrasts at least 3:1 with the key ({best:0.0}:1)");
+            }
+        }
+
         private static void T_ControlBorders()
         {
             Section("Control borders — identical on all four sides, 1 px, one colour for every control");
@@ -757,6 +845,97 @@ namespace OnScreenKeyboard
             r = Apply(new KeyProps("a", "a"), f => Pick(Field<TouchChoiceButton[]>(f, "_types")[0], Modifier));
             Assert(r.Label == "Shift" && r.Send == "", $"modifier: the first modifier is chosen and becomes the label ({r.Label})");
 
+            // ── Leaving Key/Shortcut, Layout or Modifier for Text must not carry the value over as text (all three layers) ──
+            // (A Normal key with an empty Text value types its label, so a cleared value shows up as send == label.)
+            r = Apply(new KeyProps("Nl", "layout:azerty.kbl"), f => Pick(Field<TouchChoiceButton[]>(f, "_types")[0], Text));
+            Assert(r.Send == "Nl", $"Layout -> Text on Normal: the file name is not kept as text (send '{r.Send}')");
+            r = Apply(new KeyProps("Ctrl+c", "^c"), f => Pick(Field<TouchChoiceButton[]>(f, "_types")[0], Text));
+            Assert(r.Send == "Ctrl+c", $"Key/Shortcut -> Text on Normal: the shortcut is not kept as text (send '{r.Send}')");
+            r = Apply(new KeyProps("a", "a", "A", "^v", "€", "layout:azerty.kbl"), f => { var t = Field<TouchChoiceButton[]>(f, "_types");
+                Pick(t[1], Text); Pick(t[2], Text); });
+            Assert(r.ShiftSend == "" && r.AltGrSend == "", $"Key/Layout -> Text on Shift and AltGr: nothing is kept as text (shift '{r.ShiftSend}', altgr '{r.AltGrSend}')");
+            r = Apply(new KeyProps("a", "a"), f => { var t = Field<TouchChoiceButton[]>(f, "_types");
+                Pick(t[0], Modifier); Pick(t[0], Text); });
+            Assert(r.Send == r.Label, $"Modifier -> Text on Normal: no modifier token is kept as text (send '{r.Send}', label '{r.Label}')");
+            r = Apply(new KeyProps("a", "a", "A", "B", "€", "E"), f => { var t = Field<TouchChoiceButton[]>(f, "_types"); var v = Field<TouchTextBox[]>(f, "_values");
+                Pick(t[1], Key); Pick(t[1], Text); v[1].Text = "typed"; });
+            Assert(r.ShiftSend == "typed", "typing text after returning to Text is stored as typed");
+
+            // ── Recording a shortcut: every held modifier is kept (Priority 6) ──
+            //                     vk    ctrl   alt    shift  win
+            const uint A = 0x41, S = 0x53, D = 0x44, One = 0x31, F4 = 0x73;
+            Assert(KeyEditorForm.BuildSendFromHook(A, false, false, false, false) == "a", "recorded: a plain letter");
+            Assert(KeyEditorForm.BuildSendFromHook(A, false, false, true,  false) == "A", "recorded: Shift + letter alone is the capital letter");
+            Assert(KeyEditorForm.BuildSendFromHook(A, true,  false, false, false) == "^a", "recorded: Ctrl + A");
+            Assert(KeyEditorForm.BuildSendFromHook(A, true,  false, true,  false) == "^+a", "recorded: Ctrl + Shift + A keeps both modifiers");
+            Assert(KeyEditorForm.BuildSendFromHook(A, false, true,  true,  false) == "%+a", "recorded: Alt + Shift + A keeps both modifiers");
+            Assert(KeyEditorForm.BuildSendFromHook(A, true,  true,  true,  false) == "^%+a", "recorded: Ctrl + Alt + Shift + A keeps all three");
+            Assert(KeyEditorForm.BuildSendFromHook(F4, false, true, false, false) == "%{F4}", "recorded: Alt + F4");
+            Assert(KeyEditorForm.BuildSendFromHook(F4, false, false, true, false) == "+{F4}", "recorded: Shift + F4 (not a printable key: Shift is a modifier)");
+            Assert(KeyEditorForm.BuildSendFromHook(One, false, false, true, false) == "+1", "recorded: Shift + 1 keeps Shift");
+            Assert(KeyEditorForm.BuildSendFromHook(D, false, false, false, true) == "win:d", "recorded: Win + D");
+            Assert(KeyEditorForm.BuildSendFromHook(S, false, false, true,  true) == "win:+s", "recorded: Win + Shift + S keeps Shift");
+            Assert(KeyEditorForm.BuildSendFromHook(S, true,  false, true,  true) == "win:^+s", "recorded: Win + Ctrl + Shift + S keeps all");
+            Assert(KeyEditorForm.BuildHumanLabel(A, true, false, true, false) == "Ctrl+Shift+A", "label: Ctrl+Shift+A");
+            Assert(KeyEditorForm.BuildHumanLabel(A, false, false, true, false) == "A", "label: Shift + letter alone is just A");
+            Assert(KeyEditorForm.BuildHumanLabel(S, false, false, true, true) == "Win+Shift+S", "label: Win+Shift+S");
+            foreach (var send in new[] { "^+a", "^%+a", "win:+s", "win:^+s", "%+a", "+{F4}", "A" })
+                Assert(KeyEditorForm.FromHuman(KeyEditorForm.ToHuman(send)) == send, $"readable form round-trips: '{send}' -> '{KeyEditorForm.ToHuman(send)}'");
+            Assert(KeyEditorForm.ToHuman("^+a") == "{Ctrl}{Shift}a", "readable form of Ctrl + Shift + A");
+            Assert(KeyEditorForm.ToHuman("win:+s") == "{Win}{Shift}s", "readable form of Win + Shift + S");
+
+            // ── The label a recording fills in: replaced by the next recording, never over a label the user typed ──
+            using (var f = new KeyEditorForm(new KeyProps("", ""), null))
+            {
+                var labels = Field<TouchTextBox[]>(f, "_labels");
+                var mi = typeof(KeyEditorForm).GetMethod("ApplyRecordedLabel", BindingFlags.NonPublic | BindingFlags.Instance);
+                mi.Invoke(f, new object[] { 0, "Ctrl+C" });
+                Assert(labels[0].Text == "Ctrl+C", "recording: an empty label gets the label of the shortcut");
+                mi.Invoke(f, new object[] { 0, "Ctrl+V" });
+                Assert(labels[0].Text == "Ctrl+V", "recording again: the label of the previous recording is replaced");
+                labels[0].Text = "Paste";
+                mi.Invoke(f, new object[] { 0, "Ctrl+X" });
+                Assert(labels[0].Text == "Paste", "recording: a label the user typed is kept");
+                labels[0].Text = "";
+                mi.Invoke(f, new object[] { 0, "Ctrl+Z" });
+                Assert(labels[0].Text == "Ctrl+Z", "recording: a label the user cleared is filled again");
+            }
+
+            // ── The Record / Browse button is an icon-only 44 px square in every language and state, so it never covers its neighbour ──
+            foreach (var lang in new[] { "en", "nl" })
+            {
+                Lang.Load(lang);
+                try
+                {
+                    using var f = new KeyEditorForm(new KeyProps("a", "a"), null);
+                    var pk = Field<FluentButton[]>(f, "_pickers");
+                    var t = Field<TouchChoiceButton[]>(f, "_types");
+                    Pick(t[0], Key);
+                    string idle = pk[0].AccessibleName;
+                    var recordIcon = pk[0].IconImage;
+                    Assert(pk[0].Text == "" && recordIcon != null, $"[{lang}] the Record button shows the record icon and no text");
+                    Assert(pk[0].Width == Touch.Target && pk[0].Height == Touch.Target, $"[{lang}] the Record button is 44 x 44 ({pk[0].Width} x {pk[0].Height})");
+                    Assert(!string.IsNullOrWhiteSpace(idle), $"[{lang}] the symbol button has an accessible name ('{idle}')");
+
+                    typeof(KeyEditorForm).GetMethod("StartRecording", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(f, new object[] { 0 });
+                    try
+                    {
+                        Assert(pk[0].IconImage != null && !ReferenceEquals(pk[0].IconImage, recordIcon) && pk[0].Text == "", $"[{lang}] while recording the button shows the stop icon");
+                        Assert(pk[0].AccessibleName != idle && pk[0].AccessibleName == Lang.T("Stop recording"), $"[{lang}] while recording the button is named 'Stop recording'");
+                        Assert(pk[0].Width == Touch.Target, $"[{lang}] the button does not grow while recording");
+                        Assert(Field<Label>(f, "_lblHint").Text == Lang.T("Perform the key combination you want on the keyboard."),
+                            $"[{lang}] while recording the help text asks for the key combination");
+                    }
+                    finally { typeof(KeyEditorForm).GetMethod("StopRecording", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(f, new object[] { true }); }
+                    Assert(ReferenceEquals(pk[0].IconImage, recordIcon) && pk[0].AccessibleName == idle, $"[{lang}] after stopping the button shows the record icon again");
+                }
+                finally { Lang.Load("en"); }
+            }
+            Lang.Load("nl");
+            Assert(Lang.T("Perform the key combination you want on the keyboard.") == "Voer de gewenste toetscombinatie uit op het toetsenbord.",
+                "Dutch help text while recording");
+            Lang.Load("en");
+
             // ── Size ──
             using (var f = new KeyEditorForm(new KeyProps("a", "a"), null, colSpan: 3, rowSpan: 2, maxCols: 5, maxRows: 4))
             {
@@ -839,7 +1018,6 @@ namespace OnScreenKeyboard
             var groups = new List<KeyGroup> { new KeyGroup { Name = "standard" } };
             var forms = new (string Name, Func<Form> Make)[]
             {
-                ("GroupEditorForm",    () => new GroupEditorForm(groups)),
                 ("KeyboardEditorForm", () => new KeyboardEditorForm(new VisualTheme(), new WindowState(), new LayoutMeta(), null)),
             };
             foreach (var (name, make) in forms)

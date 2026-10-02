@@ -197,6 +197,7 @@ namespace OnScreenKeyboard
                     SaveMockupD(outDir, tag);
                     if (tag != "nl") SaveMockupE(outDir, tag);
                     SaveKeyEditor(outDir, tag);
+                    SaveGroupEditor(outDir, tag);
                 }
             }
             finally { Lang.PseudoExpansion = 0; Lang.Load("en"); }
@@ -297,6 +298,74 @@ namespace OnScreenKeyboard
                     using var w = new KeyEditorForm(wpProps, null, groups: groups, layoutDir: AppDomain.CurrentDomain.BaseDirectory);
                     Show(w);
                     Save(w, Path.Combine(outDir, $"keyeditor_real_wp_{theme}_{tag}.png"));
+                }
+            }
+            finally { ToolbarButton.IsLightTheme = wasLight; }
+        }
+
+        /// <summary>The real Group Editor in both themes: a group that inherits, the standard group, the colour flyout with its inherit button, and the small dialogs.</summary>
+        private static void SaveGroupEditor(string outDir, string tag)
+        {
+            bool wasLight = ToolbarButton.IsLightTheme;
+            var bf = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+            T Field<T>(object o, string name) => (T)o.GetType().GetField(name, bf).GetValue(o);
+            var groups = new List<KeyGroup>
+            {
+                new KeyGroup { Name = SettingsManager.StandardGroupName, FontName = "Arial", KeyColor = Color.FromArgb(45, 45, 74),
+                               FontColor = Color.FromArgb(224, 224, 255), BorderColor = Color.FromArgb(120, 120, 160), BorderThickness = 1 },
+                new KeyGroup { Name = "Klinkers", KeyColor = Color.FromArgb(74, 143, 212), FontSize = 18, BorderThickness = -1 },
+                new KeyGroup { Name = "Medeklinkers", FontColor = Color.White, BorderThickness = 2, FontName = "Consolas" },
+                new KeyGroup { Name = "Cijfers", BorderThickness = -1 },
+            };
+            var imported = new List<KeyGroup>
+            {
+                new KeyGroup { Name = "standard" }, new KeyGroup { Name = "Klinkers" }, new KeyGroup { Name = "Pijlen" },
+            };
+            var existing = new HashSet<string>(groups.ConvertAll(g => g.Name), StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                foreach (bool light in new[] { true, false })
+                {
+                    ToolbarButton.IsLightTheme = light;
+                    string theme = light ? "light" : "dark";
+                    using (var d = new GroupEditorForm(groups, "Klinkers"))
+                    {
+                        Show(d);
+                        Save(d, Path.Combine(outDir, $"groupeditor_real_{theme}_{tag}.png"));
+                        if (light && tag == "en") File.WriteAllText(Path.Combine(outDir, "groupeditor_diag.txt"), d.DiagnoseLayout());
+                        var chip = Field<ColorChip>(d, "_chipFont");
+                        var fly = chip.OpenPicker(keepOpen: true);
+                        Application.DoEvents();
+                        SaveWithPopup(d, fly, Path.Combine(outDir, $"groupeditor_real_colour_{theme}_{tag}.png"));
+                        fly.Close();
+                        var font = Field<TouchChoiceButton>(d, "_cmbFont").OpenPopup(keepOpen: true, maxHeightOverride: 420);
+                        Application.DoEvents();
+                        SaveWithPopup(d, font, Path.Combine(outDir, $"groupeditor_real_font_{theme}_{tag}.png"));
+                        font.Close();
+                    }
+                    using (var d = new GroupEditorForm(groups, SettingsManager.StandardGroupName))
+                    {
+                        Show(d);
+                        Save(d, Path.Combine(outDir, $"groupeditor_real_standard_{theme}_{tag}.png"));
+                    }
+                    using (var n = new NameDialog(Lang.T("New Group"), name =>
+                               string.Equals(name, "standard", StringComparison.OrdinalIgnoreCase) ? Lang.T("Name 'standard' is reserved.") : null))
+                    {
+                        Show(n);
+                        Field<TouchTextBox>(n, "_txt").Text = "Standard";
+                        Application.DoEvents();
+                        Save(n, Path.Combine(outDir, $"groupeditor_name_{theme}_{tag}.png"));
+                    }
+                    using (var im = new ImportDialog(imported, existing))
+                    {
+                        Show(im);
+                        Save(im, Path.Combine(outDir, $"groupeditor_import_{theme}_{tag}.png"));
+                    }
+                    using (var m = new TouchMessage(Lang.T("Delete Group"), string.Format(Lang.T("Delete group msg"), "Klinkers"), question: true))
+                    {
+                        Show(m);
+                        Save(m, Path.Combine(outDir, $"groupeditor_confirm_{theme}_{tag}.png"));
+                    }
                 }
             }
             finally { ToolbarButton.IsLightTheme = wasLight; }

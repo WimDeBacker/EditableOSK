@@ -121,10 +121,11 @@ namespace OnScreenKeyboard
 
         private const int  WH_KEYBOARD_LL = 13;
         private const int  WM_KEYDOWN = 0x0100, WM_KEYUP = 0x0101, WM_SYSKEYDOWN = 0x0104, WM_SYSKEYUP = 0x0105;
-        private const uint VK_LWIN = 0x5B, VK_RWIN = 0x5C, VK_ESCAPE = 0x1B;
+        private const uint VK_LWIN = 0x5B, VK_RWIN = 0x5C;
 
         private bool   _recording;
         private int    _recordLayer;
+        private readonly string[] _recordedLabel = new string[Layers];   // the label a recording put in a layer (so a re-recording may replace it)
         private bool   _winHeld;              // tracked separately because the hook suppresses the Win key-up
         private IntPtr _hookHandle = IntPtr.Zero;
         private LowLevelKeyboardProc _hookProc;   // kept in a field so the GC cannot free it while the hook is active
@@ -290,11 +291,17 @@ namespace OnScreenKeyboard
             return ModesOf(restricted ? 1 : 0).Select(Item).ToList();
         }
 
+        // Icon only (a record / stop symbol, or a folder), so the button is the same 44 px square in every language and
+        // in every state: nothing about it can grow over the value box. The accessible name carries the words.
         private FluentButton NewPicker() => new FluentButton
         {
-            Style = FluentButton.Variant.Neutral, TabStop = true, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            Padding = new Padding(16, 0, 16, 0), MinimumSize = new Size(110, Touch.Target), Margin = new Padding(0, 4, 0, 4),
+            Style = FluentButton.Variant.Neutral, TabStop = true, AutoSize = false,
+            Size = new Size(Touch.Target, Touch.Target), MinimumSize = new Size(Touch.Target, Touch.Target),
+            Margin = new Padding(0, 4, 0, 4),
         };
+
+        // Segoe MDL2 Assets: Record, Stop, FolderOpen.
+        private const string GlyphRecord = "", GlyphStop = "", GlyphFolder = "";
 
         private void BuildKeySection(TableLayoutPanel key)
         {
@@ -367,7 +374,8 @@ namespace OnScreenKeyboard
                 _pickers[i].TabIndex = ti++;
                 _pickers[i].Visible = false;
                 _grid.Controls.Add(_pickers[i], 4, row);
-                SetTip(_pickers[i], () => ModeOf(layer) == SendMode.Layout ? Lang.T("tip: Browse layout") : Lang.T("tip: Record"));
+                SetTip(_pickers[i], () => ModeOf(layer) == SendMode.Layout ? Lang.T("tip: Browse layout")
+                                        : _recording && _recordLayer == layer ? Lang.T("tip: Stop recording") : Lang.T("tip: Record"));
 
                 _types[i].SelectedIndexChanged += (s, e) => OnTypeChanged(layer);
                 _values[i].TextChanged += (s, e) => { if (!_initialising) _layerTouched[layer] = true; ValidateLayoutField(layer); };
@@ -509,19 +517,6 @@ namespace OnScreenKeyboard
         //  Appearance: per-key → group → global
         // ══════════════════════════════════════════════════════════════
 
-        /// <summary>Selects <paramref name="name"/> in the font chooser; a font that isn't installed is inserted, not substituted.</summary>
-        private static void SelectOrInsertFont(TouchChoiceButton chooser, string name)
-        {
-            if (string.IsNullOrEmpty(name)) { chooser.SelectSilently(0); return; }
-            int idx = chooser.Items.FindIndex(i => i.Text == name);
-            if (idx < 0)
-            {
-                idx = Math.Min(1, chooser.Items.Count);
-                chooser.Items.Insert(idx, new TouchChoice { Text = name });
-            }
-            chooser.SelectSilently(idx);
-        }
-
         /// <summary>
         /// Resolves every appearance value through per-key → currently selected group → global, updates the controls
         /// and caches the values in the <c>_loaded*</c> fields so <see cref="Apply"/> can tell what the user changed.
@@ -658,8 +653,16 @@ namespace OnScreenKeyboard
         private void OnTypeChanged(int layer)
         {
             if (!_initialising) _layerTouched[layer] = true;
+            var previous = _lastMode[layer];
             ApplyMode(layer, applyPicker: !_initialising);
+            // A shortcut, a layout file name or a modifier token is never meant as text: do not carry it over to Text.
+            if (!_initialising && ModeOf(layer) == SendMode.Text
+                && (previous == SendMode.KeySequence || previous == SendMode.Layout || previous == SendMode.Modifier))
+                _values[layer].Text = "";
         }
+
+        // The action type each layer showed after its last ApplyMode, to know which type the user is leaving.
+        private readonly SendMode[] _lastMode = new SendMode[Layers];
 
         /// <summary>
         /// Shows what the layer's type needs: the value box (or modifier chooser / prediction slot), the picker
@@ -704,11 +707,12 @@ namespace OnScreenKeyboard
             if (applyPicker)
             {
                 if (isMod) ApplyModChoice();
-                else if (mode == SendMode.KeySequence) { _values[layer].Text = ""; SetHint(Lang.T("Press Record to record, or type directly")); }
+                else if (mode == SendMode.KeySequence) { _values[layer].Text = ""; SetHint(Lang.T("Press the record button to record, or type directly")); }
                 else if (mode == SendMode.Layout) _values[layer].Text = "";
             }
             _values[layer].AccessibleName = ValueName(layer);
             ValidateLayoutField(layer);
+            _lastMode[layer] = mode;
             if (layer == 0) UpdateLayerAvailability();
         }
 
@@ -767,8 +771,16 @@ namespace OnScreenKeyboard
         {
             for (int i = 0; i < Layers; i++)
             {
-                if (_recording && _recordLayer == i) continue;         // the recording state owns that button's text
-                _pickers[i].Text = ModeOf(i) == SendMode.Layout ? Lang.T("Browse…") : Lang.T("Record…");
+                bool layout = ModeOf(i) == SendMode.Layout;
+                bool recording = _recording && _recordLayer == i;
+                // The toolbar's own icon style: a ring with a red dot (record) or a red square (stop), the folder of "load" for Browse.
+                string svg = layout ? "load.svg" : recording ? "stopRecording.svg" : "record.svg";
+                _pickers[i].IconImage = SvgIconLoader.Load(svg, Fluent.TextPrimary, 28);
+                _pickers[i].IconGlyph = _pickers[i].IconImage != null ? "" : layout ? GlyphFolder : recording ? GlyphStop : GlyphRecord;   // glyph only if the icon file is missing
+                _pickers[i].Text = "";
+                _pickers[i].AccessibleName = layout ? Lang.StripMnemonic(Lang.T("Browse…"))
+                                           : recording ? Lang.T("Stop recording") : Lang.StripMnemonic(Lang.T("Record…"));
+                _pickers[i].Invalidate();
             }
         }
 
@@ -870,11 +882,8 @@ namespace OnScreenKeyboard
             _recording   = true;
             _recordLayer = layer;
             _winHeld     = false;
-            var b = _pickers[layer];
-            b.Text  = Lang.T("Press key now…");
-            b.Style = FluentButton.Variant.Danger;
-            b.Invalidate();
-            SetHint(Lang.T("Press Escape to cancel"));
+            UpdatePickerTexts();                // the stop symbol; clicking the button again cancels
+            SetHint(Lang.T("Perform the key combination you want on the keyboard."));
             _values[layer].Text = "";
 
             _hookProc   = LowLevelHookCallback;
@@ -895,10 +904,7 @@ namespace OnScreenKeyboard
                 UnhookWindowsHookEx(_hookHandle);
                 _hookHandle = IntPtr.Zero;
             }
-            var b = _pickers[_recordLayer];
-            b.Style = FluentButton.Variant.Neutral;
             UpdatePickerTexts();
-            b.Invalidate();
             SetHint(cancelled ? Lang.T("Cancelled") : Lang.T("Recorded — edit if needed"));
         }
 
@@ -918,12 +924,8 @@ namespace OnScreenKeyboard
             }
             if (!isDown) return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
 
-            // Escape cancels and still reaches the application. BeginInvoke: the hook runs inside the message pump.
-            if (kbd.vkCode == VK_ESCAPE)
-            {
-                BeginInvoke((Action)(() => StopRecording(cancelled: true)));
-                return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
-            }
+            // Escape is a key like any other (Ctrl+Esc, Alt+Esc ... are shortcuts): it is recorded. Recording is cancelled by
+            // clicking the stop button (or by leaving the window).
 
             // Win key: remember it and suppress it so the Start menu does not react.
             if (kbd.vkCode == VK_LWIN || kbd.vkCode == VK_RWIN) { _winHeld = true; return (IntPtr)1; }
@@ -954,42 +956,63 @@ namespace OnScreenKeyboard
                 }
                 _layerTouched[layer] = true;
                 _values[layer].Text = ToHuman(send);            // "{Ctrl}c", not "^c"
-                if (string.IsNullOrWhiteSpace(_labels[layer].Text))
-                    _labels[layer].Text = BuildHumanLabel(kbd.vkCode, ctrl, alt, shift, _winHeld);
+                ApplyRecordedLabel(layer, BuildHumanLabel(kbd.vkCode, ctrl, alt, shift, _winHeld));
                 StopRecording(cancelled: false);
             }));
 
             return (IntPtr)1;   // suppress: the key must not type into the app behind the editor
         }
 
-        /// <summary>The internal send string from raw hook data: ^ Ctrl, % Alt, + Shift, or "win:" for the Win key.</summary>
-        private static string BuildSendFromHook(uint vk, bool ctrl, bool alt, bool shift, bool win)
+        /// <summary>
+        /// Puts the label of a recorded shortcut in the layer's label box, unless the user wrote a label of their own:
+        /// an empty label, or the one a previous recording put there, is replaced.
+        /// </summary>
+        private void ApplyRecordedLabel(int layer, string label)
         {
-            string keyPart = VkCodeToSendKeys(vk, shift);
-            if (win) return "win:" + keyPart;
-            string prefix = "";
-            if (ctrl) prefix += "^";
-            if (alt)  prefix += "%";
-            // Shift only becomes a prefix for non-printable keys: on letters and digits it changes the character itself.
-            if (shift && !IsPrintableVk(vk)) prefix += "+";
-            return prefix + keyPart;
+            string cur = _labels[layer].Text;
+            if (!string.IsNullOrWhiteSpace(cur) && cur != _recordedLabel[layer]) return;
+            _recordedLabel[layer] = label;
+            _labels[layer].Text = label;
         }
 
-        /// <summary>A short readable label ("Ctrl+c") used when the label is still empty after recording.</summary>
-        private static string BuildHumanLabel(uint vk, bool ctrl, bool alt, bool shift, bool win)
+        /// <summary>The internal send string from raw hook data: ^ Ctrl, % Alt, + Shift, or "win:" for the Win key.</summary>
+        internal static string BuildSendFromHook(uint vk, bool ctrl, bool alt, bool shift, bool win)
+        {
+            bool asPrefix = ShiftIsPrefix(vk, ctrl, alt, shift, win);
+            string keyPart = VkCodeToSendKeys(vk, shift);
+            // Shift alone on a letter is just the capital letter ("A"): SendKeys types that without a modifier.
+            if (shift && !asPrefix) keyPart = keyPart.ToUpperInvariant();
+
+            string prefix = "";
+            if (ctrl)     prefix += "^";
+            if (alt)      prefix += "%";
+            if (asPrefix) prefix += "+";
+            // The Win key is sent by SendKeysHelper.SendWinKey, which reads the same ^ % + prefix of its payload.
+            return (win ? "win:" : "") + prefix + keyPart;
+        }
+
+        /// <summary>A short readable label ("Ctrl+Shift+A") used when the label is still empty after recording.</summary>
+        internal static string BuildHumanLabel(uint vk, bool ctrl, bool alt, bool shift, bool win)
         {
             var parts = new List<string>();
             if (win)   parts.Add("Win");
             if (ctrl)  parts.Add("Ctrl");
             if (alt)   parts.Add("Alt");
-            if (shift && !IsPrintableVk(vk)) parts.Add("Shift");
+            if (ShiftIsPrefix(vk, ctrl, alt, shift, win)) parts.Add("Shift");
             string key = VkCodeToSendKeys(vk, shift).TrimStart('{').TrimEnd('}');
             if (vk >= 0x41 && vk <= 0x5A) key = key.ToUpper();
             parts.Add(key);
             return string.Join("+", parts);
         }
 
-        private static bool IsPrintableVk(uint vk) => (vk >= 0x41 && vk <= 0x5A) || (vk >= 0x30 && vk <= 0x39);
+        /// <summary>
+        /// True when Shift is a modifier of the combination (the "+" prefix). Only a letter pressed with Shift alone is not:
+        /// there Shift just makes the capital letter. With Ctrl, Alt or Win held, or on any other key, it is a modifier.
+        /// </summary>
+        private static bool ShiftIsPrefix(uint vk, bool ctrl, bool alt, bool shift, bool win) =>
+            shift && (ctrl || alt || win || !IsLetterVk(vk));
+
+        private static bool IsLetterVk(uint vk) => vk >= 0x41 && vk <= 0x5A;
 
         /// <summary>A virtual key code as a SendKeys string: letters lowercase, digits, {NAME} tokens; unknown keys as {hex}.</summary>
         private static string VkCodeToSendKeys(uint vk, bool shift)
@@ -1090,7 +1113,7 @@ namespace OnScreenKeyboard
                         break;
                     case SendMode.KeySequence:
                         _values[0].Text = ToHuman(p.Send ?? "");
-                        SetHint(Lang.T("Press Record to re-record, or edit directly"));
+                        SetHint(Lang.T("Press the record button to record again, or edit directly"));
                         break;
                     case SendMode.Layout:
                         _values[0].Text = (p.Send ?? "").Substring(7);          // strip "layout:"

@@ -105,9 +105,33 @@ namespace OnScreenKeyboard
             // Standard Windows Forms startup sequence:
             Application.EnableVisualStyles();                    // Use the OS's current visual theme (rounded buttons, etc.)
             Application.SetCompatibleTextRenderingDefault(false); // Use GDI+ text rendering (looks better on modern Windows)
+
+            // An exception on the UI thread is logged and the app carries on, instead of the standard "unhandled exception"
+            // dialog: that dialog is a window of its own that can sit hidden behind others (this window is always on top)
+            // and then keeps the process alive after the keyboard window has closed.
+            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+            Application.ThreadException += (s, e) => LogError("UI thread", e.Exception);
+            AppDomain.CurrentDomain.UnhandledException += (s, e) => LogError("unhandled", e.ExceptionObject as Exception);
+
             Application.Run(new KeyboardForm());                  // Create the main window and start the event loop
 
-            return 0; // Reaching here means the user closed the keyboard window normally.
+            // Reaching here means the user closed the keyboard window normally. End the process now, whatever else is still
+            // alive (a stray foreground thread, a hook): a closed keyboard must never leave OnScreenKeyboard.exe running,
+            // since that locks the exe for the next build and for the next start.
+            Environment.Exit(0);
+            return 0;
+        }
+
+        /// <summary>Appends an error to <c>OnScreenKeyboard_error.log</c> next to the exe (best effort, never throws).</summary>
+        private static void LogError(string where, Exception ex)
+        {
+            try
+            {
+                System.IO.File.AppendAllText(
+                    System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "OnScreenKeyboard_error.log"),
+                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} [{where}] {ex}{Environment.NewLine}{Environment.NewLine}");
+            }
+            catch { }
         }
     }
 }

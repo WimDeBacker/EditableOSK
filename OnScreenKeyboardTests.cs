@@ -59,12 +59,19 @@ namespace OnScreenKeyboard
             T_Accelerators();
             T_SvgIconLoader_Cache();
             T_TouchControls();
+            T_TouchChoiceButton();
+            T_ColorFlyout();
             T_TouchDialogFrame();
             T_UiGuardBaseline();
             T_ColourContrastAaa();
             T_ControlBorders();
+            T_KeyRings();
+            T_CornerLabels();
             T_DisabledLook();
             T_KeyEditorGuards();
+            T_GroupEditorGuards();
+            T_GroupEditor();
+            T_GroupDialogs();
             T_KeyEditorRoundTrip();
             T_ValidationBlocksApply();
             T_MissingFontHandling();
@@ -1643,7 +1650,7 @@ namespace OnScreenKeyboard
                 }
             }
 
-            // ── Item 28: DescribedRow accessible names ──
+            // ── Item 28: import row accessible descriptions (the import dialog is a list of rows with a chooser each) ──
             {
                 string newRow      = string.Format(Lang.T("import row: {0}: New — will be added"), "Arrows");
                 string conflictRow = string.Format(Lang.T("import row: {0}: Conflict — choose Overwrite, Add as new, or Skip"), "Arrows");
@@ -1655,10 +1662,6 @@ namespace OnScreenKeyboard
                 Assert(conflictRow.Contains("Conflict") || conflictRow.Length > 10,
                     "import row: Conflict — descriptive text present");
                 Assert(protRow.Contains("standard"),                 "import row: Protected — contains group name");
-
-                // DescribedRow itself: AccessibleRowName is stored and readable.
-                var dr = new DescribedRow { AccessibleRowName = newRow };
-                Assert(dr.AccessibleRowName == newRow,               "DescribedRow: AccessibleRowName round-trips");
             }
 
             Section("Priority 8 — DPI scaling (Sizable forms, AutoScroll scroll panel)");
@@ -1680,9 +1683,8 @@ namespace OnScreenKeyboard
                 using var gef = new GroupEditorForm(groups8);
                 Assert(gef.FormBorderStyle == FormBorderStyle.Sizable,
                     "GroupEditorForm: FormBorderStyle is Sizable");
-                bool gefScroll = false;
-                foreach (Control ctrl in gef.Controls) { if (ctrl is Panel gefP && gefP.AutoScroll) { gefScroll = true; break; } }
-                Assert(gefScroll, "GroupEditorForm: has AutoScroll panel wrapper");
+                // The section host (inside the dialog frame) scrolls only when the screen is too small.
+                Assert(UiGuard.All(gef).Any(c => c is Panel gefP && gefP.AutoScroll), "GroupEditorForm: has an AutoScroll panel (the section host)");
             }
 
             // KeyboardEditorForm
@@ -4549,28 +4551,28 @@ namespace OnScreenKeyboard
                 // Button.PerformClick() requires CanSelect, which requires the whole ancestor
                 // chain to be Visible — a Form that's never been shown reports Visible=false
                 // for all its children, silently no-opping every PerformClick() below.
+                // The Group Editor has no hex text boxes any more: colours are chosen in a flyout, which never applies an
+                // invalid code (see T_ColorFlyout). What can still be flagged is a field's ErrorProvider message.
                 f.Show();
-                var hexBox = HexBox(f, "_txtKeyColorHex");
-                Assert(hexBox != null, "GroupEditorForm: found the Key color hex TextBox");
-
-                hexBox.Text = "not-a-color";
-                Assert(HasPendingErrors(f), "GroupEditorForm: invalid hex is flagged as a pending error");
+                var err = (ErrorProvider)Field(f, "_err");
+                var nameBox = (Control)Field(f, "_txtName");
+                err.SetError(nameBox, "test error");
+                Assert(HasPendingErrors(f), "GroupEditorForm: a flagged field is a pending error");
                 Assert(f.ResultGroups == null,
-                    "GroupEditorForm: ResultGroups not set before OK is clicked");
+                    "GroupEditorForm: ResultGroups not set before Apply is clicked");
 
-                var btnOk = (Button)typeof(GroupEditorForm)
-                    .GetField("_btnOK", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(f);
+                var btnOk = (Button)Field(f, "_btnApply");
                 btnOk.PerformClick();
                 Assert(f.DialogResult != DialogResult.OK,
-                    "GroupEditorForm: OK click is refused while the hex field is invalid");
+                    "GroupEditorForm: Apply click is refused while a field is flagged");
                 Assert(f.ResultGroups == null,
-                    "GroupEditorForm: ResultGroups still not set after the refused OK click");
+                    "GroupEditorForm: ResultGroups still not set after the refused Apply click");
 
-                hexBox.Text = "FF8800";
-                Assert(!HasPendingErrors(f), "GroupEditorForm: valid hex clears the pending error");
+                err.SetError(nameBox, "");
+                Assert(!HasPendingErrors(f), "GroupEditorForm: clearing the flag clears the pending error");
                 btnOk.PerformClick();
                 Assert(f.DialogResult == DialogResult.OK,
-                    "GroupEditorForm: OK click succeeds once the hex field is valid");
+                    "GroupEditorForm: Apply click succeeds once no field is flagged");
             }
 
             // ── KeyboardEditorForm: invalid hex blocks Apply(), fallback uses the prior colour ──
@@ -4674,7 +4676,7 @@ namespace OnScreenKeyboard
                 combo.Items.Add("Arial");
                 combo.Items.Add("Calibri");
                 var mi = typeof(FluentDialogBase).GetMethod("SelectOrInsertFont",
-                    BindingFlags.NonPublic | BindingFlags.Static);
+                    BindingFlags.NonPublic | BindingFlags.Static, null, new[] { typeof(ComboBox), typeof(string) }, null);
 
                 mi.Invoke(null, new object[] { combo, FakeFont });
                 Assert(combo.SelectedItem?.ToString() == FakeFont,
@@ -4688,6 +4690,25 @@ namespace OnScreenKeyboard
                 int arialCount = 0;
                 foreach (var item in combo.Items) if (item.ToString() == "Arial") arialCount++;
                 Assert(arialCount == 1, "SelectOrInsertFont: doesn't duplicate an already-listed font");
+            }
+
+            // ── The same for the touch chooser (the Key Editor and the Group Editor use it) ──
+            {
+                var chooser = new TouchChoiceButton();
+                chooser.SetItems(new[] { "(inherit)", "Arial", "Calibri" }.Select(n => new TouchChoice { Text = n }), 0);
+                int raised = 0;
+                chooser.SelectedIndexChanged += (s, e) => raised++;
+
+                FluentDialogBase.SelectOrInsertFont(chooser, FakeFont);
+                Assert(chooser.SelectedItem?.Text == FakeFont && chooser.SelectedIndex == 1,
+                    "SelectOrInsertFont (chooser): an uninstalled font is inserted after the placeholder and selected");
+                FluentDialogBase.SelectOrInsertFont(chooser, "Calibri");
+                Assert(chooser.SelectedItem?.Text == "Calibri", "SelectOrInsertFont (chooser): an installed font is just selected");
+                FluentDialogBase.SelectOrInsertFont(chooser, FakeFont);
+                Assert(chooser.Items.Count(i => i.Text == FakeFont) == 1, "SelectOrInsertFont (chooser): an inserted font is not inserted twice");
+                FluentDialogBase.SelectOrInsertFont(chooser, "");
+                Assert(chooser.SelectedIndex == 0, "SelectOrInsertFont (chooser): an empty name selects the placeholder");
+                Assert(raised == 0, "SelectOrInsertFont (chooser): never raises the change event (it is a load, not a user pick)");
             }
 
             // ── GroupEditorForm: uninstalled font survives commit untouched ─
@@ -4730,7 +4751,7 @@ namespace OnScreenKeyboard
 
                 var groups = new List<KeyGroup> { new KeyGroup { Name = SettingsManager.StandardGroupName } };
                 using var f = new GroupEditorForm(groups);
-                var cmbFont = (ComboBox)typeof(GroupEditorForm)
+                var cmbFont = (Control)typeof(GroupEditorForm)
                     .GetField("_cmbFont", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(f);
                 var fontWarn = (ErrorProvider)typeof(FluentDialogBase)
                     .GetField("_fontWarn", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(f);
@@ -4862,7 +4883,8 @@ namespace OnScreenKeyboard
                         // Guard against the collector silently finding nothing.
                         // The Key Editor has fewer labelled rows since the layers share one grid (its action types are
                         // chosen from a flyout, which has no accelerators).
-                        int min = name == "KeyEditorForm" ? 6 : 10;
+                        // The Group Editor has no label-per-row accelerators on its chips and font chooser either.
+                        int min = name == "KeyEditorForm" ? 6 : name == "GroupEditorForm" ? 6 : 10;
                         Assert(accels.Count >= min,
                             $"accelerators [{lang}] {name}: found {accels.Count} mnemonics (expected at least {min})");
 

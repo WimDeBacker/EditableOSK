@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32">
+  <!-- stop recording: a solid red disc with a white square — clearly different from the record icon (an outline ring with a dot) -->
+  <circle cx="12" cy="12" r="10" fill="#bf534e"></circle>
+  <rect x="7.8" y="7.8" width="8.4" height="8.4" rx="1.4" ry="1.4" fill="#ffffff"></rect>
+</svg>

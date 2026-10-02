@@ -671,19 +671,29 @@ namespace OnScreenKeyboard
             {
                 RestoreFocusIfLost();
 
-                ushort vk = WinKeyPayloadToVk(key);
+                // Optional ^ % + prefix: Ctrl / Alt / Shift held together with Win (e.g. Win+Shift+S is "win:+s").
+                var mods = new List<ushort>();
+                int p = 0;
+                while (p < key.Length && (key[p] == '^' || key[p] == '%' || key[p] == '+'))
+                {
+                    mods.Add(key[p] == '^' ? (ushort)0x11 : key[p] == '%' ? (ushort)0x12 : (ushort)0x10);   // VK_CONTROL / VK_MENU / VK_SHIFT
+                    p++;
+                }
+                // A lone "+" or "^" after the prefix is the key itself, not a modifier: "win:+" has no prefix.
+                if (p == key.Length && p > 0) { p--; mods.RemoveAt(mods.Count - 1); }
+
+                ushort vk = WinKeyPayloadToVk(key.Substring(p));
                 if (vk == 0) return; // unknown key — silently skip
 
-                // Press and release sequence: LWIN down, key down, key up, LWIN up.
+                // Press and release sequence: LWIN down, modifiers down, key down, key up, modifiers up, LWIN up.
                 // This matches what Windows expects for a Win+key shortcut.
-                var inputs = new[]
-                {
-                    MakeVk(VK_LWIN, false),  // Win key down
-                    MakeVk(vk,      false),  // shortcut key down
-                    MakeVk(vk,      true),   // shortcut key up
-                    MakeVk(VK_LWIN, true),   // Win key up
-                };
-                SendInput((uint)inputs.Length, inputs, INPUT.Size);
+                var inputs = new List<INPUT> { MakeVk(VK_LWIN, false) };
+                foreach (var m in mods) inputs.Add(MakeVk(m, false));
+                inputs.Add(MakeVk(vk, false));
+                inputs.Add(MakeVk(vk, true));
+                for (int i = mods.Count - 1; i >= 0; i--) inputs.Add(MakeVk(mods[i], true));
+                inputs.Add(MakeVk(VK_LWIN, true));
+                SendInput((uint)inputs.Count, inputs.ToArray(), INPUT.Size);
             });
         }
 

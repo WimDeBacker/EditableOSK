@@ -1763,6 +1763,37 @@ namespace OnScreenKeyboard
         /// their input.
         /// </para>
         /// </summary>
+        /// <summary>
+        /// The edit-mode selection ring of a key: a 2 px white band on the very edge of the key and a 2 px dark band just inside it
+        /// (pixels 0-1 and 2-3). White shows on dark keys (e.g. blue), the dark band on pale ones. Every layer is exactly as wide on
+        /// all four sides (see <see cref="Fluent.DrawSquareRing"/>).
+        /// </summary>
+        internal static void DrawSelectionRing(Graphics g, int w, int h)
+        {
+            Fluent.DrawSquareRing(g, w, h, inset: 0, penWidth: 2, Color.White);
+            Fluent.DrawSquareRing(g, w, h, inset: 2, penWidth: 2, Color.FromArgb(200, 0, 0, 0));
+        }
+
+        /// <summary>The small Shift label (top right) and AltGr label (top left) of a key, in the key's font colour at reduced opacity.</summary>
+        internal static void DrawCornerLabels(Graphics g, Size size, string shiftLabel, string altGrLabel, Font cornerFont, Color fontColor)
+        {
+            const int margin = 2;
+            if (!string.IsNullOrEmpty(shiftLabel))
+            {
+                var szS = TextRenderer.MeasureText(g, shiftLabel, cornerFont, size, TextFormatFlags.NoPrefix);
+                var rectS = new Rectangle(size.Width - szS.Width - margin, margin, szS.Width, szS.Height);
+                TextRenderer.DrawText(g, shiftLabel, cornerFont, rectS, Color.FromArgb(160, fontColor),
+                    TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine);
+            }
+            if (!string.IsNullOrEmpty(altGrLabel) && altGrLabel != shiftLabel)
+            {
+                var szA = TextRenderer.MeasureText(g, altGrLabel, cornerFont, size, TextFormatFlags.NoPrefix);
+                var rectA = new Rectangle(margin, margin, szA.Width, szA.Height);
+                TextRenderer.DrawText(g, altGrLabel, cornerFont, rectA, Color.FromArgb(130, fontColor),
+                    TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine);
+            }
+        }
+
         private void OnButtonPaint(object sender, PaintEventArgs e)
         {
             if (sender is not Button btn) return;
@@ -1777,15 +1808,7 @@ namespace OnScreenKeyboard
                 && ReferenceEquals(_chkSelBtn, btn);
             if (isSelectedKey)
             {
-                // "Sandwich" ring: dark outer → white middle → dark inner.
-                // Contrasting dark lines make the white ring visible on both
-                // dark-coloured keys (e.g. blue) and pale/white keys.
-                using (var p1 = new Pen(Color.FromArgb(180, 0, 0, 0), 1f))
-                    e.Graphics.DrawRectangle(p1, 0, 0, btn.Width - 1, btn.Height - 1);
-                using (var p2 = new Pen(Color.White, 2f))
-                    e.Graphics.DrawRectangle(p2, 2, 2, btn.Width - 5, btn.Height - 5);
-                using (var p3 = new Pen(Color.FromArgb(180, 0, 0, 0), 1f))
-                    e.Graphics.DrawRectangle(p3, 4, 4, btn.Width - 9, btn.Height - 9);
+                DrawSelectionRing(e.Graphics, btn.Width, btn.Height);
             }
 
             if (btn.Tag is not (string ml, string sl, string al, Color fc, bool isWP, int typedLen)) return;
@@ -1852,29 +1875,10 @@ namespace OnScreenKeyboard
             }
 
             // ── Corner labels (shift top-right, AltGr top-left) ──────
-            const int margin = 2;
+            // Skipped when the layout hides them (an option for people who find so many signs overstimulating).
             // GetCornerFont caches the result — no allocation per paint call.
-            var cf = GetCornerFont(btn.Font);
-
-            if (!string.IsNullOrEmpty(sl))
-            {
-                var szS = TextRenderer.MeasureText(e.Graphics, sl, cf,
-                              new Size(btn.Width, btn.Height), TextFormatFlags.NoPrefix);
-                var rectS = new Rectangle(
-                    btn.Width - szS.Width - margin, margin, szS.Width, szS.Height);
-                TextRenderer.DrawText(e.Graphics, sl, cf, rectS,
-                    Color.FromArgb(160, fc),
-                    TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine);
-            }
-            if (!string.IsNullOrEmpty(al) && al != sl)
-            {
-                var szA = TextRenderer.MeasureText(e.Graphics, al, cf,
-                              new Size(btn.Width, btn.Height), TextFormatFlags.NoPrefix);
-                var rectA = new Rectangle(margin, margin, szA.Width, szA.Height);
-                TextRenderer.DrawText(e.Graphics, al, cf, rectA,
-                    Color.FromArgb(130, fc),
-                    TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine);
-            }
+            if (_meta.ShowCornerLabels)
+                DrawCornerLabels(e.Graphics, btn.Size, sl, al, GetCornerFont(btn.Font), fc);
 
             // ── Slow-key / dwell progress (bottom-up fill) ───────────
             // Both features share the same visual: a semi-transparent fill that
@@ -3216,8 +3220,10 @@ namespace OnScreenKeyboard
                     new Rectangle(startX, 0, prefixW, H), textFg, mfV);
 
             // ── Chip: filled rounded rect ─────────────────────────────
-            var chipRect = new Rectangle(chipX, chipY, chipW - 1, chipH - 1);
-            using var chipPath = Fluent.RoundedRect(chipRect, chipR);
+            // Fill and outline run through pixel centres (see Fluent.CrispBorderRect): one identical pixel on every side.
+            var crisp = Fluent.CrispBorderRect(chipW, chipH);
+            var chipRect = new RectangleF(chipX + crisp.X, chipY + crisp.Y, crisp.Width, crisp.Height);
+            using var chipPath = Fluent.RoundedRectF(chipRect, chipR);
             using (var br = new SolidBrush(keyBg))
                 g.FillPath(br, chipPath);
             using (var pen = new Pen(keyBdr))
@@ -3515,6 +3521,7 @@ namespace OnScreenKeyboard
             _theme .CopyFrom(dlg.ResultTheme);
             _window.CopyFrom(dlg.ResultWindow);
             _meta  .CopyFrom(dlg.ResultMeta);
+            foreach (var b in _buttons.Values) b.Invalidate();   // e.g. the corner labels were switched on or off: nothing else changes, so nothing else would repaint
             ApplyTitlebarState();
             ForceTopMost();  // re-apply always-on-top setting immediately
             BackColor = _theme.BackgroundColor; Opacity = _theme.Opacity;

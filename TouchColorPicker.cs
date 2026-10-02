@@ -50,9 +50,50 @@ namespace OnScreenKeyboard
                 BackColor = value;
                 double lum = (0.299 * value.R + 0.587 * value.G + 0.114 * value.B) / 255.0;
                 ForeColor = lum > 0.55 ? Color.Black : Color.White;      // the label stays readable on any colour
-                AccessibleName = $"{_caption} color {SettingsManager.Hex(value)}";
+                UpdateAccessibleName();
                 Invalidate();
             }
+        }
+
+        // ── Inheriting the colour from a parent (a group inherits from the standard group) ──
+
+        /// <summary>
+        /// Text of the flyout's "inherit" button. When set, the flyout offers to hand the colour back to the parent
+        /// instead of choosing one (null = no such button: the colour is always a concrete one).
+        /// </summary>
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public string InheritText { get; set; }
+
+        /// <summary>
+        /// True when the colour is not set here but taken from the parent. <see cref="Value"/> then holds the colour
+        /// that is inherited, so the chip shows what the key will actually look like; a dashed outline marks it.
+        /// </summary>
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public bool Inherited
+        {
+            get => _inherited;
+            private set { if (_inherited == value) return; _inherited = value; UpdateAccessibleName(); Invalidate(); }
+        }
+        private bool _inherited;
+
+        /// <summary>Sets the chip to "inherited", showing <paramref name="inheritedColor"/> (the parent's colour). Raises nothing.</summary>
+        public void SetInherited(Color inheritedColor)
+        {
+            Inherited = true;
+            Value = inheritedColor;
+        }
+
+        /// <summary>Sets an own colour (no longer inherited). Raises nothing.</summary>
+        public void SetOwn(Color color)
+        {
+            Inherited = false;
+            Value = color;
+        }
+
+        private void UpdateAccessibleName()
+        {
+            string hex = SettingsManager.Hex(BackColor);
+            AccessibleName = _inherited ? $"{_caption} color {hex} ({Lang.T("inherited")})" : $"{_caption} color {hex}";
         }
 
         protected override void OnClick(EventArgs e)
@@ -83,7 +124,9 @@ namespace OnScreenKeyboard
             using (var path = Fluent.RoundedRectF(Fluent.CrispBorderRect(Width, Height), Fluent.RadiusBtn))
             {
                 using (var fill = new SolidBrush(BackColor)) g.FillPath(fill, path);
-                using (var pen = new Pen(border)) g.DrawPath(pen, path);
+                // An inherited colour has a dashed outline: it is shown, but it is not set on this item.
+                using (var pen = new Pen(border) { DashStyle = _inherited ? System.Drawing.Drawing2D.DashStyle.Dash : System.Drawing.Drawing2D.DashStyle.Solid })
+                    g.DrawPath(pen, path);
             }
             TextRenderer.DrawText(g, Text, Font, ClientRectangle, ForeColor,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
@@ -101,8 +144,9 @@ namespace OnScreenKeyboard
         internal ColorFlyout OpenPicker(bool keepOpen = false)
         {
             if (_flyout != null && !_flyout.IsDisposed) return _flyout;
-            var f = new ColorFlyout(Value, DeviceDpi / 96f) { KeepOpen = keepOpen };
-            f.Picked += c => { Value = c; ValueChanged?.Invoke(this, EventArgs.Empty); };
+            var f = new ColorFlyout(Value, DeviceDpi / 96f, InheritText) { KeepOpen = keepOpen };
+            f.Picked += c => { SetOwn(c); ValueChanged?.Invoke(this, EventArgs.Empty); };
+            f.InheritChosen += () => { Inherited = true; ValueChanged?.Invoke(this, EventArgs.Empty); };
             f.FormClosed += (s, e) => { _flyout = null; if (!IsDisposed) Focus(); };
 
             var wa    = Screen.FromControl(this).WorkingArea;
@@ -150,7 +194,12 @@ namespace OnScreenKeyboard
 
         private static Color Hex(string rgb) => SettingsManager.ParseColor(rgb, Color.Black);
 
-        public ColorFlyout(Color current, float scale)
+        /// <summary>Raised when the user chooses to inherit the colour instead of picking one (only offered when an inherit text is given).</summary>
+        public event Action InheritChosen;
+
+        private readonly FluentButton _inherit;
+
+        public ColorFlyout(Color current, float scale, string inheritText = null)
         {
             _current = current;
             _dark    = !ToolbarButton.IsLightTheme;
@@ -199,11 +248,26 @@ namespace OnScreenKeyboard
                 Bounds = new Rectangle(pad, y, gridW, cell),
             };
             _more.Click += (s, e) => MoreColours();
+            y += cell;
 
-            ClientSize = new Size(gridW + 2 * pad, y + cell + pad);
+            if (!string.IsNullOrEmpty(inheritText))
+            {
+                // Hands the colour back to the parent (e.g. the standard group) instead of setting one here.
+                y += gap;
+                _inherit = new FluentButton
+                {
+                    Text = inheritText, Style = FluentButton.Variant.Neutral, TabStop = true,
+                    Bounds = new Rectangle(pad, y, gridW, cell),
+                };
+                _inherit.Click += (s, e) => { InheritChosen?.Invoke(); Close(); };
+                y += cell;
+            }
+
+            ClientSize = new Size(gridW + 2 * pad, y + pad);
             Controls.Add(_palette);
             Controls.Add(_hex);
             Controls.Add(_more);
+            if (_inherit != null) Controls.Add(_inherit);
         }
 
         protected override CreateParams CreateParams
@@ -309,16 +373,18 @@ namespace OnScreenKeyboard
                     // A real boundary (3 : 1), so a white swatch on a white flyout is still a visible target.
                     using (var pen = new Pen(ToolbarButton.IsLightTheme ? Fluent.ControlBorder : Fluent.DialogDarkBorder))
                         g.DrawRectangle(pen, r.X, r.Y, r.Width - 1, r.Height - 1);
+                    var state = g.Save();
+                    g.TranslateTransform(r.X, r.Y);
                     if (_colors[i].ToArgb() == Selected.ToArgb())
                     {
-                        // Two-tone ring: visible on both light and dark swatches.
-                        using var white = new Pen(Color.White, 3f);
-                        using var dark  = new Pen(Color.FromArgb(30, 30, 30), 1f);
-                        g.DrawRectangle(white, r.X + 3, r.Y + 3, r.Width - 7, r.Height - 7);
-                        g.DrawRectangle(dark,  r.X + 5, r.Y + 5, r.Width - 11, r.Height - 11);
+                        // Two-tone ring: a white band with a dark line inside it, visible on both light and dark swatches.
+                        // (Fluent.DrawSquareRing: equally wide on all four sides.)
+                        Fluent.DrawSquareRing(g, r.Width, r.Height, inset: 3, penWidth: 3, Color.White);
+                        Fluent.DrawSquareRing(g, r.Width, r.Height, inset: 6, penWidth: 1, Color.FromArgb(30, 30, 30));
                     }
                     if (Focused && i == _focus)
-                        using (var pen = new Pen(Fluent.Accent, 3f)) g.DrawRectangle(pen, r.X + 1, r.Y + 1, r.Width - 3, r.Height - 3);
+                        Fluent.DrawSquareRing(g, r.Width, r.Height, inset: 0, penWidth: 3, Fluent.Accent);
+                    g.Restore(state);
                 }
             }
 

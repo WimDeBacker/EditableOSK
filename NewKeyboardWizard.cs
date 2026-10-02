@@ -860,7 +860,9 @@ namespace OnScreenKeyboard
                 using var keyBrush=new SolidBrush(keyC);
                 using var fntBrush=new SolidBrush(fntC);
                 g.FillRectangle(keyBrush,r);
-                if (borPen!=null) g.DrawRectangle(borPen,r);
+                // The border lies inside the key, the same width on all four sides (a pen on the edge itself put the
+                // right and bottom lines one pixel outside the fill).
+                if (borPen!=null) g.DrawRectangle(borPen, r.X + borT/2f, r.Y + borT/2f, r.Width - borT, r.Height - borT);
                 g.DrawString(samples[i].Label,fnt,fntBrush,r,sf);
             }
         }

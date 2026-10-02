@@ -70,6 +70,13 @@ namespace OnScreenKeyboard
         public string  IconGlyph    { get; set; } = "";
 
         /// <summary>
+        /// An optional bitmap (see <see cref="SvgIconLoader"/>) drawn centred, for an icon-only button. The bitmap is owned by the
+        /// icon cache: the button never disposes it.
+        /// </summary>
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public Image   IconImage    { get; set; }
+
+        /// <summary>
         /// The radius in pixels of the rounded corners.
         /// Defaults to the app-wide button corner radius defined in <see cref="Fluent.RadiusBtn"/>.
         /// A value of 0 produces square corners; larger values produce more pill-shaped buttons.
@@ -210,6 +217,14 @@ namespace OnScreenKeyboard
             FluentPainter.PaintLight(e.Graphics, ClientRectangle, Text, IconGlyph,
                 Font, Style, _hovered, _pressed, Enabled, CornerRadius, parentBg,
                 ShowKeyboardCues);
+
+            // An icon-only button draws its image (an SVG bitmap) centred; a disabled one is drawn washed out.
+            if (IconImage != null)
+            {
+                int ix = (Width - IconImage.Width) / 2, iy = (Height - IconImage.Height) / 2;
+                if (Enabled) e.Graphics.DrawImage(IconImage, ix, iy, IconImage.Width, IconImage.Height);
+                else ControlPaint.DrawImageDisabled(e.Graphics, IconImage, ix, iy, BackColor);
+            }
 
             // Focus ring — drawn whenever the button has focus, regardless of how focus was acquired.
             // WCAG 2.1 AA §2.4.7: keyboard focus must be visible.
@@ -1124,6 +1139,13 @@ namespace OnScreenKeyboard
         /// Paints the swatch and, when focused via keyboard, overlays a two-tone focus
         /// ring that is visible against any swatch colour.
         /// </summary>
+        /// <summary>The two-tone ring: a 2 px white band, then a 1 px dark line just inside it, equal on all four sides.</summary>
+        internal static void DrawFocusRing(Graphics g, int w, int h)
+        {
+            Fluent.DrawSquareRing(g, w, h, inset: 2, penWidth: 2, Color.White);
+            Fluent.DrawSquareRing(g, w, h, inset: 4, penWidth: 1, Color.FromArgb(30, 30, 30));
+        }
+
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);   // draws BackColor fill + FlatStyle border
@@ -1133,11 +1155,7 @@ namespace OnScreenKeyboard
             // ShowFocusCues is false for mouse clicks, so this only appears during Tab navigation.
             if (Focused && ShowFocusCues)
             {
-                var g = e.Graphics;
-                using var wpen = new Pen(Color.White, 2f);
-                g.DrawRectangle(wpen, new Rectangle(2, 2, Width - 5, Height - 5));
-                using var dpen = new Pen(Color.FromArgb(30, 30, 30), 1f);
-                g.DrawRectangle(dpen, new Rectangle(4, 4, Width - 9, Height - 9));
+                DrawFocusRing(e.Graphics, Width, Height);
             }
         }
     }
