@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Keyboard Editor mock-up - Accessibility</title>
+<style>
+/* Colours are the tokens of FluentTheme.cs (light and dialog-dark); sizes are design pixels at 100 %.
+   The whole dialog interior is the card colour, because FluentPainter.ApplyDialogTheme paints every panel with it. */
+:root{
+  --page:#F3F3F3; --card:#FFFFFF; --input:#FFFFFF;
+  --text:#1C1C1C;          /* TextPrimary / DialogDarkText */
+  --accent:#005496; --success:#0A640A; --danger:#961E14;
+  --neutral:#F2F2F2; --neutral-hover:#E1E1E1;   /* Neutral, hover = 7 % darker */
+  --ctl:#767676; --ctl-h:#505050;               /* ControlBorder, ControlBorderHover */
+  --tb:#767676;                                 /* text box / chip / list frame border */
+  --btn-text:#1C1C1C;                           /* neutral buttons keep dark text on both themes */
+  --colored-outline:transparent;                /* dark theme: coloured buttons get a light outline */
+  --dis-fill:#E8E8E8; --dis-border:#C8C8C8; --dis-text:#7D7D7D;
+  --row-line:#E5E5E5; --focus:#005496;
+  --desk:#C9CED6; --titlebar:#FFFFFF; --titletext:#000000; --frame:#9A9A9A;
+  --hint:var(--text);                           /* ApplyTheme recolours every Label to the plain text colour (spec D22) */
+}
+:root[data-theme=dark]{
+  --page:#202020; --card:#303030; --input:#3A3A3A; --text:#E6E6E6;
+  --tb:#969696; --colored-outline:#969696; --dis-fill:#282828; --dis-border:#555555; --dis-text:#7D7D7D;
+  --row-line:#969696; --focus:#E6E6E6;
+  --desk:#101114; --titlebar:#202020; --titletext:#FFFFFF; --frame:#555555;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--desk);color:var(--text);font-family:"Segoe UI Variable","Segoe UI",system-ui,sans-serif;font-size:16.67px;line-height:1.25}
+.tools{display:flex;flex-wrap:wrap;gap:16px;align-items:center;padding:10px 16px;background:#1f2430;color:#fff;font-size:14px;font-family:system-ui,sans-serif}
+.tools .grp{display:inline-flex;gap:0}
+.tools button{font:inherit;color:#fff;background:#39425a;border:1px solid #6b7595;padding:6px 14px;cursor:pointer}
+.tools button:first-child{border-radius:4px 0 0 4px}.tools button:last-child{border-radius:0 4px 4px 0}
+.tools button[aria-pressed=true]{background:#0a66c2;border-color:#8fb8e8}
+.tools .note{opacity:.8}
+.tools a{color:#cfe3ff}
+.stage{padding:24px 16px;overflow-x:auto}
+.win{width:922px;margin:0 auto;border:1px solid var(--frame);background:var(--card);box-shadow:0 8px 28px rgba(0,0,0,.35)}
+.title{height:32px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;background:var(--titlebar);color:var(--titletext);font-size:13px}
+.client{width:920px;padding:16px;background:var(--card)}
+/* section bar */
+.tabs{display:flex;flex-wrap:wrap;margin-bottom:8px}
+.tab{display:inline-flex;align-items:center;height:44px;min-width:96px;padding:0 14px;margin:0 6px 6px 0;border:1px solid var(--ctl);border-radius:5px;background:var(--neutral);color:var(--btn-text);text-decoration:none;cursor:pointer}
+.tab.sel{background:var(--accent);color:#fff;border-color:var(--colored-outline,var(--accent))}
+:root:not([data-theme=dark]) .tab.sel{border-color:var(--accent)}
+.body{padding:16px}
+.rows{display:grid;grid-template-columns:1fr;align-items:center}
+.wide{margin:4px 0;display:flex;align-items:center;gap:8px;flex-wrap:nowrap}
+.hint{font-size:14.67px;color:var(--hint);margin:4px 0;min-height:44px;max-width:780px}  /* always present, two lines reserved */
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;height:44px;min-width:120px;padding:0 16px;border:1px solid var(--ctl);border-radius:5px;background:var(--neutral);color:var(--btn-text);font:inherit;cursor:pointer}
+.btn:hover{background:var(--neutral-hover);border-color:var(--ctl-h)}
+.btn.success{background:var(--success);color:#fff;border-color:var(--colored-outline,var(--success))}
+:root:not([data-theme=dark]) .btn.success{border-color:var(--success)}
+.btn.success:hover{background:#08500A}
+.btn[disabled]{background:var(--dis-fill);border-color:var(--dis-border);color:var(--dis-text);cursor:default}
+.stepper{display:inline-flex;width:176px;height:44px;gap:4px}
+.stepper .sb{width:44px;min-width:44px;padding:0;font-size:21px;font-weight:700}
+.stepper .sv{flex:1;height:44px;display:flex;align-items:center;justify-content:center;border:1px solid var(--tb);background:var(--input);color:var(--text)}
+.stepper.off .sv{background:var(--dis-fill);border-color:var(--dis-border);color:var(--dis-text)}
+.check{display:inline-flex;align-items:center;gap:10px;height:44px;padding:0 16px 0 14px;border:1px solid var(--ctl);border-radius:5px;background:var(--neutral);color:var(--btn-text);cursor:pointer;user-select:none;white-space:nowrap}
+.check:hover{background:var(--neutral-hover);border-color:var(--ctl-h)}
+.check .box{position:relative;width:24px;height:24px;border:2px solid var(--ctl-h);border-radius:4px;background:#fff;flex:none}
+.check.on .box{background:var(--accent)}
+.check.on .box::after{content:"";position:absolute;left:6px;top:1px;width:6px;height:13px;border:solid #fff;border-width:0 3px 3px 0;transform:rotate(45deg)}
+.check.dis{background:var(--dis-fill);border-color:var(--dis-border);color:var(--dis-text);cursor:default}
+.check.dis:hover{background:var(--dis-fill);border-color:var(--dis-border)}
+.check.dis .box{background:var(--dis-fill);border-color:var(--dis-border)}
+.check.dis.on .box{background:var(--dis-text)}
+.unit{color:var(--text)}
+.footer{display:flex;justify-content:flex-end;gap:8px;padding:8px 16px 0}
+u{text-decoration:underline;text-underline-offset:2px}
+:focus-visible{outline:3px solid var(--focus);outline-offset:1px}
+</style>
+</head>
+<body>
+<div class="tools">
+  <strong>Mock-up (static picture, not the program): Keyboard Editor, Accessibility</strong>
+  <span class="grp" role="group" aria-label="Theme"><button id="b-light" aria-pressed="true">Light</button><button id="b-dark" aria-pressed="false">Dark</button></span>
+  <span class="grp" role="group" aria-label="Language"><button id="b-en" aria-pressed="true">English</button><button id="b-nl" aria-pressed="false">Nederlands</button></span>
+  <span class="note">Try the check boxes: Slow keys and Dwell click exclude each other, and the timing animation follows them.
+  Other sections: <a href="keyboardeditor_general.html">General</a>, <a href="keyboardeditor_wordprediction.html">Word prediction</a>. Spec: keyboardeditor_spec.md</span>
+</div>
+<div class="stage">
+<div class="win" role="dialog" aria-labelledby="ttl">
+  <div class="title"><span id="ttl" data-i="Edit Keyboard"></span><span aria-hidden="true">&#10005;</span></div>
+  <div class="client">
+    <div class="tabs" role="tablist">
+      <a class="tab" role="tab" aria-selected="false" href="keyboardeditor_general.html" data-i="General"></a>
+      <a class="tab sel" role="tab" aria-selected="true" href="keyboardeditor_accessibility.html" data-i="Accessibility"></a>
+      <a class="tab" role="tab" aria-selected="false" href="keyboardeditor_wordprediction.html" data-i="wp: Word prediction"></a>
+    </div>
+    <div class="body">
+      <div class="rows">
+        <!-- A1 -->
+        <div class="wide"><span class="check on" role="checkbox" tabindex="0" id="k-sticky" data-tip="tip: Sticky modifiers"><span class="box"></span><span data-i="Sticky modifiers"></span></span></div>
+        <!-- A2 -->
+        <div class="wide"><span class="check" role="checkbox" tabindex="0" id="k-hold" data-tip="tip: Hold to edit"><span class="box"></span><span data-i="Hold to edit"></span></span></div>
+        <!-- A3 Slow keys: check, stepper, unit -->
+        <div class="wide">
+          <span class="check" role="checkbox" tabindex="0" id="k-slow" data-tip="tip: Slow keys"><span class="box"></span><span data-i="Slow keys"></span></span>
+          <span class="stepper off" id="s-slow" data-tip="tip: Slow keys"><button class="btn sb" aria-label="Decrease" disabled>&#8722;</button><span class="sv" role="spinbutton" aria-valuemin="100" aria-valuemax="3000"></span><button class="btn sb" aria-label="Increase" disabled>+</button></span>
+          <span class="unit" id="u-slow" title="milliseconds">ms</span>
+        </div>
+        <!-- A4 Dwell click -->
+        <div class="wide">
+          <span class="check" role="checkbox" tabindex="0" id="k-dwell" data-tip="tip: Dwell click"><span class="box"></span><span data-i="Dwell click"></span></span>
+          <span class="stepper off" id="s-dwell" data-tip="tip: Dwell click"><button class="btn sb" aria-label="Decrease" disabled>&#8722;</button><span class="sv" role="spinbutton" aria-valuemin="100" aria-valuemax="5000"></span><button class="btn sb" aria-label="Increase" disabled>+</button></span>
+          <span class="unit" id="u-dwell" title="milliseconds">ms</span>
+        </div>
+        <!-- A5 Show timing animation (disabled until A3 or A4 is on; the value is kept) -->
+        <div class="wide"><span class="check on dis" role="checkbox" tabindex="-1" aria-disabled="true" id="k-anim" data-tip="tip: Show timing animation"><span class="box"></span><span data-i="Show timing animation"></span></span></div>
+        <!-- A6 hint (always present, two lines reserved) -->
+        <div class="hint" id="hint" data-i="kbd: timing hint"></div>
+        <!-- A7 Corner labels -->
+        <div class="wide"><span class="check on" role="checkbox" tabindex="0" id="k-corner" data-tip="tip: Show Shift and AltGr labels"><span class="box"></span><span data-i="Show Shift and AltGr labels"></span></span></div>
+      </div>
+    </div>
+    <div class="footer">
+      <button class="btn" data-i="Cancel"></button>
+      <button class="btn success" data-i="Apply"></button>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+/* Strings: the keys and texts of keyboardeditor_spec.md section 3 (English from LanguageManager.cs, Dutch from lang_nl.xml). */
+var S={
+en:{"Edit Keyboard":"Edit Keyboard","General":"General","Accessibility":"Accessibility","wp: Word prediction":"Word prediction",
+"Apply":"A&pply","Cancel":"&Cancel",
+"Sticky modifiers":"Stic&ky modifiers","Hold to edit":"&Hold to enter edit mode","Slow keys":"Slow k&eys","Dwell click":"&Dwell click",
+"Show timing animation":"Sho&w timing animation","Show Shift and AltGr labels":"Show Shi&ft and AltGr labels",
+"kbd: timing hint":"Slow keys and Dwell click exclude each other: switching one on switches the other off. The timing animation is available while one of them is on.",
+"milliseconds":"milliseconds",
+"tip: Sticky modifiers":"Shift, Ctrl and Alt stay on after one tap and switch off after the next key, so you never have to hold two keys at once.",
+"tip: Hold to edit":"Hold a key for a moment to open its editor. A quick tap still types the key, so the editor does not open by accident.",
+"tip: Slow keys":"Hold a key for this many milliseconds before it registers. Prevents accidental key activations.",
+"tip: Dwell click":"Hover over a key for this many milliseconds to activate it automatically, without clicking.",
+"tip: Show timing animation":"Show a visual fill animation on keys while slow keys or dwell click is counting down. Uncheck if you find the animation distracting.",
+"tip: Show Shift and AltGr labels":"Show the small Shift and AltGr labels in the corners of the keys. Uncheck for less to look at: only the main label is drawn. The keys work exactly the same."},
+nl:{"Edit Keyboard":"Toetsenbord bewerken","General":"Algemeen","Accessibility":"Toegankelijkheid","wp: Word prediction":"Woordvoorspelling",
+"Apply":"Toe&passen","Cancel":"Ann&uleren",
+"Sticky modifiers":"Plaktoetsen (Sticky &Keys)","Hold to edit":"&Ingedrukt houden voor bewerkingsmodus","Slow keys":"La&ngzame toetsen","Dwell click":"Automatis&che klik",
+"Show timing animation":"Voo&rtgangsanimatie tonen","Show Shift and AltGr labels":"Shi&ft- en AltGr-labels tonen",
+"kbd: timing hint":"Langzame toetsen en automatische klik sluiten elkaar uit: de ene aanzetten zet de andere uit. De voortgangsanimatie is beschikbaar zolang een van beide aanstaat.",
+"milliseconds":"milliseconden",
+"tip: Sticky modifiers":"Shift, Ctrl en Alt blijven na één tik aan en gaan uit na de volgende toets, zodat nooit twee toetsen tegelijk ingehouden hoeven te worden.",
+"tip: Hold to edit":"Houd een toets even ingedrukt om de editor te openen. Een korte tik typt de toets gewoon, zodat de editor niet per ongeluk opent.",
+"tip: Slow keys":"Houd een toets zo lang ingedrukt (in milliseconden) voordat deze wordt geregistreerd. Voorkomt onbedoelde toetsaanslagen.",
+"tip: Dwell click":"Zweef over een toets gedurende dit aantal milliseconden om deze automatisch te activeren, zonder klikken.",
+"tip: Show timing animation":"Toont een visuele animatie op toetsen terwijl langzame toetsen of automatische klik aftelt. Vink uit als u de animatie afleidend vindt.",
+"tip: Show Shift and AltGr labels":"Toont de kleine Shift- en AltGr-labels in de hoeken van de toetsen. Vink uit om minder te zien: alleen het hoofdlabel wordt getekend. De toetsen werken precies hetzelfde."}
+};
+var lang="en";
+function t(k){return (S[lang][k]!==undefined?S[lang][k]:S.en[k])}
+function vis(s){return s.replace(/&(.)/,"<u>$1</u>")}
+function plain(s){return s.replace("&","")}
+var slow={ms:300,min:100,max:3000,step:50}, dwell={ms:1000,min:100,max:5000,step:100};
+function on(id){return document.getElementById(id).classList.contains("on")}
+function setOn(id,v){var e=document.getElementById(id);e.classList.toggle("on",v);e.setAttribute("aria-checked",v)}
+function sync(){
+  [["slow","k-slow","s-slow",slow],["dwell","k-dwell","s-dwell",dwell]].forEach(function(a){
+    var st=document.getElementById(a[2]), e=on(a[1]);
+    st.classList.toggle("off",!e);
+    st.querySelectorAll(".sb").forEach(function(b){b.disabled=!e});
+    st.querySelector(".sv").textContent=a[3].ms;
+    st.setAttribute("aria-label",plain(t(a[0]==="slow"?"Slow keys":"Dwell click"))+" ("+t("milliseconds")+")");
+  });
+  var avail=on("k-slow")||on("k-dwell"), an=document.getElementById("k-anim");
+  an.classList.toggle("dis",!avail);an.tabIndex=avail?0:-1;an.setAttribute("aria-disabled",!avail);
+}
+function render(){
+  document.documentElement.lang=lang;
+  document.querySelectorAll("[data-i]").forEach(function(e){e.innerHTML=vis(t(e.dataset.i))});
+  document.querySelectorAll("[data-tip]").forEach(function(e){e.title=plain(t(e.dataset.tip))});
+  document.querySelectorAll(".unit").forEach(function(e){e.title=t("milliseconds")});
+  ["k-slow","k-dwell","k-anim"].forEach(function(id){document.getElementById(id).setAttribute("aria-description",t("kbd: timing hint"))});
+  sync();
+  document.getElementById("b-en").setAttribute("aria-pressed",lang==="en");
+  document.getElementById("b-nl").setAttribute("aria-pressed",lang==="nl");
+}
+function setTheme(d){document.documentElement.dataset.theme=d?"dark":"light";
+  document.getElementById("b-dark").setAttribute("aria-pressed",d);document.getElementById("b-light").setAttribute("aria-pressed",!d)}
+document.getElementById("b-light").onclick=function(){setTheme(false)};
+document.getElementById("b-dark").onclick=function(){setTheme(true)};
+document.getElementById("b-en").onclick=function(){lang="en";render()};
+document.getElementById("b-nl").onclick=function(){lang="nl";render()};
+[["s-slow",slow],["s-dwell",dwell]].forEach(function(a){
+  var b=document.querySelectorAll("#"+a[0]+" .sb"), m=a[1];
+  b[0].onclick=function(){m.ms=Math.max(m.min,m.ms-m.step);sync()};
+  b[1].onclick=function(){m.ms=Math.min(m.max,m.ms+m.step);sync()};
+});
+document.querySelectorAll(".check").forEach(function(c){
+  function flip(){
+    if(c.classList.contains("dis"))return;
+    var v=!c.classList.contains("on"); setOn(c.id,v);
+    if(v&&c.id==="k-slow")setOn("k-dwell",false);      /* mutual exclusion, as in the old dialog */
+    if(v&&c.id==="k-dwell")setOn("k-slow",false);
+    sync();
+  }
+  c.setAttribute("aria-checked",c.classList.contains("on"));
+  c.onclick=flip;c.onkeydown=function(e){if(e.key===" "){e.preventDefault();flip()}};
+});
+render();
+</script>
+</body>
+</html>

@@ -77,6 +77,7 @@ Mock-up in `KeyEditorMockups.cs`, screenshots via `--gallery`.
     - 2.4.5.1.6 **Known limits:** the list's scroll bar is the native thin one (a list of more than ~6 groups scrolls by wheel, keyboard or drag); the Name field leaves one line of room for its error message even when there is none.
     - 2.4.5.1.7 **Lessons (see formdesign.md):** a wrapping `FlowLayoutPanel` inside a nested table inflated the table's height (it is measured at a narrow width) and a docked table then gave the extra to its last row; an always-hidden label is not part of the window's size; `Control.Visible` is false in a form that was never shown, so tests must not read it.
   - 2.4.5.2 ☐ Keyboard Editor: three sections (General, Accessibility, Word prediction).
+    - 2.4.5.2.1 **Preparation done (2026-10-02, branch `claude/keyboard-editor-prep`, reading only, nothing built or run):** `keyboardeditor_inventory.md` (every control of the old dialog, defects found, hidden state, tests that touch it), `keyboardeditor_spec.md` (the new dialog, strings, accelerators, decisions D1 to D22 marked "decided by Claude, to be reviewed", tests, risks, build plan S0 to S10) and static mock-ups in `mockups/` (light / dark, English / Dutch). Review the decisions before building.
   - 2.4.5.3 ☐ New Keyboard Wizard.
 
 - **2.4.6 ☐ Narrow screens** — the Action row has five columns and fits 760 px; below that the value field must move under the label/action (stacked layout).
