@@ -291,6 +291,12 @@ namespace OnScreenKeyboard
                     Application.DoEvents();
                     d.PerformLayout();
                     Save(d, Path.Combine(outDir, $"keyeditor_real_appearance_{theme}_{tag}.png"));
+
+                    // A word prediction key: its Shift and AltGr rows are empty and disabled.
+                    var wpProps = new KeyProps("w", "wp:1", "W", "x", "€", "y");
+                    using var w = new KeyEditorForm(wpProps, null, groups: groups, layoutDir: AppDomain.CurrentDomain.BaseDirectory);
+                    Show(w);
+                    Save(w, Path.Combine(outDir, $"keyeditor_real_wp_{theme}_{tag}.png"));
                 }
             }
             finally { ToolbarButton.IsLightTheme = wasLight; }

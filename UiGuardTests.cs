@@ -536,6 +536,103 @@ namespace OnScreenKeyboard
         }
 
         // ════════════════════════════════════════════════════════════════
+        // Disabled controls must LOOK disabled on both themes. Found 2026-10-02: a translucent white wash over a light
+        // button leaves it light, so on the dark theme a disabled dropdown looked as bright as an enabled one.
+        // ════════════════════════════════════════════════════════════════
+        private static void T_DisabledLook()
+        {
+            Section("Disabled controls look disabled (flat grey palette) on both themes");
+
+            static double Bright(Color c) => c.GetBrightness();
+            static bool Near(Color a, Color b) => Math.Abs(a.R - b.R) <= 3 && Math.Abs(a.G - b.G) <= 3 && Math.Abs(a.B - b.B) <= 3;
+
+            Bitmap Paint(bool enabled, Color parent)
+            {
+                var bmp = new Bitmap(120, 44);
+                using var g = Graphics.FromImage(bmp);
+                FluentPainter.PaintLight(g, new Rectangle(0, 0, 120, 44), "OK", "", Fluent.FontBtnLg,
+                    FluentButton.Variant.Neutral, false, false, enabled, Fluent.RadiusBtn, parent);
+                return bmp;
+            }
+
+            foreach (bool dark in new[] { false, true })
+            {
+                string theme = dark ? "dark" : "light";
+                Color parent = dark ? Fluent.DialogDarkCard : Fluent.BgPage;
+                var palette = FluentPainter.DisabledPalette(dark);
+                using var on  = Paint(true,  parent);
+                using var off = Paint(false, parent);
+                Assert(Near(off.GetPixel(8, 22), palette.Fill), $"disabled button ({theme}): flat disabled fill {off.GetPixel(8, 22)}");
+                Assert(Near(off.GetPixel(0, 22), palette.Border), $"disabled button ({theme}): disabled border {off.GetPixel(0, 22)}");
+                Assert(!Near(on.GetPixel(8, 22), off.GetPixel(8, 22)), $"disabled button ({theme}): clearly different from an enabled one");
+            }
+            // On the dark theme a disabled button must be dark, not bright.
+            using (var offDark = Paint(false, Fluent.DialogDarkCard))
+                Assert(Bright(offDark.GetPixel(8, 22)) < 0.3f, "disabled button (dark): the fill is dark, not bright");
+
+            // A disabled text box that still shows text (e.g. "Slot 1 (automatic)") draws it in the disabled-text grey of the
+            // palette, the same grey as a disabled dropdown — not in the fainter colour of the edit control itself.
+            bool wasLightTheme = ToolbarButton.IsLightTheme;
+            try
+            {
+                foreach (bool dark in new[] { false, true })
+                {
+                    ToolbarButton.IsLightTheme = !dark;
+                    var palette = FluentPainter.DisabledPalette(dark);
+                    using var host = new Form { BackColor = dark ? Fluent.DialogDarkCard : Fluent.BgPage };
+                    var tb = new TouchTextBox { Text = "Slot 1 (automatic)", Enabled = false };
+                    host.Controls.Add(tb);
+                    tb.SetBounds(0, 0, 220, 44);
+                    _ = host.Handle;
+                    using var bmp = new Bitmap(220, 44);
+                    tb.DrawToBitmap(bmp, new Rectangle(0, 0, 220, 44));
+                    int exact = 0;
+                    for (int y = 0; y < 44; y++)
+                        for (int x = 4; x < 216; x++)
+                            if (Near(bmp.GetPixel(x, y), palette.Text)) exact++;
+                    Assert(exact >= 20, $"disabled text box ({(dark ? "dark" : "light")}): its text is drawn in the disabled-text grey ({exact} pixels)");
+                    Assert(Near(bmp.GetPixel(210, 40), palette.Fill), $"disabled text box ({(dark ? "dark" : "light")}): flat disabled fill");
+                }
+            }
+            finally { ToolbarButton.IsLightTheme = wasLightTheme; }
+
+            // The dropdown, the check box and the text box follow.
+            bool wasLight = ToolbarButton.IsLightTheme;
+            try
+            {
+                foreach (bool dark in new[] { false, true })
+                {
+                    ToolbarButton.IsLightTheme = !dark;
+                    string theme = dark ? "dark" : "light";
+                    var palette = FluentPainter.DisabledPalette(dark);
+                    Color parent = dark ? Fluent.DialogDarkCard : Fluent.BgPage;
+
+                    using (var host = new Form { BackColor = parent })
+                    {
+                        var choice = new TouchChoiceButton { Enabled = false };
+                        choice.Items.Add(new TouchChoice { Text = "Text" });
+                        choice.SelectSilently(0);
+                        var check = new TouchCheckBox { Text = "Auto", Enabled = false, AutoSize = false };
+                        host.Controls.Add(choice); host.Controls.Add(check);
+                        choice.AutoSize = false;
+                        choice.SetBounds(0, 0, 150, 44); check.SetBounds(0, 60, 150, 44);
+                        _ = host.Handle;
+                        using var b1 = new Bitmap(150, 44); choice.DrawToBitmap(b1, new Rectangle(0, 0, 150, 44));
+                        using var b2 = new Bitmap(150, 44); check.DrawToBitmap(b2, new Rectangle(0, 0, 150, 44));
+                        Assert(Near(b1.GetPixel(75, 40), palette.Fill), $"disabled dropdown ({theme}): flat disabled fill {b1.GetPixel(75, 40)}");
+                        Assert(Near(b2.GetPixel(140, 22), palette.Fill), $"disabled check box ({theme}): flat disabled fill {b2.GetPixel(140, 22)}");
+                        if (dark)
+                        {
+                            Assert(Bright(b1.GetPixel(75, 40)) < 0.3f, "disabled dropdown (dark): dark, not bright");
+                            Assert(Bright(b2.GetPixel(140, 22)) < 0.3f, "disabled check box (dark): dark, not bright");
+                        }
+                    }
+                }
+            }
+            finally { ToolbarButton.IsLightTheme = wasLight; }
+        }
+
+        // ════════════════════════════════════════════════════════════════
         // Key Editor behaviour: every action type survives load + Apply
         // ════════════════════════════════════════════════════════════════
         private static void T_KeyEditorRoundTrip()
@@ -544,7 +641,10 @@ namespace OnScreenKeyboard
 
             var applyMi = typeof(KeyEditorForm).GetMethod("Apply", BindingFlags.NonPublic | BindingFlags.Instance);
             T Field<T>(object f, string name) => (T)typeof(KeyEditorForm).GetField(name, BindingFlags.NonPublic | BindingFlags.Instance).GetValue(f);
-            const int Text = 0, Key = 1, Modifier = 2, WordPrediction = 3, Layout = 4;
+            // Types are chosen by name: the row of a type differs between the Normal layer and Shift / AltGr.
+            const string Text = "Text", Key = "Key/Shortcut", Modifier = "Modifier", WordPrediction = "Word prediction", Layout = "Layout";
+            void Pick(TouchChoiceButton b, string type) => b.SelectedIndex = b.Items.FindIndex(i => i.Text == type);
+            string Current(TouchChoiceButton b) => b.SelectedItem?.Text;
 
             KeyProps Apply(KeyProps p, Action<KeyEditorForm> edit = null, HashSet<int> usedWp = null, List<KeyGroup> groups = null)
             {
@@ -580,31 +680,81 @@ namespace OnScreenKeyboard
 
             // ── Editing the layers ──
             r = Apply(new KeyProps("a", "a"), f => { var t = Field<TouchChoiceButton[]>(f, "_types"); var v = Field<TouchTextBox[]>(f, "_values");
-                t[1].SelectedIndex = Key;    v[1].Text = "{Ctrl}v"; });
+                Pick(t[1], Key);    v[1].Text = "{Ctrl}v"; });
             Assert(r.ShiftSend == "^v", "Shift layer: a typed shortcut is stored in SendKeys syntax");
             r = Apply(new KeyProps("a", "a"), f => { var t = Field<TouchChoiceButton[]>(f, "_types"); var v = Field<TouchTextBox[]>(f, "_values");
-                t[2].SelectedIndex = Layout; v[2].Text = "azerty.kbl"; });
+                Pick(t[2], Layout); v[2].Text = "azerty.kbl"; });
             Assert(r.AltGrSend == "layout:azerty.kbl", "AltGr layer: a chosen layout gets its 'layout:' prefix");
             r = Apply(new KeyProps("a", "a"), f => { var t = Field<TouchChoiceButton[]>(f, "_types"); var v = Field<TouchTextBox[]>(f, "_values");
-                t[1].SelectedIndex = Text;   v[1].Text = "B"; });
+                Pick(t[1], Text);   v[1].Text = "B"; });
             Assert(r.ShiftSend == "B", "Shift layer: plain text is stored as typed");
 
-            // ── Modifier and Word prediction belong to the whole key: refused on Shift / AltGr ──
+            // ── Word prediction exists on the Normal layer only; Modifier is listed on Shift / AltGr but unavailable ──
             using (var f = new KeyEditorForm(new KeyProps("a", "a"), null))
             {
                 var t = Field<TouchChoiceButton[]>(f, "_types");
-                t[1].SelectedIndex = Modifier;
-                t[2].SelectedIndex = WordPrediction;
-                Assert(t[1].SelectedIndex == Text && t[2].SelectedIndex == Text, "Modifier / Word prediction cannot be chosen on Shift or AltGr");
-                Assert(!t[1].Items[Modifier].Enabled && !string.IsNullOrEmpty(t[1].Items[Modifier].DisabledReason),
-                    "the disabled types say why");
-                Assert(t[0].Items[Modifier].Enabled && t[0].Items[WordPrediction].Enabled, "on the Normal layer all five types are available");
+                Assert(t[0].Items.Any(i => i.Text == WordPrediction), "Normal layer: Word prediction is an option");
+                Assert(!t[1].Items.Any(i => i.Text == WordPrediction) && !t[2].Items.Any(i => i.Text == WordPrediction),
+                    "Shift and AltGr: Word prediction is not an option at all");
+                Pick(t[1], Modifier);
+                Pick(t[2], Modifier);
+                Assert(Current(t[1]) == Text && Current(t[2]) == Text, "Modifier cannot be chosen on Shift or AltGr");
+                var mod = t[1].Items.First(i => i.Text == Modifier);
+                Assert(!mod.Enabled && !string.IsNullOrEmpty(mod.DisabledReason), "the unavailable Modifier row says why");
+                Assert(t[0].Items.All(i => i.Enabled), "on the Normal layer all five types are available");
+                Assert(t[0].Items.Count == 5 && t[1].Items.Count == 4 && t[2].Items.Count == 4, "five types on Normal, four on Shift / AltGr");
             }
 
+            // ── A word prediction key has no Shift / AltGr action: those rows are empty and disabled ──
+            using (var f = new KeyEditorForm(new KeyProps("w", "wp:1", "W", "x", "€", "layout:azerty.kbl"), null, layoutDir: AppDomain.CurrentDomain.BaseDirectory))
+            {
+                var labels = Field<TouchTextBox[]>(f, "_labels");
+                var t = Field<TouchChoiceButton[]>(f, "_types");
+                var v = Field<TouchTextBox[]>(f, "_values");
+                var pk = Field<FluentButton[]>(f, "_pickers");
+                bool Off(int i) => !labels[i].Enabled && !t[i].Enabled && !v[i].Enabled && !pk[i].Enabled
+                                   && labels[i].Text == "" && v[i].Text == "" && Current(t[i]) == Text;
+                Assert(Off(1) && Off(2), "word prediction key: Shift and AltGr are empty and disabled");
+                Assert(!labels[0].Enabled && labels[0].Text == "",
+                    "word prediction key: the Normal label is not editable (it is a placeholder that the predicted word replaces)");
+                Assert(t[0].Enabled, "word prediction key: the type can still be changed");
+
+                // Choosing another type brings back what the layers held; choosing word prediction again empties them.
+                Pick(t[0], Text);
+                Assert(labels[1].Enabled && t[1].Enabled && v[1].Enabled && labels[2].Enabled && t[2].Enabled && v[2].Enabled,
+                    "leaving word prediction enables Shift and AltGr again");
+                Assert(labels[1].Text == "W" && v[1].Text == "x" && labels[2].Text == "€" && v[2].Text == "azerty.kbl" && Current(t[2]) == Layout,
+                    "leaving word prediction brings back the Shift and AltGr label, type and value");
+                Assert(labels[0].Enabled && labels[0].Text == "w", "leaving word prediction brings back the Normal label and makes it editable");
+                Pick(t[0], WordPrediction);
+                Assert(Off(1) && Off(2), "choosing word prediction again empties and disables them again");
+            }
+            r = Apply(new KeyProps("w", "wp:1", "W", "x", "€", "layout:azerty.kbl"));
+            Assert(r.Send == "wp:1" && r.ShiftLabel == "" && r.ShiftSend == "" && r.AltGrLabel == "" && r.AltGrSend == "",
+                "word prediction key: Apply stores no Shift / AltGr label or action");
+            Assert(r.Label == "w", $"word prediction key: an existing placeholder label is kept ('{r.Label}')");
+            r = Apply(new KeyProps("w", "wp:4"));
+            Assert(r.Label == "w", "word prediction key: the label is kept whatever the slot");
+            r = Apply(new KeyProps("a", "a", "A", "B", "€", "E"), f => Pick(Field<TouchChoiceButton[]>(f, "_types")[0], WordPrediction), usedWp: new HashSet<int>());
+            Assert(r.Send == "wp:0" && r.ShiftLabel == "" && r.ShiftSend == "" && r.AltGrLabel == "" && r.AltGrSend == "",
+                "choosing word prediction on a key with Shift / AltGr values clears them");
+            Assert(r.Label == "word 1", $"a key that becomes a word prediction gets the placeholder label for its slot ('{r.Label}')");
+            r = Apply(new KeyProps("a", "a", "A", "B", "€", "E"), f => { var t = Field<TouchChoiceButton[]>(f, "_types");
+                Pick(t[0], WordPrediction); Pick(t[0], Text); });
+            Assert(r.Label == "a" && r.Send == "a" && r.ShiftLabel == "A" && r.ShiftSend == "B" && r.AltGrLabel == "€" && r.AltGrSend == "E",
+                $"word prediction and back: label and Shift / AltGr values are untouched (label '{r.Label}', send '{r.Send}', shift '{r.ShiftLabel}'/'{r.ShiftSend}', altgr '{r.AltGrLabel}'/'{r.AltGrSend}')");
+            // Regression (found 2026-10-02): a loaded word prediction key, switched to Text, kept the explanation
+            // "Prediction slot 1 (assigned automatically)" in its value box, so the key would have typed that text.
+            r = Apply(new KeyProps("w", "wp:1"), f => Pick(Field<TouchChoiceButton[]>(f, "_types")[0], Text));
+            Assert(r.Send == "w", $"a loaded word prediction key switched to Text does not keep the explanation as its text (send '{r.Send}')");
+            // An unresolvable layout path on a layer that word prediction emptied must not block Apply.
+            r = Apply(new KeyProps("w", "wp:1", "", "", "", "layout:does_not_exist.kbl"));
+            Assert(r != null && r.AltGrSend == "", "word prediction key: a stale layout path on AltGr does not block Apply");
+
             // ── Choosing a type resets the value for it; word prediction takes the first free slot ──
-            r = Apply(new KeyProps("a", "a"), f => Field<TouchChoiceButton[]>(f, "_types")[0].SelectedIndex = WordPrediction, usedWp: new HashSet<int> { 0, 1 });
+            r = Apply(new KeyProps("a", "a"), f => Pick(Field<TouchChoiceButton[]>(f, "_types")[0], WordPrediction), usedWp: new HashSet<int> { 0, 1 });
             Assert(r.Send == "wp:2", $"word prediction: the first free slot is assigned ({r.Send})");
-            r = Apply(new KeyProps("a", "a"), f => Field<TouchChoiceButton[]>(f, "_types")[0].SelectedIndex = Modifier);
+            r = Apply(new KeyProps("a", "a"), f => Pick(Field<TouchChoiceButton[]>(f, "_types")[0], Modifier));
             Assert(r.Label == "Shift" && r.Send == "", $"modifier: the first modifier is chosen and becomes the label ({r.Label})");
 
             // ── Size ──

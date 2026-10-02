@@ -142,7 +142,20 @@ namespace OnScreenKeyboard
                 using var pen = new Pen(ring, 2f);
                 g.DrawRectangle(pen, 1f, 1f, Width - 2, Height - 2);
             }
-            if (Text.Length == 0 && !string.IsNullOrEmpty(Hint)) PaintHint(g);
+            if (Enabled && Text.Length == 0 && !string.IsNullOrEmpty(Hint)) PaintHint(g);
+            if (!Enabled && !hc)
+            {
+                // A disabled box gets the flat grey of a disabled button (fill, border and text), so it does not look like an
+                // empty field to fill in. The edit control's own disabled text is too faint (and cannot be recoloured), so
+                // it is covered by an opaque fill and the text is drawn again in the disabled-text grey of the palette.
+                var off = FluentPainter.DisabledPalette(FluentPainter.IsDarkSurface(Parent?.BackColor ?? Fluent.BgPage));
+                using (var fill = new SolidBrush(off.Fill)) g.FillRectangle(fill, 0, 0, Width, Height);
+                using (var pen = new Pen(off.Border)) g.DrawRectangle(pen, 0.5f, 0.5f, Width - 1, Height - 1);
+                if (Text.Length > 0)
+                    TextRenderer.DrawText(g, Text, Font, new Rectangle(6, 0, Math.Max(0, ClientSize.Width - 12), ClientSize.Height), off.Text,
+                        TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine |
+                        TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
+            }
         }
 
         private void PaintHint(Graphics g)
@@ -297,11 +310,13 @@ namespace OnScreenKeyboard
 
             Color fill   = hc ? SystemColors.Control : _hovered ? Color.FromArgb(225, 225, 225) : Fluent.Neutral;
             Color border = hc ? SystemColors.ControlText : _hovered ? Fluent.ControlBorderHover : Fluent.ControlBorder;
+            // Disabled: the flat grey palette shared with the buttons (a white wash left it looking enabled on the dark theme).
+            var off = FluentPainter.DisabledPalette(FluentPainter.IsDarkSurface(Parent?.BackColor ?? Fluent.BgPage));
+            if (!Enabled && !hc) { fill = off.Fill; border = off.Border; }
             using (var path = Fluent.RoundedRectF(Fluent.CrispBorderRect(Width, Height), Fluent.RadiusBtn))
             {
                 using (var b = new SolidBrush(fill)) g.FillPath(b, path);
                 using (var p = new Pen(border))      g.DrawPath(p, path);
-                if (!Enabled) using (var wash = new SolidBrush(Color.FromArgb(100, 255, 255, 255))) g.FillPath(wash, path);
             }
 
             // The tick box.
@@ -310,15 +325,17 @@ namespace OnScreenKeyboard
             using (var path = Fluent.RoundedRectF(new RectangleF(box.X + 0.5f, box.Y + 0.5f, box.Width - 1, box.Height - 1), 4))
             {
                 Color boxFill = Checked ? (hc ? SystemColors.Highlight : Fluent.Accent) : (hc ? SystemColors.Window : Color.White);
+                Color boxEdge = hc ? SystemColors.ControlText : Fluent.ControlBorderHover;
+                if (!Enabled && !hc) { boxFill = Checked ? off.Text : off.Fill; boxEdge = off.Border; }
                 using (var b = new SolidBrush(boxFill)) g.FillPath(b, path);
-                using (var p = new Pen(hc ? SystemColors.ControlText : Fluent.ControlBorderHover, 2f)) g.DrawPath(p, path);
+                using (var p = new Pen(boxEdge, 2f)) g.DrawPath(p, path);
             }
             if (Checked)
                 using (var tick = new Pen(hc ? SystemColors.HighlightText : Color.White, 3f) { StartCap = System.Drawing.Drawing2D.LineCap.Round, EndCap = System.Drawing.Drawing2D.LineCap.Round, LineJoin = System.Drawing.Drawing2D.LineJoin.Round })
                     g.DrawLines(tick, new[] { new Point(box.X + 6, box.Y + 12), new Point(box.X + 10, box.Y + 17), new Point(box.X + 18, box.Y + 7) });
 
             TextRenderer.DrawText(g, Text, Font, new Rectangle(Padding.Left, 0, Math.Max(0, Width - Padding.Horizontal), Height),
-                hc ? SystemColors.ControlText : Enabled ? Fluent.TextPrimary : Fluent.TextHint,
+                hc ? (Enabled ? SystemColors.ControlText : SystemColors.GrayText) : Enabled ? Fluent.TextPrimary : off.Text,
                 // NoPadding, as when the width was measured in GetPreferredSize: otherwise the text is a few pixels too
                 // wide for its rectangle and gets an ellipsis ("A…").
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis |

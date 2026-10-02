@@ -90,7 +90,7 @@ namespace OnScreenKeyboard
             try { base.OnPaint(e); } finally { _blankText = false; }
 
             bool hc = SystemInformation.HighContrast;
-            Color fg = !Enabled ? (hc ? SystemColors.GrayText : Fluent.TextHint)
+            Color fg = !Enabled ? (hc ? SystemColors.GrayText : FluentPainter.DisabledPalette(FluentPainter.IsDarkSurface(Parent?.BackColor ?? Fluent.BgPage)).Text)
                                 : (hc ? SystemColors.ControlText : Fluent.TextPrimary);
             var r = ClientRectangle;
             TextRenderer.DrawText(e.Graphics, base.Text, Font, new Rectangle(14, 0, Math.Max(0, r.Width - 14 - 34), r.Height), fg,

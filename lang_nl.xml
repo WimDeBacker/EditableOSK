@@ -32,7 +32,9 @@
   <String key="Shows a word suggestion to tap" value="Toont een woordsuggestie om aan te tikken" />
   <String key="Jumps to another layout file" value="Springt naar een ander lay-outbestand" />
   <String key="Whole key only: set it on the Normal layer" value="Alleen voor de hele toets: stel het in op Normaal" />
-  <String key="Prediction slot {0} (assigned automatically)" value="Voorspelling {0} (automatisch toegewezen)" />
+  <String key="A word prediction key has no label. An action on Shift or AltGr is not possible." value="Een woordvoorspellingstoets heeft geen label. Een actie bij Shift of AltGr is niet mogelijk." />
+  <String key="word {0}" value="woord {0}" />
+  <String key="Slot {0} (automatic)" value="Plek {0} (automatisch)" />
 
   <!-- Toolbar tooltips -->
   <String key="tip: Load"               value="Lay-outbestand laden" />

@@ -63,6 +63,7 @@ namespace OnScreenKeyboard
             T_UiGuardBaseline();
             T_ColourContrastAaa();
             T_ControlBorders();
+            T_DisabledLook();
             T_KeyEditorGuards();
             T_KeyEditorRoundTrip();
             T_ValidationBlocksApply();
@@ -4613,14 +4614,16 @@ namespace OnScreenKeyboard
 
                 var types  = (TouchChoiceButton[])Field(f, "_types");
                 var values = (TouchTextBox[])Field(f, "_values");
-                const int Layout = 4, Text = 0;
+                // Chosen by name: the row of a type differs between the Normal layer and Shift / AltGr.
+                void Pick(TouchChoiceButton b, string type) => b.SelectedIndex = b.Items.FindIndex(i => i.Text == type);
+                const string Layout = "Layout", Text = "Text";
                 var applyMi = typeof(KeyEditorForm).GetMethod("Apply", BindingFlags.NonPublic | BindingFlags.Instance);
 
                 // The Normal layer (row 0) and the Shift layer (row 1) behave the same.
                 foreach (int layer in new[] { 0, 1 })
                 {
                     string where = layer == 0 ? "Normal" : "Shift";
-                    types[layer].SelectedIndex = Layout;
+                    Pick(types[layer], Layout);
 
                     values[layer].Text = "does_not_exist.kbl";
                     Assert(HasPendingErrors(f), $"KeyEditorForm ({where}): unresolvable layout path is flagged live");
@@ -4633,7 +4636,7 @@ namespace OnScreenKeyboard
                     Assert(f.DialogResult != DialogResult.OK, $"KeyEditorForm ({where}): Apply() refuses to save an unresolvable layout path");
 
                     // Switching away from Layout must not leave a stale error behind.
-                    types[layer].SelectedIndex = Text;
+                    Pick(types[layer], Text);
                     Assert(!HasPendingErrors(f), $"KeyEditorForm ({where}): leaving Layout clears the stale layout-path error");
                 }
             }

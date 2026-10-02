@@ -36,8 +36,13 @@ namespace OnScreenKeyboard
         public bool ResultGroupsChanged { get; private set; }
 
         // ── What a layer's action can be ──────────────────────────────
-        // The values are the item indexes of the type chooser.
         private enum SendMode { Text, KeySequence, Modifier, WordPrediction, Layout }
+
+        // The types each layer's chooser offers, in the order of its rows (the row index is NOT the enum value
+        // on Shift and AltGr). Word prediction belongs to the whole key, so it exists on the Normal layer only.
+        private static readonly SendMode[] NormalModes = { SendMode.Text, SendMode.KeySequence, SendMode.Modifier, SendMode.WordPrediction, SendMode.Layout };
+        private static readonly SendMode[] LayerModes  = { SendMode.Text, SendMode.KeySequence, SendMode.Modifier, SendMode.Layout };
+        private static SendMode[] ModesOf(int layer) => layer == 0 ? NormalModes : LayerModes;
 
         private const int Layers = 3;                    // Normal, Shift, AltGr
         private const int LabelColumnWidth = 124;        // a key label is short: room for about 11 characters
@@ -219,6 +224,7 @@ namespace OnScreenKeyboard
             _cmbGroup.ShowSelection();
             UpdatePickerTexts();
             if (_valueShowsWp) ShowWpValue();
+            if (LayersDisabled) SetHint(WpHint);
         }
 
         // ══════════════════════════════════════════════════════════════
@@ -268,19 +274,20 @@ namespace OnScreenKeyboard
             return lbl;
         }
 
-        /// <summary>The action type chooser's rows. Modifier and Word prediction belong to the whole key, so they
-        /// are only available on the Normal layer and say so on the others.</summary>
+        /// <summary>The action type chooser's rows for a layer (see <see cref="ModesOf"/>). Modifier belongs to the
+        /// whole key, so on Shift and AltGr it is listed but unavailable, and says why. Word prediction is not listed there at all.</summary>
         private List<TouchChoice> TypeItems(bool restricted)
         {
             string whole = Lang.T("Whole key only: set it on the Normal layer");
-            return new List<TouchChoice>
+            TouchChoice Item(SendMode mode) => mode switch
             {
-                new TouchChoice { Text = Lang.StripMnemonic(Lang.T("Text")),            Description = Lang.T("Types these characters") },
-                new TouchChoice { Text = Lang.StripMnemonic(Lang.T("Key/Shortcut")),    Description = Lang.T("Presses a key or a shortcut, e.g. Ctrl+C") },
-                new TouchChoice { Text = Lang.StripMnemonic(Lang.T("Modifier")),        Description = Lang.T("Holds Shift, Ctrl or Alt for the next key"), Enabled = !restricted, DisabledReason = whole },
-                new TouchChoice { Text = Lang.StripMnemonic(Lang.T("Word prediction")), Description = Lang.T("Shows a word suggestion to tap"),         Enabled = !restricted, DisabledReason = whole },
-                new TouchChoice { Text = Lang.StripMnemonic(Lang.T("Layout")),          Description = Lang.T("Jumps to another layout file") },
+                SendMode.Text           => new TouchChoice { Text = Lang.StripMnemonic(Lang.T("Text")),            Description = Lang.T("Types these characters") },
+                SendMode.KeySequence    => new TouchChoice { Text = Lang.StripMnemonic(Lang.T("Key/Shortcut")),    Description = Lang.T("Presses a key or a shortcut, e.g. Ctrl+C") },
+                SendMode.Modifier       => new TouchChoice { Text = Lang.StripMnemonic(Lang.T("Modifier")),        Description = Lang.T("Holds Shift, Ctrl or Alt for the next key"), Enabled = !restricted, DisabledReason = whole },
+                SendMode.WordPrediction => new TouchChoice { Text = Lang.StripMnemonic(Lang.T("Word prediction")), Description = Lang.T("Shows a word suggestion to tap") },
+                _                       => new TouchChoice { Text = Lang.StripMnemonic(Lang.T("Layout")),          Description = Lang.T("Jumps to another layout file") },
             };
+            return ModesOf(restricted ? 1 : 0).Select(Item).ToList();
         }
 
         private FluentButton NewPicker() => new FluentButton
@@ -613,7 +620,33 @@ namespace OnScreenKeyboard
         //  Layers: action type, value, picker
         // ══════════════════════════════════════════════════════════════
 
-        private SendMode ModeOf(int layer) => (SendMode)Math.Max(0, _types[layer].SelectedIndex);
+        private SendMode ModeOf(int layer)
+        {
+            var modes = ModesOf(layer);
+            int i = _types[layer].SelectedIndex;
+            return i >= 0 && i < modes.Length ? modes[i] : SendMode.Text;
+        }
+
+        /// <summary>Selects <paramref name="mode"/> on a layer's chooser without raising its change event.</summary>
+        private void SelectModeSilently(int layer, SendMode mode) => _types[layer].SelectSilently(Array.IndexOf(ModesOf(layer), mode));
+
+        /// <summary>A key that shows a word prediction has no Shift or AltGr action (the Normal layer's type decides).</summary>
+        private bool LayersDisabled => ModeOf(0) == SendMode.WordPrediction;
+
+        private static string WpHint =>
+            Lang.T("A word prediction key has no label. An action on Shift or AltGr is not possible.");
+
+        /// <summary>
+        /// The label stored for a word prediction key. It is only a placeholder (the key shows the predicted word), so it is not
+        /// editable: a key that already was a prediction key keeps its label ("woord 1"), a new one gets "word N" for its slot.
+        /// </summary>
+        private string WpLabel()
+        {
+            bool wasWp = (_original.Send ?? "").StartsWith("wp:", StringComparison.Ordinal);
+            return wasWp && !string.IsNullOrEmpty(_original.Label)
+                ? _original.Label
+                : string.Format(Lang.T("word {0}"), _wpSlot + 1);
+        }
 
         private void SetHint(string text)
         {
@@ -640,7 +673,7 @@ namespace OnScreenKeyboard
             bool isWp  = layer == 0 && mode == SendMode.WordPrediction;
 
             if (layer == 0) { _modChooser.Visible = isMod; _values[0].Visible = !isMod; }
-            _values[layer].Enabled = !isWp;
+            _values[layer].Enabled = !isWp && !(layer > 0 && LayersDisabled);
 
             if (isWp)
             {
@@ -653,10 +686,12 @@ namespace OnScreenKeyboard
                 }
                 ShowWpValue();
             }
-            else if (_valueShowsWp)
+            else if (layer == 0 && _valueShowsWp)
             {
+                // Leaving word prediction: the value box held the explanation, not something to type.
+                // (Layer 0 only: the flag belongs to the Normal layer, and Shift / AltGr are applied after it.)
                 _valueShowsWp = false;
-                _values[layer].Text = "";
+                _values[0].Text = "";
             }
 
             bool showPicker = !isMod && (mode == SendMode.KeySequence || mode == SendMode.Layout);
@@ -674,7 +709,59 @@ namespace OnScreenKeyboard
             }
             _values[layer].AccessibleName = ValueName(layer);
             ValidateLayoutField(layer);
+            if (layer == 0) UpdateLayerAvailability();
         }
+
+        // What Shift and AltGr held before the Normal layer became a word prediction, so switching back brings it back.
+        private readonly (string Label, SendMode Mode, string Value)?[] _stash = new (string, SendMode, string)?[Layers];
+
+        /// <summary>
+        /// A word prediction key has no Shift or AltGr action (the click handler returns before it looks at them), so while
+        /// the Normal layer is a word prediction those two rows are emptied and disabled, with a line saying why. Choosing
+        /// another type for the Normal layer brings back what they held.
+        /// </summary>
+        private void UpdateLayerAvailability()
+        {
+            bool wp = LayersDisabled;
+            bool was = _initialising;
+            _initialising = true;                    // not an edit by the user: must not mark the layers as touched
+            try
+            {
+                // The Normal label of a prediction key is a placeholder that the predicted word replaces: not editable.
+                if (wp && _labelStash == null) { _labelStash = _labels[0].Text; _labels[0].Text = ""; }
+                else if (!wp && _labelStash != null) { _labels[0].Text = _labelStash; _labelStash = null; }
+                _labels[0].Enabled = !wp;
+
+                for (int i = 1; i < Layers; i++)
+                {
+                    if (wp && _stash[i] == null)
+                    {
+                        _stash[i] = (_labels[i].Text, ModeOf(i), _values[i].Text);
+                        _labels[i].Text = "";
+                        SelectModeSilently(i, SendMode.Text);
+                        _values[i].Text = "";
+                        ApplyMode(i, applyPicker: false);
+                    }
+                    else if (!wp && _stash[i] is { } s)
+                    {
+                        _stash[i] = null;
+                        _labels[i].Text = s.Label;
+                        SelectModeSilently(i, s.Mode);
+                        _values[i].Text = s.Value;
+                        ApplyMode(i, applyPicker: false);
+                    }
+                    _labels[i].Enabled = _types[i].Enabled = _values[i].Enabled = _pickers[i].Enabled = !wp;
+                }
+            }
+            finally { _initialising = was; }
+
+            string hint = WpHint;
+            if (wp) SetHint(hint);
+            else if (_lblHint.Text == hint) SetHint("");
+            Refresh2();                              // the preview shows the placeholder of a prediction key
+        }
+
+        private string _labelStash;                  // the Normal label while the key is a word prediction
 
         private void UpdatePickerTexts()
         {
@@ -692,7 +779,7 @@ namespace OnScreenKeyboard
             bool was = _initialising;
             _initialising = true;
             _values[0].Text = allFull ? Lang.T("WP all slots full")
-                                      : string.Format(Lang.T("Prediction slot {0} (assigned automatically)"), _wpSlot);
+                                      : string.Format(Lang.T("Slot {0} (automatic)"), _wpSlot);
             _initialising = was;
         }
 
@@ -861,7 +948,7 @@ namespace OnScreenKeyboard
                 {
                     bool was = _initialising;
                     _initialising = true;
-                    _types[layer].SelectSilently((int)newMode);
+                    SelectModeSilently(layer, newMode);
                     ApplyMode(layer, applyPicker: false);
                     _initialising = was;
                 }
@@ -991,7 +1078,7 @@ namespace OnScreenKeyboard
 
                 // Layer 0 (Normal): the full set of types.
                 var mode0 = DetectSendMode(p.Send ?? "", p.Label ?? "");
-                _types[0].SelectSilently((int)mode0);
+                SelectModeSilently(0, mode0);
                 if (p.Send != null && p.Send.StartsWith("wp:") && int.TryParse(p.Send.Substring(3), out int slot))
                     _wpSlot = Math.Clamp(slot, 0, 9);
                 switch (mode0)
@@ -1020,7 +1107,7 @@ namespace OnScreenKeyboard
                 {
                     string raw = _origSend[i];
                     var mode = DetectLayerMode(raw);
-                    _types[i].SelectSilently((int)mode);
+                    SelectModeSilently(i, mode);
                     _values[i].Text = mode == SendMode.Layout ? raw.Substring(7)
                                     : mode == SendMode.KeySequence ? ToHuman(raw)
                                     : raw;
@@ -1044,7 +1131,7 @@ namespace OnScreenKeyboard
             int btRaw = (int)_stpBorderThickness.Value;
             int bt = btRaw == -1 ? (ownerGlob?.BorderThickness ?? 1) : btRaw;    // -1 = inherit
 
-            string label = _labels[0]?.Text ?? "";
+            string label = LayersDisabled ? WpLabel() : _labels[0]?.Text ?? "";
             _preview.Set(label, _chipKey.Value, _chipFont.Value, _chipBorder.Value, fn, fs, bt);
             _preview.AccessibleName = string.Format(
                 Lang.T("preview: key '{0}', key colour {1}, font colour {2}, {3} {4} pt"),
@@ -1071,6 +1158,8 @@ namespace OnScreenKeyboard
                         return string.IsNullOrEmpty(send) ? label : send;
                 }
             }
+            // A word prediction key has no Shift / AltGr action.
+            if (LayersDisabled) return "";
             // Shift / AltGr: a layer the user did not touch keeps exactly what was stored (the readable form is lossy).
             if (!_layerTouched[layer]) return _origSend[layer];
             switch (mode)
@@ -1088,7 +1177,8 @@ namespace OnScreenKeyboard
             // its ErrorProvider icon is the feedback — no blocking message box on top of it.
             if (ShowFirstSectionWithError()) return;
 
-            string label = _labels[0].Text.Trim();
+            // A word prediction key keeps its placeholder label (it is not editable: the predicted word replaces it).
+            string label = LayersDisabled ? WpLabel() : _labels[0].Text.Trim();
 
             bool isNoGroup = _cmbGroup.SelectedIndex == 0;
             string groupName = isNoGroup ? "" : (_cmbGroup.SelectedItem?.Text ?? "");
@@ -1134,9 +1224,11 @@ namespace OnScreenKeyboard
             ResultColSpan = (int)_stpColSpan.Value;
             ResultRowSpan = (int)_stpRowSpan.Value;
 
+            // A word prediction key has no Shift / AltGr label or action (those rows are empty and disabled).
+            bool wpKey = LayersDisabled;
             Result = new KeyProps(label, send,
-                                  _labels[1].Text ?? "", BuildSend(1, ""),
-                                  _labels[2].Text ?? "", BuildSend(2, ""))
+                                  wpKey ? "" : _labels[1].Text ?? "", BuildSend(1, ""),
+                                  wpKey ? "" : _labels[2].Text ?? "", BuildSend(2, ""))
             {
                 FontName = fontName, FontSize = fontSize,
                 FontColor = fc, KeyColor = kc, BorderColor = bc,

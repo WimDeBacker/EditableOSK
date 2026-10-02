@@ -503,6 +503,11 @@ namespace OnScreenKeyboard
                      : hovered ? Darken(baseBg, 0.07f)
                      :           baseBg;
 
+            // A disabled button does not react to the pointer and uses the flat disabled palette (see DisabledPalette).
+            bool darkParent = IsDarkSurface(parentBg == default ? Fluent.BgPage : parentBg);
+            var  off        = DisabledPalette(darkParent);
+            if (!enabled) bg = off.Fill;
+
             // Step 3: draw the filled rounded rectangle.
             // We use r.Width - 1 / r.Height - 1 because GDI+ draws the bottom-right
             // pixel one unit outside the given rectangle — subtracting 1 keeps
@@ -517,7 +522,12 @@ namespace OnScreenKeyboard
             // Step 4 (Neutral only): draw an outline border.
             // Neutral buttons have a subtle grey background and rely on the border
             // to define their shape, similar to a "secondary" button style.
-            if (style == FluentButton.Variant.Neutral)
+            if (!enabled)
+            {
+                using var pen = new Pen(off.Border);
+                g.DrawPath(pen, path);
+            }
+            else if (style == FluentButton.Variant.Neutral)
             {
                 // WCAG 1.4.11: the boundary of a control needs 3 : 1 against its surroundings, so the
                 // border is a real grey (ControlBorder), not the pale BorderCard used for grouping lines.
@@ -526,7 +536,7 @@ namespace OnScreenKeyboard
                 using var pen = new Pen(bc);
                 g.DrawPath(pen, path);
             }
-            else if ((parentBg == default ? Fluent.BgPage : parentBg).GetBrightness() < 0.4f)
+            else if (darkParent)
             {
                 // The coloured fills are dark enough for white text at 7 : 1, which on a dark parent leaves
                 // them under 3 : 1 against the background — so they get a light outline there.
@@ -534,21 +544,14 @@ namespace OnScreenKeyboard
                 g.DrawPath(pen, path);
             }
 
-            // Step 5 (disabled): overlay a semi-transparent white wash.
-            // This dims the colours without replacing them, so the button still
-            // looks like itself — just clearly unavailable.
-            if (!enabled)
-            {
-                using var dim = new SolidBrush(Color.FromArgb(100, 255, 255, 255));
-                g.FillPath(dim, path);
-            }
+            // Step 5 (disabled): handled above — flat grey fill, border and (below) text from DisabledPalette.
 
             // Step 6: choose foreground (text/icon) colour.
             // Neutral uses dark text on its light background; other variants use
             // white text on their coloured backgrounds.
-            Color fg = (style == FluentButton.Variant.Neutral)
-                ? (enabled ? Fluent.TextPrimary : Fluent.TextHint)
-                : (enabled ? Color.White : Color.FromArgb(160, 255, 255, 255));
+            Color fg = !enabled ? off.Text
+                : (style == FluentButton.Variant.Neutral) ? Fluent.TextPrimary
+                : Color.White;
 
             // Step 7: draw icon glyph + label, or label alone.
             // Prefix flag for mnemonic underline rendering:
@@ -1020,6 +1023,20 @@ namespace OnScreenKeyboard
                     ApplyThemeChildren(c, cardBg, inputBg, fg, skip);
             }
         }
+
+        /// <summary>
+        /// The look of a disabled control: a flat grey fill, border and text that stand apart from an enabled control on
+        /// BOTH themes. (A translucent white wash, as used before, leaves a light button light, so on the dark theme a
+        /// disabled button looked as bright as an enabled one.) Disabled controls are exempt from the contrast rules.
+        /// </summary>
+        /// <param name="darkParent">True when the control sits on a dark surface.</param>
+        internal static (Color Fill, Color Border, Color Text) DisabledPalette(bool darkParent) =>
+            darkParent
+                ? (Color.FromArgb(40, 40, 40),    Color.FromArgb(85, 85, 85),    Color.FromArgb(125, 125, 125))
+                : (Color.FromArgb(232, 232, 232), Color.FromArgb(200, 200, 200), Color.FromArgb(125, 125, 125));
+
+        /// <summary>True when <paramref name="surface"/> is dark enough that light controls need the dark treatment.</summary>
+        internal static bool IsDarkSurface(Color surface) => surface.GetBrightness() < 0.4f;
 
         /// <summary>
         /// Draws a rounded ring inside a control of size <paramref name="w"/> x <paramref name="h"/>: the ring's centre
