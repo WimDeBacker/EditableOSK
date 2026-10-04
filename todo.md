@@ -86,7 +86,13 @@ Mock-up in `KeyEditorMockups.cs`, screenshots via `--gallery`.
     - 2.4.5.2.7 **Cleanup done on the way (2.4.7):** removed `AddGroup`, `AddFieldLabel`, `AddColorRow`, `Get/SetSwatchHex`, `MakeActionBtn`, `WrapInScrollPanel`, `_transGroups` and `_suppressOnChanged` from `FluentDialogBase` (nothing used them any more).
     - 2.4.5.2.8 **Not verified (S0 and by hand):** B1 (that the old dialog really saved the previous values) was never reproduced; Save / Save As / Load through the real `KeyboardForm` hand-off (`KeyboardForm` is never built in the suite); the Export file dialog; "More colours…" from the background chip; 125 % / 150 % scaling; real touch. **Please try:** change the transparency, press Save, open the saved file; press Load and cancel the file dialog; choose Dutch and Cancel.
     - 2.4.5.2.9 **Tooltip of "Sticky modifiers" corrected (2026-10-04):** the prepared text described the OFF behaviour (one tap applies to the next key); the option really adds a locked state (tap 2 locks, tap 3 releases, like Windows Sticky Keys). The rule moved from `KeyboardForm` into `ModifierLatch` (Off / Latched / Locked) and is tested in `StickyModifierTests.cs`, together with the wording in English and Dutch. One edge changed: with the option off, a tap now also clears a leftover locked modifier (the option switched off while a modifier was locked).
-  - 2.4.5.3 ☐ New Keyboard Wizard.
+  - 2.4.5.3 ▶ New Keyboard Wizard. Inventory `wizard_inventory.md`, spec `wizard_spec.md` (approved 2026-10-04, D1–D10), mock-up `mockups/wizard.html`.
+    - 2.4.5.3.1 ☐ W1 components (theme tile, read-only value row, browse row, `WizardGridPreview` with live labels).
+    - 2.4.5.3.2 ☐ W2 frame, footer (Cancel / Back / Next / Create), page host, Enter / Escape.
+    - 2.4.5.3.3 ☐ W3 pages 1 and 2, inline validation.
+    - 2.4.5.3.4 ☐ W4 page 3 (theme tiles, from-file row, sample keys).
+    - 2.4.5.3.5 ☐ W5 page 4 (name, folder, summary, overwrite check, invalid name), `TryCreate`, adapt the two reflection tests.
+    - 2.4.5.3.6 ☐ W6 `WizardTests.cs`, `DevGallery.SaveWizard`, pictures en / nl light / dark, docs, remove old code and the unused `wiz:` strings.
 
 - **2.4.6 ☐ Narrow screens** — the Action row has five columns and fits 760 px; below that the value field must move under the label/action (stacked layout).
 

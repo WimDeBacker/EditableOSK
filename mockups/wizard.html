@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>New Keyboard Wizard mock-up</title>
+<style>
+/* Tokens as in the Keyboard Editor mock-ups (FluentTheme.cs). Sizes are design pixels at 100 %. */
+:root{--card:#FFFFFF;--input:#FFFFFF;--text:#1C1C1C;--accent:#005496;--success:#0A640A;--danger:#961E14;--neutral:#F2F2F2;--ctl:#767676;--tb:#767676;--row:#E5E5E5;--desk:#C9CED6;--titlebar:#fff;--titletext:#000;--frame:#9A9A9A;--sel-bg:#E6F0FA}
+:root[data-theme=dark]{--card:#303030;--input:#3A3A3A;--text:#E6E6E6;--tb:#969696;--row:#969696;--desk:#101114;--titlebar:#202020;--titletext:#fff;--frame:#555;--sel-bg:#1F3347;--danger:#FF8C82}
+*{box-sizing:border-box}
+body{margin:0;background:var(--desk);color:var(--text);font-family:"Segoe UI Variable","Segoe UI",system-ui,sans-serif;font-size:16.67px;line-height:1.25}
+.tools{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:10px 16px;background:#1f2430;color:#fff;font:14px system-ui}
+.tools button{font:inherit;color:#fff;background:#39425a;border:1px solid #6b7595;padding:6px 14px;cursor:pointer;border-radius:4px}
+.tools button[aria-pressed=true]{background:#0a66c2;border-color:#8fb8e8}
+.stage{padding:24px 16px;overflow-x:auto}
+.win{width:822px;margin:0 auto;border:1px solid var(--frame);background:var(--card);box-shadow:0 8px 28px rgba(0,0,0,.35)}
+.title{height:32px;display:flex;align-items:center;padding:0 12px;background:var(--titlebar);color:var(--titletext);font-size:13px}
+.client{padding:16px;background:var(--card)}
+.page{display:none;min-height:430px}.page.on{display:block}
+h2{font-size:22px;margin:0 0 2px}
+.sub{margin:0 0 14px}
+.grp{border:1px solid var(--tb);border-radius:5px;padding:12px 14px;margin-bottom:12px;position:relative}
+.grp>.cap{position:absolute;top:-11px;left:10px;background:var(--card);padding:0 6px;font-weight:700}
+.radio{display:flex;gap:12px;align-items:flex-start;min-height:44px;padding:4px 0}
+.radio .dot{flex:none;width:24px;height:24px;margin-top:10px;border:2px solid var(--ctl);border-radius:50%;display:flex;align-items:center;justify-content:center}
+.radio.sel .dot{border-color:var(--accent)}.radio.sel .dot::after{content:"";width:12px;height:12px;border-radius:50%;background:var(--accent)}
+:root[data-theme=dark] .radio.sel .dot{border-color:var(--text)}:root[data-theme=dark] .radio.sel .dot::after{background:var(--text)}
+.radio .t{padding-top:10px}.radio .d{display:block;font-size:14.67px;opacity:.9}
+.row{display:flex;gap:8px;align-items:center;margin:6px 0}
+.lbl{width:150px;flex:none}
+.tb{flex:1;height:44px;border:1px solid var(--tb);background:var(--input);padding:0 10px;display:flex;align-items:center}
+.btn{display:inline-flex;align-items:center;justify-content:center;height:44px;min-width:120px;padding:0 16px;border:1px solid var(--ctl);border-radius:5px;background:var(--neutral);color:#1C1C1C;font:inherit}
+.btn.icon{min-width:44px;width:44px;padding:0}
+.btn.acc{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn.ok{background:var(--success);color:#fff;border-color:var(--success)}
+.choice{width:280px;justify-content:space-between}
+.stepper{display:inline-flex;gap:4px;width:176px}.stepper .sb{min-width:44px;width:44px;padding:0;font-weight:700;font-size:21px}
+.stepper .sv{flex:1;height:44px;display:flex;align-items:center;justify-content:center;border:1px solid var(--tb);background:var(--input)}
+.err{color:var(--danger);font-weight:600;min-height:22px;margin:4px 0}
+.tiles{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px}
+.tile{border:1px solid var(--ctl);border-radius:6px;padding:8px;min-height:104px;background:var(--neutral);color:#1C1C1C;position:relative;text-align:center}
+.tile.sel{border:3px solid var(--accent);padding:6px;background:var(--sel-bg);color:var(--text)}
+.tile.sel .chk{display:block}.chk{display:none;position:absolute;top:2px;right:6px;font-weight:700;color:var(--accent)}
+:root[data-theme=dark] .tile.sel{border-color:#E6E6E6}:root[data-theme=dark] .chk{color:#E6E6E6}
+.mini{display:flex;gap:3px;justify-content:center;margin:4px 0 8px}.mini i{width:20px;height:24px;border:1px solid #0006;display:block}
+.strip{display:flex;gap:4px;justify-content:center;padding:18px;border:1px solid var(--tb)}
+.strip b{width:60px;height:48px;display:flex;align-items:center;justify-content:center;font-weight:400}
+.prev{display:grid;gap:2px;padding:6px;border:1px solid var(--tb);background:#8884;margin-top:6px}
+.prev i{height:34px;background:var(--input);border:1px solid var(--tb);display:flex;align-items:center;justify-content:center;font-style:normal;font-size:15px}.prev i.g{background:var(--neutral)}
+.sum{border:1px solid var(--tb);padding:10px 14px;display:grid;grid-template-columns:150px 1fr;row-gap:6px}
+.sum span:nth-child(odd){font-weight:700}
+.foot{display:flex;gap:8px;align-items:center;border-top:1px solid var(--row);padding-top:12px;margin-top:8px}
+.foot .sp{flex:1}.foot .btn{width:130px}
+textarea{width:100%;height:150px;border:1px solid var(--tb);background:var(--input);color:var(--text);font:inherit;padding:8px}
+</style>
+</head>
+<body>
+<div class="tools">
+  <span>Page</span>
+  <button data-p="0" aria-pressed="true">1 Start</button><button data-p="1" aria-pressed="false">2 Grid (blank)</button><button data-p="1b" aria-pressed="false">2 Grid (paste)</button><button data-p="2" aria-pressed="false">3 Theme</button><button data-p="3" aria-pressed="false">4 Save</button>
+  <span>Theme</span><button data-t="light" aria-pressed="true">Light</button><button data-t="dark" aria-pressed="false">Dark</button>
+</div>
+<div class="stage"><div class="win">
+<div class="title">New Keyboard</div>
+<div class="client">
+
+<section class="page on" id="p0">
+  <h2>How do you want to start?</h2><p class="sub">Choose the starting point for your new keyboard layout.</p>
+  <div class="grp"><span class="cap">Starting point</span>
+    <div class="radio sel"><span class="dot"></span><span class="t">Blank grid<span class="d">Create an empty grid of the size you choose. You fill in the keys in the editor.</span></span></div>
+    <div class="radio"><span class="dot"></span><span class="t">Type or paste key labels<span class="d">One row per line, words separated by spaces.</span></span></div>
+    <div class="radio"><span class="dot"></span><span class="t">Copy from an existing layout file<span class="d">Theme and window settings can still be changed.</span></span></div>
+    <div class="row" style="margin-left:36px"><span class="lbl">Layout file</span><span class="tb">C:\keyboards\azerty.kbl</span><span class="btn icon" title="Browse">…</span></div>
+    <div class="err" style="margin-left:36px">Please select a layout file to copy from.</div>
+  </div>
+  <div class="row"><span class="lbl">Keyboard language</span><span class="btn choice">Nederlands (nl) <span>▾</span></span></div>
+  <div class="foot"><span>Step 1 of 4</span><span class="sp"></span><span class="btn">Cancel</span><span class="btn acc">Next →</span></div>
+</section>
+
+<section class="page" id="p1">
+  <h2>Grid &amp; key labels</h2><p class="sub">Set the grid size. The last column is reserved for the ⚙ button.</p>
+  <div class="row"><span class="lbl">Rows</span><span class="stepper"><span class="btn sb">−</span><span class="sv">4</span><span class="btn sb">+</span></span>
+     <span class="lbl" style="width:auto;margin-left:24px">Columns</span><span class="stepper"><span class="btn sb">−</span><span class="sv">8</span><span class="btn sb">+</span></span></div>
+  <div class="grp" style="margin-top:22px"><span class="cap">Preview</span>
+    <div class="prev" style="grid-template-columns:repeat(9,1fr)" id="pv1"></div></div>
+  <div class="foot"><span>Step 2 of 4</span><span class="sp"></span><span class="btn">Cancel</span><span class="btn">← Back</span><span class="btn acc">Next →</span></div>
+</section>
+
+<section class="page" id="p1b">
+  <h2>Grid &amp; key labels</h2><p class="sub">Type the key labels, one row per line.</p>
+  <p style="margin:0 0 6px">Words = keys · [Enter] [Backspace] [Tab] [Space] [Up] [Down] [Left] [Right] · "quoted phrase" · _ = blank</p>
+  <textarea aria-label="Key labels">q w e r t y u i o p
+a s d f g h j k l
+z x c v b n m [Backspace]</textarea>
+  <div class="row"><span class="lbl">Grid size</span><span>3 rows × 11 columns (from your labels)</span></div>
+  <div class="grp" style="margin-top:22px"><span class="cap">Preview</span>
+    <div class="prev" style="grid-template-columns:repeat(12,1fr)" id="pv2"></div></div>
+  <div class="foot"><span>Step 2 of 4</span><span class="sp"></span><span class="btn">Cancel</span><span class="btn">← Back</span><span class="btn acc">Next →</span></div>
+</section>
+
+<section class="page" id="p2">
+  <h2>Theme</h2><p class="sub">Choose a colour theme for the keyboard.</p>
+  <div class="tiles">
+    <div class="tile sel"><span class="chk">✓</span><div class="mini"><i style="background:#2C2C42"></i><i style="background:#3A3A5A"></i><i style="background:#243050"></i></div>Dark</div>
+    <div class="tile"><div class="mini"><i style="background:#fff"></i><i style="background:#DFF0FF"></i><i style="background:#FFF3DC"></i></div>Light</div>
+    <div class="tile"><div class="mini"><i style="background:#FFFF00"></i><i style="background:#FFD700"></i><i style="background:#FFA500"></i></div>High Contrast</div>
+    <div class="tile"><div class="mini"><i style="background:#4A8FD4"></i><i style="background:#B52535"></i><i style="background:#2A6B35"></i></div>Colorful</div>
+    <div class="tile"><div class="mini"><i style="background:repeating-linear-gradient(45deg,#999,#999 3px,#ddd 3px,#ddd 6px)"></i></div>From file…</div>
+  </div>
+  <div class="row"><span class="lbl">Theme file</span><span class="tb">(only when From file is chosen)</span><span class="btn icon">…</span></div>
+  <div class="grp" style="margin-top:22px"><span class="cap">Sample keys</span>
+    <div class="strip" style="background:#1C1C28">
+      <b style="background:#3A3A5A;color:#EFEFFF">a</b><b style="background:#2C2C42;color:#EFEFFF">b</b><b style="background:#243050;color:#C0D0FF">1</b><b style="background:#1C1C2E;color:#B0B0C8">↵</b><b style="background:#38283C;color:#D8C0F0">.</b><b style="background:#263826;color:#B0D0B0">abc</b>
+    </div></div>
+  <div class="foot"><span>Step 3 of 4</span><span class="sp"></span><span class="btn">Cancel</span><span class="btn">← Back</span><span class="btn acc">Next →</span></div>
+</section>
+
+<section class="page" id="p3">
+  <h2>Save as</h2><p class="sub">Choose a file name and folder, then click Create.</p>
+  <div class="row"><span class="lbl">File name</span><span class="tb">new keyboard</span></div>
+  <div class="row"><span class="lbl">Folder</span><span class="tb">C:\Users\me\Documents\keyboards</span><span class="btn icon">…</span></div>
+  <div class="err">The selected folder does not exist.</div>
+  <div class="grp" style="margin-top:20px"><span class="cap">Summary</span>
+    <div class="sum"><span>Grid</span><span>3 rows × 12 columns (last column reserved for ⚙)</span><span>Theme</span><span>Dark</span><span>Language</span><span>nl</span><span>Window</span><span>Always on top, title bar shown</span></div></div>
+  <div class="foot"><span>Step 4 of 4</span><span class="sp"></span><span class="btn">Cancel</span><span class="btn">← Back</span><span class="btn ok">Create</span></div>
+</section>
+
+</div></div></div>
+<script>
+function grid(id,rows,cols,L){var e=document.getElementById(id),h='';for(var r=0;r<rows;r++)for(var c=0;c<cols;c++){var g=(r==0&&c==cols-1),t=g?'⚙':(L&&L[r]&&L[r][c])||'';h+='<i class="'+(g?'g':'')+'">'+t+'</i>'}e.innerHTML=h}
+grid('pv1',4,9);
+grid('pv2',3,12,[['q','w','e','r','t','y','u','i','o','p'],['a','s','d','f','g','h','j','k','l'],['z','x','c','v','b','n','m','⌫']]);
+document.querySelectorAll('[data-p]').forEach(function(b){b.onclick=function(){document.querySelectorAll('[data-p]').forEach(function(x){x.setAttribute('aria-pressed',x==b)});document.querySelectorAll('.page').forEach(function(p){p.classList.toggle('on',p.id=='p'+b.dataset.p)})}});
+document.querySelectorAll('[data-t]').forEach(function(b){b.onclick=function(){document.querySelectorAll('[data-t]').forEach(function(x){x.setAttribute('aria-pressed',x==b)});document.documentElement.dataset.theme=b.dataset.t}});
+</script>
+</body>
+</html>
