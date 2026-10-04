@@ -63,7 +63,6 @@ namespace OnScreenKeyboard
             T_TouchChoiceButton();
             T_ColorFlyout();
             T_TouchDialogFrame();
-            T_UiGuardBaseline();
             T_ColourContrastAaa();
             T_ControlBorders();
             T_KeyRings();
@@ -73,6 +72,9 @@ namespace OnScreenKeyboard
             T_GroupEditorGuards();
             T_GroupEditor();
             T_GroupDialogs();
+            T_KeyboardEditorGuards();
+            T_KeyboardEditor();
+            T_KeyboardEditorAlignment();
             T_KeyEditorRoundTrip();
             T_ValidationBlocksApply();
             T_MissingFontHandling();
@@ -1696,9 +1698,8 @@ namespace OnScreenKeyboard
                 using var kbef = new KeyboardEditorForm(theme8, window8, meta8, null);
                 Assert(kbef.FormBorderStyle == FormBorderStyle.Sizable,
                     "KeyboardEditorForm: FormBorderStyle is Sizable");
-                bool kbefScroll = false;
-                foreach (Control ctrl in kbef.Controls) { if (ctrl is Panel kbefP && kbefP.AutoScroll) { kbefScroll = true; break; } }
-                Assert(kbefScroll, "KeyboardEditorForm: has AutoScroll panel wrapper");
+                // The section host (inside the dialog frame) scrolls only when the screen is too small.
+                Assert(UiGuard.All(kbef).Any(c => c is Panel kbefP && kbefP.AutoScroll), "KeyboardEditorForm: has an AutoScroll panel (the section host)");
             }
 
             Section("StyleGroups — standard group name immutable through round-trip");
@@ -4418,12 +4419,12 @@ namespace OnScreenKeyboard
                 CheckTabIndexUnique(f, "KeyboardEditorForm");
                 CheckTooltipsRegistered(f, "KeyboardEditorForm");
 
-                // Slow-keys and dwell NUDs must have AccessibleName
-                var nuds = AllControls<NumericUpDown>(f);
-                int namedNuds = 0;
-                foreach (var n in nuds) if (!string.IsNullOrEmpty(n.AccessibleName)) namedNuds++;
-                Assert(namedNuds >= 2,
-                    $"KeyboardEditorForm: at least 2 NumericUpDown controls have AccessibleName (got {namedNuds})");
+                // The slow-keys and dwell steppers (and the transparency stepper) have a name and a description
+                var steppers = AllControls<TouchStepper>(f);
+                int namedSteppers = 0;
+                foreach (var st in steppers) if (!string.IsNullOrEmpty(st.AccessibleName) && !string.IsNullOrEmpty(st.AccessibleDescription)) namedSteppers++;
+                Assert(namedSteppers >= 3,
+                    $"KeyboardEditorForm: at least 3 steppers have an accessible name and description (got {namedSteppers})");
             }
             catch (Exception ex) { Assert(false, $"KeyboardEditorForm accessibility check failed: {ex.Message}"); }
 
@@ -4536,11 +4537,6 @@ namespace OnScreenKeyboard
 
             object Field(object form, string fieldName) =>
                 form.GetType().GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance).GetValue(form);
-            // GroupEditorForm stores the hex TextBox field directly (e.g. _txtKeyColorHex).
-            TextBox HexBox(object form, string fieldName) => (TextBox)Field(form, fieldName);
-            // KeyboardEditorForm/KeyEditorForm use FluentDialogBase.AddColorRow, which only
-            // exposes the swatch Button — the paired TextBox hangs off its .Tag.
-            TextBox SwatchHexBox(object form, string fieldName) => ((Button)Field(form, fieldName)).Tag as TextBox;
             bool HasPendingErrors(object form) =>
                 (bool)form.GetType().GetMethod("HasPendingErrors", BindingFlags.NonPublic | BindingFlags.Instance)
                     .Invoke(form, new object[] { null });
@@ -4576,28 +4572,15 @@ namespace OnScreenKeyboard
                     "GroupEditorForm: Apply click succeeds once no field is flagged");
             }
 
-            // ── KeyboardEditorForm: invalid hex blocks Apply(), fallback uses the prior colour ──
+            // ── KeyboardEditorForm: the colour is chosen from a flyout (never an invalid code); a flagged field still blocks Apply ──
             {
                 var srcTheme = new VisualTheme { BackgroundColor = Color.FromArgb(255, 10, 20, 30) };
                 using var f = new KeyboardEditorForm(srcTheme, new WindowState(), new LayoutMeta(), owner: null);
-                var hexBox = SwatchHexBox(f, "_pnlBgColor");
-                Assert(hexBox != null, "KeyboardEditorForm: found the Background color hex TextBox");
-
-                var applyMi = typeof(KeyboardEditorForm)
-                    .GetMethod("Apply", BindingFlags.NonPublic | BindingFlags.Instance);
-
-                hexBox.Text = "zzz";
-                Assert(HasPendingErrors(f), "KeyboardEditorForm: invalid background hex is flagged");
-                bool applied1 = (bool)applyMi.Invoke(f, null);
-                Assert(!applied1, "KeyboardEditorForm: Apply() refuses to proceed with an invalid hex");
-                Assert(f.DialogResult != DialogResult.OK,
-                    "KeyboardEditorForm: dialog does not close on a refused Apply()");
-
-                hexBox.Text = "112233";
-                bool applied2 = (bool)applyMi.Invoke(f, null);
-                Assert(applied2, "KeyboardEditorForm: Apply() succeeds once the hex is valid");
-                Assert(f.ResultTheme.BackgroundColor == Color.FromArgb(255, 0x11, 0x22, 0x33),
-                    "KeyboardEditorForm: valid hex is applied");
+                Assert(UiGuard.All(f).OfType<ColorChip>().Count() == 1, "KeyboardEditorForm: the background colour is a chip (no hex text box to mistype)");
+                Assert(!HasPendingErrors(f), "KeyboardEditorForm: a fresh dialog has no pending error");
+                var applyMi = typeof(KeyboardEditorForm).GetMethod("Apply", BindingFlags.NonPublic | BindingFlags.Instance);
+                bool applied = (bool)applyMi.Invoke(f, null);
+                Assert(applied && f.ResultTheme.BackgroundColor.ToArgb() == Color.FromArgb(255, 10, 20, 30).ToArgb(), "KeyboardEditorForm: Apply keeps the background colour");
             }
 
             // ── KeyEditorForm: colours are chosen, never typed into the form, so they cannot be invalid ──

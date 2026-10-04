@@ -1035,32 +1035,5 @@ namespace OnScreenKeyboard
                 "the control border is much stronger than the pale grouping line (BorderCard)");
         }
 
-        // ════════════════════════════════════════════════════════════════
-        // Baseline: how far the existing editors are from the guards
-        // ════════════════════════════════════════════════════════════════
-        private static void T_UiGuardBaseline()
-        {
-            Section("UI guard baseline — existing editor dialogs (reported, not enforced yet)");
-
-            var lines = new List<string> { "UI guard baseline — existing dialogs (not migrated yet)", $"Generated: {DateTime.Now:yyyy-MM-dd HH:mm:ss}", "" };
-            var groups = new List<KeyGroup> { new KeyGroup { Name = "standard" } };
-            var forms = new (string Name, Func<Form> Make)[]
-            {
-                ("KeyboardEditorForm", () => new KeyboardEditorForm(new VisualTheme(), new WindowState(), new LayoutMeta(), null)),
-            };
-            foreach (var (name, make) in forms)
-            {
-                using var f = make();
-                var t = UiGuard.TargetViolations(f, visibleOnly: false);
-                int pointer = UiGuard.All(f).Count(Touch.IsPointerControl);
-                lines.Add($"{name}: {f.Width} x {f.Height} px, {t.Count} of {pointer} pointer controls are smaller than 44 x 44");
-                foreach (var v in t) lines.Add("    " + v);
-                lines.Add("");
-                Assert(pointer > 0, $"baseline: {name} has pointer controls to check ({pointer})");
-            }
-            string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ui_guard_report.txt");
-            try { File.WriteAllLines(path, lines, new System.Text.UTF8Encoding(true)); } catch { }
-            Assert(File.Exists(path), "baseline: report written (ui_guard_report.txt)");
-        }
     }
 }

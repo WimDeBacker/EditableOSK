@@ -3501,11 +3501,12 @@ namespace OnScreenKeyboard
         /// </summary>
         private void OpenKeyboardEditor()
         {
+            // Save / Save As are not callbacks any more: the dialog applies the edits and closes with a FileAction, and the file
+            // is written below, AFTER the results were copied into _theme / _window / _meta (the old dialog saved the previous values).
+            // Load stays a callback (it asks the user first and replaces the keyboard at once); it returns whether a file was loaded.
             using var dlg = new KeyboardEditorForm(_theme, _window, _meta, this,
-                groups:      _layout.Groups,
-                onSave:      () => SaveSettings(false),
-                onSaveAs:    () => SaveSettings(true),
                 onLoad:      () => LoadSettings(),
+                groups:      _layout.Groups,
                 getGroups:   () => _layout.Groups,
                 getSettings: () => (_theme, _window, _meta));
             if (dlg.ShowDialog(this) != DialogResult.OK) return;
@@ -3530,6 +3531,9 @@ namespace OnScreenKeyboard
             RefreshAllButtons();
             ApplyWPTags();
             AutoSave();
+            // The user pressed Save or Save As in the dialog: write the layout file now, with the values that were just applied.
+            if (dlg.FileAction == KeyboardFileAction.Save)        SaveSettings(false);
+            else if (dlg.FileAction == KeyboardFileAction.SaveAs) SaveSettings(true);
         }
 
         // ── Save / Load ───────────────────────────────────────────────
@@ -3605,12 +3609,14 @@ namespace OnScreenKeyboard
         /// Shows an Open dialog and loads the selected layout file via
         /// <see cref="ApplyLoadedSettings"/>.
         /// </summary>
-        private void LoadSettings()
+        private bool LoadSettings()
         {
             using var dlg = new OpenFileDialog
             { Title="Load",Filter="Keyboard layouts (*.kbl)|*.kbl|All files (*.*)|*.*",
               FileName=_currentFilePath ?? SettingsManager.DefaultPath };
-            if (dlg.ShowDialog() == DialogResult.OK) ApplyLoadedSettings(dlg.FileName);
+            if (dlg.ShowDialog() != DialogResult.OK) return false;      // cancelled: nothing was loaded
+            ApplyLoadedSettings(dlg.FileName);
+            return true;
         }
 
         /// <summary>

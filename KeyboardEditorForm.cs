@@ -1,1148 +1,722 @@
+// KeyboardEditorForm.cs — the Keyboard Editor rebuilt on the touch components (spec: keyboardeditor_spec.md).
+//
+// Same pattern as GroupEditorForm / KeyEditorForm: content-sized FluentDialogBase, a section bar with three sections
+// (General, Accessibility, Word prediction), 44 px controls, table layout, no hand-positioned control, English and Dutch.
+//
+// What is different from the old dialog (see the inventory for the defects this fixes):
+//   • Apply clones the source objects and overwrites only the fields it edits, so a field added to a model later is never reset.
+//   • Save / Save As apply the edits first and set FileAction; the caller copies the results and then saves (the old dialog saved
+//     the previous values). Load asks first and only refills the dialog when a file was really loaded.
+//   • Language changes live and is restored on Cancel. "Remember typed words" only takes effect on Apply.
+//   • Slow keys / Dwell click are a radio group (Off / Slow keys / Dwell click) instead of two exclusive check boxes.
+//   • Controls that stand under each other share one width (OptionStack, ButtonRow).
+
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Drawing.Text;
+using System.IO;
 using System.Linq;
 using System.Windows.Forms;
-using Microsoft.Win32;
 
 namespace OnScreenKeyboard
 {
+    /// <summary>What the user asked the caller to do with the layout file after the dialog closed with OK.</summary>
+    public enum KeyboardFileAction { None, Save, SaveAs }
+
     /// <summary>
-    /// A modal dialog that lets the user edit all visual and behavioural
-    /// settings for the on-screen keyboard in one place.
-    ///
-    /// When the user clicks "Apply", the dialog closes with
-    /// <see cref="DialogResult.OK"/> and the caller can read back the
-    /// updated values through <see cref="ResultTheme"/>,
-    /// <see cref="ResultWindow"/>, <see cref="ResultMeta"/>,
-    /// and <see cref="ResultGroups"/>.
-    ///
-    /// If the user clicks "Cancel" the dialog closes with
-    /// <see cref="DialogResult.Cancel"/> and the original values are left
-    /// unchanged.
+    /// The word-prediction data the dialog reads and changes. Every member defaults to the static <see cref="WordDatabase"/> /
+    /// <see cref="LanguageRegistry"/>; tests replace them so no real database is needed.
+    /// </summary>
+    internal sealed class WordPredictionBackend
+    {
+        public Func<IReadOnlyList<(string Word, int Count)>> Candidates = () => WordDatabase.GetCandidates();
+        public Func<string, bool> Promote = w => WordDatabase.PromoteCandidate(w);
+        public Func<string, bool> Reject  = w => WordDatabase.RemoveCandidate(w);
+        public Func<IReadOnlyList<DatabaseInfo>> Databases = () => new LanguageRegistry(AppDomain.CurrentDomain.BaseDirectory).All;
+        public Func<bool>   IsLoaded       = () => WordDatabase.IsLoaded;
+        public Func<string> LoadedLanguage = () => WordDatabase.Language;
+        public Func<int>    WordCount      = () => WordDatabase.WordCount;
+        public Func<string, string> OverlayPath = p => WordDatabase.GetOverlayPath(p);
+        public Func<string, bool>   FileExists  = p => File.Exists(p);
+    }
+
+    /// <summary>
+    /// A modal dialog for the settings of the whole keyboard: language, window, layout file, accessibility, word prediction.
+    /// On OK the edited copies are in <see cref="ResultTheme"/>, <see cref="ResultWindow"/>, <see cref="ResultMeta"/> and
+    /// <see cref="ResultGroups"/>, and <see cref="FileAction"/> says whether the caller should save the layout file next.
     /// </summary>
     public class KeyboardEditorForm : FluentDialogBase
     {
-        // ── Public results (read by the caller after DialogResult.OK) ────
-
-        /// <summary>The edited visual theme (colors, font, border…).</summary>
-        public VisualTheme   ResultTheme  { get; private set; }
-
-        /// <summary>The edited window settings (always-on-top, opacity, size…).</summary>
-        public WindowState   ResultWindow { get; private set; }
-
-        /// <summary>The edited layout metadata (language, sticky modifiers…).</summary>
-        public LayoutMeta    ResultMeta   { get; private set; }
-
-        /// <summary>
-        /// The (possibly edited) list of key groups.  Groups are always
-        /// cloned on entry so the original list is never mutated directly.
-        /// </summary>
+        // ── Results ──────────────────────────────────────────────────
+        public VisualTheme ResultTheme  { get; private set; }
+        public WindowState ResultWindow { get; private set; }
+        public LayoutMeta  ResultMeta   { get; private set; }
         public List<KeyGroup> ResultGroups { get; private set; }
 
-        // ── Snapshot of the original settings (updated after Load) ──────
+        /// <summary>Set when Save or Save As closed the dialog: the caller copies the results and then saves the layout file.</summary>
+        public KeyboardFileAction FileAction { get; private set; } = KeyboardFileAction.None;
 
-        /// <summary>The theme as it was when the editor was opened (or last loaded) — passthrough fields in <see cref="Apply"/> are copied from here.</summary>
-        private VisualTheme _srcTheme;
-        /// <summary>The window state as it was when the editor was opened (or last loaded).</summary>
-        private WindowState _srcWindow;
-        /// <summary>The layout metadata as it was when the editor was opened (or last loaded).</summary>
-        private LayoutMeta  _srcMeta;
+        /// <summary>Two columns (word prediction) and the widest label need a little more than the default.</summary>
+        protected override int ContentMaxWidth => 920;
 
-        /// <summary>
-        /// Working copy of the key-group list.  Never changed inside this dialog (group
-        /// management moved to <see cref="KeyEditorForm"/>), but refreshed after a "Load"
-        /// operation so <see cref="ResultGroups"/> reflects the newly-loaded layout.
-        /// </summary>
+        // ── Source objects: Apply clones these and overwrites what the dialog edits ──
+        private VisualTheme _sourceTheme;
+        private WindowState _sourceWindow;
+        private LayoutMeta  _sourceMeta;
         private List<KeyGroup> _groups;
 
-        // ── UI controls ─────────────────────────────────────────────────
-
-        // Language section
-        private ComboBox      _cmbLanguage;
-
-        // Window section
-        private TrackBar      _trkOpacity;
-        private Button        _pnlBgColor;
-
-        // Window/accessibility checkboxes
-        private CheckBox        _chkAlwaysOnTop;
-        private CheckBox        _chkStickyMods;
-        private CheckBox        _chkHoldToEdit;
-        private CheckBox        _chkHideTitlebar;
-        private ComboBox        _cmbToolbarTheme;
-
-        // Accessibility — slow keys and dwell click (checkbox = enabled, NUD = duration)
-        private CheckBox        _chkSlowKeys;
-        private NumericUpDown   _nudSlowKeys;
-        private CheckBox        _chkDwell;
-        private NumericUpDown   _nudDwell;
-        private CheckBox        _chkTimingAnimation;
-        private CheckBox        _chkCornerLabels;     // "Show Shift and AltGr labels" (LayoutMeta.ShowCornerLabels)
-
-        // Word prediction database
-        private CheckBox        _chkWPLearning;       // "Remember typed words"
-        private ComboBox        _cmbWPDatabase;
-        private Label           _lblWPInfo;
-        private Button          _btnWPExport;
-        private bool            _suppressWPChanged;   // re-entrancy guard
-
-        // Word prediction — learning candidates (unknown words seen while typing,
-        // not yet promoted to the real word list). See WordDatabase.RecordWord.
-        private ListBox          _lstWPCandidates;
-        private Button           _btnWPPromote;
-        private Button           _btnWPReject;
-
-        // Subscribed to WordDatabase.Loaded so the info label refreshes when a
-        // background load completes while the editor is open (finding #6).
-        // Named delegate stored so FormClosed can unsubscribe the same instance.
-        private readonly Action _onWordDbLoaded;
-
-        // File action delegates — called when Save/SaveAs/Load buttons are clicked
-        private readonly Action _onSave;
-        private readonly Action _onSaveAs;
-        private readonly Action _onLoad;
-        /// <summary>
-        /// Retrieves the current key-group list from the main form after a
-        /// "Load" operation so the editor can refresh its working copy.
-        /// </summary>
+        // ── Callbacks from the main form ─────────────────────────────
+        private readonly Func<bool> _onLoad;
         private readonly Func<List<KeyGroup>> _getGroups;
-
-        /// <summary>
-        /// Retrieves the freshly-loaded theme, window state, and layout metadata
-        /// from the main form after a "Load" operation.
-        /// </summary>
         private readonly Func<(VisualTheme, WindowState, LayoutMeta)> _getSettings;
+        private readonly WordPredictionBackend _backend;
 
-        // File buttons — kept as fields so OnLanguageChanged() can update their text
-        private Button _btnSaveFile, _btnSaveAsFile, _btnLoadFile;
+        // ── Controls: General ────────────────────────────────────────
+        private TouchChoiceButton _cmbLanguage, _cmbToolbarTheme;
+        private TouchStepper      _stpOpacity;
+        private ColorChip         _chipBackground;
+        private TouchCheckBox     _chkAlwaysOnTop, _chkHideTitlebar;
+        private FluentButton      _btnSaveFile, _btnSaveAsFile, _btnLoadFile;
 
-        // _dark is inherited from FluentDialogBase.
+        // ── Controls: Accessibility ──────────────────────────────────
+        private TouchCheckBox    _chkStickyMods, _chkHoldToEdit, _chkTimingAnimation, _chkCornerLabels;
+        private TouchRadioButton _optTimingOff, _optSlowKeys, _optDwell;
+        private TouchStepper     _stpSlowKeys, _stpDwell;
 
-        // Confirm / dismiss
-        private Button _btnApply, _btnCancel;
+        // ── Controls: Word prediction ────────────────────────────────
+        private TouchCheckBox     _chkWPLearning;
+        private TouchChoiceButton _cmbWPDatabase;
+        private Label             _lblWPInfo, _lblExportHint, _lblImmediateHint;
+        private FluentButton      _btnWPExport, _btnWPPromote, _btnWPReject;
+        private TouchList         _lstWPCandidates;
+        private Panel             _candidateFrame;
 
-        // ── Translation / tooltip / accessibility helpers ────────────────
-        // _transLabels, _transGroups, _transTooltips, _tip, _err, _onPrefChanged,
-        // _pendingAccessibleName — all inherited from FluentDialogBase.
+        private FluentButton _btnApply, _btnCancel;
 
-        // ── Fluent / WinUI-3 colour and font shorthands ─────────────────
-        // These are static properties so they always return the current
-        // theme value even if the global theme is swapped at runtime.
+        // ── State that is not a control ──────────────────────────────
+        private bool   _loading;                 // set only while the code fills controls (read by change handlers, never by Apply)
+        private string _languageOnOpen = "";     // restored when the dialog is cancelled
+        private readonly List<string> _languageCodes = new List<string>();
+        private readonly List<string> _databaseFiles = new List<string>();     // file name per chooser row; "" = automatic
+        private readonly Action _onWordDbLoaded;
+        private bool _released;
 
-        private static Color C_BG        => Fluent.BgPage;
-        private static Color C_PANEL_BG  => Fluent.BgCard;
-        private static Color C_BORDER    => Fluent.BorderCard;
-        private static Color C_LBL       => Fluent.TextPrimary;
-        private static Color C_HINT      => Fluent.TextHint;
-        private static Color C_BTN_OK    => Fluent.Success;
-        private static Color C_BTN_CANCEL=> Fluent.Danger;
-        private static Color C_INPUT_BG  => Fluent.BgInput;
-        private static Font  F_LABEL     => Fluent.FontLabel;
-        private static Font  F_INPUT     => Fluent.FontInput;
-        private static Font  F_HEADER    => Fluent.FontTitle;
-        private static Font  F_BTN       => Fluent.FontBtnLg;
-        private static Font  F_HINT      => Fluent.FontHint;
+        // The enum values in the order of the chooser rows (explicit: no index = enum coupling).
+        private static readonly ToolbarTheme[] ToolbarThemeOrder = { ToolbarTheme.Dark, ToolbarTheme.Light, ToolbarTheme.System };
 
-        // Layout constants (pixels)
-        private const int HDR_H = 42;   // height of a card's coloured header bar
-        private const int ROW_H = 50;   // vertical space allocated for each setting row
-        private const int PAD   = 20;   // inner horizontal padding inside a card
+        // ── Construction ─────────────────────────────────────────────
 
-        // ════════════════════════════════════════════════════════════════
-        // Constructor
-        // ════════════════════════════════════════════════════════════════
+        public KeyboardEditorForm(VisualTheme theme, WindowState window, LayoutMeta meta, Form owner,
+                                   Func<bool> onLoad = null, List<KeyGroup> groups = null,
+                                   Func<List<KeyGroup>> getGroups = null,
+                                   Func<(VisualTheme, WindowState, LayoutMeta)> getSettings = null)
+            : this(theme, window, meta, owner, onLoad, groups, getGroups, getSettings, new WordPredictionBackend()) { }
 
-        /// <summary>
-        /// Creates the editor dialog and immediately builds all UI controls.
-        /// </summary>
-        /// <param name="theme">
-        ///   The current visual theme.  A deep clone is made so the original
-        ///   is never changed until the user confirms with Apply.
-        /// </param>
-        /// <param name="window">
-        ///   The current window state (size, always-on-top flag, …).
-        /// </param>
-        /// <param name="meta">
-        ///   The current layout metadata (language, sticky modifiers, …).
-        /// </param>
-        /// <param name="owner">
-        ///   The parent form.  Used by <see cref="StartPosition"/> to centre
-        ///   the dialog on screen (currently unused directly but kept for
-        ///   future use).
-        /// </param>
-        /// <param name="onSave">
-        ///   Callback invoked when the user clicks "Save".  Apply() is called
-        ///   first so ResultTheme is up to date before the file is written.
-        /// </param>
-        /// <param name="onSaveAs">Callback for "Save As…".</param>
-        /// <param name="onLoad">
-        ///   Callback for "Load…".  After the callback returns the editor
-        ///   refreshes its controls from the reloaded values.
-        /// </param>
-        /// <param name="groups">
-        ///   Initial key-group list.  Each group is deep-cloned so edits
-        ///   inside the sub-dialog do not affect the caller's list until OK.
-        /// </param>
-        /// <param name="getGroups">
-        ///   Factory that returns the caller's current group list after a
-        ///   successful Load operation so the editor can sync its copy.
-        /// </param>
-        public KeyboardEditorForm(VisualTheme theme, WindowState window, LayoutMeta meta,
-                                  Form owner,
-                                  Action onSave = null, Action onSaveAs = null, Action onLoad = null,
-                                  List<KeyGroup> groups = null, Func<List<KeyGroup>> getGroups = null,
-                                  Func<(VisualTheme, WindowState, LayoutMeta)> getSettings = null)
-            : base(new Size(940, 560))
+        internal KeyboardEditorForm(VisualTheme theme, WindowState window, LayoutMeta meta, Form owner,
+                                     Func<bool> onLoad, List<KeyGroup> groups, Func<List<KeyGroup>> getGroups,
+                                     Func<(VisualTheme, WindowState, LayoutMeta)> getSettings, WordPredictionBackend backend)
         {
-            _srcTheme  = theme;
-            _srcWindow = window;
-            _srcMeta   = meta;
-
-            ResultTheme  = theme.Clone();
-            ResultWindow = window.Clone();
-            ResultMeta   = meta.Clone();
-
+            _sourceTheme = theme; _sourceWindow = window; _sourceMeta = meta;
             _groups      = groups?.Select(g => g.Clone()).ToList() ?? new List<KeyGroup>();
-            ResultGroups = _groups;
+            _onLoad = onLoad; _getGroups = getGroups; _getSettings = getSettings;
+            _backend = backend ?? new WordPredictionBackend();
 
-            _onSave      = onSave;
-            _onSaveAs    = onSaveAs;
-            _onLoad      = onLoad;
-            _getGroups   = getGroups;
-            _getSettings = getSettings;
+            ResultTheme = theme.Clone(); ResultWindow = window.Clone(); ResultMeta = meta.Clone(); ResultGroups = _groups;
+            _languageOnOpen = Lang.CurrentCode;
 
             Text = Lang.T("Edit Keyboard");
-
             BuildUI();
-            PopulateFields(theme, window, meta);
+            PopulateFields(_sourceTheme, _sourceWindow, _sourceMeta);
             ActiveControl = _cmbLanguage;
 
-            // Refresh the WP info label when a background database load completes
-            // while this dialog is open (finding #6).
+            // The info line and the candidates follow a background database load that finishes while the dialog is open.
             _onWordDbLoaded = () =>
             {
                 if (!IsHandleCreated || IsDisposed) return;
-                try { BeginInvoke((Action)(() => { UpdateWPInfoLabel(); PopulateWPCandidates(); })); }
+                try { BeginInvoke((Action)(() => { if (!IsDisposed) { UpdateWPInfo(); PopulateCandidates(); } })); }
                 catch (InvalidOperationException) { }
             };
             WordDatabase.Loaded += _onWordDbLoaded;
-            FormClosed += (s, e) => WordDatabase.Loaded -= _onWordDbLoaded;
-            // Base FormClosed handles Lang.LanguageChanged, UserPreferenceChanged, and _err.
+            FormClosed += (s, e) => { RestoreLanguageIfCancelled(); ReleaseFormResources(); };
         }
 
-        // ════════════════════════════════════════════════════════════════
-        // Language-change handler
-        // ════════════════════════════════════════════════════════════════
-
-        /// <summary>
-        /// Refreshes all translatable strings on the form when the language changes.
-        /// Calls <see cref="FluentDialogBase.OnLanguageChanged"/> first (handles labels,
-        /// group-panel headers, tooltips), then updates form-specific controls.
-        /// </summary>
-        protected override void OnLanguageChanged()
+        /// <summary>Unsubscribes from the static word database event. Also run from Dispose: a form built and never shown never gets FormClosed.</summary>
+        private void ReleaseFormResources()
         {
-            base.OnLanguageChanged();
-            Text                  = Lang.T("Edit Keyboard");
-            _btnApply.Text        = Lang.T("Apply");
-            _btnCancel.Text       = Lang.T("Cancel");
-            _chkAlwaysOnTop.Text  = Lang.T("Always on top");
-            _chkStickyMods.Text   = Lang.T("Sticky modifiers");
-            _chkHoldToEdit.Text   = Lang.T("Hold to edit");
-            _chkHideTitlebar.Text = Lang.T("Hide title bar");
-            _chkSlowKeys.Text           = Lang.T("Slow keys");
-            _chkDwell.Text              = Lang.T("Dwell click");
-            _chkTimingAnimation.Text    = Lang.T("Show timing animation");
-            _chkCornerLabels.Text       = Lang.T("Show Shift and AltGr labels");
-            _nudSlowKeys.AccessibleName = Lang.StripMnemonic(Lang.T("Slow keys"));
-            _nudDwell.AccessibleName    = Lang.StripMnemonic(Lang.T("Dwell click"));
-            _btnSaveFile.Text     = "&" + Lang.T("Save");
-            _btnSaveAsFile.Text   = Lang.T("Save As…");
-            _btnLoadFile.Text     = "&" + Lang.T("Load…");
-            if (_chkWPLearning != null) _chkWPLearning.Text = "&" + Lang.T("wp: Remember typed words");
-            if (_btnWPExport   != null) _btnWPExport.Text   = Lang.T("wp: Export…");
-            if (_btnWPPromote  != null) _btnWPPromote.Text  = Lang.T("wp: Promote");
-            if (_btnWPReject   != null) _btnWPReject.Text   = Lang.T("wp: Reject");
-            UpdateWPInfoLabel();
+            if (_released) return;
+            _released = true;
+            if (_onWordDbLoaded != null) WordDatabase.Loaded -= _onWordDbLoaded;
         }
 
-        // ════════════════════════════════════════════════════════════════
-        // UI construction
-        // ════════════════════════════════════════════════════════════════
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) ReleaseFormResources();
+            base.Dispose(disposing);
+        }
 
-        /// <summary>
-        /// Creates and positions every control on the form.
-        ///
-        /// The layout is a two-column grid:
-        /// <list type="bullet">
-        ///   <item><description>
-        ///     Left column — Language, Window settings
-        ///   </description></item>
-        ///   <item><description>
-        ///     Right column — Layout File, Accessibility
-        ///   </description></item>
-        /// </list>
-        ///
-        /// Group management was moved to <see cref="KeyEditorForm"/> since groups are a
-        /// per-key concern, not a keyboard-level one.
-        ///
-        /// At the bottom, Apply and Cancel buttons span the full width.
-        /// The form's height is adjusted at the end to fit all content.
-        /// </summary>
+        /// <summary>Cancel does not keep a language change that was applied live while the dialog was open.</summary>
+        private void RestoreLanguageIfCancelled()
+        {
+            if (DialogResult != DialogResult.OK && Lang.CurrentCode != _languageOnOpen) Lang.Load(_languageOnOpen);
+        }
+
+        // ── UI ───────────────────────────────────────────────────────
+
         private void BuildUI()
         {
-            int margin = 16;    // gap between the form edge and the card columns
-            int gap    = 14;    // gap between the two columns and between stacked cards
-
-            // Divide the client area into two equal columns.
-            int colW   = (ClientSize.Width - margin * 2 - gap) / 2;
-            int leftW  = colW;
-            int rightW = colW;
-            int leftX  = margin;
-            int rightX = margin + colW + gap;
-
-            // ── LEFT COLUMN ───────────────────────────────────────────────
-
-            int leftY = margin;  // tracks the next free vertical position in the left column
-
-            // ── Language card ─────────────────────────────────────────────
-            // Height: header bar + top padding + one combo-box row + bottom padding
-            int langH = HDR_H + PAD + ROW_H + PAD - 4;
-            var grpLang = AddGroup(() => Lang.T("Language"), leftX, leftY, colW, langH,
-                                   Color.FromArgb(52, 73, 94));
-            grpLang.TabIndex = 0;
-            leftY += langH + gap;
-
-            // Populate the language combo from all .json translation files that
-            // were found at startup.
-            var langs = Lang.GetAvailable();
-            _cmbLanguage = new ComboBox
-            {
-                Left = PAD, Top = HDR_H + PAD, Width = colW - PAD * 2,
-                DropDownStyle = ComboBoxStyle.DropDownList,   // no free-text entry
-                BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary,
-                Font = F_INPUT, FlatStyle = FlatStyle.Flat,
-                TabIndex = 0,
-                AccessibleName = Lang.StripMnemonic(Lang.T("Language")),
-            };
-            foreach (var (code, name) in langs)
-                _cmbLanguage.Items.Add(new LangItem(code, name));
-
-            // Pre-select the language that is currently active.
-            for (int i = 0; i < _cmbLanguage.Items.Count; i++)
-                if (((LangItem)_cmbLanguage.Items[i]).Code == Lang.CurrentCode)
-                { _cmbLanguage.SelectedIndex = i; break; }
-
-            // Fall back to the first item if the current language was not found
-            // (e.g. after a language file was deleted).
-            if (_cmbLanguage.SelectedIndex < 0 && _cmbLanguage.Items.Count > 0)
-                _cmbLanguage.SelectedIndex = 0;
-
-            // Switching the combo immediately applies the language — the rest of
-            // the UI responds via the LanguageChanged event.
-            _cmbLanguage.SelectedIndexChanged += (s, e) =>
-            {
-                if (_cmbLanguage.SelectedItem is LangItem li) Lang.Load(li.Code);
-            };
-            grpLang.Controls.Add(_cmbLanguage);
-
-            // ── Window card ───────────────────────────────────────────────
-            // Contains: opacity slider, background colour, always-on-top,
-            // hide-titlebar.  Heights are summed manually to fit everything.
-            int wndH = HDR_H + PAD + 52       + ROW_H + ROW_H + ROW_H + ROW_H + PAD + 6;
-            var grpWnd = AddGroup(() => Lang.T("Window"), leftX, leftY, colW, wndH,
-                                  Color.FromArgb(41, 128, 185));
-            grpWnd.TabIndex = 1;
-            leftY += wndH + gap;
-
-            // lx = label x, vx = value-control x, vw = value-control width
-            int lx = PAD, vx = 195, vw = colW - lx - vx - PAD;
-            int gy = HDR_H + PAD;  // running y position inside this card
-
-            // ti = TabIndex counter within grpWnd; label.TabIndex = buddy.TabIndex − 1.
-            int ti = 0;
-
-            // Opacity trackbar — value 0 means fully opaque, value 80 means
-            // 20 % opacity (the minimum we allow so the keyboard is still usable).
-            AddFieldLabel(grpWnd, () => "&" + Lang.T("Opacity"), lx, gy).TabIndex = ti++;
-            _trkOpacity = new TrackBar
-            {
-                Left = vx, Top = gy, Width = vw, Height = 45,
-                Minimum = 0, Maximum = 80, TickFrequency = 10,
-                SmallChange = 5, LargeChange = 10,
-                TabIndex = ti++,
-                AccessibleName = Lang.StripMnemonic(Lang.T("Opacity")),
-            };
-            SetTip(_trkOpacity, () => Lang.T("tip: Opacity"));
-            _trkOpacity.ValueChanged += (s, e) => { };  // reserved for future live preview
-            grpWnd.Controls.Add(_trkOpacity);
-            gy += 52;  // trackbar is taller than a normal row
-
-            // Background colour picker
-            AddFieldLabel(grpWnd, () => "&" + Lang.T("Background"), lx, gy).TabIndex = ti++;
-            _pnlBgColor = AddColorRow(grpWnd, vx, gy, vw, ref ti); gy += ROW_H;
-
-            // "Always on top" keeps the keyboard window above all other windows.
-            _chkAlwaysOnTop = new CheckBox
-            {
-                Text = Lang.T("Always on top"),
-                Left = lx, Top = gy + 8, AutoSize = true,
-                ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent,
-                Font = F_LABEL, TabIndex = ti++,
-            };
-            grpWnd.Controls.Add(_chkAlwaysOnTop); gy += ROW_H;
-
-            // "Hide title bar" removes the window chrome so only the keys show.
-            _chkHideTitlebar = new CheckBox
-            {
-                Text = Lang.T("Hide title bar"),
-                Left = lx, Top = gy + 8, AutoSize = true,
-                ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent,
-                Font = F_LABEL, TabIndex = ti++,
-            };
-            grpWnd.Controls.Add(_chkHideTitlebar); gy += ROW_H;
-
-            // Toolbar theme selector
-            AddFieldLabel(grpWnd, () => Lang.T("Toolbar theme"), lx, gy).TabIndex = ti++;
-            _cmbToolbarTheme = new ComboBox
-            {
-                Left = vx, Top = gy + 2, Width = vw,
-                DropDownStyle = ComboBoxStyle.DropDownList,
-                Font = F_LABEL, TabIndex = ti++,
-                AccessibleName = Lang.StripMnemonic(Lang.T("Toolbar theme")),
-            };
-            _cmbToolbarTheme.Items.AddRange(new object[]
-            {
-                Lang.T("Dark"),
-                Lang.T("Light"),
-                Lang.T("System default"),
-            });
-            _cmbToolbarTheme.SelectedIndex = (int)ResultMeta.ToolbarTheme;
-            grpWnd.Controls.Add(_cmbToolbarTheme); gy += ROW_H;
-
-            // ── RIGHT COLUMN ──────────────────────────────────────────────
-
-            int rightY = margin;  // tracks the next free vertical position in the right column
-
-            // ── Layout file card ──────────────────────────────────────────
-            // Three equal-width buttons: Save, Save As, Load.
-            int fileH = HDR_H + PAD + ROW_H + PAD;
-            var grpFile = AddGroup(() => Lang.T("Layout file"), rightX, rightY, rightW, fileH,
-                                   Color.FromArgb(39, 174, 96));
-            grpFile.TabIndex = 2;
-            rightY += fileH + gap;
-
-            // Calculate button width so three buttons + two gaps fill the card.
-            int fbw = (rightW - PAD * 2 - gap * 2) / 3;
-            // Alt+S (Save), Alt+V (Save As), Alt+L (Load) — mnemonics embedded via Lang.T().
-            _btnSaveFile   = MakeFileBtn("&" + Lang.T("Save"),       grpFile, PAD,                    HDR_H + PAD, fbw); _btnSaveFile.TabIndex   = 0;
-            _btnSaveAsFile = MakeFileBtn(Lang.T("Save As…"),         grpFile, PAD + fbw + gap,        HDR_H + PAD, fbw); _btnSaveAsFile.TabIndex = 1;
-            _btnLoadFile   = MakeFileBtn("&" + Lang.T("Load…"),     grpFile, PAD + fbw * 2 + gap * 2, HDR_H + PAD, fbw); _btnLoadFile.TabIndex   = 2;
-
-            // Save / Save As: first commit the current UI state to ResultTheme etc.,
-            // then hand off to the caller's file-writing callback.
-            _btnSaveFile.Click   += (s, e) => { if (Apply()) _onSave?.Invoke(); };
-            _btnSaveAsFile.Click += (s, e) => { if (Apply()) _onSaveAs?.Invoke(); };
-
-            // Load: let the caller read a file, then re-sync our controls to
-            // whatever the caller has loaded.
-            _btnLoadFile.Click += (s, e) =>
-            {
-                _onLoad?.Invoke();
-                // Fetch the freshly loaded theme/window/meta so PopulateFields
-                // shows the new file's values, not the pre-open snapshots.
-                if (_getSettings != null)
-                {
-                    var (t, ws, m) = _getSettings();
-                    _srcTheme  = t;
-                    _srcWindow = ws;
-                    _srcMeta   = m;
-                }
-                if (_getGroups != null)
-                    _groups = _getGroups().Select(g => g.Clone()).ToList();
-                PopulateFields(_srcTheme, _srcWindow, _srcMeta);
-            };
-
-            // ── Accessibility card ─────────────────────────────────────────
-            int accH = HDR_H + PAD + ROW_H * 6 + PAD;
-            var grpAcc = AddGroup(() => Lang.T("Accessibility"), rightX, rightY, rightW, accH,
-                                  Color.FromArgb(155, 89, 182));
-            grpAcc.TabIndex = 3;
-            rightY += accH + gap;
-
-            // Sticky modifiers: a modifier key (Shift, Ctrl, Alt) stays active
-            // after being pressed once, so the user does not need to hold it.
-            _chkStickyMods = new CheckBox
-            {
-                Text = Lang.T("Sticky modifiers"),
-                Left = PAD, Top = HDR_H + PAD + 8, AutoSize = true,
-                ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent, Font = F_LABEL,
-                TabIndex = 0,
-            };
-            grpAcc.Controls.Add(_chkStickyMods);
-
-            // Hold to edit: the user must hold a key for a moment to open its
-            // properties, preventing accidental edits while typing.
-            _chkHoldToEdit = new CheckBox
-            {
-                Text = Lang.T("Hold to edit"),
-                Left = PAD, Top = HDR_H + PAD + ROW_H + 8, AutoSize = true,
-                ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent, Font = F_LABEL,
-                TabIndex = 1,
-            };
-            grpAcc.Controls.Add(_chkHoldToEdit);
-
-            // Slow keys: key must be held for N ms before it registers.
-            // Dwell click: hovering over a key for N ms auto-fires it.
-            // The two are mutually exclusive; setting one > 0 clears the other.
-            int nudW = 75;
-            int nudX = rightW - PAD - nudW;
-            int slowY = HDR_H + PAD + ROW_H * 2;
-            int dwellY = HDR_H + PAD + ROW_H * 3;
-
-            // Slow keys row: checking enables the feature; NUD greyed when unchecked.
-            _chkSlowKeys = new CheckBox
-            {
-                Text = Lang.T("Slow keys"), Left = PAD, Top = slowY + 8, AutoSize = true,
-                ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent, Font = F_LABEL,
-                TabIndex = 2,
-            };
-            grpAcc.Controls.Add(_chkSlowKeys);
-            SetTip(_chkSlowKeys, () => Lang.T("tip: Slow keys"));
-
-            _nudSlowKeys = new NumericUpDown
-            {
-                Left = nudX, Top = slowY + 4, Width = nudW, Height = 26,
-                Minimum = 100, Maximum = 3000, Increment = 50, Value = 300,
-                BackColor = C_INPUT_BG, ForeColor = C_LBL, Font = F_LABEL,
-                TabIndex = 3, Enabled = false,
-                AccessibleName = Lang.StripMnemonic(Lang.T("Slow keys")),
-            };
-            grpAcc.Controls.Add(_nudSlowKeys);
-            SetTip(_nudSlowKeys, () => Lang.T("tip: Slow keys"));
-
-            // Dwell click row: same pattern.
-            _chkDwell = new CheckBox
-            {
-                Text = Lang.T("Dwell click"), Left = PAD, Top = dwellY + 8, AutoSize = true,
-                ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent, Font = F_LABEL,
-                TabIndex = 4,
-            };
-            grpAcc.Controls.Add(_chkDwell);
-            SetTip(_chkDwell, () => Lang.T("tip: Dwell click"));
-
-            _nudDwell = new NumericUpDown
-            {
-                Left = nudX, Top = dwellY + 4, Width = nudW, Height = 26,
-                Minimum = 100, Maximum = 5000, Increment = 100, Value = 1000,
-                BackColor = C_INPUT_BG, ForeColor = C_LBL, Font = F_LABEL,
-                TabIndex = 5, Enabled = false,
-                AccessibleName = Lang.StripMnemonic(Lang.T("Dwell click")),
-            };
-            grpAcc.Controls.Add(_nudDwell);
-            SetTip(_nudDwell, () => Lang.T("tip: Dwell click"));
-
-            // Checking one feature auto-unchecks the other (mutually exclusive);
-            // also enables/disables the paired NUD and the animation checkbox.
-            _chkSlowKeys.CheckedChanged += (s, e) =>
-            {
-                _nudSlowKeys.Enabled        = _chkSlowKeys.Checked;
-                if (_chkSlowKeys.Checked) _chkDwell.Checked = false;
-                _chkTimingAnimation.Enabled = _chkSlowKeys.Checked || _chkDwell.Checked;
-            };
-            _chkDwell.CheckedChanged += (s, e) =>
-            {
-                _nudDwell.Enabled           = _chkDwell.Checked;
-                if (_chkDwell.Checked) _chkSlowKeys.Checked = false;
-                _chkTimingAnimation.Enabled = _chkSlowKeys.Checked || _chkDwell.Checked;
-            };
-
-            // Show timing animation: bottom-up fill on keys during countdown.
-            int animY = HDR_H + PAD + ROW_H * 4;
-            _chkTimingAnimation = new CheckBox
-            {
-                Text = Lang.T("Show timing animation"),
-                Left = PAD, Top = animY + 8, AutoSize = true,
-                ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent, Font = F_LABEL,
-                TabIndex = 6, Checked = true,
-            };
-            grpAcc.Controls.Add(_chkTimingAnimation);
-            SetTip(_chkTimingAnimation, () => Lang.T("tip: Show timing animation"));
-
-            // Show corner labels: the small Shift (top right) and AltGr (top left) labels on the keys. Switching them off
-            // leaves only the main label, for people who find so many signs on the keyboard overstimulating.
-            int cornerY = HDR_H + PAD + ROW_H * 5;
-            _chkCornerLabels = new CheckBox
-            {
-                Text = Lang.T("Show Shift and AltGr labels"),
-                Left = PAD, Top = cornerY + 8, AutoSize = true,
-                ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent, Font = F_LABEL,
-                TabIndex = 7, Checked = true,
-            };
-            grpAcc.Controls.Add(_chkCornerLabels);
-            SetTip(_chkCornerLabels, () => Lang.T("tip: Show Shift and AltGr labels"));
-
-            // ── Word Prediction card ──────────────────────────────────────
-            // Rows: "Remember typed words" checkbox, combo (label + dropdown),
-            // info label, export button, candidates label, candidates list,
-            // promote/reject buttons.
-            const int ChkRowH = 30;
-            int wpH = HDR_H + PAD + ChkRowH + 24 + 46 + ROW_H + ROW_H + 24 + 74 + ROW_H + PAD;
-            var grpWP = AddGroup(() => Lang.T("wp: Word prediction"), rightX, rightY, rightW, wpH,
-                                 Color.FromArgb(22, 160, 133));
-            grpWP.TabIndex = 4;
-            rightY += wpH + gap;
-
-            int wgy = HDR_H + PAD;   // running y inside the WP card
-
-            // Master on/off switch for the learning engine. When off, RecordWord
-            // is a no-op (WordDatabase.LearningEnabled) and nothing is written
-            // to the overlay file — see WordDatabase's learning-engine remarks.
-            _chkWPLearning = new CheckBox
-            {
-                Text = "&" + Lang.T("wp: Remember typed words"),
-                Left = PAD, Top = wgy + 4, AutoSize = true,
-                ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent, Font = F_LABEL,
-                TabIndex = 0, Checked = true,
-            };
-            grpWP.Controls.Add(_chkWPLearning);
-            SetTip(_chkWPLearning, () => Lang.T("wp: tip remember"));
-            _chkWPLearning.CheckedChanged += (s, e) =>
-            {
-                // Live feedback while the dialog is open — actual persistence
-                // (LayoutMeta.WordLearningEnabled) only takes effect on Apply.
-                WordDatabase.LearningEnabled = _chkWPLearning.Checked;
-                UpdateWPInfoLabel();
-                UpdateWPCandidateControlsEnabled();
-            };
-            wgy += ChkRowH;
-
-            // Database selector — which base language file to use. No personal/
-            // copy concept here: "Remember typed words" above handles learning
-            // for whichever base file ends up loaded.
-            AddFieldLabel(grpWP, () => Lang.T("wp: Database"), PAD, wgy + 2).TabIndex = 1;
-            wgy += 24;
-            _cmbWPDatabase = new ComboBox
-            {
-                Left = PAD, Top = wgy, Width = rightW - PAD * 2,
-                DropDownStyle = ComboBoxStyle.DropDownList,
-                BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary,
-                Font = F_INPUT, FlatStyle = FlatStyle.Flat, TabIndex = 2,
-                AccessibleName = Lang.StripMnemonic(Lang.T("wp: Database")),
-            };
-            grpWP.Controls.Add(_cmbWPDatabase);
-            SetTip(_cmbWPDatabase, () => Lang.T("wp: tip database"));
-            wgy += 46;
-
-            // Info label: language · word count · learning on/off
-            _lblWPInfo = new Label
-            {
-                Left = PAD, Top = wgy + 4, Width = rightW - PAD * 2, Height = 20,
-                ForeColor = Fluent.TextHint, Font = F_HINT, AutoSize = false,
-            };
-            grpWP.Controls.Add(_lblWPInfo);
-            wgy += ROW_H;
-
-            _btnWPExport = MakeFileBtn(Lang.T("wp: Export…"), grpWP, PAD, wgy, rightW - PAD * 2);
-            _btnWPExport.TabIndex = 3;
-            SetTip(_btnWPExport, () => Lang.T("wp: tip export"));
-            _btnWPExport.Click += (s, e) => WPExport();
-
-            // ── Candidates: unknown words seen while typing, awaiting promotion ──
-            wgy += ROW_H;
-            AddFieldLabel(grpWP, () => Lang.T("wp: Candidates"), PAD, wgy + 2).TabIndex = 4;
-            wgy += 24;
-
-            _lstWPCandidates = new ListBox
-            {
-                Left = PAD, Top = wgy, Width = rightW - PAD * 2, Height = 70,
-                BackColor = C_INPUT_BG, ForeColor = Fluent.TextPrimary,
-                Font = F_INPUT, BorderStyle = BorderStyle.FixedSingle, TabIndex = 5,
-                AccessibleName = Lang.StripMnemonic(Lang.T("wp: Candidates")),
-            };
-            grpWP.Controls.Add(_lstWPCandidates);
-            SetTip(_lstWPCandidates, () => Lang.T("wp: tip candidates"));
-            _lstWPCandidates.SelectedIndexChanged += (s, e) => UpdateWPCandidateControlsEnabled();
-            wgy += 74;
-
-            int halfBw2 = (rightW - PAD * 2 - gap) / 2;
-            _btnWPPromote = MakeFileBtn(Lang.T("wp: Promote"), grpWP, PAD, wgy, halfBw2);
-            _btnWPPromote.TabIndex = 6;
-            SetTip(_btnWPPromote, () => Lang.T("wp: tip promote"));
-            _btnWPReject = MakeFileBtn(Lang.T("wp: Reject"), grpWP, PAD + halfBw2 + gap, wgy, halfBw2);
-            _btnWPReject.TabIndex = 7;
-            SetTip(_btnWPReject, () => Lang.T("wp: tip reject"));
-
-            _btnWPPromote.Click += (s, e) => WPPromoteSelectedCandidate();
-            _btnWPReject.Click  += (s, e) => WPRejectSelectedCandidate();
-
-            PopulateWPCandidates();
-            UpdateWPCandidateControlsEnabled();
-
-            // Selection change: just refresh the info label — no copy dialog,
-            // no revert logic; every entry in the (base-only) combo is directly
-            // selectable.
-            _cmbWPDatabase.SelectedIndexChanged += (s, e) =>
-            {
-                if (_suppressWPChanged) return;
-                UpdateWPInfoLabel();
-            };
-
-            // ── Bottom action buttons ─────────────────────────────────────
-            // Place them below whichever column is taller.
-            int btnTop = Math.Max(leftY, rightY) + gap;
-            int bw     = (colW * 2 + gap - gap) / 2;  // each button is half the total column width
-
-            _btnCancel = MakeActionBtn(Lang.T("Cancel"), margin,        btnTop, bw, 44); _btnCancel.TabIndex = 4;
-            _btnApply  = MakeActionBtn(Lang.T("Apply"),  margin+bw+gap, btnTop, bw, 44); _btnApply.TabIndex  = 5;
-
+            _btnCancel = MakeTouchButton(() => Lang.T("Cancel"));
+            _btnApply  = MakeTouchButton(() => Lang.T("Apply"), FluentButton.Variant.Success);
+            BuildFrame(MakeFooter(null, _btnCancel, _btnApply), withSections: true);
             _btnApply.Click  += (s, e) => Apply();
             _btnCancel.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
-
-            ClientSize = new Size(ClientSize.Width, btnTop + 44 + margin);
-
-            WrapInScrollPanel(grpLang, grpWnd, grpFile, grpAcc, grpWP, _btnCancel, _btnApply);
             AcceptButton = _btnApply;
             CancelButton = _btnCancel;
+
+            BuildGeneral(AddSection(() => Lang.T("General")));
+            BuildAccessibility(AddSection(() => Lang.T("Accessibility")));
+            BuildWordPrediction(AddSection(() => Lang.T("wp: Word prediction")));
         }
 
-        // ════════════════════════════════════════════════════════════════
-        // Helper methods for building UI sections
-        // ════════════════════════════════════════════════════════════════
+        // ── Section 1: General ──────────────────────────────────────
 
-        // AddGroup, AddColorRow, GetSwatchHex (was GetHex), SetSwatchHex (was SetHex),
-        // AddFieldLabel, SetTip, MakeActionBtn, ParseColor — all inherited from FluentDialogBase.
-
-        /// <summary>
-        /// Creates a small <see cref="FluentButton"/> suitable for file operations
-        /// (Save, Save As, Load) and adds it to a parent panel.
-        /// </summary>
-        private Button MakeFileBtn(string text, Panel parent, int x, int y, int w)
+        private void BuildGeneral(TableLayoutPanel t)
         {
-            var btn = new FluentButton
+            // Language: live (the dialog and the app translate at once); restored on Cancel.
+            _cmbLanguage = new TouchChoiceButton { RowHeight = 44, AutoSize = false, Size = new Size(280, Touch.Target), MinimumSize = new Size(280, Touch.Target) };
+            foreach (var (code, name) in Lang.GetAvailable()) _languageCodes.Add(code);
+            _cmbLanguage.SetItems(Lang.GetAvailable().Select(l => new TouchChoice { Text = l.Name }), 0);
+            _cmbLanguage.SelectedIndexChanged += (s, e) =>
             {
-                Text = text, Left = x, Top = y, Width = w, Height = ROW_H - 8,
-                Style = FluentButton.Variant.Neutral,
-                TabStop = true,
+                if (_loading) return;
+                int i = _cmbLanguage.SelectedIndex;
+                if (i >= 0 && i < _languageCodes.Count) Lang.Load(_languageCodes[i]);
             };
-            parent.Controls.Add(btn);
-            return btn;
+            SetTip(_cmbLanguage, () => Lang.T("tip: Language"));
+            AddRow(t, () => Lang.T("Language"), _cmbLanguage, fill: false);
+
+            AddWideRow(t, Heading(() => Lang.T("Window")), fill: false);
+
+            _cmbToolbarTheme = new TouchChoiceButton { RowHeight = 44, AutoSize = false, Size = new Size(280, Touch.Target), MinimumSize = new Size(280, Touch.Target) };
+            _cmbToolbarTheme.SetItems(ToolbarThemeItems(), 0);
+            SetTip(_cmbToolbarTheme, () => Lang.T("tip: Toolbar theme"));
+            AddRow(t, () => Lang.T("Toolbar theme"), _cmbToolbarTheme, fill: false);
+
+            // Transparency: 0 = opaque … 80 = nearly transparent (a stepper: a slider thumb is not a 44 px target).
+            _stpOpacity = new TouchStepper { Minimum = 0, Maximum = 80, Increment = 5, Margin = new Padding(0, 0, Touch.Gap, 0) };
+            _stpOpacity.AccessibleName = Lang.StripMnemonic(Lang.T("Opacity"));
+            _stpOpacity.AccessibleDescription = Lang.T("tip: Opacity");
+            _stpOpacity.ValueBox.AccessibleDescription = _stpOpacity.AccessibleDescription;
+            SetTip(_stpOpacity.ValueBox, () => Lang.T("tip: Opacity"));
+            var percent = new Label { Text = "%", AutoSize = true, Anchor = AnchorStyles.Left, UseMnemonic = false, Font = Fluent.FontLabel, ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent };
+            AddRow(t, () => "&" + Lang.T("Opacity"), InlineRow(_stpOpacity, percent), fill: false);
+
+            // Background chip, Always on top and Hide title bar: one stack, one width.
+            _chipBackground = new ColorChip(Lang.T("Background"), Color.Black);
+            _transTexts.Add((_chipBackground, () => Lang.T("Background")));
+            SetTip(_chipBackground, () => Lang.T("tip: Background"));
+            _chkAlwaysOnTop  = NewCheck(() => Lang.T("Always on top"));
+            _chkHideTitlebar = NewCheck(() => Lang.T("Hide title bar"));
+            SetTip(_chkAlwaysOnTop,  () => Lang.T("tip: Always on top"));
+            SetTip(_chkHideTitlebar, () => Lang.T("tip: Hide title bar"));
+            AddWideRow(t, OptionStack(_chipBackground, _chkAlwaysOnTop, _chkHideTitlebar), fill: false);
+
+            AddWideRow(t, Heading(() => Lang.T("Layout file")), fill: false);
+
+            // Save / Save As apply the edits and close (the caller then saves); Load asks first. One common width.
+            _btnSaveFile   = MakeTouchButton(() => "&" + Lang.T("Save"));
+            _btnSaveAsFile = MakeTouchButton(() => Lang.T("Save As…"));
+            _btnLoadFile   = MakeTouchButton(() => "&" + Lang.T("Load…"));
+            SetTip(_btnSaveFile,   () => Lang.T("tip: Save settings"));
+            SetTip(_btnSaveAsFile, () => Lang.T("tip: Save settings as"));
+            SetTip(_btnLoadFile,   () => Lang.T("tip: Load"));
+            _btnSaveFile.Click   += (s, e) => ApplyWith(KeyboardFileAction.Save);
+            _btnSaveAsFile.Click += (s, e) => ApplyWith(KeyboardFileAction.SaveAs);
+            _btnLoadFile.Click   += (s, e) => LoadLayout();
+            AddWideRow(t, ButtonRow(_btnSaveFile, _btnSaveAsFile, _btnLoadFile), fill: false);
         }
 
-        // ════════════════════════════════════════════════════════════════
-        // Populating controls from data
-        // ════════════════════════════════════════════════════════════════
+        private IEnumerable<TouchChoice> ToolbarThemeItems()
+        {
+            yield return new TouchChoice { Text = Lang.T("Dark") };
+            yield return new TouchChoice { Text = Lang.T("Light") };
+            yield return new TouchChoice { Text = Lang.T("System default") };
+        }
+
+        // ── Section 2: Accessibility ────────────────────────────────
+
+        private void BuildAccessibility(TableLayoutPanel t)
+        {
+            _chkStickyMods = NewCheck(() => Lang.T("Sticky modifiers"));
+            _chkHoldToEdit = NewCheck(() => Lang.T("Hold to edit"));
+            SetTip(_chkStickyMods, () => Lang.T("tip: Sticky modifiers"));
+            SetTip(_chkHoldToEdit, () => Lang.T("tip: Hold to edit"));
+
+            // The timing aid: a framed group of three radio buttons (exactly one is on). Column 1 holds the three radio buttons
+            // and the animation check box (one width, right edges aligned), column 2 the steppers, column 3 the unit.
+            _optTimingOff = NewRadio(() => Lang.T("kbd: Off"));
+            _optSlowKeys  = NewRadio(() => Lang.T("Slow keys"));
+            _optDwell     = NewRadio(() => Lang.T("Dwell click"));
+            _stpSlowKeys  = NewTimingStepper(100, 3000, 50, 300, "Slow keys");
+            _stpDwell     = NewTimingStepper(100, 5000, 100, 1000, "Dwell click");
+            _chkTimingAnimation = NewCheck(() => Lang.T("Show timing animation"));
+            SetTip(_optTimingOff, () => Lang.T("tip: Timing off"));
+            SetTip(_optSlowKeys,  () => Lang.T("tip: Slow keys"));
+            SetTip(_optDwell,     () => Lang.T("tip: Dwell click"));
+            SetTip(_stpSlowKeys.ValueBox, () => Lang.T("tip: Slow keys"));
+            SetTip(_stpDwell.ValueBox,    () => Lang.T("tip: Dwell click"));
+            SetTip(_chkTimingAnimation, () => Lang.T("tip: Show timing animation"));
+            _chkTimingAnimation.AccessibleDescription = Lang.T("tip: Show timing animation");
+
+            var grid = new TableLayoutPanel { ColumnCount = 3, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink };
+            for (int i = 0; i < 3; i++) grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            void Cell(Control c, int col, int row)
+            {
+                while (grid.RowStyles.Count <= row) { grid.RowStyles.Add(new RowStyle(SizeType.AutoSize)); grid.RowCount = grid.RowStyles.Count; }
+                grid.Controls.Add(c, col, row);
+            }
+            Control Unit() => new Label { Text = "ms", AutoSize = true, Anchor = AnchorStyles.Left, UseMnemonic = false, Font = Fluent.FontLabel, ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent, Margin = new Padding(Touch.Gap, 0, 0, 0) };
+            foreach (var r in new Control[] { _optTimingOff, _optSlowKeys, _optDwell, _chkTimingAnimation })
+            { r.Dock = DockStyle.Fill; r.Margin = new Padding(0, 4, Touch.Gap, 4); }
+            _optTimingOff.TabIndex = 0; _optSlowKeys.TabIndex = 1; _optDwell.TabIndex = 2;
+            Cell(_optTimingOff, 0, 0);
+            Cell(_optSlowKeys, 0, 1); Cell(_stpSlowKeys, 1, 1); Cell(Unit(), 2, 1);
+            Cell(_optDwell, 0, 2);    Cell(_stpDwell, 1, 2);    Cell(Unit(), 2, 2);
+            var sep = new Panel { Height = 1, Dock = DockStyle.Fill, Margin = new Padding(0, 8, 0, 8), Tag = "notheme", BackColor = _dark ? Fluent.DialogDarkBorder : Fluent.BorderCard };
+            Cell(sep, 0, 3); grid.SetColumnSpan(sep, 3);
+            Cell(_chkTimingAnimation, 0, 4);
+            _stpSlowKeys.Anchor = AnchorStyles.Right; _stpDwell.Anchor = AnchorStyles.Right;
+
+            foreach (var r in new[] { _optTimingOff, _optSlowKeys, _optDwell })
+                r.CheckedChanged += (s, e) => { if (((TouchRadioButton)s).Checked) OnTimingModeChanged(); };
+
+            _chkCornerLabels = NewCheck(() => Lang.T("Show Shift and AltGr labels"));
+            SetTip(_chkCornerLabels, () => Lang.T("tip: Show Shift and AltGr labels"));
+
+            var group = MakeGroup(() => Lang.T("kbd: Timing aid"), grid);
+            AddWideRow(t, OptionStack(_chkStickyMods, _chkHoldToEdit, group, _chkCornerLabels), fill: false);
+        }
+
+        private TouchStepper NewTimingStepper(int min, int max, int step, int value, string nameKey)
+        {
+            var st = new TouchStepper { Minimum = min, Maximum = max, Increment = step, Value = value, Margin = new Padding(0, 4, 0, 4) };
+            st.AccessibleName = Lang.StripMnemonic(Lang.T(nameKey));
+            st.AccessibleDescription = Lang.T("milliseconds");
+            st.ValueBox.AccessibleDescription = st.AccessibleDescription;
+            return st;
+        }
+
+        /// <summary>The timing aid chosen by the radio group.</summary>
+        private enum TimingMode { Off, SlowKeys, Dwell }
+        private TimingMode CurrentTimingMode => _optSlowKeys.Checked ? TimingMode.SlowKeys : _optDwell.Checked ? TimingMode.Dwell : TimingMode.Off;
+
+        /// <summary>The animation applies while a timing aid is on; the steppers belong to the chosen option only.</summary>
+        private bool TimingAvailable() => CurrentTimingMode != TimingMode.Off;
+
+        private void OnTimingModeChanged()
+        {
+            _stpSlowKeys.Enabled = CurrentTimingMode == TimingMode.SlowKeys;
+            _stpDwell.Enabled    = CurrentTimingMode == TimingMode.Dwell;
+            _chkTimingAnimation.Enabled = TimingAvailable();      // its value is kept while it is disabled
+        }
+
+        // ── Section 3: Word prediction ──────────────────────────────
+
+        private void BuildWordPrediction(TableLayoutPanel section)
+        {
+            var cols = new TableLayoutPanel { ColumnCount = 2, RowCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink };
+            cols.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            cols.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            cols.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            cols.Controls.Add(BuildWordSettings(), 0, 0);
+            cols.Controls.Add(BuildCandidates(), 1, 0);
+            AddWideRow(section, cols);
+        }
+
+        private Control BuildWordSettings()
+        {
+            var t = NewTable();
+            t.Padding = new Padding(0, 0, Touch.Gap * 2, 0);
+            t.Dock = DockStyle.None; t.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+
+            _chkWPLearning = NewCheck(() => "&" + Lang.T("wp: Remember typed words"));
+            SetTip(_chkWPLearning, () => Lang.T("wp: tip remember"));
+            _chkWPLearning.CheckedChanged += (s, e) => { UpdateWPInfo(); UpdateCandidateState(); };
+            AddWideRow(t, _chkWPLearning);                       // fills the column: same right edge as the chooser and Export
+
+            _cmbWPDatabase = new TouchChoiceButton { RowHeight = 44 };
+            SetTip(_cmbWPDatabase, () => Lang.T("wp: tip database"));
+            _err.SetIconPadding(_cmbWPDatabase, -54); _fontWarn.SetIconPadding(_cmbWPDatabase, -54);
+            _cmbWPDatabase.SelectedIndexChanged += (s, e) => { if (!_loading) { UpdateDatabaseWarning(); UpdateWPInfo(); } };
+            _cmbWPDatabase.AccessibleName = Lang.StripMnemonic(Lang.T("wp: Database"));
+            // The label sits above the chooser (not beside it): a long translation or a long file name then gets the whole column.
+            var dbLabel = new Label { Text = Lang.T("wp: Database"), AutoSize = true, UseMnemonic = false, Font = Fluent.FontLabel, ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent, Margin = new Padding(0, 4, 0, 0) };
+            _transLabels.Add((dbLabel, () => Lang.T("wp: Database")));
+            AddWideRow(t, dbLabel, fill: false);
+            AddWideRow(t, _cmbWPDatabase);
+
+            _lblWPInfo = HintLabel(2);
+            AddWideRow(t, _lblWPInfo, fill: false);
+            _lblExportHint = HintLabel(1);
+            AddWideRow(t, _lblExportHint, fill: false);
+
+            _btnWPExport = MakeTouchButton(() => Lang.T("wp: Export…"));
+            SetTip(_btnWPExport, () => Lang.T("wp: tip export"));
+            _btnWPExport.Click += (s, e) => ExportLearnedWords();
+            AddWideRow(t, _btnWPExport);
+            return t;
+        }
+
+        private Control BuildCandidates()
+        {
+            var t = NewTable();
+            t.Padding = Padding.Empty;
+            t.Dock = DockStyle.None; t.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            AddWideRow(t, Heading(() => Lang.T("wp: Candidates")), fill: false);
+
+            _lstWPCandidates = new TouchList { Dock = DockStyle.Fill, AccessibleName = Lang.StripMnemonic(Lang.T("wp: Candidates")), TabIndex = 0 };
+            _candidateFrame = new Panel
+            {
+                Padding = new Padding(1), Dock = DockStyle.Fill, Margin = new Padding(0, 4, 0, 4),
+                MinimumSize = new Size(0, 4 * Touch.Target + 2), Height = 4 * Touch.Target + 2, Tag = "notheme",
+                BackColor = _dark ? Fluent.DialogDarkBorder : Fluent.ControlBorder,
+            };
+            _candidateFrame.Controls.Add(_lstWPCandidates);
+            _lstWPCandidates.GotFocus  += (s, e) => _candidateFrame.BackColor = _dark ? Fluent.DialogDarkText : Fluent.Accent;
+            _lstWPCandidates.LostFocus += (s, e) => _candidateFrame.BackColor = _dark ? Fluent.DialogDarkBorder : Fluent.ControlBorder;
+            _lstWPCandidates.SelectedIndexChanged += (s, e) => UpdateCandidateState();
+            SetTip(_lstWPCandidates, () => Lang.T("wp: tip candidates"));
+            AddWideRow(t, _candidateFrame);
+
+            // Promote / Reject: two equal halves under the list, so the list and the buttons end at the same edge.
+            _btnWPPromote = MakeTouchButton(() => Lang.T("wp: Promote"));
+            _btnWPReject  = MakeTouchButton(() => Lang.T("wp: Reject"));
+            foreach (var b in new[] { _btnWPPromote, _btnWPReject }) { b.Dock = DockStyle.Fill; b.MinimumSize = new Size(0, Touch.Target); b.Margin = new Padding(0, 0, 0, 0); }
+            _btnWPPromote.Margin = new Padding(0, 0, Touch.Gap / 2, 0); _btnWPReject.Margin = new Padding(Touch.Gap / 2, 0, 0, 0);
+            SetTip(_btnWPPromote, () => Lang.T("wp: tip promote"));
+            SetTip(_btnWPReject,  () => Lang.T("wp: tip reject"));
+            _btnWPPromote.Click += (s, e) => PromoteSelected();
+            _btnWPReject.Click  += (s, e) => RejectSelected();
+            var halves = new TableLayoutPanel { ColumnCount = 2, RowCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink };
+            halves.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            halves.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            halves.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            halves.Controls.Add(_btnWPPromote, 0, 0); halves.Controls.Add(_btnWPReject, 1, 0);
+            AddWideRow(t, halves);
+
+            _lblImmediateHint = HintLabel(2);
+            AddWideRow(t, _lblImmediateHint, fill: false);
+            return t;
+        }
+
+        /// <summary>A hint line that is always there (empty when there is nothing to say), with its height reserved, so the window is measured with it.</summary>
+        private Label HintLabel(int lines) => new Label
+        {
+            AutoSize = true, UseMnemonic = false, Font = Fluent.FontHint, BackColor = Color.Transparent, ForeColor = Fluent.TextPrimary,
+            MaximumSize = new Size(Touch.LabelMaxWidth * 3 / 2 + 60, 0), MinimumSize = new Size(0, Fluent.FontHint.Height * lines + 4),
+            Margin = new Padding(0, 4, 0, 4),
+        };
+
+        // ── Filling the controls ────────────────────────────────────
 
         /// <summary>
-        /// Pushes a set of theme / window / meta values into every UI
-        /// control.  Called once after construction and again after a
-        /// "Load" file operation.
+        /// Shows a set of values in every control. Called once after construction and again after Load. Nothing in here changes the
+        /// values: they are shown as they are (a stepper widens its range to hold a loaded value outside the usual one).
         /// </summary>
-        /// <param name="t">Visual theme to display.</param>
-        /// <param name="ws">Window state to display.</param>
-        /// <param name="m">Layout metadata to display.</param>
         private void PopulateFields(VisualTheme t, WindowState ws, LayoutMeta m)
         {
-            // Convert the stored opacity fraction (0.2 – 1.0) to a slider
-            // value (0 – 80).  Slider 0 = fully opaque (opacity 1.0).
-            // Slider 80 = most transparent we allow (opacity 0.2).
-            int opacitySlider = (int)Math.Round((1.0 - Math.Clamp(t.Opacity, 0.2, 1.0)) * 100);
-            _trkOpacity.Value = Math.Clamp(opacitySlider, 0, 80);
-
-            SetSwatchHex(_pnlBgColor, SettingsManager.Hex(t.BackgroundColor));
-
-            _chkAlwaysOnTop.Checked  = ws.AlwaysOnTop;
-            _chkStickyMods.Checked   = m.StickyModifiers;
-            _chkHoldToEdit.Checked   = m.HoldToEdit;
-            _chkHideTitlebar.Checked = ws.HideTitlebar;
-            _cmbToolbarTheme.SelectedIndex = (int)m.ToolbarTheme;
-            if (m.SlowKeysMs > 0)
-            {
-                _nudSlowKeys.Value   = Math.Clamp(m.SlowKeysMs, 100, 3000);
-                _chkSlowKeys.Checked = true;
-            }
-            else
-            {
-                _chkSlowKeys.Checked = false;
-            }
-            _nudSlowKeys.Enabled = _chkSlowKeys.Checked;
-
-            if (m.DwellMs > 0)
-            {
-                _nudDwell.Value   = Math.Clamp(m.DwellMs, 100, 5000);
-                _chkDwell.Checked = true;
-            }
-            else
-            {
-                _chkDwell.Checked = false;
-            }
-            _nudDwell.Enabled           = _chkDwell.Checked;
-            _chkTimingAnimation.Enabled = m.SlowKeysMs > 0 || m.DwellMs > 0;
-            _chkTimingAnimation.Checked = m.ShowTimingAnimation;
-            _chkCornerLabels.Checked    = m.ShowCornerLabels;
-
-            // Word prediction: learning toggle + database combo
-            _chkWPLearning.Checked = m.WordLearningEnabled;
-            PopulateWPDatabaseCombo(m.WordDatabase);
-            UpdateWPCandidateControlsEnabled();
-        }
-
-        // ════════════════════════════════════════════════════════════════
-        // Word prediction database helpers
-        // ════════════════════════════════════════════════════════════════
-
-        /// <summary>Combo-box item representing one base .wfq database file.</summary>
-        private sealed class WPDbItem
-        {
-            public DatabaseInfo Info { get; }
-            public WPDbItem(DatabaseInfo info) { Info = info; }
-            public override string ToString()
-            {
-                string lang = string.IsNullOrEmpty(Info.Language)
-                    ? "?" : Info.Language.ToUpper();
-                return $"[{lang}]  {Info.DisplayName}";
-            }
-        }
-
-        /// <summary>Combo-box item for the "auto-select" option.</summary>
-        private sealed class WPDbAutoItem
-        {
-            public override string ToString() => Lang.T("wp: Auto");
-        }
-
-        /// <summary>
-        /// Fills the word-prediction combo from the base .wfq files found in the
-        /// app directory and pre-selects the entry that matches
-        /// <paramref name="selectedFilename"/> (just the filename, no path).
-        /// Selects "(auto)" when the string is empty or no match is found.
-        /// </summary>
-        /// <param name="selectedFilename">Filename to pre-select (no path).</param>
-        private void PopulateWPDatabaseCombo(string selectedFilename)
-        {
-            _suppressWPChanged = true;
+            _loading = true;
             try
             {
-                _cmbWPDatabase.Items.Clear();
-                _cmbWPDatabase.Items.Add(new WPDbAutoItem());
+                SyncLanguageChooser();
+                _cmbToolbarTheme.SetItems(ToolbarThemeItems(), Math.Max(0, Array.IndexOf(ToolbarThemeOrder, m.ToolbarTheme)));
 
-                string appDir = System.AppDomain.CurrentDomain.BaseDirectory;
-                var registry  = new LanguageRegistry(appDir);
-                foreach (var db in registry.All)
-                    _cmbWPDatabase.Items.Add(new WPDbItem(db));
+                _stpOpacity.Value = OpacityToStep(t.Opacity);
+                _chipBackground.SetOwn(t.BackgroundColor);
+                _chkAlwaysOnTop.Checked  = ws.AlwaysOnTop;
+                _chkHideTitlebar.Checked = ws.HideTitlebar;
 
-                // Pre-select the matching entry.
-                int selectIdx = 0;  // default: "(auto)"
-                if (!string.IsNullOrEmpty(selectedFilename))
-                {
-                    for (int i = 1; i < _cmbWPDatabase.Items.Count; i++)
-                    {
-                        if (_cmbWPDatabase.Items[i] is WPDbItem wpI &&
-                            string.Equals(
-                                System.IO.Path.GetFileName(wpI.Info.FilePath),
-                                selectedFilename,
-                                StringComparison.OrdinalIgnoreCase))
-                        { selectIdx = i; break; }
-                    }
-                }
-                _cmbWPDatabase.SelectedIndex = selectIdx;
+                _chkStickyMods.Checked = m.StickyModifiers;
+                _chkHoldToEdit.Checked = m.HoldToEdit;
+                WidenStepper(_stpSlowKeys, 100, 3000, m.SlowKeysMs);
+                WidenStepper(_stpDwell, 100, 5000, m.DwellMs);
+                if (m.SlowKeysMs > 0)      { _stpSlowKeys.Value = m.SlowKeysMs; _optSlowKeys.Checked = true; }   // both above 0: Slow keys (the first option)
+                else if (m.DwellMs > 0)    { _stpDwell.Value = m.DwellMs;       _optDwell.Checked = true; }
+                else                       _optTimingOff.Checked = true;
+                _chkTimingAnimation.Checked = m.ShowTimingAnimation;
+                _chkCornerLabels.Checked    = m.ShowCornerLabels;
+                OnTimingModeChanged();
+
+                _chkWPLearning.Checked = m.WordLearningEnabled;
+                FillDatabaseChooser(m.WordDatabase);
             }
-            finally { _suppressWPChanged = false; }
-
-            UpdateWPInfoLabel();
+            finally { _loading = false; }
+            UpdateDatabaseWarning();
+            UpdateWPInfo();
+            PopulateCandidates();
+            UpdateImmediateHint();
         }
 
-        /// <summary>
-        /// Updates the info label below the combo (language, word count,
-        /// learning on/off) and the Export button's enabled state.
-        /// </summary>
-        private void UpdateWPInfoLabel()
+        private static int OpacityToStep(double opacity) =>
+            Math.Clamp((int)Math.Round((1.0 - Math.Clamp(opacity, 0.2, 1.0)) * 100), 0, 80);
+
+        private static void WidenStepper(TouchStepper st, int min, int max, int loaded)
+        {
+            // A loaded value outside the usual range is shown as it is (and stored as it is): the range grows to hold it.
+            st.Minimum = loaded > 0 ? Math.Min(min, loaded) : min;
+            st.Maximum = Math.Max(max, loaded);
+        }
+
+        private void SyncLanguageChooser()
+        {
+            int i = _languageCodes.IndexOf(Lang.CurrentCode);
+            _cmbLanguage.SelectSilently(i >= 0 ? i : (_languageCodes.Count > 0 ? 0 : -1));
+        }
+
+        // ── Database chooser, info line, export ─────────────────────
+
+        private void FillDatabaseChooser(string storedName)
+        {
+            var infos = _backend.Databases();
+            var items = new List<TouchChoice> { new TouchChoice { Text = Lang.T("wp: Auto") } };
+            _databaseFiles.Clear();
+            _databaseFiles.Add("");
+            foreach (var db in infos)
+            {
+                items.Add(new TouchChoice { Text = $"[{(string.IsNullOrEmpty(db.Language) ? "?" : db.Language.ToUpper())}]  {db.DisplayName}" });
+                _databaseFiles.Add(Path.GetFileName(db.FilePath));
+            }
+            int select = 0;
+            if (!string.IsNullOrEmpty(storedName))
+            {
+                select = _databaseFiles.FindIndex(f => string.Equals(f, storedName, StringComparison.OrdinalIgnoreCase));
+                if (select < 0)
+                {
+                    // A stored name that is not found stays selected as an extra row (never rewritten silently).
+                    items.Insert(1, new TouchChoice { Text = $"{Lang.T("wp: (not found)")}  {storedName}" });
+                    _databaseFiles.Insert(1, storedName);
+                    select = 1;
+                }
+            }
+            _cmbWPDatabase.SetItems(items, select);
+        }
+
+        private string SelectedDatabaseFile =>
+            _cmbWPDatabase.SelectedIndex >= 0 && _cmbWPDatabase.SelectedIndex < _databaseFiles.Count ? _databaseFiles[_cmbWPDatabase.SelectedIndex] : "";
+
+        private bool SelectedDatabaseMissing
+        {
+            get
+            {
+                string f = SelectedDatabaseFile;
+                return !string.IsNullOrEmpty(f) && !_backend.Databases().Any(d => string.Equals(Path.GetFileName(d.FilePath), f, StringComparison.OrdinalIgnoreCase));
+            }
+        }
+
+        private void UpdateDatabaseWarning()
+        {
+            string f = SelectedDatabaseFile;
+            _fontWarn.SetError(_cmbWPDatabase, SelectedDatabaseMissing ? string.Format(Lang.T("warn: database not found"), f) : "");
+        }
+
+        private static string LangOrUnknown(string lang) => string.IsNullOrEmpty(lang) ? "?" : lang.ToUpper();
+
+        private void UpdateWPInfo()
         {
             if (_lblWPInfo == null) return;
-
-            string kind = _chkWPLearning.Checked
-                ? Lang.T("wp: learning on") : Lang.T("wp: learning off");
-
-            if (_cmbWPDatabase.SelectedItem is WPDbAutoItem)
+            string kind = _chkWPLearning.Checked ? Lang.T("wp: learning on") : Lang.T("wp: learning off");
+            string file = SelectedDatabaseFile;
+            if (string.IsNullOrEmpty(file))
             {
-                _lblWPInfo.Text = WordDatabase.IsLoaded
-                    ? $"{LangOrUnknown(WordDatabase.Language)}  ·  {WordDatabase.WordCount:N0} {Lang.T("wp: words")}  ·  {kind}"
+                _lblWPInfo.Text = _backend.IsLoaded()
+                    ? $"{LangOrUnknown(_backend.LoadedLanguage())}  ·  {_backend.WordCount():N0} {Lang.T("wp: words")}  ·  {kind}"
                     : Lang.T("wp: No database loaded");
             }
-            else if (_cmbWPDatabase.SelectedItem is WPDbItem item)
+            else
             {
-                _lblWPInfo.Text = $"{LangOrUnknown(item.Info.Language)}  ·  {kind}";
+                var db = _backend.Databases().FirstOrDefault(d => string.Equals(Path.GetFileName(d.FilePath), file, StringComparison.OrdinalIgnoreCase));
+                _lblWPInfo.Text = db != null ? $"{LangOrUnknown(db.Language)}  ·  {kind}" : kind;
             }
-
-            UpdateWPExportEnabled();
+            _cmbWPDatabase.AccessibleDescription = _lblWPInfo.Text;
+            UpdateExportState();
         }
 
-        private static string LangOrUnknown(string lang) =>
-            string.IsNullOrEmpty(lang) ? "?" : lang.ToUpper();
+        /// <summary>Full path of the base database the chooser resolves to: the chosen file, or for "(auto)" the one for the current language.</summary>
+        private string SelectedOrAutoBasePath()
+        {
+            var all = _backend.Databases();
+            string file = SelectedDatabaseFile;
+            if (!string.IsNullOrEmpty(file))
+                return all.FirstOrDefault(d => string.Equals(Path.GetFileName(d.FilePath), file, StringComparison.OrdinalIgnoreCase))?.FilePath;
+            var match = !string.IsNullOrEmpty(_sourceMeta.Language)
+                ? all.FirstOrDefault(d => string.Equals(d.Language, _sourceMeta.Language, StringComparison.OrdinalIgnoreCase)) : null;
+            return (match ?? all.FirstOrDefault())?.FilePath;
+        }
 
-        /// <summary>
-        /// The Export button is only meaningful once something has actually
-        /// been learned — enabled only when the selected (or auto-resolved)
-        /// base database has a companion overlay file on disk.
-        /// </summary>
-        private void UpdateWPExportEnabled()
+        /// <summary>Export is only possible once something has been learned: the overlay file of the chosen database exists.</summary>
+        private void UpdateExportState()
         {
             if (_btnWPExport == null) return;
-            string basePath = SelectedOrLoadedBasePath();
-            _btnWPExport.Enabled = basePath != null &&
-                System.IO.File.Exists(WordDatabase.GetOverlayPath(basePath));
+            string basePath = SelectedOrAutoBasePath();
+            bool can = basePath != null && _backend.FileExists(_backend.OverlayPath(basePath));
+            _btnWPExport.Enabled = can;
+            _lblExportHint.Text = can ? "" : Lang.T("wp: nothing to export");
         }
 
-        /// <summary>
-        /// Full path of the base database the combo currently resolves to: the
-        /// explicitly selected file, or (for "(auto)") whatever is actually
-        /// loaded right now.
-        /// </summary>
-        private string SelectedOrLoadedBasePath()
+        private void ExportLearnedWords()
         {
-            if (_cmbWPDatabase.SelectedItem is WPDbItem item) return item.Info.FilePath;
-            // "(auto)": WordDatabase doesn't expose its own load path, but
-            // LastFile-style lookups aren't needed here — fall back to
-            // re-resolving the same way KeyboardForm.LoadWordDatabase does,
-            // via the registry, since the export button only needs a plausible
-            // target, not perfect precision while the dialog is still open.
-            var registry = new LanguageRegistry(System.AppDomain.CurrentDomain.BaseDirectory);
-            var match = !string.IsNullOrEmpty(_srcMeta.Language)
-                ? registry.GetForLanguage(_srcMeta.Language).FirstOrDefault()
-                : null;
-            return (match ?? registry.All.FirstOrDefault())?.FilePath;
-        }
-
-        /// <summary>
-        /// Exports the currently selected base database's overlay file (the
-        /// small file holding everything the learning engine has recorded) to
-        /// a user-chosen location, for backup or transfer to another PC.
-        /// </summary>
-        private void WPExport()
-        {
-            string basePath = SelectedOrLoadedBasePath();
+            string basePath = SelectedOrAutoBasePath();
             if (basePath == null) return;
-            string overlayPath = WordDatabase.GetOverlayPath(basePath);
-            if (!System.IO.File.Exists(overlayPath)) return;
-
+            string overlay = _backend.OverlayPath(basePath);
+            if (!_backend.FileExists(overlay)) return;
             using var dlg = new SaveFileDialog
             {
-                Title      = Lang.T("wp: Export learned words"),
-                Filter     = "Word database (*.wfq)|*.wfq|All files (*.*)|*.*",
-                DefaultExt = "wfq",
-                FileName   = System.IO.Path.GetFileName(overlayPath),
+                Title = Lang.T("wp: Export learned words"), Filter = "Word database (*.wfq)|*.wfq|All files (*.*)|*.*",
+                DefaultExt = "wfq", FileName = Path.GetFileName(overlay),
             };
-            if (dlg.ShowDialog(this) != System.Windows.Forms.DialogResult.OK) return;
-
-            try   { System.IO.File.Copy(overlayPath, dlg.FileName, overwrite: true); }
-            catch (Exception ex)
-            {
-                System.Windows.Forms.MessageBox.Show(
-                    $"{Lang.T("wp: Export failed")}\n{ex.Message}",
-                    Lang.T("wp: Word prediction"),
-                    System.Windows.Forms.MessageBoxButtons.OK,
-                    System.Windows.Forms.MessageBoxIcon.Error);
-            }
+            if (dlg.ShowDialog(this) != DialogResult.OK) return;
+            try { File.Copy(overlay, dlg.FileName, overwrite: true); }
+            catch (Exception ex) { TouchMessage.Info(this, Lang.T("wp: Word prediction"), $"{Lang.T("wp: Export failed")}\n{ex.Message}"); }
         }
 
-        /// <summary>
-        /// Candidates are shown as plain "word (count)" strings; the raw word
-        /// is recovered by stripping the " (n)" suffix in
-        /// <see cref="SelectedCandidateWord"/>. Refills <see cref="_lstWPCandidates"/>
-        /// from <see cref="WordDatabase.GetCandidates"/>, most-seen first. Call
-        /// after opening the dialog and after any promote/reject action.
-        /// </summary>
-        private void PopulateWPCandidates()
+        // ── Candidates ──────────────────────────────────────────────
+
+        private void PopulateCandidates()
         {
             if (_lstWPCandidates == null) return;
-            string previouslySelected = SelectedCandidateWord();
-
+            string previous = SelectedCandidateWord();
             _lstWPCandidates.Items.Clear();
-            foreach (var (word, count) in WordDatabase.GetCandidates())
-                _lstWPCandidates.Items.Add($"{word} ({count})");
-
-            if (previouslySelected != null)
-            {
+            foreach (var (word, count) in _backend.Candidates()) _lstWPCandidates.Items.Add($"{word} ({count})");
+            if (previous != null)
                 for (int i = 0; i < _lstWPCandidates.Items.Count; i++)
-                    if (_lstWPCandidates.Items[i].ToString().StartsWith(previouslySelected + " (", StringComparison.Ordinal))
-                    { _lstWPCandidates.SelectedIndex = i; break; }
-            }
-
-            UpdateWPCandidateControlsEnabled();
+                    if (_lstWPCandidates.Items[i].ToString().StartsWith(previous + " (", StringComparison.Ordinal)) { _lstWPCandidates.SelectedIndex = i; break; }
+            UpdateCandidateState();
         }
 
-        /// <summary>
-        /// Enables the whole Candidates section only while "Remember typed
-        /// words" is on, and the Promote/Reject buttons only while something
-        /// is selected in the list.
-        /// </summary>
-        private void UpdateWPCandidateControlsEnabled()
+        private void UpdateCandidateState()
         {
+            if (_lstWPCandidates == null || _btnWPPromote == null) return;
             bool learning = _chkWPLearning != null && _chkWPLearning.Checked;
-            bool selected = _lstWPCandidates != null && _lstWPCandidates.SelectedIndex >= 0;
-
-            if (_lstWPCandidates != null) _lstWPCandidates.Enabled = learning;
-            if (_btnWPPromote    != null) _btnWPPromote.Enabled    = learning && selected;
-            if (_btnWPReject     != null) _btnWPReject.Enabled     = learning && selected;
+            bool selected = _lstWPCandidates.SelectedIndex >= 0;
+            _lstWPCandidates.Enabled = learning;
+            _lstWPCandidates.EmptyText = learning ? Lang.T("wp: no candidates") : Lang.T("wp: learning off hint");
+            _btnWPPromote.Enabled = learning && selected;
+            _btnWPReject.Enabled  = learning && selected;
         }
 
-        /// <summary>
-        /// Extracts the raw word from the selected "word (count)" list entry,
-        /// or <c>null</c> if nothing is selected.
-        /// </summary>
+        private void UpdateImmediateHint() { if (_lblImmediateHint != null) _lblImmediateHint.Text = Lang.T("wp: immediate"); }
+
         private string SelectedCandidateWord()
         {
             if (_lstWPCandidates?.SelectedItem is not string s) return null;
-            int idx = s.LastIndexOf(" (", StringComparison.Ordinal);
-            return idx > 0 ? s.Substring(0, idx) : s;
+            int i = s.LastIndexOf(" (", StringComparison.Ordinal);
+            return i > 0 ? s.Substring(0, i) : s;
         }
 
-        /// <summary>
-        /// Promotes the selected candidate to a real, predictable word
-        /// immediately, bypassing the usual occurrence-count threshold.
-        /// </summary>
-        private void WPPromoteSelectedCandidate()
+        private void PromoteSelected() { string w = SelectedCandidateWord(); if (w == null) return; _backend.Promote(w); PopulateCandidates(); }
+        private void RejectSelected()  { string w = SelectedCandidateWord(); if (w == null) return; _backend.Reject(w);  PopulateCandidates(); }
+
+        // ── Language change while open ──────────────────────────────
+
+        protected override void OnLanguageChanged()
         {
-            string word = SelectedCandidateWord();
-            if (word == null) return;
-            WordDatabase.PromoteCandidate(word);
-            PopulateWPCandidates();
+            base.OnLanguageChanged();
+            Text = Lang.T("Edit Keyboard");
+            if (_cmbToolbarTheme == null) return;
+            bool was = _loading; _loading = true;
+            try
+            {
+                _cmbToolbarTheme.SetItems(ToolbarThemeItems(), Math.Max(0, _cmbToolbarTheme.SelectedIndex));
+                if (_cmbWPDatabase != null && _cmbWPDatabase.Items.Count > 0)
+                {
+                    _cmbWPDatabase.Items[0].Text = Lang.T("wp: Auto");
+                    RelabelMissingDatabaseRow();
+                    _cmbWPDatabase.ShowSelection();
+                }
+                _stpOpacity.AccessibleName = Lang.StripMnemonic(Lang.T("Opacity"));
+                _cmbWPDatabase.AccessibleName = Lang.StripMnemonic(Lang.T("wp: Database"));
+                _stpSlowKeys.AccessibleName = Lang.StripMnemonic(Lang.T("Slow keys")); _stpSlowKeys.AccessibleDescription = Lang.T("milliseconds");
+                _stpDwell.AccessibleName = Lang.StripMnemonic(Lang.T("Dwell click"));  _stpDwell.AccessibleDescription = Lang.T("milliseconds");
+                _lstWPCandidates.AccessibleName = Lang.StripMnemonic(Lang.T("wp: Candidates"));
+                _chkTimingAnimation.AccessibleDescription = Lang.T("tip: Show timing animation");
+            }
+            finally { _loading = was; }
+            SyncLanguageChooser();
+            UpdateDatabaseWarning(); UpdateWPInfo(); UpdateCandidateState(); UpdateImmediateHint();
         }
 
-        /// <summary>
-        /// Discards the selected candidate (e.g. a typo) without promoting it.
-        /// </summary>
-        private void WPRejectSelectedCandidate()
+        private void RelabelMissingDatabaseRow()
         {
-            string word = SelectedCandidateWord();
-            if (word == null) return;
-            WordDatabase.RemoveCandidate(word);
-            PopulateWPCandidates();
+            string stored = SelectedDatabaseFile;
+            if (!SelectedDatabaseMissing) return;
+            _cmbWPDatabase.Items[_cmbWPDatabase.SelectedIndex].Text = $"{Lang.T("wp: (not found)")}  {stored}";
         }
 
-        // ════════════════════════════════════════════════════════════════
-        // Apply / commit
-        // ════════════════════════════════════════════════════════════════
+        // ── Apply, Save, Load ───────────────────────────────────────
 
         /// <summary>
-        /// Reads every control, builds new <see cref="VisualTheme"/>,
-        /// <see cref="WindowState"/>, and <see cref="LayoutMeta"/> objects,
-        /// detects which fields changed, then closes the dialog with
-        /// <see cref="DialogResult.OK"/>.
-        ///
-        /// Fields that this editor does not expose (e.g. window size) are
-        /// copied verbatim from the original so they are not accidentally reset.
+        /// Builds the results and closes with OK. The source objects are cloned and only the edited fields are overwritten, so a
+        /// field the dialog does not edit (language, last file, gear position, window size, key style) and any field added to a
+        /// model later is never reset. <paramref name="action"/> says whether the caller should save the layout file next.
         /// </summary>
-        private bool Apply()
+        private bool Apply() => ApplyWith(KeyboardFileAction.None);
+
+        private bool ApplyWith(KeyboardFileAction action)
         {
-            // Refuse to proceed while any field is flagged invalid (e.g. bad background hex) —
-            // the ErrorProvider icon already on that field is the feedback.
-            if (HasPendingErrors()) return false;
+            if (ShowFirstSectionWithError()) return false;
 
-            // Key style fields (font, colors, border) are now managed exclusively
-            // through the standard group in GroupEditorForm.  Only window-level
-            // theme fields (background color, opacity) are edited here; pass all
-            // style fields through unchanged from the source theme.
-            var theme = new VisualTheme
-            {
-                // Fall back to the prior background — never a hardcoded, unrelated colour —
-                // so an invalid hex silently keeps the current look instead of jumping to
-                // something the user never chose.
-                BackgroundColor = ParseColor(GetSwatchHex(_pnlBgColor), _srcTheme.BackgroundColor),
+            ResultTheme = _sourceTheme.Clone();
+            int srcStep = OpacityToStep(_sourceTheme.Opacity);
+            if ((int)_stpOpacity.Value != srcStep)                         // an untouched value is kept as it is (0.755 stays 0.755)
+                ResultTheme.Opacity = Math.Clamp((100 - (int)_stpOpacity.Value) / 100.0, 0.2, 1.0);
+            ResultTheme.BackgroundColor = _chipBackground.Value;
 
-                // Convert slider value back to an opacity fraction.
-                // Slider 0 → opacity 1.0 (opaque); slider 80 → opacity 0.2 (most transparent).
-                Opacity = Math.Clamp((100 - _trkOpacity.Value) / 100.0, 0.2, 1.0),
+            ResultWindow = _sourceWindow.Clone();
+            ResultWindow.AlwaysOnTop  = _chkAlwaysOnTop.Checked;
+            ResultWindow.HideTitlebar = _chkHideTitlebar.Checked;
 
-                // Pass style fields through unchanged — they are no longer editable
-                // in this dialog; the standard group is the authoritative source.
-                FontName        = _srcTheme.FontName,
-                FontSize        = _srcTheme.FontSize,
-                FontColor       = _srcTheme.FontColor,
-                KeyColor        = _srcTheme.KeyColor,
-                BorderColor     = _srcTheme.BorderColor,
-                BorderThickness = _srcTheme.BorderThickness,
-            };
+            ResultMeta = _sourceMeta.Clone();
+            ResultMeta.ToolbarTheme        = ToolbarThemeOrder[Math.Clamp(_cmbToolbarTheme.SelectedIndex, 0, ToolbarThemeOrder.Length - 1)];
+            ResultMeta.StickyModifiers     = _chkStickyMods.Checked;
+            ResultMeta.HoldToEdit          = _chkHoldToEdit.Checked;
+            ResultMeta.SlowKeysMs          = CurrentTimingMode == TimingMode.SlowKeys ? (int)_stpSlowKeys.Value : 0;
+            ResultMeta.DwellMs             = CurrentTimingMode == TimingMode.Dwell ? (int)_stpDwell.Value : 0;
+            ResultMeta.ShowTimingAnimation = _chkTimingAnimation.Checked;     // kept while its check box is disabled
+            ResultMeta.ShowCornerLabels    = _chkCornerLabels.Checked;
+            ResultMeta.WordDatabase        = SelectedDatabaseFile;
+            ResultMeta.WordLearningEnabled = _chkWPLearning.Checked;
 
-            var window = new WindowState
-            {
-                // WindowWidth / WindowHeight are not exposed in this editor,
-                // so copy them unchanged from the original to avoid resetting
-                // a window size the user previously set by dragging.
-                WindowWidth  = _srcWindow.WindowWidth,
-                WindowHeight = _srcWindow.WindowHeight,
-                HideTitlebar = _chkHideTitlebar.Checked,
-                AlwaysOnTop  = _chkAlwaysOnTop.Checked,
-            };
-
-            var meta = new LayoutMeta
-            {
-                // Language, LastFile, gear position are managed elsewhere; copy through.
-                Language        = _srcMeta.Language,
-                LastFile        = _srcMeta.LastFile,
-                GearRow         = _srcMeta.GearRow,
-                GearCol         = _srcMeta.GearCol,
-                // WordDatabase: use the filename of whatever is selected in the combo,
-                // or empty string for "(auto)" which lets LoadWordDatabase() choose.
-                WordDatabase    = _cmbWPDatabase.SelectedItem is WPDbItem selDb
-                                  ? System.IO.Path.GetFileName(selDb.Info.FilePath)
-                                  : "",
-                WordLearningEnabled = _chkWPLearning.Checked,
-                StickyModifiers = _chkStickyMods.Checked,
-                HoldToEdit      = _chkHoldToEdit.Checked,
-                ToolbarTheme    = (ToolbarTheme)_cmbToolbarTheme.SelectedIndex,
-                SlowKeysMs           = _chkSlowKeys.Checked ? (int)_nudSlowKeys.Value : 0,
-                DwellMs              = _chkDwell.Checked    ? (int)_nudDwell.Value    : 0,
-                ShowTimingAnimation  = _chkTimingAnimation.Checked,
-                ShowCornerLabels     = _chkCornerLabels.Checked,
-            };
-
-            ResultTheme  = theme;
-            ResultWindow = window;
-            ResultMeta   = meta;
             ResultGroups = _groups;
-
+            FileAction   = action;
             DialogResult = DialogResult.OK;
             Close();
             return true;
         }
 
-        // ════════════════════════════════════════════════════════════════
-        // Static utility methods
-        // ════════════════════════════════════════════════════════════════
-
-        // ParseColor inherited from FluentDialogBase.
-        // GetInstalledFonts removed — use Fluent.InstalledFontNames() which caches the
-        // result process-wide so the expensive GDI enumeration only runs once.
-
-        // ════════════════════════════════════════════════════════════════
-        // Helper class
-        // ════════════════════════════════════════════════════════════════
-
-        /// <summary>
-        /// Wraps a language code and its human-readable display name for use
-        /// as items in the language <see cref="ComboBox"/>.
-        ///
-        /// <see cref="ToString"/> returns only the name so the combo box
-        /// shows "English" rather than "en – English".
-        /// </summary>
-        private class LangItem
+        /// <summary>Load: asks first (it replaces the keyboard at once and Cancel cannot undo it), then refills the dialog from the loaded file.</summary>
+        private void LoadLayout()
         {
-            /// <summary>The ISO / internal language code (e.g. "en", "nl").</summary>
-            public string Code { get; }
-
-            /// <summary>The human-readable name shown in the combo box (e.g. "English").</summary>
-            public string Name { get; }
-
-            /// <summary>
-            /// Creates a new language item.
-            /// </summary>
-            /// <param name="code">Internal language code.</param>
-            /// <param name="name">Display name shown in the combo box.</param>
-            public LangItem(string code, string name) { Code = code; Name = name; }
-
-            /// <summary>Returns the display name so the combo box shows readable text.</summary>
-            public override string ToString() => Name;
+            if (_onLoad == null) return;
+            if (!TouchMessage.Confirm(this, Lang.T("kbd: Load title"), Lang.T("kbd: Load msg"))) return;
+            LoadFromCaller();
         }
+
+        /// <summary>The load itself, without the question (tests call this). Returns true when a file was loaded and the dialog was refilled.</summary>
+        internal bool LoadFromCaller()
+        {
+            if (_onLoad == null || !_onLoad()) return false;           // the file dialog was cancelled: nothing changes, the edits stay
+            if (_getSettings != null)
+            {
+                var (t, ws, m) = _getSettings();
+                _sourceTheme = t; _sourceWindow = ws; _sourceMeta = m;
+            }
+            if (_getGroups != null) _groups = _getGroups().Select(g => g.Clone()).ToList();
+            ResultGroups = _groups;
+            _languageOnOpen = Lang.CurrentCode;                         // the loaded file may have changed the language: that is the new baseline
+            PopulateFields(_sourceTheme, _sourceWindow, _sourceMeta);
+            return true;
+        }
+
+        /// <summary>For tests: Apply with a file action.</summary>
+        internal bool ApplyForTest(KeyboardFileAction action = KeyboardFileAction.None) => ApplyWith(action);
     }
 }

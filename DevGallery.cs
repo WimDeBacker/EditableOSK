@@ -198,6 +198,7 @@ namespace OnScreenKeyboard
                     if (tag != "nl") SaveMockupE(outDir, tag);
                     SaveKeyEditor(outDir, tag);
                     SaveGroupEditor(outDir, tag);
+                    SaveKeyboardEditor(outDir, tag);
                 }
             }
             finally { Lang.PseudoExpansion = 0; Lang.Load("en"); }
@@ -365,6 +366,38 @@ namespace OnScreenKeyboard
                     {
                         Show(m);
                         Save(m, Path.Combine(outDir, $"groupeditor_confirm_{theme}_{tag}.png"));
+                    }
+                }
+            }
+            finally { ToolbarButton.IsLightTheme = wasLight; }
+        }
+
+        /// <summary>The new Keyboard Editor: its three sections, in both themes (with fake word-database data, so no real file is needed).</summary>
+        private static void SaveKeyboardEditor(string outDir, string tag)
+        {
+            bool wasLight = ToolbarButton.IsLightTheme;
+            var backend = new WordPredictionBackend
+            {
+                Candidates     = () => new List<(string Word, int Count)> { ("kapstok", 2), ("tuinhek", 2), ("wasbeer", 1), ("fietspomp", 1) },
+                Databases      = () => new List<DatabaseInfo> { new DatabaseInfo(@"C:\x\worddb_NL.wfq", "nl"), new DatabaseInfo(@"C:\x\worddb_EN.wfq", "en") },
+                IsLoaded       = () => true, LoadedLanguage = () => "nl", WordCount = () => 52431,
+                FileExists     = p => true,
+            };
+            var meta = new LayoutMeta { StickyModifiers = true, SlowKeysMs = 300, WordDatabase = "worddb_NL.wfq", Language = Lang.CurrentCode };
+            try
+            {
+                foreach (bool light in new[] { true, false })
+                {
+                    ToolbarButton.IsLightTheme = light;
+                    string theme = light ? "light" : "dark";
+                    using var d = new KeyboardEditorForm(new VisualTheme(), new WindowState(), meta, null, null, null, null, null, backend);
+                    Show(d);
+                    for (int i = 0; i < d.SectionBarAccess.Count; i++)
+                    {
+                        d.SectionBarAccess.Select(i, focus: false);
+                        Application.DoEvents();
+                        d.PerformLayout();
+                        Save(d, Path.Combine(outDir, $"keyboardeditor2_{i + 1}_{theme}_{tag}.png"));
                     }
                 }
             }

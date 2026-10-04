@@ -31,6 +31,18 @@ Status tags: **fixed**, **open**, **unverified** (not tested).
 | Fixed pixel layout and constant size (880 × 610); labels at a fixed x; no preview. | fixed (content-sized, table layout, labelled preview) |
 | A new group was a copy of the standard group "so the user sees concrete values". Kept: it avoids a row of inherit markers that mean nothing before the inheritance model is understood. | kept on purpose |
 
+### 1c. Flaws in the original Keyboard Editor (found when it was migrated, 2026-10-04; full list in `keyboardeditor_inventory.md`)
+
+| Flaw | Status |
+|---|---|
+| **Save and Save As saved the previous values** (read by reading the code, not reproduced): the dialog applied and closed, then the main form saved its live objects, which were only updated after the dialog had returned. | fixed (Save applies first and sets `FileAction`; the caller copies the results and then saves) |
+| Load wiped every unsaved edit in the dialog even when the file dialog was cancelled, and nothing warned that Cancel cannot undo a load. | fixed (asks first; a cancelled file dialog changes nothing) |
+| Cancel did not undo the live language change, the flipped learning engine or Promote / Reject. | fixed (language restored on Cancel; learning only on Apply; Promote / Reject say on screen that they are immediate) |
+| Hidden state and silent rewrites: `Apply` built new model objects field by field (a field added later is reset), an untouched opacity 0.755 became 0.76, slow / dwell values outside the stepper range were clamped, a stored database that was not found became "(auto)", a file with both slow keys and dwell kept only dwell by accident of the load order, the toolbar theme was stored by list index. | fixed (clone and overwrite, keep untouched values, widen ranges, keep the missing database as a row, explicit radio group, explicit enum order) |
+| A track bar (thumb a few pixels), 17 px check boxes, 26 px combo boxes, a hex text box and a 32 × 26 swatch; fixed 940 px window that did not fit a laptop. | fixed |
+| Two similar controls that stand under each other differed slightly in width, so no right edge lined up. | fixed (alignment rule, section 3b) |
+| Slow keys and Dwell click were two exclusive check boxes with no word of explanation, and a disabled "Show timing animation" with no visible reason. | fixed (radio group "Timing aid"; the animation check box belongs to the group and is greyed while Off is chosen) |
+
 ## 2. Flaws in the proposals during the design
 
 - **Separate Shift/AltGr tab (first proposal):** there was no way to set a layout jump in Shift send. This led to the layer-based design.
@@ -61,11 +73,14 @@ Status tags: **fixed**, **open**, **unverified** (not tested).
 - **Pseudo-localisation finds unbreakable runs:** the padding "xxxx…" of the test language is one unbreakable word, so a message label that wrapped fine at +40 % was clipped at +80 %. The label got more room (three label widths); a real long compound word behaves the same.
 - **`Control.Visible` is false in a form that was never shown.** A test that asserted "this check box is hidden for the standard group" through `Visible` was true by accident (and a state check `Visible && Checked` inside the form logic was wrong for the same reason). Use `Enabled` or an explicit field instead; the form's own logic must not depend on `Visible`.
 - **Idle hints named a button that no longer had a name:** "Press Record…" while the button was icon-only. Reworded to "record button". Lesson: when a control loses its text, search for the texts that refer to it.
+- **A long user-supplied text in a chooser (Keyboard Editor).** A stored database name such as `old_db.wfq` plus the suffix "(not found)" ran past the chooser's width and the suffix was the part that got cut off. Put the status first and the user's text last, so an ellipsis cuts the less important end. A label beside a chooser also steals its width at +80 % text: put the label above the chooser when the value can be long.
+- **A guard that checks the stress case finds layout decisions the normal case hides.** The Word prediction section looked fine at +0 % and +40 %, and failed only at +80 % because the "Database" label grew; the same guard found the 753 px height of the Group Editor earlier. Keep the +80 % case in every dialog guard.
+- **Tests on a form that was never shown.** `Visible` is false, `DrawToBitmap` needs a handle, a docked control has no size until a layout ran: the helper `HostFor` (a hidden form with a handle) and `DevGallery.Show` exist for this. Calls to protected handlers go through reflection (`Key`, `Send`), and the data behind a dialog goes through a seam (`WordPredictionBackend`) so no test touches a real database.
 
 ## 3b. Layout rules (from the owner's reviews)
 
-- **Neighbouring controls share one width (2026-10-04).** The old Keyboard Editor looked untidy because controls that stand under each other differed a little in width (Background, Always on top, Hide title bar; Sticky modifiers and Hold to enter edit mode; Slow keys and Dwell click), so no right edge lined up. Rules: (a) controls stacked in one column get the width of the widest of them; (b) buttons side by side (Save / Save As / Load, Promote / Reject) get one common width; (c) choosers under each other get one width; (d) a stepper next to a control sits in its own column so the steppers line up too. Built with `OptionStack` and `ButtonRow` (planned, spec D23) and checked by `UiGuard.StackedEdges`. The Group and Key Editors have no stacked check boxes, so they were not affected; check them against this rule when touched again.
-- **"Exactly one of these" is a radio group, not two check boxes with an explanatory sentence (2026-10-04).** A group is a frame with a caption (the caption is its accessible name), button-shaped rows with a round mark, a 2 px accent border on the selected row (not only the dot), one tab stop with arrow keys inside, and the values that belong to an option (steppers) enabled only for the selected option. Planned components `TouchRadioButton` and `TouchGroup` (spec D24).
+- **Neighbouring controls share one width (2026-10-04).** The old Keyboard Editor looked untidy because controls that stand under each other differed a little in width (Background, Always on top, Hide title bar; Sticky modifiers and Hold to enter edit mode; Slow keys and Dwell click), so no right edge lined up. Rules: (a) controls stacked in one column get the width of the widest of them; (b) buttons side by side (Save / Save As / Load, Promote / Reject) get one common width; (c) choosers under each other get one width; (d) a stepper next to a control sits in its own column so the steppers line up too. Built with `OptionStack` and `ButtonRow` (2026-10-04, spec D23) and checked by `UiGuard.StackedEdges`. The Group and Key Editors have no stacked check boxes, so they were not affected; check them against this rule when touched again.
+- **"Exactly one of these" is a radio group, not two check boxes with an explanatory sentence (2026-10-04).** A group is a frame with a caption (the caption is its accessible name), button-shaped rows with a round mark, a 2 px accent border on the selected row (not only the dot), one tab stop with arrow keys inside, and the values that belong to an option (steppers) enabled only for the selected option. Components `TouchRadioButton` and `TouchGroup` (built 2026-10-04, spec D24).
 
 ## 4. Accessibility (WCAG AAA)
 
@@ -89,7 +104,7 @@ Status tags: **fixed**, **open**, **unverified** (not tested).
 - **Priority 5 and 6 (`todo.md`) are fixed** (see section 3). Remaining: Modifier → Text clears the value but the label stays "Shift" by design (the user may want it); undecided.
 - **Record / Browse icons:** the Browse icon is the toolbar's `load.svg`; whether a folder icon reads as "pick a layout file" has not been tested with users. The record ring looks a little small in its button.
 - **Priority 7:** borders and focus rings on the keys of the keyboard itself were never checked.
-- **Still on the old layout:** the Keyboard Editor and the wizard. (The Group Editor was migrated on 2026-10-02.)
+- **Still on the old layout:** the New Keyboard Wizard only. (The Group Editor was migrated on 2026-10-02, the Keyboard Editor on 2026-10-04.)
 - **Group Editor:** the list's scroll bar is the native thin one; the Name field keeps one empty line for its error message; "More colours…" still opens the standard Windows colour dialog.
 - **Narrow screens:** the Action row has five columns and fits 760 px; below that a stacked layout is not built.
 - **Left over for cleanup:** `KeyEditorMockups.cs`, the old `AddColorRow`, `ROW_H` / `HDR_H`, `WrapInScrollPanel`.
@@ -101,6 +116,7 @@ Status tags: **fixed**, **open**, **unverified** (not tested).
 - **Now tested (2026-10-02):** keyboard and mouse handling of the chooser flyout and the colour flyout (`TouchChoiceColorTests.cs`), which found a real bug: Home / End did nothing when the first / last rows were unavailable. Still untested: opening them from a real control (placement, focus return) and the standard colour dialog behind "More colours…".
 - **Not tested at all:** recording a shortcut through the real hook (only the label and send logic are unit-tested, and the key injection of Win+Shift), the stop icon on screen (the gallery cannot show the recording state), 125% and 150% display scaling, a real touch screen.
 - The flyout closes when it loses focus; the case of the Windows colour dialog opening from it is handled, other focus changes are not.
+- **Keyboard Editor (2026-10-04):** built, tested and photographed only; never used with a mouse or touch screen. Not verified: that the old dialog really saved the previous values (inventory B1), the whole Save / Save As / Load hand-off through the real `KeyboardForm` (never built in the suite), the Export file dialog, "More colours…" from the background chip, 125 % / 150 % scaling.
 
 ## 8. Process
 
