@@ -2709,29 +2709,27 @@ namespace OnScreenKeyboard
                 _predictor?.SetNextWordUpper(turningOn);
             }
 
-            if (!_meta.StickyModifiers)
-            {
-                bool wasLatched = _latchedMods.Contains(cell);
-                foreach (var c in _layout.Cells)
-                    if (c.Props.Label == cell.Props.Label)
-                    {
-                        if (wasLatched) _latchedMods.Remove(c);
-                        else            _latchedMods.Add(c);
-                    }
-            }
-            else
-            {
-                bool wasLocked  = _lockedMods.Contains(cell);
-                bool wasLatched = _latchedMods.Contains(cell);
-                foreach (var c in _layout.Cells)
-                {
-                    if (c.Props.Label != cell.Props.Label) continue;
-                    if (wasLocked)       { _lockedMods.Remove(c);  _latchedMods.Remove(c); }
-                    else if (wasLatched) { _lockedMods.Add(c); }
-                    else                 { _latchedMods.Add(c); }
-                }
-            }
+            // The rule (Off → Latched → Off, or with sticky modifiers Off → Latched → Locked → Off) lives in ModifierLatch so it can be tested.
+            var next = ModifierLatch.Toggle(StateOf(cell), _meta.StickyModifiers);
+            foreach (var c in _layout.Cells)
+                if (c.Props.Label == cell.Props.Label)
+                    SetState(c, next);
             RefreshAllButtons();
+        }
+
+        /// <summary>The latch state of a modifier key: locked if it is in the locked set, else latched if it is in the latched set.</summary>
+        private ModifierState StateOf(GridCell c) =>
+            _lockedMods.Contains(c) ? ModifierState.Locked : _latchedMods.Contains(c) ? ModifierState.Latched : ModifierState.Off;
+
+        /// <summary>Stores a latch state in the two sets (a locked key is in both: the latched set is what Caps Lock and the display read).</summary>
+        private void SetState(GridCell c, ModifierState s)
+        {
+            switch (s)
+            {
+                case ModifierState.Off:     _latchedMods.Remove(c); _lockedMods.Remove(c); break;
+                case ModifierState.Latched: _latchedMods.Add(c);    _lockedMods.Remove(c); break;
+                default:                    _latchedMods.Add(c);    _lockedMods.Add(c);    break;
+            }
         }
 
         /// <summary>
@@ -2742,7 +2740,7 @@ namespace OnScreenKeyboard
         {
             // Remove one-shot latched mods; keep locked mods and Caps
             _latchedMods.RemoveWhere(c =>
-                c.Props.Label != "Caps" && !_lockedMods.Contains(c));
+                c.Props.Label != "Caps" && ModifierLatch.AfterKey(StateOf(c)) == ModifierState.Off);
             RefreshAllButtons();
         }
 

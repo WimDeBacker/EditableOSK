@@ -75,6 +75,7 @@ namespace OnScreenKeyboard
             T_KeyboardEditorGuards();
             T_KeyboardEditor();
             T_KeyboardEditorAlignment();
+            T_StickyModifiers();
             T_KeyEditorRoundTrip();
             T_ValidationBlocksApply();
             T_MissingFontHandling();

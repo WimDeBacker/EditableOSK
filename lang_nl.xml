@@ -198,7 +198,7 @@
   <String key="kbd: Timing aid"                  value="Tijdhulp" />
   <String key="kbd: Off"                         value="Uit" />
   <String key="tip: Timing off"                  value="Geen tijdhulp: een toets wordt geregistreerd zodra u erop drukt of klikt." />
-  <String key="tip: Sticky modifiers"            value="Shift, Ctrl en Alt blijven na één tik aan en gaan uit na de volgende toets, zodat nooit twee toetsen tegelijk ingehouden hoeven te worden." />
+  <String key="tip: Sticky modifiers"            value="Tik twee keer op Shift, Ctrl of Alt om het vast te zetten tot u er een derde keer op tikt (zoals Plaktoetsen in Windows). Uit: één tik geldt alleen voor de volgende toets." />
   <String key="tip: Hold to edit"                value="Houd een toets even ingedrukt om de editor te openen. Een korte tik typt de toets gewoon, zodat de editor niet per ongeluk opent." />
   <String key="tip: Always on top"               value="Het toetsenbord boven alle andere vensters houden." />
   <String key="tip: Hide title bar"              value="De Windows-titelbalk verbergen voor een strakker zwevend toetsenbord." />

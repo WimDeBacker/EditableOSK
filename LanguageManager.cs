@@ -271,7 +271,7 @@ namespace OnScreenKeyboard
             ["kbd: Timing aid"]                  = "Timing aid",
             ["kbd: Off"]                         = "Off",
             ["tip: Timing off"]                  = "No timing aid: a key registers as soon as you press it, or click it.",
-            ["tip: Sticky modifiers"]            = "Shift, Ctrl and Alt stay on after one tap and switch off after the next key, so you never have to hold two keys at once.",
+            ["tip: Sticky modifiers"]            = "Tap Shift, Ctrl or Alt twice to lock it on until you tap it a third time (like Windows Sticky Keys). Off: one tap only applies to the next key.",
             ["tip: Hold to edit"]                = "Hold a key for a moment to open its editor. A quick tap still types the key, so the editor does not open by accident.",
             ["tip: Always on top"]               = "Keep the keyboard floating above all other windows.",
             ["tip: Hide title bar"]              = "Hide the Windows title bar for a cleaner floating keyboard look.",
