@@ -332,6 +332,19 @@ namespace OnScreenKeyboard
         /// <summary>The section buttons, for the UI guard tests (which switch section on any dialog).</summary>
         internal SectionBar SectionBarAccess => Sections;
 
+        /// <summary>Number of sections or pages added with <see cref="AddSection"/>.</summary>
+        internal int HostSectionCount => _host?.SectionCount ?? 0;
+
+        /// <summary>Shows one section or page by index (for a dialog without a section bar, such as a wizard).</summary>
+        protected void ShowHostSection(int index) => _host.ShowSection(index);
+
+        /// <summary>For the UI guard tests: shows section (or wizard page) <paramref name="index"/> the way the user would reach it.</summary>
+        internal virtual void ShowSectionForGuard(int index)
+        {
+            if (Sections != null) Sections.Select(index, focus: false);
+            else if (_host != null && _host.SectionCount > 1) _host.ShowSection(index);
+        }
+
         /// <summary>Index of the visible section.</summary>
         protected int SelectedSection => Sections?.SelectedIndex ?? 0;
 

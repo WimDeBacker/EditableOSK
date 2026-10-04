@@ -31,6 +31,18 @@ Status tags: **fixed**, **open**, **unverified** (not tested).
 | Fixed pixel layout and constant size (880 × 610); labels at a fixed x; no preview. | fixed (content-sized, table layout, labelled preview) |
 | A new group was a copy of the standard group "so the user sees concrete values". Kept: it avoids a row of inherit markers that mean nothing before the inheritance model is understood. | kept on purpose |
 
+### 1d. Flaws in the original wizard and lessons from rebuilding it (2026-10-04; full list W1–W14 in `wizard_inventory.md`)
+
+| Flaw or lesson | Status |
+|---|---|
+| 820 px tall window (did not fit 1366 × 768), 25 px text boxes and number boxes, 30 × 25 browse buttons, message boxes for every error, no Cancel button, Enter did nothing on pages 1–3, selection shown by colour only. | fixed |
+| In paste mode the rows / columns boxes did nothing (the file used the parsed rows). Create overwrote an existing file silently; file names with `/ : ? *` gave a raw system error. | fixed (size shown as text; Yes / No question; clear message) |
+| **Lesson: a `TableLayoutPanel` row takes the control's own height, not its `GetPreferredSize`, unless the control is `AutoSize`.** A custom control (`WizardGridPreview`) therefore set its own `Height` / `MinimumSize`. | learned |
+| **Lesson: a wrapping `Label` must have a `MaximumSize` that is no larger than the real room.** One that was wider than its container (or wider than the window) kept a one-line height and clipped; one narrower than the column broke the "stacked controls share one width" rule. Use constants derived from `ContentMaxWidth` (`PageTextWidth`, `GroupTextWidth`). | learned |
+| **Lesson: a stress test that appends `xxxx` to a string cannot wrap it.** A hint of 130 characters grows an unbreakable run wider than the window at +80 %; keep each hint line short (three short lines instead of one long). | learned |
+| **Lesson: a page that shows different things per mode must not hold all of them at once.** The three variants of page 2 as separate host sections keep the window as tall as the tallest instead of their sum. | learned |
+| A hard-coded "Always on top: Yes" in the summary; the preview used the colours of preset 0 whatever was chosen. | fixed (summary text states the defaults; the preview uses neutral dialog colours) |
+
 ### 1c. Flaws in the original Keyboard Editor (found when it was migrated, 2026-10-04; full list in `keyboardeditor_inventory.md`)
 
 | Flaw | Status |

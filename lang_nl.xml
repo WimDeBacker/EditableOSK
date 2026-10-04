@@ -287,7 +287,7 @@
   <String key="wiz: Rows"                   value="Rijen" />
   <String key="wiz: Columns"               value="Kolommen" />
   <String key="wiz: Preview"               value="Voorbeeld" />
-  <String key="wiz: Language"               value="Taal" />
+  <String key="wiz: Language"               value="Taal van het toetsenbord" />
   <String key="wiz: Theme file"             value="Themabestand" />
   <String key="wiz: From file…"             value="Uit bestand…" />
   <String key="wiz: Validate with"          value="Geïmporteerd thema valideren met:" />
@@ -306,17 +306,35 @@
   <String key="wiz: theme light"            value="Licht" />
   <String key="wiz: theme hc"               value="Hoog contrast" />
   <String key="wiz: theme colorful"         value="Kleurrijk" />
-  <String key="wiz: tip Blank grid"         value="Een leeg raster aanmaken met de opgegeven grootte. Toetsen invullen via de editor." />
-  <String key="wiz: tip Paste labels"       value="Toetslabels typen of plakken — één rij per regel, woorden gescheiden door spaties." />
-  <String key="wiz: tip Copy from file"     value="Beginnen vanuit een bestaande lay-out. Thema en vensterinstellingen zijn nog aan te passen." />
+  <String key="wiz: tip Blank grid"         value="Een leeg raster; u vult de toetsen in de editor in." />
+  <String key="wiz: tip Paste labels"       value="Eén rij per regel, woorden gescheiden door spaties." />
+  <String key="wiz: tip Copy from file"     value="Begint met de toetsen van een bestaand lay-outbestand." />
   <String key="wiz: tip always on top"      value="Het toetsenbord boven alle andere vensters houden." />
   <String key="wiz: tip hide title bar"     value="De Windows-titelbalk verbergen voor een strakker zwevend toetsenbord." />
   <String key="wiz: tip paste"              value="Één rij per regel, woorden gescheiden door spaties of tabs.&#10;[Enter]  [Backspace]  [Tab]  [Spatie]  [Omhoog]  [Omlaag]  [Links]  [Rechts]  [Esc]  [Del]&#10;&quot;geciteerde zin&quot;  =  één toets met dat label&#10;_  =  lege spacer" />
   <String key="wiz: tip folder"             value="Map waar het nieuwe lay-outbestand wordt opgeslagen." />
   <String key="wiz: paste hint"             value="Één rij per regel · woorden = toetsen · [Enter] [Backspace] [Tab] [Spatie] [Omhoog] [Omlaag] [Links] [Rechts] · &quot;geciteerde zin&quot; · _ = leeg" />
+  <String key="wiz: paste hint 1"           value="Eén rij per regel, één toets per woord." />
+  <String key="wiz: paste hint 2"           value="Speciale toetsen: [Enter] [Backspace] [Tab] [Spatie] [Omhoog] [Omlaag] [Links] [Rechts]" />
+  <String key="wiz: paste hint 3"           value="&quot;geciteerde zin&quot; is één toets; _ is een lege toets." />
   <String key="wiz: Select layout"          value="Selecteer een bestaand lay-outbestand" />
   <String key="wiz: Select theme file"      value="Selecteer een lay-outbestand om het thema van te kopiëren" />
   <String key="wiz: copy info"              value="Toetsen worden gekopieerd van: {0}" />
+  <String key="wiz: preview description"    value="{0} rijen, {1} kolommen; de laatste kolom van de eerste rij bevat de tandwieltoets." />
+  <String key="wiz: p2 sub blank"           value="Kies hoeveel rijen en kolommen het toetsenbord heeft. De laatste kolom komt erbij voor de instellingsknop." />
+  <String key="wiz: p2 sub paste"           value="Eén rij per regel, één toets per woord." />
+  <String key="wiz: p2 sub copy"            value="De toetsen komen uit het gekozen lay-outbestand." />
+  <String key="wiz: Starting point"         value="Beginpunt" />
+  <String key="wiz: Sample keys"            value="Voorbeeldtoetsen" />
+  <String key="wiz: Summary"                value="Samenvatting" />
+  <String key="wiz: Browse"                 value="Bladeren" />
+  <String key="wiz: paste size"             value="{0} rijen, {1} toetsen breed (er komt een instellingskolom bij)" />
+  <String key="wiz: paste nothing"          value="Nog geen toetsen" />
+  <String key="wiz: sum copy"               value="Toetsen: gekopieerd van {0}" />
+  <String key="wiz: sum window"             value="Venster: altijd bovenaan, titelbalk zichtbaar" />
+  <String key="wiz: err bad name"           value="De bestandsnaam bevat een teken dat niet is toegestaan." />
+  <String key="wiz: replace title"          value="Bestand vervangen?" />
+  <String key="wiz: replace text"           value="Er bestaat al een bestand met de naam {0} in deze map. Vervangen?" />
   <String key="wiz: err no copy file"       value="Selecteer een lay-outbestand om van te kopiëren." />
   <String key="wiz: err empty paste"        value="Plak minstens één toets voordat u doorgaat." />
   <String key="wiz: err no theme file"      value="Selecteer een lay-outbestand om het thema van te kopiëren." />

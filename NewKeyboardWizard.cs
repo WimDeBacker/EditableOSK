@@ -86,785 +86,486 @@ namespace OnScreenKeyboard
                 } },
         };
 
-        // ── Page indices ─────────────────────────────────────────────────
+        // ── Pages ────────────────────────────────────────────────────────
         private const int PAGE_START=0, PAGE_GRID=1,
                           PAGE_THEME=2, PAGE_SAVE=3, PAGE_COUNT=4;
 
-        // ── Infrastructure ───────────────────────────────────────────────
-        private readonly List<(Control Ctrl, Func<string> GetText)> _transControls
-            = new List<(Control, Func<string>)>();
+        private const int MaxWidth = 900;
+        /// <summary>Widest a line of text may be on a page (window minus the padding of frame and page), and inside a group.</summary>
+        private const int PageTextWidth = MaxWidth - 4 * Fluent.Pad, GroupTextWidth = PageTextWidth - 36, SummaryTextWidth = GroupTextWidth - 24;
+        protected override int ContentMaxWidth => MaxWidth;
 
-        private int    _currentPage = PAGE_START;
-        private Panel  _pageArea;
-        private Panel  _navBar;
-        private Panel[] _pages;
-        private FluentButton _btnBack, _btnNext, _btnCreate;
-        private Label  _lblStep;
+        private int _currentPage = PAGE_START;
+        private FluentButton _btnCancel, _btnBack, _btnNext, _btnCreate;
+        private Label _lblStep;
 
-        // ── Page 1 ───────────────────────────────────────────────────────
-        private RadioButton _rbBlank, _rbPaste, _rbCopy;
-        private TextBox     _txtCopyFile;
-        private Button      _btnBrowseCopy;
-        private Label       _lblCopyRow;
+        // Page 1: starting point
+        private TouchRadioButton  _rbBlank, _rbPaste, _rbCopy;
+        private TouchTextBox      _txtCopyFile;
+        private FluentButton      _btnBrowseCopy;
+        private Label             _lblCopyRow, _lblCopyErr;
+        private Control           _copyRowInput;
+        private TouchChoiceButton _cmbLanguage;
 
-        // ── Page 2 ───────────────────────────────────────────────────────
-        private NumericUpDown _nudRows, _nudCols;
-        private TextBox       _txtPaste;
-        private Panel         _pnlPreview;
-        private Label         _lblPasteSection, _lblPasteHint, _lblSizeSection, _lblPreviewSection;
-        private Label         _lblCopyInfo;
-        private int _gridRows=4, _gridCols=8;
+        // Page 2: grid and labels (what shows depends on page 1)
+        private TouchStepper      _stpRows, _stpCols;
+        private Label             _lblPasteSize, _lblCopyInfo, _lblPasteErr;
+        private TextBox           _txtPaste;
+        private WizardGridPreview _previewBlank, _previewPaste;
+        private int _gridRows = 4, _gridCols = 8;
 
-        // ── Page 1 (language) / Page 2 (row-col labels) ─────────────────────────────
-        private ComboBox _cmbLanguage;
-        private Label    _lblRows, _lblCols;
+        // Page 3: theme
+        private TouchTile[]      _tiles;
+        private TouchTile        _tileFile;
+        private TouchTextBox     _txtThemeFile;
+        private FluentButton     _btnBrowseTheme;
+        private Label            _lblThemeFile, _lblThemeErr;
+        private Control          _themeFileInput;
+        private SampleStrip      _strip;
+        private int              _selectedPreset = 0;
 
-        // ── Page 4 (now page 3) ───────────────────────────────────────────────────────
-        private FluentButton[] _themeBtns;
-        private FluentButton   _btnFromFile;
-        private Label[]        _themeCheckMarks;   // ✓ indicators
-        private TextBox        _txtThemeFile;
-        private Button         _btnBrowseTheme;
-        private Panel          _pnlFromFile;
-        private Panel          _pnlThemePreview;
-        private int            _selectedPreset = 0;
-
-        // ── Page 5 ───────────────────────────────────────────────────────
-        private TextBox _txtFileName, _txtFolder;
-        private Button  _btnBrowseFolder;
-        private Label   _lblSaveError;
-        private Panel   _pnlSummary;
+        // Page 4: save
+        private TouchTextBox _txtFileName, _txtFolder;
+        private FluentButton _btnBrowseFolder;
+        private Label        _lblSaveError;
+        private Label[]      _sumLines;
 
         // ── Result ───────────────────────────────────────────────────────
         public string CreatedFilePath { get; private set; }
 
         // ── Constructor ──────────────────────────────────────────────────
-        public NewKeyboardWizard() : base(new Size(880, 820))
+        public NewKeyboardWizard()
         {
             Text            = Lang.T("New Keyboard");
-            FormBorderStyle = FormBorderStyle.Sizable;
-            MaximizeBox     = false;
-            MinimumSize     = new Size(720, 580);
+            FormBorderStyle = FormBorderStyle.FixedDialog;
 
             BuildUI();
-            ShowPage(PAGE_START);
+            // Everything is built visible, so the window is measured for the tallest case (copy row, paste box and blank
+            // steppers together); the choice made on page 1 decides what is shown once the window has its size.
+            Load += (s, e) => { ApplyStartMode(); ApplyThemeMode(); RefreshGrid(); ShowPage(PAGE_START); };
         }
 
-        // Skip _navBar so it keeps its intentional dark-navy background.
-        // Also re-positions nav buttons, since the first Resize fires before
-        // the handler is registered (during Controls.Add in the constructor).
         protected override void ApplyTheme()
         {
-            FluentPainter.ApplyDialogTheme(this, _dark, _navBar);
-
-            // ApplyThemeChildren walks every Label and sets ForeColor to the global fg,
-            // which overwrites the accent color on the ✓ checkmarks below each theme tile.
-            // Re-apply the correct accent color here, with HC-mode support.
-            if (_themeCheckMarks != null)
-            {
-                Color ckColor = SystemInformation.HighContrast
-                    ? SystemColors.Highlight
-                    : _dark ? Color.FromArgb(100, 180, 255)   // bright enough on dark panels
-                            : Color.FromArgb(0,  120, 212);   // accent blue on light panels
-                foreach (var lbl in _themeCheckMarks)
-                    if (lbl != null) lbl.ForeColor = ckColor;
-            }
-
-            PositionNavButtons();
+            base.ApplyTheme();
+            // The theme pass makes every label plain text colour; the error lines keep theirs.
+            Color err = _dark ? Fluent.DialogDarkDanger : Fluent.Danger;
+            foreach (var l in new[] { _lblCopyErr, _lblPasteErr, _lblThemeErr, _lblSaveError })
+                if (l != null) l.ForeColor = err;
         }
 
-        private void PositionNavButtons()
-        {
-            int rx = _navBar.ClientSize.Width - 6;
-            if (rx < 100) return;   // handle not yet created
-            _btnCreate.Left = rx - _btnCreate.Width;
-            _btnNext.Left   = rx - _btnNext.Width;
-            _btnBack.Left   = _btnNext.Left - 6 - _btnBack.Width;
-        }
+        // ── Build ────────────────────────────────────────────────────────
 
-        // ── BuildUI ───────────────────────────────────────────────────────
         private void BuildUI()
         {
-            _navBar = new Panel
-            {
-                Dock      = DockStyle.Bottom,
-                Height    = 52,
-                BackColor = _dark ? Color.FromArgb(36,36,52) : Color.FromArgb(220,220,228),
-            };
-            Controls.Add(_navBar);
+            _lblStep = new Label { AutoSize = true, Font = Fluent.FontLabel, UseMnemonic = false, BackColor = Color.Transparent, Margin = new Padding(0, 0, Touch.Gap, 0) };
+            _btnCancel = MakeTouchButton(() => Lang.T("Cancel"));
+            _btnBack   = MakeTouchButton(() => Lang.T("← Back"));
+            _btnNext   = MakeTouchButton(() => Lang.T("Next →"), FluentButton.Variant.Primary);
+            _btnCreate = MakeTouchButton(() => Lang.T("Create"), FluentButton.Variant.Success);
+            BuildFrame(MakeFooter(_lblStep, _btnCancel, _btnBack, _btnNext, _btnCreate), withSections: false);
+            _btnCancel.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
+            _btnBack.Click   += (s, e) => Navigate(-1);
+            _btnNext.Click   += (s, e) => Navigate(+1);
+            _btnCreate.Click += (s, e) => TryCreate();
+            CancelButton = _btnCancel;
+            AcceptButton = _btnNext;
+            EqualiseFooter();
 
-            _lblStep = new Label
-            {
-                Left=12, Top=16, Width=240, Height=22,
-                Font      = Fluent.FontLabel,
-                ForeColor = _dark ? Color.FromArgb(160,160,200) : Color.FromArgb(80,80,100),
-                BackColor = Color.Transparent,
-            };
-            _navBar.Controls.Add(_lblStep);
-
-            _btnCreate = new FluentButton
-            { Text=Lang.T("Create"),  Left=0, Top=8, Width=110, Height=36,
-              Style=FluentButton.Variant.Primary,  TabStop=true, Visible=false };
-            _btnNext = new FluentButton
-            { Text=Lang.T("Next →"),  Left=0, Top=8, Width=110, Height=36,
-              Style=FluentButton.Variant.Primary,  TabStop=true };
-            _btnBack = new FluentButton
-            { Text=Lang.T("← Back"),  Left=0, Top=8, Width=110, Height=36,
-              Style=FluentButton.Variant.Neutral,  TabStop=true };
-            _navBar.Controls.Add(_btnCreate);
-            _navBar.Controls.Add(_btnNext);
-            _navBar.Controls.Add(_btnBack);
-
-            _btnBack.Click   += (s,e) => Navigate(-1);
-            _btnNext.Click   += (s,e) => Navigate(+1);
-            _btnCreate.Click += (s,e) => TryCreate();
-
-            // Reposition nav buttons when form resizes
-            _navBar.Resize += (s,e) => PositionNavButtons();
-
-            _pageArea = new Panel
-            {
-                Dock      = DockStyle.Fill,
-                BackColor = _dark ? Fluent.DarkBg : Fluent.BgPage,
-            };
-            Controls.Add(_pageArea);
-
-            _pages = new Panel[PAGE_COUNT];
-            _pages[PAGE_START]  = BuildPage1();
-            _pages[PAGE_GRID]   = BuildPage2();
-            _pages[PAGE_THEME]  = BuildPage4();
-            _pages[PAGE_SAVE]   = BuildPage5();
-            foreach (var p in _pages) _pageArea.Controls.Add(p);
-
-            AcceptButton = _btnCreate;
+            BuildStartPage(AddSection(() => Lang.T("wiz: p1 title")));
+            BuildGridPages(AddSection(() => Lang.T("wiz: p2 title")), AddSection(() => Lang.T("wiz: p2 title")), AddSection(() => Lang.T("wiz: p2 title")));
+            BuildThemePage(AddSection(() => Lang.T("wiz: p4 title")));
+            BuildSavePage(AddSection(() => Lang.T("wiz: p5 title")));
         }
 
-        // ── Page helpers ──────────────────────────────────────────────────
-
-        private Panel MakePage()
+        /// <summary>The footer buttons side by side get one width, the widest of them (alignment rule D23); re-run when the language changes.</summary>
+        private void EqualiseFooter()
         {
-            return new Panel
+            var all = new[] { _btnCancel, _btnBack, _btnNext, _btnCreate };
+            foreach (var b in all) b.MinimumSize = new Size(120, Touch.Target);
+            int w = 120;
+            foreach (var b in all) w = Math.Max(w, b.GetPreferredSize(Size.Empty).Width);
+            foreach (var b in all) b.MinimumSize = new Size(w, Touch.Target);
+        }
+
+        private Label Hint(Func<string> text, int indent = 0)
+        {
+            var l = new Label
             {
-                Dock        = DockStyle.Fill,
-                AutoScroll  = true,
-                BackColor   = _dark ? Fluent.DarkBg : Fluent.BgPage,
-                Visible     = false,
+                Text = text(), AutoSize = true, UseMnemonic = false, MaximumSize = new Size(indent > 0 ? GroupTextWidth : PageTextWidth, 0),
+                Font = Fluent.FontLabel, ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent,
+                Padding = new Padding(indent, 0, 0, 0), AccessibleName = text(),
+            };
+            _transLabels.Add((l, () => { string s = text(); l.AccessibleName = s; return s; }));
+            return l;
+        }
+
+        private Label ErrorLine()
+        {
+            return new Label
+            {
+                Text = "", AutoSize = true, UseMnemonic = false, MaximumSize = new Size(PageTextWidth, 0),
+                MinimumSize = new Size(0, 24), Font = Fluent.FontLabel, BackColor = Color.Transparent,
+                ForeColor = _dark ? Fluent.DialogDarkDanger : Fluent.Danger, AccessibleRole = AccessibleRole.Alert,
             };
         }
 
-        private void AddPageTitle(Panel pg, Func<string> getTitle, Func<string> getSub)
+        private void PageTitle(TableLayoutPanel t, Func<string> title, Func<string> sub)
         {
-            var lblTitle = new Label
-            {
-                Left=20, Top=18, Width=840, Height=34, AutoSize=false,
-                Font=new Font("Arial",16f,FontStyle.Bold),
-                ForeColor=Fluent.TextPrimary, BackColor=Color.Transparent,
-                Text=getTitle(),
-            };
-            var lblSub = new Label
-            {
-                Left=20, Top=58, Width=840, Height=22, AutoSize=false,
-                Font=Fluent.FontLabel,
-                ForeColor=_dark ? Color.FromArgb(150,150,180) : Color.FromArgb(90,90,110),
-                BackColor=Color.Transparent,
-                Text=getSub(),
-            };
-            _transLabels.Add((lblTitle, getTitle));
-            _transLabels.Add((lblSub,   getSub));
-            pg.Controls.Add(lblTitle);
-            pg.Controls.Add(lblSub);
-            var sep = new Panel { Left=20, Top=88, Width=840, Height=1,
-                BackColor=_dark ? Color.FromArgb(60,60,80) : Color.FromArgb(200,200,210) };
-            pg.Controls.Add(sep);
+            AddWideRow(t, Heading(title));
+            AddWideRow(t, Hint(sub));
         }
 
-        private Label AddSectionLabel(Panel pg, Func<string> getText, int y)
+        /// <summary>A text box with a 44 px browse button to its right; the box fills the row.</summary>
+        private TableLayoutPanel BrowseRow(TouchTextBox box, out FluentButton browse, Action onClick, Func<string> tip)
         {
-            var lbl = new Label
+            var b = new FluentButton
             {
-                Left=28, Top=y, Width=824, Height=20, AutoSize=false,
-                Font=new Font("Arial",9f,FontStyle.Bold),
-                ForeColor=_dark ? Color.FromArgb(100,160,255) : Color.FromArgb(60,60,140),
-                BackColor=Color.Transparent, Text=getText(),
+                Text = "…", Style = FluentButton.Variant.Neutral, TabStop = true, AutoSize = false,
+                Size = new Size(Touch.Target, Touch.Target), MinimumSize = new Size(Touch.Target, Touch.Target),
+                Margin = new Padding(Touch.Gap, 0, 0, 0), AccessibleName = Lang.T("wiz: Browse"),
             };
-            _transLabels.Add((lbl, getText));
-            pg.Controls.Add(lbl);
-            return lbl;
+            b.Click += (s, e) => onClick();
+            SetTip(box, tip); SetTip(b, tip);
+            var row = new TableLayoutPanel { ColumnCount = 2, RowCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink };
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            box.Dock = DockStyle.Fill; box.Margin = Padding.Empty; box.MinimumSize = new Size(Touch.InputMinWidth, Touch.Target);
+            row.Controls.Add(box, 0, 0);
+            row.Controls.Add(b, 1, 0);
+            browse = b;
+            return row;
         }
 
-        private Label AddFieldLabel(Panel pg, Func<string> getText, int x, int y, int w=160)
-        {
-            var lbl = new Label
-            {
-                Left=x, Top=y+5, Width=w, Height=20, AutoSize=false,
-                Font=Fluent.FontLabel,
-                ForeColor=Fluent.TextPrimary, BackColor=Color.Transparent,
-                Text=getText(),
-            };
-            _transLabels.Add((lbl, getText));
-            pg.Controls.Add(lbl);
-            _pendingAccessibleName = Lang.StripMnemonic(getText());
-            return lbl;
-        }
+        // ── Page 1: starting point ───────────────────────────────────────
 
-        private RadioButton MakeRadio(Panel pg, Func<string> getText, Func<string> getTip, int y)
+        private void BuildStartPage(TableLayoutPanel t)
         {
-            var rb = new RadioButton
-            {
-                Left=40, Top=y, Width=800, Height=28,
-                Text=getText(),
-                ForeColor=Fluent.TextPrimary, BackColor=Color.Transparent,
-                Font=Fluent.FontLabel,
-            };
-            _transControls.Add((rb, getText));
-            SetTip(rb, getTip);
-            pg.Controls.Add(rb);
-            return rb;
-        }
+            PageTitle(t, () => Lang.T("wiz: p1 title"), () => Lang.T("wiz: p1 sub"));
 
-        private Button MakeBrowse(Panel pg, int x, int y, Action onClick)
-        {
-            var btn = new Button
-            {
-                Text="…", Left=x, Top=y, Width=30, Height=25,
-                BackColor=_dark ? Color.FromArgb(60,60,80) : Color.FromArgb(200,200,210),
-                ForeColor=Fluent.TextPrimary, FlatStyle=FlatStyle.Flat,
-                TabStop=true, AccessibleName="…",
-            };
-            btn.FlatAppearance.BorderSize=1;
-            btn.Click += (s,e) => onClick();
-            pg.Controls.Add(btn);
-            return btn;
-        }
-
-        private TextBox MakeTextBox(Panel pg, int x, int y, int w, int tabIdx)
-        {
-            var txt = new TextBox
-            {
-                Left=x, Top=y, Width=w, Height=25,
-                BackColor=Fluent.BgInput, ForeColor=Fluent.TextPrimary,
-                BorderStyle=BorderStyle.FixedSingle, Font=Fluent.FontLabel,
-                TabIndex=tabIdx,
-            };
-            if (_pendingAccessibleName != null)
-            { txt.AccessibleName = _pendingAccessibleName; _pendingAccessibleName=null; }
-            pg.Controls.Add(txt);
-            return txt;
-        }
-
-        // ── Page 1 — Starting point ───────────────────────────────────────
-        private Panel BuildPage1()
-        {
-            var pg = MakePage();
-            AddPageTitle(pg, ()=>Lang.T("wiz: p1 title"), ()=>Lang.T("wiz: p1 sub"));
-
-            _rbBlank = MakeRadio(pg, ()=>Lang.T("wiz: Blank grid"),     ()=>Lang.T("wiz: tip Blank grid"),     110);
-            _rbPaste = MakeRadio(pg, ()=>Lang.T("wiz: Paste labels"),   ()=>Lang.T("wiz: tip Paste labels"),   150);
-            _rbCopy  = MakeRadio(pg, ()=>Lang.T("wiz: Copy from file"), ()=>Lang.T("wiz: tip Copy from file"), 190);
+            _rbBlank = NewRadio(() => Lang.T("wiz: Blank grid"));
+            _rbPaste = NewRadio(() => Lang.T("wiz: Paste labels"));
+            _rbCopy  = NewRadio(() => Lang.T("wiz: Copy from file"));
             _rbBlank.Checked = true;
+            var stack = OptionStack(
+                _rbBlank, Hint(() => Lang.T("wiz: tip Blank grid"), 38),
+                _rbPaste, Hint(() => Lang.T("wiz: tip Paste labels"), 38),
+                _rbCopy,  Hint(() => Lang.T("wiz: tip Copy from file"), 38));
+            AddWideRow(t, MakeGroup(() => Lang.T("wiz: Starting point"), stack));
 
-            // Copy file row
-            _lblCopyRow = AddFieldLabel(pg, ()=>Lang.T("wiz: Layout file"), 40, 234);
-            _txtCopyFile = MakeTextBox(pg, 200, 234, 606, 10);
-            _btnBrowseCopy = MakeBrowse(pg, 812, 234, () =>
+            _txtCopyFile = new TouchTextBox();
+            _copyRowInput = BrowseRow(_txtCopyFile, out _btnBrowseCopy, () =>
             {
-                using var dlg = new OpenFileDialog { Title=Lang.T("wiz: Select layout"),
-                    Filter="Keyboard layouts (*.kbl)|*.kbl|All files (*.*)|*.*" };
-                if (dlg.ShowDialog(this)==DialogResult.OK) _txtCopyFile.Text=dlg.FileName;
-            });
-            SetTip(_txtCopyFile,  ()=>Lang.T("tip: Browse layout"));
-            SetTip(_btnBrowseCopy,()=>Lang.T("tip: Browse layout"));
+                using var dlg = new OpenFileDialog { Title = Lang.T("wiz: Select layout"), Filter = "Keyboard layouts (*.kbl)|*.kbl|All files (*.*)|*.*" };
+                if (dlg.ShowDialog(this) == DialogResult.OK) _txtCopyFile.Text = dlg.FileName;
+            }, () => Lang.T("tip: Browse layout"));
+            _lblCopyRow = AddRow(t, () => Lang.T("wiz: Layout file"), _copyRowInput);
+            _lblCopyErr = ErrorLine();
+            AddWideRow(t, _lblCopyErr);
+            _txtCopyFile.TextChanged += (s, e) => _lblCopyErr.Text = "";
 
-            void UpdateCopyRow()
-            {
-                bool v=_rbCopy.Checked;
-                _txtCopyFile.Visible=v; _btnBrowseCopy.Visible=v; _lblCopyRow.Visible=v;
-            }
-            _rbBlank.CheckedChanged+=(s,e)=>UpdateCopyRow();
-            _rbPaste.CheckedChanged+=(s,e)=>UpdateCopyRow();
-            _rbCopy.CheckedChanged +=(s,e)=>UpdateCopyRow();
-            UpdateCopyRow();
+            // The language of the new keyboard's labels and tips (it also decides how pasted words such as "Space" are read).
+            _cmbLanguage = new TouchChoiceButton { RowHeight = 44, AutoSize = false, Size = new Size(280, Touch.Target), MinimumSize = new Size(280, Touch.Target) };
+            _cmbLanguage.SetItems(new[] { new TouchChoice { Text = "English (en)" }, new TouchChoice { Text = "Nederlands (nl)" } }, Lang.CurrentCode == "nl" ? 1 : 0);
+            AddRow(t, () => Lang.T("wiz: Language"), _cmbLanguage, fill: false);
+            SetTip(_cmbLanguage, () => Lang.T("tip: Language"));
 
-            // Language selector — always visible
-            int langY = 282;
-            AddFieldLabel(pg, ()=>Lang.T("wiz: Language"), 40, langY, 120);
-            _cmbLanguage = new ComboBox
-            {
-                Left=170, Top=langY, Width=220, Height=25,
-                DropDownStyle=ComboBoxStyle.DropDownList,
-                BackColor=Fluent.BgInput, ForeColor=Fluent.TextPrimary,
-                Font=Fluent.FontLabel, TabIndex=11,
-                AccessibleName=Lang.StripMnemonic(Lang.T("wiz: Language")),
-            };
-            _cmbLanguage.Items.AddRange(new object[]{"English (en)","Nederlands (nl)"});
-            _cmbLanguage.SelectedIndex = Lang.CurrentCode=="nl" ? 1 : 0;
-            pg.Controls.Add(_cmbLanguage);
-            SetTip(_cmbLanguage, ()=>Lang.T("tip: Language"));
-
-            return pg;
+            _rbBlank.CheckedChanged += (s, e) => ApplyStartMode();
+            _rbPaste.CheckedChanged += (s, e) => ApplyStartMode();
+            _rbCopy.CheckedChanged  += (s, e) => ApplyStartMode();
         }
 
-        // ── Page 2 — Grid & labels ────────────────────────────────────────
-        private Panel BuildPage2()
+        private void ApplyStartMode()
         {
-            var pg = MakePage();
-            AddPageTitle(pg, ()=>Lang.T("wiz: p2 title"), ()=>Lang.T("wiz: p2 sub"));
+            bool copy = _rbCopy.Checked;
+            _lblCopyRow.Visible = _copyRowInput.Visible = _lblCopyErr.Visible = copy;
+            if (!copy) _lblCopyErr.Text = "";
+        }
 
-            // Info label for copy mode
-            _lblCopyInfo = new Label
-            {
-                Left=28, Top=106, Width=824, Height=24,
-                Font=Fluent.FontLabel, ForeColor=Fluent.TextPrimary, BackColor=Color.Transparent,
-                Visible=false,
-            };
-            pg.Controls.Add(_lblCopyInfo);
+        // ── Page 2: grid and labels (three pages, one per start mode) ────
+        // Each start mode has its own page, so the window is as tall as the tallest of them, not the three added together.
 
-            // Paste section
-            _lblPasteSection = AddSectionLabel(pg, ()=>Lang.T("wiz: Key labels"), 106);
+        private void BuildGridPages(TableLayoutPanel blank, TableLayoutPanel paste, TableLayoutPanel copy)
+        {
+            // Blank: the size, with steppers, and the preview.
+            PageTitle(blank, () => Lang.T("wiz: p2 title"), () => Lang.T("wiz: p2 sub blank"));
+            _stpRows = new TouchStepper { Minimum = 1, Maximum = 30, Value = 4 };
+            _stpCols = new TouchStepper { Minimum = 1, Maximum = 60, Value = 8 };
+            AddRow(blank, () => Lang.T("wiz: Rows"),    _stpRows, fill: false);
+            AddRow(blank, () => Lang.T("wiz: Columns"), _stpCols, fill: false);
+            _stpRows.ValueChanged += (s, e) => RefreshGrid();
+            _stpCols.ValueChanged += (s, e) => RefreshGrid();
+            _previewBlank = new WizardGridPreview { Dock = DockStyle.Fill };
+            AddWideRow(blank, MakeGroup(() => Lang.T("wiz: Preview"), _previewBlank));
 
-            _lblPasteHint = new Label
-            {
-                Left=28, Top=128, Width=824, Height=50,
-                Font=Fluent.FontLabel, AutoSize=false,
-                ForeColor=_dark ? Color.FromArgb(130,130,160) : Color.FromArgb(100,100,120),
-                BackColor=Color.Transparent, Text=Lang.T("wiz: paste hint"),
-            };
-            _transLabels.Add((_lblPasteHint, ()=>Lang.T("wiz: paste hint")));
-            pg.Controls.Add(_lblPasteHint);
-
+            // Paste: the hint, the box, the size that follows from it, and the preview with the labels.
+            PageTitle(paste, () => Lang.T("wiz: p2 title"), () => Lang.T("wiz: p2 sub paste"));
+            AddWideRow(paste, Hint(() => Lang.T("wiz: paste hint 2")));
+            AddWideRow(paste, Hint(() => Lang.T("wiz: paste hint 3")));
             _txtPaste = new TextBox
             {
-                Left=28, Top=182, Width=824, Height=220,
-                Multiline=true, ScrollBars=ScrollBars.Vertical,
-                BackColor=Fluent.BgInput, ForeColor=Fluent.TextPrimary,
-                BorderStyle=BorderStyle.FixedSingle, Font=Fluent.FontLabel,
-                AcceptsReturn=true, AcceptsTab=false, TabIndex=0,
-                AccessibleName=Lang.StripMnemonic(Lang.T("wiz: Key labels")),
+                Multiline = true, ScrollBars = ScrollBars.Vertical, AcceptsReturn = true, AcceptsTab = false,
+                BorderStyle = BorderStyle.FixedSingle, Font = Fluent.FontInput, AccessibleName = Lang.StripMnemonic(Lang.T("wiz: Key labels")),
             };
-            pg.Controls.Add(_txtPaste);
-            SetTip(_txtPaste, ()=>Lang.T("wiz: tip paste"));
-            _txtPaste.TextChanged+=(s,e)=>UpdateGridFromPaste();
+            AddWideRow(paste, _txtPaste);
+            _txtPaste.MinimumSize = new Size(Touch.InputMinWidth, 100);
+            _txtPaste.Height = 100;
+            SetTip(_txtPaste, () => Lang.T("wiz: tip paste"));
+            _lblPasteSize = Hint(() => PasteSizeText());
+            AddWideRow(paste, _lblPasteSize);
+            _lblPasteErr = ErrorLine();
+            AddWideRow(paste, _lblPasteErr);
+            _txtPaste.TextChanged += (s, e) => { _lblPasteErr.Text = ""; RefreshGrid(); };
+            _previewPaste = new WizardGridPreview { Dock = DockStyle.Fill };
+            AddWideRow(paste, MakeGroup(() => Lang.T("wiz: Preview"), _previewPaste));
 
-            // Grid size section
-            _lblSizeSection = AddSectionLabel(pg, ()=>Lang.T("wiz: Grid size"), 418);
-
-            _lblRows = AddFieldLabel(pg, ()=>Lang.T("wiz: Rows"),    28, 446, 120);
-            _nudRows = new NumericUpDown
-            {
-                Left=152, Top=446, Width=70, Height=25,
-                Minimum=1, Maximum=30, Value=4,
-                BackColor=Fluent.BgInput, ForeColor=Fluent.TextPrimary,
-                Font=Fluent.FontLabel, TabIndex=1,
-                AccessibleName=Lang.StripMnemonic(Lang.T("wiz: Rows")),
-            };
-            pg.Controls.Add(_nudRows);
-
-            _lblCols = AddFieldLabel(pg, ()=>Lang.T("wiz: Columns"), 252, 446, 130);
-            _nudCols = new NumericUpDown
-            {
-                Left=386, Top=446, Width=70, Height=25,
-                Minimum=1, Maximum=60, Value=8,
-                BackColor=Fluent.BgInput, ForeColor=Fluent.TextPrimary,
-                Font=Fluent.FontLabel, TabIndex=2,
-                AccessibleName=Lang.StripMnemonic(Lang.T("wiz: Columns")),
-            };
-            pg.Controls.Add(_nudCols);
-
-            _nudRows.ValueChanged+=(s,e)=>{ _gridRows=(int)_nudRows.Value; UpdatePreviewSize(); _pnlPreview?.Invalidate(); };
-            _nudCols.ValueChanged+=(s,e)=>{ _gridCols=(int)_nudCols.Value; _pnlPreview?.Invalidate(); };
-
-            // Preview section
-            _lblPreviewSection = AddSectionLabel(pg, ()=>Lang.T("wiz: Preview"), 490);
-            _pnlPreview = new Panel
-            {
-                Left=28, Top=514, Width=824, Height=Math.Max(180, _gridRows*34),
-                BackColor=_dark ? Color.FromArgb(24,24,36) : Color.FromArgb(230,230,238),
-                BorderStyle=BorderStyle.FixedSingle,
-            };
-            _pnlPreview.Paint+=OnPreviewPaint;
-            pg.Controls.Add(_pnlPreview);
-
-            return pg;
+            // Copy: one line.
+            PageTitle(copy, () => Lang.T("wiz: p2 title"), () => Lang.T("wiz: p2 sub copy"));
+            _lblCopyInfo = Hint(() => CopyInfoText());
+            AddWideRow(copy, _lblCopyInfo);
         }
 
-        // ── Page 3 — Theme (was page 4) ──────────────────────────────────
-        private Panel BuildPage4()
+        private string CopyInfoText() =>
+            _txtCopyFile != null && File.Exists(_txtCopyFile.Text)
+                ? string.Format(Lang.T("wiz: copy info"), Path.GetFileName(_txtCopyFile.Text)) : "";
+
+        private string PasteSizeText()
         {
-            var pg = MakePage();
-            AddPageTitle(pg, ()=>Lang.T("wiz: p4 title"), ()=>Lang.T("wiz: p4 sub"));
+            if (_txtPaste == null) return "";
+            var rows = WizardKeyParser.Parse(_txtPaste.Text, IsDutch());
+            if (rows.Count == 0) return Lang.T("wiz: paste nothing");
+            int cols = 0;
+            foreach (var r in rows) cols = Math.Max(cols, r.Count);
+            return string.Format(Lang.T("wiz: paste size"), rows.Count, cols);
+        }
 
-            // Preset tiles: 5 buttons, each 158px wide, 8px gap, starting at x=28
-            const int BW=158, BH=72, BGAP=8;
-            _themeBtns      = new FluentButton[Presets.Length];
-            _themeCheckMarks = new Label[Presets.Length+1];     // +1 for "from file"
+        /// <summary>Redraws the previews and the texts that depend on what was typed; remembers the size the summary reports.</summary>
+        private void RefreshGrid()
+        {
+            if (_previewPaste == null || _previewBlank == null || _lblCopyInfo == null) return;
+            _previewBlank.ShowBlank((int)_stpRows.Value, (int)_stpCols.Value);
+            _previewPaste.ShowParsed(WizardKeyParser.Parse(_txtPaste.Text, IsDutch()));
+            _lblPasteSize.Text = PasteSizeText();
+            _lblCopyInfo.Text  = CopyInfoText();
+            if (_rbPaste.Checked) { _gridRows = _previewPaste.GridRows; _gridCols = _previewPaste.GridCols; }
+            else                  { _gridRows = (int)_stpRows.Value;    _gridCols = (int)_stpCols.Value; }
+        }
 
-            for (int i=0; i<Presets.Length; i++)
+        // ── Page 3: theme ────────────────────────────────────────────────
+
+        private void BuildThemePage(TableLayoutPanel t)
+        {
+            PageTitle(t, () => Lang.T("wiz: p4 title"), () => Lang.T("wiz: p4 sub"));
+
+            var tiles = new TableLayoutPanel { ColumnCount = Presets.Length + 1, RowCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(0, 0, 0, Touch.Gap) };
+            _tiles = new TouchTile[Presets.Length];
+            for (int i = 0; i <= Presets.Length; i++)
             {
-                int bx = 28 + i*(BW+BGAP);
-                var preset=Presets[i];
-                var btn = new FluentButton
+                tiles.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / (Presets.Length + 1)));
+                bool file = i == Presets.Length;
+                var tile = new TouchTile { Dock = DockStyle.Fill, Margin = new Padding(0, 0, i == Presets.Length ? 0 : Touch.Gap, 0) };
+                if (!file)
                 {
-                    Text=Lang.T("wiz: theme "+preset.Id),
-                    Left=bx, Top=108, Width=BW, Height=BH,
-                    Style= i==0 ? FluentButton.Variant.Primary : FluentButton.Variant.Neutral,
-                    TabStop=true, TabIndex=i,
-                };
-                int cap=i;
-                btn.Click+=(s,e)=>SelectPreset(cap);
-                _themeBtns[i]=btn;
-                pg.Controls.Add(btn);
-
-                var chk = new Label
-                {
-                    Left=bx, Top=108+BH+2, Width=BW, Height=20,
-                    TextAlign=ContentAlignment.MiddleCenter,
-                    Font=new Font("Arial",10f,FontStyle.Bold),
-                    ForeColor=Color.FromArgb(0,120,212),
-                    BackColor=Color.Transparent, Text="",
-                };
-                _themeCheckMarks[i]=chk;
-                pg.Controls.Add(chk);
+                    var p = Presets[i];
+                    tile.Text = Lang.T("wiz: theme " + p.Id);
+                    tile.Swatches = new[] { ParseColor(p.KeyColor, Color.Gray), ParseColor(p.ExtraGroups[0].Key, Color.Gray), ParseColor(p.ExtraGroups[2].Key, Color.Gray) };
+                    _tiles[i] = tile;
+                }
+                else { tile.Text = Lang.T("wiz: From file…"); _tileFile = tile; }
+                int idx = file ? -1 : i;
+                tile.CheckedChanged += (s, e) => { if (((TouchTile)s).Checked) SelectPreset(idx); };
+                tile.TabIndex = i;
+                tiles.Controls.Add(tile, i, 0);
             }
+            _tiles[0].Checked = true;
+            AddWideRow(t, tiles);
 
-            // "From file" button (5th tile)
-            int ffx = 28 + Presets.Length*(BW+BGAP);
-            _btnFromFile = new FluentButton
+            _txtThemeFile = new TouchTextBox();
+            _themeFileInput = BrowseRow(_txtThemeFile, out _btnBrowseTheme, () =>
             {
-                Text=Lang.T("wiz: From file…"),
-                Left=ffx, Top=108, Width=BW, Height=BH,
-                Style=FluentButton.Variant.Neutral,
-                TabStop=true, TabIndex=Presets.Length,
-            };
-            _btnFromFile.Click+=(s,e)=>SelectPreset(-1);
-            pg.Controls.Add(_btnFromFile);
+                using var dlg = new OpenFileDialog { Title = Lang.T("wiz: Select theme file"), Filter = "Keyboard layouts (*.kbl)|*.kbl|All files (*.*)|*.*" };
+                if (dlg.ShowDialog(this) == DialogResult.OK) _txtThemeFile.Text = dlg.FileName;
+            }, () => Lang.T("tip: Browse layout"));
+            _lblThemeFile = AddRow(t, () => Lang.T("wiz: Theme file"), _themeFileInput);
+            _lblThemeErr = ErrorLine();
+            AddWideRow(t, _lblThemeErr);
+            // Repaint the sample keys once a theme file is chosen or typed.
+            _txtThemeFile.TextChanged += (s, e) => { _lblThemeErr.Text = ""; _strip?.Invalidate(); };
 
-            var ffChk = new Label
-            {
-                Left=ffx, Top=108+BH+2, Width=BW, Height=20,
-                TextAlign=ContentAlignment.MiddleCenter,
-                Font=new Font("Arial",10f,FontStyle.Bold),
-                ForeColor=Color.FromArgb(0,120,212),
-                BackColor=Color.Transparent, Text="",
-            };
-            _themeCheckMarks[Presets.Length]=ffChk;
-            pg.Controls.Add(ffChk);
-
-            // Show initial checkmark on preset 0
-            _themeCheckMarks[0].Text="✓";
-
-            // From-file picker (hidden by default)
-            _pnlFromFile = new Panel
-            {
-                Left=28, Top=200, Width=824, Height=34,
-                BackColor=Color.Transparent, Visible=false,
-            };
-            var lblTF = new Label
-            {
-                Left=0, Top=6, Width=140, Height=22,
-                Text=Lang.T("wiz: Theme file"),
-                Font=Fluent.FontLabel, ForeColor=Fluent.TextPrimary, BackColor=Color.Transparent,
-            };
-            _transLabels.Add((lblTF, ()=>Lang.T("wiz: Theme file")));
-            _txtThemeFile = new TextBox
-            {
-                Left=144, Top=2, Width=616, Height=25,
-                BackColor=Fluent.BgInput, ForeColor=Fluent.TextPrimary,
-                BorderStyle=BorderStyle.FixedSingle, Font=Fluent.FontLabel,
-                TabIndex=20, AccessibleName=Lang.StripMnemonic(Lang.T("wiz: Theme file")),
-            };
-            _btnBrowseTheme = new Button
-            {
-                Text="…", Left=766, Top=2, Width=30, Height=25,
-                BackColor=_dark ? Color.FromArgb(60,60,80) : Color.FromArgb(200,200,210),
-                ForeColor=Fluent.TextPrimary, FlatStyle=FlatStyle.Flat,
-                TabIndex=21, TabStop=true,
-            };
-            _btnBrowseTheme.FlatAppearance.BorderSize=1;
-            _pnlFromFile.Controls.Add(lblTF);
-            _pnlFromFile.Controls.Add(_txtThemeFile);
-            _pnlFromFile.Controls.Add(_btnBrowseTheme);
-            pg.Controls.Add(_pnlFromFile);
-
-            _btnBrowseTheme.Click+=(s,e)=>
-            {
-                using var dlg=new OpenFileDialog { Title=Lang.T("wiz: Select theme file"),
-                    Filter="Keyboard layouts (*.kbl)|*.kbl|All files (*.*)|*.*" };
-                if (dlg.ShowDialog(this)==DialogResult.OK) _txtThemeFile.Text=dlg.FileName;
-            };
-            // Repaint the example swatches once a theme file is actually chosen/typed —
-            // SelectPreset() only invalidates once, when "From file" is first clicked,
-            // while the path is still empty.
-            _txtThemeFile.TextChanged+=(s,e)=>_pnlThemePreview?.Invalidate();
-
-            // Theme preview strip
-            _pnlThemePreview = new Panel
-            {
-                Left=28, Top=378, Width=824, Height=190,
-                BorderStyle=BorderStyle.FixedSingle,
-            };
-            _pnlThemePreview.Paint+=OnThemePreviewPaint;
-            pg.Controls.Add(_pnlThemePreview);
-
-            return pg;
+            _strip = new SampleStrip(this) { Dock = DockStyle.Fill, Height = 100, MinimumSize = new Size(0, 100) };
+            AddWideRow(t, MakeGroup(() => Lang.T("wiz: Sample keys"), _strip));
         }
 
-        // ── Page 5 — Save ─────────────────────────────────────────────────
-        private Panel BuildPage5()
+        private void SelectPreset(int idx)
         {
-            var pg=MakePage();
-            AddPageTitle(pg, ()=>Lang.T("wiz: p5 title"), ()=>Lang.T("wiz: p5 sub"));
-            int ti=0;
-
-            AddFieldLabel(pg, ()=>Lang.T("wiz: File name"), 40, 116, 150);
-            _txtFileName = MakeTextBox(pg, 200, 116, 580, ti++);
-            _txtFileName.Text=Lang.T("wiz: default filename");
-
-            AddFieldLabel(pg, ()=>Lang.T("wiz: Folder"), 40, 158, 150);
-            _txtFolder = MakeTextBox(pg, 200, 158, 546, ti++);
-            _txtFolder.Text=DefaultFolder();
-            _btnBrowseFolder = MakeBrowse(pg, 752, 158, () =>
-            {
-                using var dlg=new FolderBrowserDialog { SelectedPath=_txtFolder.Text };
-                if (dlg.ShowDialog(this)==DialogResult.OK) _txtFolder.Text=dlg.SelectedPath;
-            });
-            SetTip(_txtFolder,      ()=>Lang.T("wiz: tip folder"));
-            SetTip(_btnBrowseFolder,()=>Lang.T("wiz: tip folder"));
-
-            _lblSaveError = new Label
-            {
-                Left=40, Top=204, Width=800, Height=22,
-                Font=Fluent.FontLabel,
-                ForeColor=Color.FromArgb(220,80,80), BackColor=Color.Transparent, Text="",
-            };
-            pg.Controls.Add(_lblSaveError);
-
-            _pnlSummary = new Panel
-            {
-                Left=40, Top=238, Width=800, Height=200,
-                BackColor=_dark ? Color.FromArgb(32,32,48) : Color.FromArgb(238,238,246),
-                BorderStyle=BorderStyle.FixedSingle,
-            };
-            _pnlSummary.Paint+=OnSummaryPaint;
-            pg.Controls.Add(_pnlSummary);
-
-            return pg;
+            _selectedPreset = idx;
+            ApplyThemeMode();
+            _strip?.Invalidate();
         }
 
-        // ── Navigation ────────────────────────────────────────────────────
-        private void ShowPage(int index)
+        private void ApplyThemeMode()
         {
-            _currentPage=index;
-            for (int i=0; i<_pages.Length; i++) _pages[i].Visible=(i==index);
+            if (_lblThemeFile == null || _lblThemeErr == null) return;     // still building the page
+            bool file = _selectedPreset == -1;
+            _lblThemeFile.Visible = _themeFileInput.Visible = _lblThemeErr.Visible = file;
+            if (!file) _lblThemeErr.Text = "";
+        }
 
-            _btnBack.Visible   = index>0;
-            _btnNext.Visible   = index<PAGE_COUNT-1;
-            _btnCreate.Visible = index==PAGE_COUNT-1;
-
-            if (index==PAGE_GRID)   RefreshPage2Visibility();
-            if (index==PAGE_SAVE)   { _pnlSummary?.Invalidate(); _lblSaveError.Text=""; }
-
-            _lblStep.Text=string.Format(Lang.T("wiz: Step {0} of {1}"), index+1, PAGE_COUNT);
-
-            switch (index)
+        /// <summary>The ten sample keys, one per group, in the colours of the chosen theme.</summary>
+        private sealed class SampleStrip : Panel
+        {
+            private readonly NewKeyboardWizard _w;
+            public SampleStrip(NewKeyboardWizard w)
             {
-                case PAGE_START:  _cmbLanguage?.Focus(); break;
-                case PAGE_GRID:   (_rbPaste.Checked ? (Control)_txtPaste : _nudRows).Focus(); break;
-                case PAGE_THEME:  _themeBtns[0].Focus(); break;
-                case PAGE_SAVE:   _txtFileName.Focus(); break;
+                _w = w; DoubleBuffered = true;
+                AccessibleRole = AccessibleRole.Graphic;
             }
+            protected override void OnPaint(PaintEventArgs e) { base.OnPaint(e); _w.PaintSamples(e.Graphics, ClientSize); }
+        }
+
+        private static readonly (string Label, string Group)[] SampleKeys =
+        {
+            ("a", "Klinkers"), ("e", "Klinkers"), ("b", "Medeklinkers"), ("n", "Medeklinkers"), ("1", "Cijfers"),
+            ("↵", "Besturing"), ("⌫", "Besturing"), (".", "Leestekens"), ("abc", "Woord"), ("⚙", null),
+        };
+
+        private void PaintSamples(Graphics g, Size size)
+        {
+            Color bg = GetPreviewBgColor(), borC = GetPreviewBorderColor();
+            int borT = GetPreviewBorderThick();
+            g.Clear(bg);
+            if (_strip != null) _strip.AccessibleName = Lang.T("wiz: Sample keys") + ": " + ThemeDisplayName();
+
+            int n = SampleKeys.Length, gap = 4, kh = Math.Min(56, size.Height - 16);
+            int kw = Math.Max(34, Math.Min(72, (size.Width - 16 - (n - 1) * gap) / n));
+            int totalW = n * kw + (n - 1) * gap;
+            int ox = Math.Max(4, (size.Width - totalW) / 2), oy = (size.Height - kh) / 2;
+            using var borPen = borT > 0 ? new Pen(borC, borT) : null;
+            for (int i = 0; i < n; i++)
+            {
+                var r = new Rectangle(ox + i * (kw + gap), oy, kw, kh);
+                using (var b = new SolidBrush(GetGroupKeyColor(SampleKeys[i].Group))) g.FillRectangle(b, r);
+                // The border lies inside the key, the same width on all four sides (a pen on the edge put the right and
+                // bottom lines one pixel outside the fill).
+                if (borPen != null) g.DrawRectangle(borPen, r.X + borT / 2f, r.Y + borT / 2f, r.Width - borT, r.Height - borT);
+                TextRenderer.DrawText(g, SampleKeys[i].Label, Fluent.FontLabel, r, GetGroupFontColor(SampleKeys[i].Group),
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
+            }
+        }
+
+        // ── Page 4: save ─────────────────────────────────────────────────
+
+        private void BuildSavePage(TableLayoutPanel t)
+        {
+            PageTitle(t, () => Lang.T("wiz: p5 title"), () => Lang.T("wiz: p5 sub"));
+
+            _txtFileName = new TouchTextBox { Text = Lang.T("wiz: default filename") };
+            AddRow(t, () => Lang.T("wiz: File name"), _txtFileName);
+            _txtFolder = new TouchTextBox { Text = DefaultFolder() };
+            var folderRow = BrowseRow(_txtFolder, out _btnBrowseFolder, () =>
+            {
+                using var dlg = new FolderBrowserDialog { SelectedPath = _txtFolder.Text };
+                if (dlg.ShowDialog(this) == DialogResult.OK) _txtFolder.Text = dlg.SelectedPath;
+            }, () => Lang.T("wiz: tip folder"));
+            AddRow(t, () => Lang.T("wiz: Folder"), folderRow);
+            _lblSaveError = ErrorLine();
+            AddWideRow(t, _lblSaveError);
+            _txtFileName.TextChanged += (s, e) => _lblSaveError.Text = "";
+            _txtFolder.TextChanged   += (s, e) => _lblSaveError.Text = "";
+
+            _sumLines = new Label[4];
+            var sum = new TableLayoutPanel { ColumnCount = 1, RowCount = _sumLines.Length, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink };
+            sum.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            for (int i = 0; i < _sumLines.Length; i++)
+            {
+                _sumLines[i] = new Label { AutoSize = true, UseMnemonic = false, Font = Fluent.FontLabel, BackColor = Color.Transparent,
+                    MaximumSize = new Size(SummaryTextWidth, 0), Margin = new Padding(0, 4, 0, 4) };
+                sum.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                sum.Controls.Add(_sumLines[i], 0, i);
+            }
+            AddWideRow(t, MakeGroup(() => Lang.T("wiz: Summary"), sum));
+            UpdateSummary();
+        }
+
+        private void UpdateSummary()
+        {
+            if (_sumLines == null) return;
+            _sumLines[0].Text = _rbCopy.Checked
+                ? string.Format(Lang.T("wiz: sum copy"), Path.GetFileName(_txtCopyFile.Text))
+                : string.Format(Lang.T("wiz: sum rows cols"), _gridRows, _gridCols + 1);
+            _sumLines[1].Text = string.Format(Lang.T("wiz: sum theme"),    ThemeDisplayName());
+            _sumLines[2].Text = string.Format(Lang.T("wiz: sum language"), LanguageCode());
+            _sumLines[3].Text = Lang.T("wiz: sum window");
+        }
+
+        // ── Navigation ───────────────────────────────────────────────────
+
+        // Host sections: 0 start, 1 grid (blank), 2 grid (paste), 3 grid (copy), 4 theme, 5 save. The wizard has four pages;
+        // page 2 is one of the three grid sections, whichever start mode page 1 chose.
+        private const int SEC_GRID_BLANK = 1, SEC_THEME = 4, SEC_SAVE = 5;
+
+        private int SectionOfPage(int page) =>
+            page == PAGE_GRID ? SEC_GRID_BLANK + (_rbPaste.Checked ? 1 : _rbCopy.Checked ? 2 : 0)
+            : page == PAGE_THEME ? SEC_THEME : page == PAGE_SAVE ? SEC_SAVE : 0;
+
+        private static int PageOfSection(int section) => section == 0 ? PAGE_START : section < SEC_THEME ? PAGE_GRID : section == SEC_THEME ? PAGE_THEME : PAGE_SAVE;
+
+        /// <summary>Index of the host section on show.</summary>
+        internal int CurrentSection { get; private set; }
+
+        internal override void ShowSectionForGuard(int index) => ShowSection(index);
+
+        private void ShowPage(int index) => ShowSection(SectionOfPage(index));
+
+        private void ShowSection(int section)
+        {
+            int index = PageOfSection(section);
+            _currentPage = index;
+            CurrentSection = section;
+            ShowHostSection(section);
+            _btnBack.Visible   = index > 0;
+            _btnNext.Visible   = index < PAGE_COUNT - 1;
+            _btnCreate.Visible = index == PAGE_COUNT - 1;
+            AcceptButton = index == PAGE_COUNT - 1 ? _btnCreate : _btnNext;
+            _lblStep.Text = string.Format(Lang.T("wiz: Step {0} of {1}"), index + 1, PAGE_COUNT);
+
+            if (index == PAGE_GRID) RefreshGrid();
+            if (index == PAGE_SAVE) { _lblSaveError.Text = ""; UpdateSummary(); }
+
+            Control focus = index switch
+            {
+                PAGE_START => _rbCopy.Checked ? _rbCopy : _rbPaste.Checked ? _rbPaste : _rbBlank,
+                PAGE_GRID  => section == SEC_GRID_BLANK + 1 ? _txtPaste : section == SEC_GRID_BLANK + 2 ? _btnNext : (Control)_stpRows,
+                PAGE_THEME => _selectedPreset == -1 ? _tileFile : _tiles[Math.Max(0, _selectedPreset)],
+                _          => _txtFileName,
+            };
+            if (IsHandleCreated) focus.Focus();
         }
 
         private void Navigate(int delta)
         {
-            int next=_currentPage+delta;
-            if (next<0||next>=PAGE_COUNT) return;
-            if (delta>0 && !ValidatePage(_currentPage)) return;
+            int next = _currentPage + delta;
+            if (next < 0 || next >= PAGE_COUNT) return;
+            if (delta > 0 && !ValidatePage(_currentPage)) return;
             ShowPage(next);
         }
 
+        /// <summary>Checks the page the user is leaving; the reason appears under the field, which gets the focus.</summary>
         private bool ValidatePage(int page)
         {
-            if (page==PAGE_START && _rbCopy.Checked &&
+            if (page == PAGE_START && _rbCopy.Checked &&
                 (string.IsNullOrWhiteSpace(_txtCopyFile.Text) || !File.Exists(_txtCopyFile.Text)))
-            { MessageBox.Show(Lang.T("wiz: err no copy file"),"",MessageBoxButtons.OK,MessageBoxIcon.Warning);
-              _txtCopyFile.Focus(); return false; }
+            { _lblCopyErr.Text = Lang.T("wiz: err no copy file"); _txtCopyFile.Focus(); return false; }
 
-            if (page==PAGE_GRID && _rbPaste.Checked &&
-                WizardKeyParser.Parse(_txtPaste.Text, IsDutch()).Count==0)
-            { MessageBox.Show(Lang.T("wiz: err empty paste"),"",MessageBoxButtons.OK,MessageBoxIcon.Warning);
-              _txtPaste.Focus(); return false; }
+            if (page == PAGE_GRID && _rbPaste.Checked &&
+                WizardKeyParser.Parse(_txtPaste.Text, IsDutch()).Count == 0)
+            { _lblPasteErr.Text = Lang.T("wiz: err empty paste"); _txtPaste.Focus(); return false; }
 
-            if (page==PAGE_THEME && _selectedPreset==-1 && string.IsNullOrWhiteSpace(_txtThemeFile.Text))
-            { MessageBox.Show(Lang.T("wiz: err no theme file"),"",MessageBoxButtons.OK,MessageBoxIcon.Warning);
-              _txtThemeFile.Focus(); return false; }
+            if (page == PAGE_THEME && _selectedPreset == -1 &&
+                (string.IsNullOrWhiteSpace(_txtThemeFile.Text) || !File.Exists(_txtThemeFile.Text)))
+            { _lblThemeErr.Text = Lang.T("wiz: err no theme file"); _txtThemeFile.Focus(); return false; }
 
             return true;
-        }
-
-        // ── Page 2 helpers ────────────────────────────────────────────────
-        private void RefreshPage2Visibility()
-        {
-            bool isPaste=_rbPaste.Checked, isCopy=_rbCopy.Checked;
-
-            _lblCopyInfo.Visible     = isCopy;
-            if (isCopy && File.Exists(_txtCopyFile.Text))
-            {
-                _lblCopyInfo.Text = string.Format(Lang.T("wiz: copy info"), Path.GetFileName(_txtCopyFile.Text));
-            }
-
-            _lblPasteSection.Visible = isPaste;
-            _lblPasteHint.Visible    = isPaste;
-            _txtPaste.Visible        = isPaste;
-            _lblSizeSection.Visible  = !isCopy;
-            _lblRows.Visible         = !isCopy;
-            _nudRows.Visible         = !isCopy;
-            _lblCols.Visible         = !isCopy;
-            _nudCols.Visible         = !isCopy;
-            _lblPreviewSection.Visible = !isCopy;
-            _pnlPreview.Visible      = !isCopy;
-        }
-
-        private void UpdateGridFromPaste()
-        {
-            if (!_rbPaste.Checked) return;
-            var rows=WizardKeyParser.Parse(_txtPaste.Text, IsDutch());
-            if (rows.Count==0) { _pnlPreview?.Invalidate(); return; }
-            int maxCols=0;
-            foreach (var r in rows) if (r.Count>maxCols) maxCols=r.Count;
-            _gridRows=rows.Count; _gridCols=maxCols;
-
-            _nudRows.ValueChanged-=NudChanged; _nudCols.ValueChanged-=NudChanged;
-            _nudRows.Value=Math.Max(1,Math.Min(_nudRows.Maximum,_gridRows));
-            _nudCols.Value=Math.Max(1,Math.Min(_nudCols.Maximum,_gridCols));
-            _nudRows.ValueChanged+=NudChanged; _nudCols.ValueChanged+=NudChanged;
-
-            UpdatePreviewSize();
-            _pnlPreview?.Invalidate();
-        }
-
-        private void NudChanged(object s, EventArgs e)
-        { _gridRows=(int)_nudRows.Value; _gridCols=(int)_nudCols.Value; UpdatePreviewSize(); _pnlPreview?.Invalidate(); }
-
-        private void UpdatePreviewSize()
-        {
-            if (_pnlPreview == null) return;
-            _pnlPreview.Height = Math.Max(180, _gridRows * 34);
-        }
-
-        // ── Page 4 helpers ────────────────────────────────────────────────
-        private void SelectPreset(int idx)
-        {
-            _selectedPreset=idx;
-
-            for (int i=0; i<_themeBtns.Length; i++)
-            {
-                _themeBtns[i].Style = (i==idx) ? FluentButton.Variant.Primary : FluentButton.Variant.Neutral;
-                _themeCheckMarks[i].Text = (i==idx) ? "✓" : "";
-                _themeBtns[i].Invalidate();
-            }
-            bool isFile=(idx==-1);
-            _btnFromFile.Style = isFile ? FluentButton.Variant.Primary : FluentButton.Variant.Neutral;
-            _themeCheckMarks[Presets.Length].Text = isFile ? "✓" : "";
-            _btnFromFile.Invalidate();
-
-            _pnlFromFile.Visible   = isFile;
-            _pnlThemePreview?.Invalidate();
-        }
-
-        // ── Paint handlers ────────────────────────────────────────────────
-        private void OnPreviewPaint(object sender, PaintEventArgs e)
-        {
-            var g=(Graphics)e.Graphics;
-            var pnl=(Panel)sender;
-            int rows=_gridRows, cols=_gridCols+1; // +1 for gear col
-            if (rows<1||cols<1) return;
-
-            float cw=(float)(pnl.Width-2)/cols;
-            float rh=(float)(pnl.Height-2)/rows;
-
-            Color keyClr=GetPreviewKeyColor();
-            Color fntClr=GetPreviewFontColor();
-            Color gearClr=_dark ? Color.FromArgb(80,80,100) : Color.FromArgb(180,180,200);
-
-            bool isPaste=_rbPaste.Checked;
-            List<List<WizardKeyParser.KeySpec>> parsed=null;
-            if (isPaste) parsed=WizardKeyParser.Parse(_txtPaste.Text, IsDutch());
-
-            using var keyBrush  = new SolidBrush(keyClr);
-            using var gearBrush = new SolidBrush(gearClr);
-            using var fntBrush  = new SolidBrush(fntClr);
-            using var borPen    = new Pen(_dark ? Color.FromArgb(60,60,80) : Color.FromArgb(180,180,200));
-            using var fnt       = new Font("Arial", Math.Max(5f,Math.Min(10f,rh*0.38f)));
-            var sf = new StringFormat
-            { Alignment=StringAlignment.Center, LineAlignment=StringAlignment.Center,
-              Trimming=StringTrimming.EllipsisCharacter };
-
-            for (int r=0; r<rows; r++)
-            {
-                for (int c=0; c<cols; c++)
-                {
-                    bool isGear=(r==0 && c==cols-1);
-                    var rect=new RectangleF(1+c*cw, 1+r*rh, cw-1, rh-1);
-                    g.FillRectangle(isGear ? gearBrush : keyBrush, rect);
-                    g.DrawRectangle(borPen, rect.X, rect.Y, rect.Width, rect.Height);
-
-                    if (isGear)
-                        g.DrawString("⚙", fnt, fntBrush, rect, sf);
-                    else if (isPaste && parsed!=null && r<parsed.Count && c<parsed[r].Count)
-                    {
-                        var spec=parsed[r][c];
-                        if (!spec.IsBlank && spec.Label.Length>0)
-                            g.DrawString(spec.Label, fnt, fntBrush, rect, sf);
-                    }
-                }
-            }
-        }
-
-        private void OnThemePreviewPaint(object sender, PaintEventArgs e)
-        {
-            var g=e.Graphics;
-            var pnl=(Panel)sender;
-            Color bg=GetPreviewBgColor(), borC=GetPreviewBorderColor();
-            int borT=GetPreviewBorderThick();
-            g.Clear(bg);
-
-            // One representative key per group so the user sees the full colour palette.
-            var samples = new (string Label, string Group)[]
-            {
-                ("a",   "Klinkers"),
-                ("e",   "Klinkers"),
-                ("b",   "Medeklinkers"),
-                ("n",   "Medeklinkers"),
-                ("1",   "Cijfers"),
-                ("↵",   "Besturing"),
-                ("⌫",   "Besturing"),
-                (".",   "Leestekens"),
-                ("abc", "Woord"),
-                ("⚙",   null),        // standard group / gear
-            };
-
-            int n=samples.Length, kw=72, kh=54, gap=4;
-            int totalW=n*kw+(n-1)*gap;
-            int ox=Math.Max(4,(pnl.Width-totalW)/2);
-            int oy=(pnl.Height-kh)/2;
-
-            using var borPen=(borT>0) ? new Pen(borC,borT) : null;
-            using var fnt=new Font("Arial",9f);
-            var sf=new StringFormat{Alignment=StringAlignment.Center,LineAlignment=StringAlignment.Center};
-
-            for (int i=0; i<n && ox+i*(kw+gap)+kw<=pnl.Width-4; i++)
-            {
-                Color keyC = GetGroupKeyColor(samples[i].Group);
-                Color fntC = GetGroupFontColor(samples[i].Group);
-                var r=new Rectangle(ox+i*(kw+gap),oy,kw,kh);
-                using var keyBrush=new SolidBrush(keyC);
-                using var fntBrush=new SolidBrush(fntC);
-                g.FillRectangle(keyBrush,r);
-                // The border lies inside the key, the same width on all four sides (a pen on the edge itself put the
-                // right and bottom lines one pixel outside the fill).
-                if (borPen!=null) g.DrawRectangle(borPen, r.X + borT/2f, r.Y + borT/2f, r.Width - borT, r.Height - borT);
-                g.DrawString(samples[i].Label,fnt,fntBrush,r,sf);
-            }
         }
 
         private Color GetGroupKeyColor(string groupName)
@@ -895,21 +596,6 @@ namespace OnScreenKeyboard
             return Color.White;
         }
 
-        private void OnSummaryPaint(object sender, PaintEventArgs e)
-        {
-            var g=e.Graphics; var pnl=(Panel)sender;
-            g.Clear(pnl.BackColor);
-            var lines=new[]
-            {
-                string.Format(Lang.T("wiz: sum rows cols"), _gridRows, _gridCols+1),
-                string.Format(Lang.T("wiz: sum theme"),     ThemeDisplayName()),
-                string.Format(Lang.T("wiz: sum language"),  LanguageCode()),
-                string.Format(Lang.T("wiz: sum always on top"), Lang.T("Yes")),
-            };
-            var fnt=Fluent.FontLabel;
-            using var br=new SolidBrush(_dark ? Color.FromArgb(230,230,230) : Fluent.TextPrimary);
-            for (int i=0; i<lines.Length; i++) g.DrawString(lines[i],fnt,br,14,12+i*28);
-        }
 
         // ── Theme preview helpers ─────────────────────────────────────────
         private Color GetPreviewBgColor()
@@ -992,6 +678,13 @@ namespace OnScreenKeyboard
         }
 
         // ── Create ────────────────────────────────────────────────────────
+
+        /// <summary>Asks whether an existing file may be replaced (a seam so the tests do not open a dialog). "No" is the default.</summary>
+        internal Func<string,bool> ConfirmReplace;
+
+        private bool AskReplace(string fileName) =>
+            (ConfirmReplace ?? (n => TouchMessage.Confirm(this, Lang.T("wiz: replace title"), string.Format(Lang.T("wiz: replace text"), n))))(fileName);
+
         private void TryCreate()
         {
             _lblSaveError.Text="";
@@ -1002,8 +695,13 @@ namespace OnScreenKeyboard
             if (!Directory.Exists(folder))
             { _lblSaveError.Text=Lang.T("wiz: err bad folder"); _txtFolder.Focus(); return; }
 
+            if (name.IndexOfAny(Path.GetInvalidFileNameChars())>=0)
+            { _lblSaveError.Text=Lang.T("wiz: err bad name"); _txtFileName.Focus(); return; }
+
             if (!name.EndsWith(".kbl",StringComparison.OrdinalIgnoreCase)) name+=".kbl";
             string path=Path.Combine(folder,name);
+            if (File.Exists(path) && !AskReplace(name))
+            { _txtFileName.Focus(); _txtFileName.SelectAll(); return; }
             try
             {
                 var (layout,theme,window,meta)=BuildLayoutData();
@@ -1032,7 +730,7 @@ namespace OnScreenKeyboard
             }
             else
             {
-                layout=BuildBlankGrid((int)_nudRows.Value, (int)_nudCols.Value+1);
+                layout=BuildBlankGrid((int)_stpRows.Value, (int)_stpCols.Value+1);
             }
 
             var theme=new VisualTheme { FontName="Arial", FontSize=0 };
@@ -1250,14 +948,16 @@ namespace OnScreenKeyboard
         protected override void OnLanguageChanged()
         {
             base.OnLanguageChanged();
-            foreach (var (ctrl,getText) in _transControls) ctrl.Text=getText();
             Text=Lang.T("New Keyboard");
-            _btnNext.Text=Lang.T("Next →"); _btnBack.Text=Lang.T("← Back"); _btnCreate.Text=Lang.T("Create");
             _lblStep.Text=string.Format(Lang.T("wiz: Step {0} of {1}"),_currentPage+1,PAGE_COUNT);
-            // Refresh theme button labels (selected one keeps ✓ prefix)
-            for (int i=0;i<_themeBtns.Length;i++)
-                _themeBtns[i].Text=Lang.T("wiz: theme "+Presets[i].Id);
-            _btnFromFile.Text=Lang.T("wiz: From file…");
+            for (int i=0;i<_tiles.Length;i++) _tiles[i].Text=Lang.T("wiz: theme "+Presets[i].Id);
+            _tileFile.Text=Lang.T("wiz: From file…");
+            foreach (var b in new[]{ _btnBrowseCopy, _btnBrowseTheme, _btnBrowseFolder }) b.AccessibleName=Lang.T("wiz: Browse");
+            _txtPaste.AccessibleName=Lang.StripMnemonic(Lang.T("wiz: Key labels"));
+            RefreshGrid();
+            UpdateSummary();
+            EqualiseFooter();
+            _strip?.Invalidate();
         }
     }
 

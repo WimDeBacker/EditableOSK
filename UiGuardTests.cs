@@ -58,7 +58,7 @@ namespace OnScreenKeyboard
             {
                 if (visibleOnly && !c.Visible) continue;
                 if (!(c is Label || c is ButtonBase) || string.IsNullOrWhiteSpace(c.Text)) continue;
-                bool wraps = c is Label;
+                bool wraps = c is Label || c is TouchTile;     // a tile name may take two lines
                 var flags = TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding | (wraps ? TextFormatFlags.WordBreak : TextFormatFlags.SingleLine);
                 string text = Lang.StripMnemonic(c.Text);
                 var avail = new Size(Math.Max(1, c.ClientSize.Width - c.Padding.Horizontal), wraps ? int.MaxValue : c.ClientSize.Height);
@@ -419,10 +419,10 @@ namespace OnScreenKeyboard
                         Assert(need <= 728, $"{tag}: needs {need}px, fits a 1366x768 screen (728px usable)");
 
                         var bar = d.SectionBarAccess;
-                        int sections = bar?.Count ?? 1;
+                        int sections = bar?.Count ?? Math.Max(1, d.HostSectionCount);
                         for (int i = 0; i < sections; i++)
                         {
-                            bar?.Select(i, focus: false);
+                            d.ShowSectionForGuard(i);
                             Application.DoEvents();
                             d.PerformLayout();
                             var t = UiGuard.TargetViolations(d, visibleOnly: true);

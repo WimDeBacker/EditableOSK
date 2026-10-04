@@ -199,6 +199,7 @@ namespace OnScreenKeyboard
                     SaveKeyEditor(outDir, tag);
                     SaveGroupEditor(outDir, tag);
                     SaveKeyboardEditor(outDir, tag);
+                    SaveWizard(outDir, tag);
                 }
             }
             finally { Lang.PseudoExpansion = 0; Lang.Load("en"); }
@@ -404,6 +405,33 @@ namespace OnScreenKeyboard
             finally { ToolbarButton.IsLightTheme = wasLight; }
         }
 
+        /// <summary>Every page of the New Keyboard Wizard in both themes, with pasted labels so the preview and the summary show real content.</summary>
+        private static void SaveWizard(string outDir, string tag)
+        {
+            bool wasLight = ToolbarButton.IsLightTheme;
+            try
+            {
+                foreach (bool light in new[] { true, false })
+                {
+                    ToolbarButton.IsLightTheme = light;
+                    string theme = light ? "light" : "dark";
+                    using var w = new NewKeyboardWizard();
+                    var t = typeof(NewKeyboardWizard);
+                    ((RadioButton)t.GetField("_rbPaste", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).GetValue(w)).Checked = true;
+                    ((TextBox)t.GetField("_txtPaste", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).GetValue(w)).Text =
+                        "q w e r t y u i o p\r\na s d f g h j k l\r\nz x c v b n m [Backspace]\r\n[Space] \"good morning\"";
+                    Show(w);
+                    for (int i = 0; i < w.HostSectionCount; i++)
+                    {
+                        w.ShowSectionForGuard(i);
+                        Application.DoEvents();
+                        w.PerformLayout();
+                        Save(w, Path.Combine(outDir, $"wizard_{i + 1}_{theme}_{tag}.png"));
+                    }
+                }
+            }
+            finally { ToolbarButton.IsLightTheme = wasLight; }
+        }
         /// <summary>Option E in both themes: both sections, plus the Group, Font and colour flyouts open.</summary>
         private static void SaveMockupE(string outDir, string tag)
         {
