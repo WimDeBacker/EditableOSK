@@ -51,6 +51,17 @@ namespace OnScreenKeyboard
 
         /// <summary>Font of the "-" and "+" glyphs on a stepper button.</summary>
         internal static readonly Font StepperFont = new Font(Fluent.FontLabel.FontFamily, 16f, FontStyle.Bold);
+
+        /// <summary>
+        /// How a control draws an "&amp;" in its text: the accelerator letter is underlined while Alt is held or "always show
+        /// keyboard shortcuts" is on (<paramref name="showCues"/>), otherwise the "&amp;" is simply not drawn. Never printed.
+        /// </summary>
+        public static TextFormatFlags PrefixFlag(bool showCues) => showCues ? TextFormatFlags.Default : TextFormatFlags.HidePrefix;
+
+        /// <summary>Width of <paramref name="text"/> on one line as it is drawn (an "&amp;" accelerator marker takes no room).</summary>
+        public static int TextWidth(string text, Font font) =>
+            string.IsNullOrEmpty(text) ? 0
+            : TextRenderer.MeasureText(text, font, new Size(int.MaxValue, int.MaxValue), TextFormatFlags.SingleLine | TextFormatFlags.NoPadding).Width;
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -283,18 +294,16 @@ namespace OnScreenKeyboard
             Cursor      = Cursors.Hand;
         }
 
-        public override Size GetPreferredSize(Size proposedSize)
-        {
-            int textW = string.IsNullOrEmpty(Text) ? 0
-                : TextRenderer.MeasureText(Text, Font, new Size(int.MaxValue, int.MaxValue),
-                    TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding).Width;
-            return new Size(Padding.Horizontal + textW, Math.Max(Touch.Target, MinimumSize.Height));
-        }
+        public override Size GetPreferredSize(Size proposedSize) =>
+            new Size(Padding.Horizontal + Touch.TextWidth(Text, Font), Math.Max(Touch.Target, MinimumSize.Height));
 
         protected override void OnMouseEnter(EventArgs e) { _hovered = true;  Invalidate(); base.OnMouseEnter(e); }
         protected override void OnMouseLeave(EventArgs e) { _hovered = false; Invalidate(); base.OnMouseLeave(e); }
         protected override void OnGotFocus(EventArgs e)   { Invalidate(); base.OnGotFocus(e); }
         protected override void OnLostFocus(EventArgs e)  { Invalidate(); base.OnLostFocus(e); }
+        // The underline of the accelerator appears while Alt is held or "always show keyboard shortcuts" is on, as on a button.
+        protected override void OnKeyDown(KeyEventArgs e) { base.OnKeyDown(e); Invalidate(); }
+        protected override void OnKeyUp(KeyEventArgs e)   { base.OnKeyUp(e);   Invalidate(); }
 
         /// <summary>
         /// Drawn as one button-shaped 44 px target (same shape and outline as every other button) holding a large
@@ -334,18 +343,251 @@ namespace OnScreenKeyboard
                 using (var tick = new Pen(hc ? SystemColors.HighlightText : Color.White, 3f) { StartCap = System.Drawing.Drawing2D.LineCap.Round, EndCap = System.Drawing.Drawing2D.LineCap.Round, LineJoin = System.Drawing.Drawing2D.LineJoin.Round })
                     g.DrawLines(tick, new[] { new Point(box.X + 6, box.Y + 12), new Point(box.X + 10, box.Y + 17), new Point(box.X + 18, box.Y + 7) });
 
+            // NoPadding, as when the width was measured in GetPreferredSize: otherwise the text is a few pixels too
+            // wide for its rectangle and gets an ellipsis ("A…"). "&" marks the accelerator (underlined while the cues show).
             TextRenderer.DrawText(g, Text, Font, new Rectangle(Padding.Left, 0, Math.Max(0, Width - Padding.Horizontal), Height),
                 hc ? (Enabled ? SystemColors.ControlText : SystemColors.GrayText) : Enabled ? Fluent.TextPrimary : off.Text,
-                // NoPadding, as when the width was measured in GetPreferredSize: otherwise the text is a few pixels too
-                // wide for its rectangle and gets an ellipsis ("A…").
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis |
-                TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
+                TextFormatFlags.NoPadding | Touch.PrefixFlag(ShowKeyboardCues));
 
             if (Focused)
             {
                 if (hc) ControlPaint.DrawFocusRectangle(g, new Rectangle(2, 2, Width - 5, Height - 5));
                 else FluentPainter.DrawRoundedRing(g, Width, Height, Fluent.RadiusBtn, 3f, 2f, Fluent.Accent);
             }
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    //  TouchRadioButton
+    // ════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// A <see cref="RadioButton"/> drawn like <see cref="TouchCheckBox"/>: one button-shaped 44 px row that is the whole
+    /// target, with a round mark. The chosen row also gets a 2 px accent border, so the choice does not rest on the dot
+    /// alone. Radio buttons that share a parent are one group: the chosen one is the only tab stop, and the arrow keys
+    /// move the choice (and the focus) to the next or previous enabled radio button of the group.
+    /// </summary>
+    public class TouchRadioButton : RadioButton
+    {
+        private const int GlyphSize = 24;
+        private const int GlyphLeft = 14;
+        private bool _hovered;
+
+        public TouchRadioButton()
+        {
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
+                     ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+            AutoSize    = true;
+            MinimumSize = new Size(Touch.Target, Touch.Target);
+            TextAlign   = ContentAlignment.MiddleLeft;
+            Font        = Fluent.FontLabel;
+            Padding     = new Padding(GlyphLeft + GlyphSize + 10, 0, 16, 0);
+            Cursor      = Cursors.Hand;
+        }
+
+        public override Size GetPreferredSize(Size proposedSize) =>
+            new Size(Padding.Horizontal + Touch.TextWidth(Text, Font), Math.Max(Touch.Target, MinimumSize.Height));
+
+        protected override void OnMouseEnter(EventArgs e) { _hovered = true;  Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { _hovered = false; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnGotFocus(EventArgs e)   { Invalidate(); base.OnGotFocus(e); }
+        protected override void OnLostFocus(EventArgs e)  { Invalidate(); base.OnLostFocus(e); }
+        protected override void OnCheckedChanged(EventArgs e) { Invalidate(); base.OnCheckedChanged(e); }
+        protected override void OnEnabledChanged(EventArgs e) { Invalidate(); base.OnEnabledChanged(e); }
+        protected override void OnKeyUp(KeyEventArgs e) { base.OnKeyUp(e); Invalidate(); }
+
+        // ── Keyboard: the arrow keys move the choice within the group ──────────
+
+        protected override bool IsInputKey(Keys keyData) =>
+            keyData == Keys.Up || keyData == Keys.Down || keyData == Keys.Left || keyData == Keys.Right || base.IsInputKey(keyData);
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            int dir = e.KeyCode == Keys.Down || e.KeyCode == Keys.Right ? 1
+                    : e.KeyCode == Keys.Up   || e.KeyCode == Keys.Left  ? -1 : 0;
+            if (dir != 0)
+            {
+                var next = Neighbour(dir);
+                if (next != null) { next.Checked = true; next.Focus(); }
+                e.Handled = true;
+            }
+            base.OnKeyDown(e);
+            Invalidate();
+        }
+
+        /// <summary>The next (<paramref name="dir"/> = 1) or previous enabled radio button of this group, wrapping round; null if there is none.</summary>
+        internal TouchRadioButton Neighbour(int dir)
+        {
+            if (Parent == null) return null;
+            var group = new List<TouchRadioButton>();
+            foreach (Control c in Parent.Controls)
+                if (c is TouchRadioButton r) group.Add(r);
+            group.Sort((a, b) => a.TabIndex.CompareTo(b.TabIndex));
+            int at = group.IndexOf(this);
+            for (int step = 1; step < group.Count; step++)
+            {
+                var cand = group[((at + dir * step) % group.Count + group.Count) % group.Count];
+                if (cand.Enabled) return cand;
+            }
+            return null;
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode   = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;   // pixel centres at .5, as in FluentPainter
+            g.Clear(Parent?.BackColor ?? Fluent.BgPage);
+            bool hc = SystemInformation.HighContrast;
+            bool dark = FluentPainter.IsDarkSurface(Parent?.BackColor ?? Fluent.BgPage);
+
+            Color fill   = hc ? SystemColors.Control : _hovered ? Color.FromArgb(225, 225, 225) : Fluent.Neutral;
+            Color border = hc ? SystemColors.ControlText : _hovered ? Fluent.ControlBorderHover : Fluent.ControlBorder;
+            var off = FluentPainter.DisabledPalette(dark);
+            if (!Enabled && !hc) { fill = off.Fill; border = off.Border; }
+            using (var path = Fluent.RoundedRectF(Fluent.CrispBorderRect(Width, Height), Fluent.RadiusBtn))
+            {
+                using (var b = new SolidBrush(fill)) g.FillPath(b, path);
+                using (var p = new Pen(border))      g.DrawPath(p, path);
+            }
+
+            // The chosen row: a 2 px border inside the normal one (a light one on a dark dialog), in addition to the dot.
+            if (Checked && Enabled)
+            {
+                Color sel = hc ? SystemColors.Highlight : dark ? Fluent.DialogDarkText : Fluent.Accent;
+                using (var path = Fluent.RoundedRectF(new RectangleF(1.5f, 1.5f, Width - 3, Height - 3), Math.Max(1, Fluent.RadiusBtn - 1)))
+                using (var p = new Pen(sel, 1.5f)) g.DrawPath(p, path);
+            }
+
+            // The round mark; the dot inside it says "chosen".
+            int y = (Height - GlyphSize) / 2;
+            var circle = new RectangleF(GlyphLeft + 1f, y + 1f, GlyphSize - 2, GlyphSize - 2);
+            Color ring = hc ? SystemColors.ControlText : Fluent.ControlBorderHover;
+            Color back = hc ? SystemColors.Window : Color.White;
+            if (!Enabled && !hc) { ring = off.Border; back = off.Fill; }
+            using (var b = new SolidBrush(back)) g.FillEllipse(b, circle);
+            using (var p = new Pen(ring, 2f))    g.DrawEllipse(p, circle);
+            if (Checked)
+            {
+                Color dot = hc ? SystemColors.Highlight : Enabled ? Fluent.Accent : off.Text;
+                var inner = new RectangleF(GlyphLeft + 6f, y + 6f, GlyphSize - 12, GlyphSize - 12);
+                using (var b = new SolidBrush(dot)) g.FillEllipse(b, inner);
+            }
+
+            TextRenderer.DrawText(g, Text, Font, new Rectangle(Padding.Left, 0, Math.Max(0, Width - Padding.Horizontal), Height),
+                hc ? (Enabled ? SystemColors.ControlText : SystemColors.GrayText) : Enabled ? Fluent.TextPrimary : off.Text,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis |
+                TextFormatFlags.NoPadding | Touch.PrefixFlag(ShowKeyboardCues));
+
+            if (Focused)
+            {
+                if (hc) ControlPaint.DrawFocusRectangle(g, new Rectangle(2, 2, Width - 5, Height - 5));
+                else FluentPainter.DrawRoundedRing(g, Width, Height, Fluent.RadiusBtn, 3f, 2f, dark ? Fluent.DialogDarkText : Fluent.Accent);
+            }
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    //  OptionStack / ButtonRow (alignment rule, spec D23)
+    // ════════════════════════════════════════════════════════════════════
+
+    /// <summary>A one-column table whose members all have one width (marker type: the UI guard checks every instance).</summary>
+    internal sealed class OptionStackPanel : TableLayoutPanel { }
+
+    /// <summary>
+    /// Buttons side by side that all have the same width: the widest of their preferred widths (and at least their own
+    /// minimum, normally 120). Re-measured whenever a button's text changes.
+    /// </summary>
+    internal sealed class ButtonRowPanel : TableLayoutPanel
+    {
+        private readonly Control[] _buttons;
+
+        public ButtonRowPanel(Control[] buttons)
+        {
+            _buttons = buttons;
+            ColumnCount = buttons.Length;
+            RowCount    = 1;
+            AutoSize     = true;
+            AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            for (int i = 0; i < buttons.Length; i++)
+            {
+                ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+                buttons[i].Anchor = AnchorStyles.Left;
+                buttons[i].Margin = new Padding(i == 0 ? 0 : Touch.Gap, 0, 0, 0);
+                if (buttons[i] is Button bb) { bb.AutoSize = true; bb.AutoSizeMode = AutoSizeMode.GrowAndShrink; }   // so a shorter text can shrink the row again
+                buttons[i].TextChanged += (s, e) => Equalise();
+                Controls.Add(buttons[i], i, 0);
+            }
+            Equalise();
+        }
+
+        /// <summary>Gives every button the width of the widest one.</summary>
+        internal void Equalise()
+        {
+            foreach (var b in _buttons) b.MinimumSize = new Size(120, Touch.Target);       // forget the previous common width first
+            int w = 120;
+            foreach (var b in _buttons) w = Math.Max(w, b.GetPreferredSize(Size.Empty).Width);
+            foreach (var b in _buttons) b.MinimumSize = new Size(w, Touch.Target);
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    //  TouchGroup
+    // ════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// A framed group of related controls with a bold caption: a rounded 1 px border in the control-border colour (3 : 1)
+    /// around a caption and the group's content. The caption is the group's accessible name, and the group is announced
+    /// as a group. Content-sized: it is as big as its content needs.
+    /// </summary>
+    internal sealed class TouchGroup : TableLayoutPanel
+    {
+        private readonly Label _caption;
+
+        public TouchGroup(string caption)
+        {
+            ColumnCount = 1;
+            RowCount    = 2;
+            AutoSize     = true;
+            AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            Padding      = new Padding(12);
+            AccessibleRole = AccessibleRole.Grouping;
+            ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            _caption = new Label
+            {
+                Text = caption, AutoSize = true, UseMnemonic = false, Font = Fluent.FontBtnLg,
+                ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent, Margin = new Padding(0, 0, 0, Touch.Gap),
+                Anchor = AnchorStyles.Left, AccessibleName = Lang.StripMnemonic(caption),
+            };
+            Controls.Add(_caption, 0, 0);
+            SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+            AccessibleName = Lang.StripMnemonic(caption);
+        }
+
+        /// <summary>The caption label (registered by the dialog for language changes).</summary>
+        internal Label CaptionLabel => _caption;
+
+        /// <summary>Puts the group's content under the caption, filling the group's width.</summary>
+        internal void SetContent(Control content)
+        {
+            content.Dock = DockStyle.Fill;
+            Controls.Add(content, 0, 1);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            var g = e.Graphics;
+            g.SmoothingMode   = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+            bool dark = FluentPainter.IsDarkSurface(Parent?.BackColor ?? Fluent.BgPage);
+            Color border = SystemInformation.HighContrast ? SystemColors.ControlText : dark ? Fluent.DialogDarkBorder : Fluent.ControlBorder;
+            using (var path = Fluent.RoundedRectF(Fluent.CrispBorderRect(Width, Height), 8))
+            using (var p = new Pen(border)) g.DrawPath(p, path);
         }
     }
 

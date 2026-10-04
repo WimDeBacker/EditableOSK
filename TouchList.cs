@@ -39,6 +39,48 @@ namespace OnScreenKeyboard
         protected override void OnGotFocus(EventArgs e)  { base.OnGotFocus(e);  Invalidate(); }
         protected override void OnLostFocus(EventArgs e) { base.OnLostFocus(e); Invalidate(); }
 
+        protected override void OnEnabledChanged(EventArgs e)
+        {
+            base.OnEnabledChanged(e);
+            // The empty part below the rows: the flat grey of the disabled controls, or the normal input colour again.
+            bool dark = !ToolbarButton.IsLightTheme;
+            BackColor = !Enabled && !SystemInformation.HighContrast ? FluentPainter.DisabledPalette(dark).Fill
+                      : dark ? Fluent.DialogDarkInput : Fluent.BgInput;
+            Invalidate();
+        }
+
+        // ── The text shown when the list is empty ─────────────────────────────
+
+        private string _emptyText = "";
+
+        /// <summary>Said inside the list while it has no rows (e.g. "No candidates yet."), so an empty list explains itself.</summary>
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        public string EmptyText
+        {
+            get => _emptyText;
+            set { _emptyText = value ?? ""; Invalidate(); }
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+            base.WndProc(ref m);
+            if (m.Msg == 0x000F /* WM_PAINT */ && Items.Count == 0 && _emptyText.Length > 0 && IsHandleCreated)
+                using (var g = CreateGraphics()) PaintEmptyText(g);
+        }
+
+        /// <summary>Draws <see cref="EmptyText"/> (wrapped, at the top of the list); in the disabled colour while the list is disabled.</summary>
+        internal void PaintEmptyText(Graphics g)
+        {
+            bool dark = !ToolbarButton.IsLightTheme;
+            bool hc = SystemInformation.HighContrast;
+            Color fg = hc ? (Enabled ? SystemColors.WindowText : SystemColors.GrayText)
+                     : !Enabled ? FluentPainter.DisabledPalette(dark).Text
+                     : dark ? Fluent.DialogDarkTextDim : Fluent.TextHint;
+            int pad = (int)Math.Round(12 * DeviceDpi / 96.0);
+            TextRenderer.DrawText(g, _emptyText, Font, new Rectangle(pad, pad, Math.Max(1, Width - 2 * pad), Math.Max(1, Height - 2 * pad)), fg,
+                TextFormatFlags.Left | TextFormatFlags.Top | TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+        }
+
         protected override void OnDrawItem(DrawItemEventArgs e)
         {
             if (e.Index < 0 || e.Index >= Items.Count) return;
@@ -53,6 +95,13 @@ namespace OnScreenKeyboard
                      : sel ? Color.White
                      : dark ? Fluent.DialogDarkText : Fluent.TextPrimary;
             Color line = hc ? SystemColors.WindowText : dark ? Fluent.DialogDarkBorder : Fluent.BorderCard;
+            if (!Enabled)
+            {
+                // Disabled: the flat grey palette of the other disabled controls, and no selection highlight (it cannot be used).
+                sel = false;
+                if (hc) { bg = SystemColors.Window; fg = SystemColors.GrayText; }
+                else { var off = FluentPainter.DisabledPalette(dark); bg = off.Fill; fg = off.Text; line = off.Border; }
+            }
 
             var g = e.Graphics;
             using (var b = new SolidBrush(bg)) g.FillRectangle(b, e.Bounds);

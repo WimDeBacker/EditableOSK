@@ -191,8 +191,29 @@
   <String key="Dwell click"        value="Automatis&amp;che klik" />
   <String key="tip: Slow keys"     value="Houd een toets zo lang ingedrukt (in milliseconden) voordat deze wordt geregistreerd. Voorkomt onbedoelde toetsaanslagen." />
   <String key="tip: Dwell click"          value="Zweef over een toets gedurende dit aantal milliseconden om deze automatisch te activeren, zonder klikken." />
-  <String key="Show Shift and AltGr labels"      value="Shift- en AltGr-labels tonen" />
+  <String key="Show Shift and AltGr labels"      value="Shi&amp;ft- en AltGr-labels tonen" />
   <String key="tip: Show Shift and AltGr labels" value="Toont de kleine Shift- en AltGr-labels in de hoeken van de toetsen. Vink uit om minder te zien: alleen het hoofdlabel wordt getekend. De toetsen werken precies hetzelfde." />
+  <String key="General"                          value="Algemeen" />
+  <String key="milliseconds"                     value="milliseconden" />
+  <String key="kbd: Timing aid"                  value="Tijdhulp" />
+  <String key="kbd: Off"                         value="Uit" />
+  <String key="tip: Timing off"                  value="Geen tijdhulp: een toets wordt geregistreerd zodra u erop drukt of klikt." />
+  <String key="tip: Sticky modifiers"            value="Shift, Ctrl en Alt blijven na één tik aan en gaan uit na de volgende toets, zodat nooit twee toetsen tegelijk ingehouden hoeven te worden." />
+  <String key="tip: Hold to edit"                value="Houd een toets even ingedrukt om de editor te openen. Een korte tik typt de toets gewoon, zodat de editor niet per ongeluk opent." />
+  <String key="tip: Always on top"               value="Het toetsenbord boven alle andere vensters houden." />
+  <String key="tip: Hide title bar"              value="De Windows-titelbalk verbergen voor een strakker zwevend toetsenbord." />
+  <String key="tip: Toolbar theme"               value="Kleuren van de werkbalk boven het toetsenbord: donker, licht of gelijk aan Windows." />
+  <String key="tip: Background"                  value="Kleur van het toetsenbordvenster achter de toetsen. Klik om te kiezen." />
+  <String key="tip: Save settings"               value="De wijzigingen toepassen en het lay-outbestand opslaan." />
+  <String key="tip: Save settings as"            value="De wijzigingen toepassen en het lay-outbestand onder een nieuwe naam opslaan." />
+  <String key="kbd: Load title"                  value="Een lay-out laden" />
+  <String key="kbd: Load msg"                    value="Laden vervangt het huidige toetsenbord meteen. Wijzigingen die in dit venster zijn gemaakt gaan verloren en Annuleren maakt het laden niet ongedaan.&#10;&#10;Doorgaan?" />
+  <String key="wp: nothing to export"            value="Exporteren kan zodra er woorden zijn geleerd." />
+  <String key="wp: no candidates"                value="Nog geen kandidaten." />
+  <String key="wp: learning off hint"            value="Kandidaten worden verzameld zolang &quot;Getypte woorden onthouden&quot; aan staat." />
+  <String key="wp: immediate"                    value="Toevoegen en Verwijderen werken meteen; Annuleren maakt ze niet ongedaan." />
+  <String key="wp: (not found)"                  value="(niet gevonden)" />
+  <String key="warn: database not found"         value="Het databasebestand '{0}' is niet gevonden. Het blijft geselecteerd tot een ander wordt gekozen." />
   <String key="Show timing animation"     value="Voo&amp;rtgangsanimatie tonen" />
   <String key="tip: Show timing animation" value="Toont een visuele animatie op toetsen terwijl langzame toetsen of automatische klik aftelt. Vink uit als u de animatie afleidend vindt." />
   <String key="Toolbar theme"      value="&amp;Werkbalkthema" />

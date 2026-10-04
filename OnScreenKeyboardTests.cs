@@ -59,6 +59,7 @@ namespace OnScreenKeyboard
             T_Accelerators();
             T_SvgIconLoader_Cache();
             T_TouchControls();
+            T_TouchGroupComponents();
             T_TouchChoiceButton();
             T_ColorFlyout();
             T_TouchDialogFrame();

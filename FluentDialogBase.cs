@@ -569,6 +569,78 @@ namespace OnScreenKeyboard
             return c;
         }
 
+        /// <summary>A touch-sized radio button whose text follows language changes. Radio buttons with the same parent are one group.</summary>
+        protected TouchRadioButton NewRadio(Func<string> text)
+        {
+            var r = new TouchRadioButton { Text = text() };
+            _transTexts.Add((r, text));
+            return r;
+        }
+
+        /// <summary>
+        /// Controls side by side on one line, each in a column that sizes to it (no wrapping). Used instead of a wrapping
+        /// FlowLayoutPanel: inside a table a flow panel is measured at a narrow width first, which inflated the table's height
+        /// and opened a gap in its last row, and it under-measured its own width.
+        /// </summary>
+        protected static TableLayoutPanel InlineRow(params Control[] items)
+        {
+            // A little room on the right: an auto-sized column can come out a pixel or two narrower than the long caption it holds.
+            var row = new TableLayoutPanel { ColumnCount = items.Length, RowCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(0, 0, Touch.Gap, 0) };
+            row.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            for (int i = 0; i < items.Length; i++)
+            {
+                row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+                items[i].Anchor = AnchorStyles.Left;
+                row.Controls.Add(items[i], i, 0);
+            }
+            return row;
+        }
+
+        /// <summary>
+        /// Alignment rule (spec D23): controls that stand under each other get <b>one width, the widest of them</b>, so their right
+        /// edges line up. A one-column table whose column sizes to its widest member; every member fills it.
+        /// </summary>
+        protected static TableLayoutPanel OptionStack(params Control[] items)
+        {
+            var t = new OptionStackPanel { ColumnCount = 1, RowCount = items.Length, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink };
+            t.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            for (int i = 0; i < items.Length; i++)
+            {
+                t.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                items[i].Dock = DockStyle.Fill;
+                items[i].Margin = new Padding(0, 4, 0, 4);
+                t.Controls.Add(items[i], 0, i);
+            }
+            return t;
+        }
+
+        /// <summary>
+        /// Alignment rule (spec D23): buttons side by side get <b>one common width, the widest</b>. Re-measured when a button's text
+        /// changes (language), so the buttons stay equal.
+        /// </summary>
+        protected static TableLayoutPanel ButtonRow(params Control[] buttons) => new ButtonRowPanel(buttons);
+
+        /// <summary>A bold heading in the label column of a section table, spanning both columns; its text follows language changes.</summary>
+        protected Label Heading(Func<string> text)
+        {
+            var lbl = new Label
+            {
+                Text = text(), AutoSize = true, Anchor = AnchorStyles.Left, UseMnemonic = false, Font = Fluent.FontBtnLg,
+                ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent, Margin = new Padding(0, 0, 0, Touch.Gap),
+            };
+            _transLabels.Add((lbl, text));
+            return lbl;
+        }
+
+        /// <summary>A framed group with a caption (see <see cref="TouchGroup"/>); the caption follows language changes.</summary>
+        internal TouchGroup MakeGroup(Func<string> caption, Control content)
+        {
+            var g = new TouchGroup(caption());
+            g.SetContent(content);
+            _transLabels.Add((g.CaptionLabel, () => { string s = caption(); g.AccessibleName = Lang.StripMnemonic(s); return s; }));
+            return g;
+        }
+
         private static void NameInput(Control input, string name)
         {
             if (input is TouchStepper st) { if (string.IsNullOrEmpty(st.AccessibleName)) st.AccessibleName = name; }

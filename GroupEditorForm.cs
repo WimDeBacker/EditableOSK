@@ -223,17 +223,6 @@ namespace OnScreenKeyboard
             return col;
         }
 
-        private Label Heading(Func<string> text)
-        {
-            var lbl = new Label
-            {
-                Text = text(), AutoSize = true, Anchor = AnchorStyles.Left, UseMnemonic = false, Font = Fluent.FontBtnLg,
-                ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent, Margin = new Padding(0, 0, 0, Touch.Gap),
-            };
-            _transLabels.Add((lbl, text));
-            return lbl;
-        }
-
         /// <summary>The list of groups with the Add / Delete / Import buttons below it.</summary>
         private Control BuildListColumn()
         {
@@ -392,25 +381,6 @@ namespace OnScreenKeyboard
             var borderRow = InlineRow(_stpBorder, _chkBorderInherit);
             AddRow(t, () => Lang.T("Border thickness"), borderRow, fill: false);
             return t;
-        }
-
-        /// <summary>
-        /// Controls side by side on one line, each in a column that sizes to it (no wrapping). Used instead of a wrapping
-        /// FlowLayoutPanel: inside a table a flow panel is measured at a narrow width first, which inflated the table's height
-        /// and opened a gap in its last row, and it under-measured its own width.
-        /// </summary>
-        private static TableLayoutPanel InlineRow(params Control[] items)
-        {
-            // A little room on the right: an auto-sized column can come out a pixel or two narrower than the long caption it holds.
-            var row = new TableLayoutPanel { ColumnCount = items.Length, RowCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(0, 0, Touch.Gap, 0) };
-            row.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            for (int i = 0; i < items.Length; i++)
-            {
-                row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-                items[i].Anchor = AnchorStyles.Left;
-                row.Controls.Add(items[i], i, 0);
-            }
-            return row;
         }
 
         // ── What a group inherits ─────────────────────────────────────

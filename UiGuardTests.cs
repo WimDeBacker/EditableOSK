@@ -70,6 +70,32 @@ namespace OnScreenKeyboard
             return bad;
         }
 
+        /// <summary>
+        /// Alignment rule (spec D23): the members of an <see cref="OptionStackPanel"/> have one width and one right edge, and the
+        /// buttons of a <see cref="ButtonRowPanel"/> have one width (a pixel of rounding is allowed).
+        /// </summary>
+        public static List<string> StackedEdges(Control root, bool visibleOnly)
+        {
+            var bad = new List<string>();
+            foreach (var c in All(root))
+            {
+                if (visibleOnly && !c.Visible) continue;
+                if (c is OptionStackPanel stack)
+                {
+                    var members = stack.Controls.Cast<Control>().Where(m => !visibleOnly || m.Visible).ToList();
+                    if (members.Count > 1 && (members.Max(m => m.Right) - members.Min(m => m.Right) > 1 || members.Max(m => m.Width) - members.Min(m => m.Width) > 1))
+                        bad.Add("stack: " + string.Join(", ", members.Select(m => $"{m.GetType().Name} '{m.Text}' w{m.Width} right{m.Right}")));
+                }
+                else if (c is ButtonRowPanel row)
+                {
+                    var members = row.Controls.Cast<Control>().Where(m => !visibleOnly || m.Visible).ToList();
+                    if (members.Count > 1 && members.Max(m => m.Width) - members.Min(m => m.Width) > 1)
+                        bad.Add("button row: " + string.Join(", ", members.Select(m => $"'{m.Text}' w{m.Width}")));
+                }
+            }
+            return bad;
+        }
+
         /// <summary>Controls that extend past the container that holds them (scrolling containers may grow downwards).</summary>
         public static List<string> Overflow(Control root, bool visibleOnly)
         {
@@ -402,6 +428,8 @@ namespace OnScreenKeyboard
                             var t = UiGuard.TargetViolations(d, visibleOnly: true);
                             var c = UiGuard.ClippedText(d, visibleOnly: true);
                             var o = UiGuard.Overflow(d, visibleOnly: true);
+                            var a = UiGuard.StackedEdges(d, visibleOnly: true);
+                            Assert(a.Count == 0, $"{tag}, section {i + 1}: stacked controls share one width {(a.Count > 0 ? "— " + a[0] : "")}");
                             Assert(t.Count == 0, $"{tag}, section {i + 1}: all controls >= 44x44 {(t.Count > 0 ? "— " + t[0] : "")}");
                             Assert(c.Count == 0, $"{tag}, section {i + 1}: no clipped text {(c.Count > 0 ? "— " + c[0] : "")}");
                             Assert(o.Count == 0, $"{tag}, section {i + 1}: nothing sticks out {(o.Count > 0 ? "— " + o[0] : "")}");
