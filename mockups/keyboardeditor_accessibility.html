@@ -17,14 +17,14 @@
   --btn-text:#1C1C1C;                           /* neutral buttons keep dark text on both themes */
   --colored-outline:transparent;                /* dark theme: coloured buttons get a light outline */
   --dis-fill:#E8E8E8; --dis-border:#C8C8C8; --dis-text:#7D7D7D;
-  --row-line:#E5E5E5; --focus:#005496;
+  --row-line:#E5E5E5; --focus:#005496; --gbg:#F7F7F7;
   --desk:#C9CED6; --titlebar:#FFFFFF; --titletext:#000000; --frame:#9A9A9A;
   --hint:var(--text);                           /* ApplyTheme recolours every Label to the plain text colour (spec D22) */
 }
 :root[data-theme=dark]{
   --page:#202020; --card:#303030; --input:#3A3A3A; --text:#E6E6E6;
   --tb:#969696; --colored-outline:#969696; --dis-fill:#282828; --dis-border:#555555; --dis-text:#7D7D7D;
-  --row-line:#969696; --focus:#E6E6E6;
+  --row-line:#969696; --focus:#E6E6E6; --gbg:#383838;
   --desk:#101114; --titlebar:#202020; --titletext:#FFFFFF; --frame:#555555;
 }
 *{box-sizing:border-box}
@@ -70,6 +70,24 @@ body{margin:0;background:var(--desk);color:var(--text);font-family:"Segoe UI Var
 .check.dis .box{background:var(--dis-fill);border-color:var(--dis-border)}
 .check.dis.on .box{background:var(--dis-text)}
 .unit{color:var(--text)}
+/* Alignment rule (owner, 2026-10-04): controls that stand under each other share one width, so their right edges line up. */
+.stack{display:grid;grid-template-columns:max-content;gap:8px}
+.stack>.check{width:100%;justify-content:flex-start}
+/* The timing aid: a framed group with a caption; Off / Slow keys / Dwell click are radio buttons (exactly one is on). */
+.group{width:100%;border:1px solid var(--tb);border-radius:8px;background:var(--gbg);padding:12px}
+.gcap{font-weight:700;margin:0 0 8px}
+.gridr{display:grid;grid-template-columns:1fr auto auto;column-gap:8px;row-gap:8px;align-items:center}
+.radio{display:flex;align-items:center;gap:10px;height:44px;padding:0 16px 0 14px;border:1px solid var(--ctl);border-radius:5px;background:var(--neutral);color:var(--btn-text);cursor:pointer;user-select:none;white-space:nowrap}
+.radio:hover{background:var(--neutral-hover);border-color:var(--ctl-h)}
+.radio .dot{position:relative;width:24px;height:24px;border:2px solid var(--ctl-h);border-radius:50%;background:#fff;flex:none}
+.radio.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+:root[data-theme=dark] .radio.on{border-color:var(--focus);box-shadow:inset 0 0 0 1px var(--focus)}
+.radio.on .dot::after{content:"";position:absolute;left:4px;top:4px;width:12px;height:12px;border-radius:50%;background:var(--accent)}
+.gridr>.radio,.gridr>.check{grid-column:1;width:100%}
+.gridr>.stepper{grid-column:2}
+.gridr>.unit{grid-column:3}
+.sep{grid-column:1 / span 3;height:1px;background:var(--row-line);margin:4px 0}
+.group .check{justify-content:flex-start}
 .footer{display:flex;justify-content:flex-end;gap:8px;padding:8px 16px 0}
 u{text-decoration:underline;text-underline-offset:2px}
 :focus-visible{outline:3px solid var(--focus);outline-offset:1px}
@@ -80,7 +98,7 @@ u{text-decoration:underline;text-underline-offset:2px}
   <strong>Mock-up (static picture, not the program): Keyboard Editor, Accessibility</strong>
   <span class="grp" role="group" aria-label="Theme"><button id="b-light" aria-pressed="true">Light</button><button id="b-dark" aria-pressed="false">Dark</button></span>
   <span class="grp" role="group" aria-label="Language"><button id="b-en" aria-pressed="true">English</button><button id="b-nl" aria-pressed="false">Nederlands</button></span>
-  <span class="note">Try the check boxes: Slow keys and Dwell click exclude each other, and the timing animation follows them.
+  <span class="note">Try the timing aid: pick Off, Slow keys or Dwell click (click, or Up / Down on a focused radio button); only the chosen one has an active stepper, and the timing animation is available once one is chosen.
   Other sections: <a href="keyboardeditor_general.html">General</a>, <a href="keyboardeditor_wordprediction.html">Word prediction</a>. Spec: keyboardeditor_spec.md</span>
 </div>
 <div class="stage">
@@ -94,28 +112,33 @@ u{text-decoration:underline;text-underline-offset:2px}
     </div>
     <div class="body">
       <div class="rows">
-        <!-- A1 -->
-        <div class="wide"><span class="check on" role="checkbox" tabindex="0" id="k-sticky" data-tip="tip: Sticky modifiers"><span class="box"></span><span data-i="Sticky modifiers"></span></span></div>
-        <!-- A2 -->
-        <div class="wide"><span class="check" role="checkbox" tabindex="0" id="k-hold" data-tip="tip: Hold to edit"><span class="box"></span><span data-i="Hold to edit"></span></span></div>
-        <!-- A3 Slow keys: check, stepper, unit -->
-        <div class="wide">
-          <span class="check" role="checkbox" tabindex="0" id="k-slow" data-tip="tip: Slow keys"><span class="box"></span><span data-i="Slow keys"></span></span>
-          <span class="stepper off" id="s-slow" data-tip="tip: Slow keys"><button class="btn sb" aria-label="Decrease" disabled>&#8722;</button><span class="sv" role="spinbutton" aria-valuemin="100" aria-valuemax="3000"></span><button class="btn sb" aria-label="Increase" disabled>+</button></span>
-          <span class="unit" id="u-slow" title="milliseconds">ms</span>
-        </div>
-        <!-- A4 Dwell click -->
-        <div class="wide">
-          <span class="check" role="checkbox" tabindex="0" id="k-dwell" data-tip="tip: Dwell click"><span class="box"></span><span data-i="Dwell click"></span></span>
-          <span class="stepper off" id="s-dwell" data-tip="tip: Dwell click"><button class="btn sb" aria-label="Decrease" disabled>&#8722;</button><span class="sv" role="spinbutton" aria-valuemin="100" aria-valuemax="5000"></span><button class="btn sb" aria-label="Increase" disabled>+</button></span>
-          <span class="unit" id="u-dwell" title="milliseconds">ms</span>
-        </div>
-        <!-- A5 Show timing animation (disabled until A3 or A4 is on; the value is kept) -->
-        <div class="wide"><span class="check on dis" role="checkbox" tabindex="-1" aria-disabled="true" id="k-anim" data-tip="tip: Show timing animation"><span class="box"></span><span data-i="Show timing animation"></span></span></div>
-        <!-- A6 hint (always present, two lines reserved) -->
-        <div class="hint" id="hint" data-i="kbd: timing hint"></div>
-        <!-- A7 Corner labels -->
-        <div class="wide"><span class="check on" role="checkbox" tabindex="0" id="k-corner" data-tip="tip: Show Shift and AltGr labels"><span class="box"></span><span data-i="Show Shift and AltGr labels"></span></span></div>
+        <!-- One stack, one width (the widest member), so every right edge lines up -->
+        <div class="wide"><div class="stack">
+          <!-- A1 -->
+          <span class="check on" role="checkbox" tabindex="0" id="k-sticky" data-tip="tip: Sticky modifiers"><span class="box"></span><span data-i="Sticky modifiers"></span></span>
+          <!-- A2 -->
+          <span class="check" role="checkbox" tabindex="0" id="k-hold" data-tip="tip: Hold to edit"><span class="box"></span><span data-i="Hold to edit"></span></span>
+          <!-- A3 to A5: the timing aid, a framed group. Off / Slow keys / Dwell click are radio buttons (one tab stop, arrow keys move). -->
+          <div class="group" role="radiogroup" aria-labelledby="g-cap">
+            <div class="gcap" id="g-cap" data-i="kbd: Timing aid"></div>
+            <!-- Column 1: Off, Slow keys, Dwell click and the animation check box, all the same width (right edges line up);
+                 column 2: the steppers (right edges line up); column 3: the unit. -->
+            <div class="gridr">
+              <span class="radio on" role="radio" tabindex="0" id="r-off" data-mode="off" data-tip="tip: Timing off"><span class="dot"></span><span data-i="kbd: Off"></span></span>
+              <span class="radio" role="radio" tabindex="-1" id="r-slow" data-mode="slow" data-tip="tip: Slow keys"><span class="dot"></span><span data-i="Slow keys"></span></span>
+              <span class="stepper off" id="s-slow" data-tip="tip: Slow keys"><button class="btn sb" aria-label="Decrease" disabled>&#8722;</button><span class="sv" role="spinbutton" aria-valuemin="100" aria-valuemax="3000"></span><button class="btn sb" aria-label="Increase" disabled>+</button></span>
+              <span class="unit" id="u-slow" title="milliseconds">ms</span>
+              <span class="radio" role="radio" tabindex="-1" id="r-dwell" data-mode="dwell" data-tip="tip: Dwell click"><span class="dot"></span><span data-i="Dwell click"></span></span>
+              <span class="stepper off" id="s-dwell" data-tip="tip: Dwell click"><button class="btn sb" aria-label="Decrease" disabled>&#8722;</button><span class="sv" role="spinbutton" aria-valuemin="100" aria-valuemax="5000"></span><button class="btn sb" aria-label="Increase" disabled>+</button></span>
+              <span class="unit" id="u-dwell" title="milliseconds">ms</span>
+              <div class="sep"></div>
+              <!-- A5: available while Slow keys or Dwell click is chosen; its value is kept while it is disabled -->
+              <span class="check on dis" role="checkbox" tabindex="-1" aria-disabled="true" id="k-anim" data-tip="tip: Show timing animation"><span class="box"></span><span data-i="Show timing animation"></span></span>
+            </div>
+          </div>
+          <!-- A6 Corner labels -->
+          <span class="check on" role="checkbox" tabindex="0" id="k-corner" data-tip="tip: Show Shift and AltGr labels"><span class="box"></span><span data-i="Show Shift and AltGr labels"></span></span>
+        </div></div>
       </div>
     </div>
     <div class="footer">
@@ -133,7 +156,8 @@ en:{"Edit Keyboard":"Edit Keyboard","General":"General","Accessibility":"Accessi
 "Apply":"A&pply","Cancel":"&Cancel",
 "Sticky modifiers":"Stic&ky modifiers","Hold to edit":"&Hold to enter edit mode","Slow keys":"Slow k&eys","Dwell click":"&Dwell click",
 "Show timing animation":"Sho&w timing animation","Show Shift and AltGr labels":"Show Shi&ft and AltGr labels",
-"kbd: timing hint":"Slow keys and Dwell click exclude each other: switching one on switches the other off. The timing animation is available while one of them is on.",
+"kbd: Timing aid":"Timing aid","kbd: Off":"Off",
+"tip: Timing off":"No timing aid: a key registers as soon as you press it, or click it.",
 "milliseconds":"milliseconds",
 "tip: Sticky modifiers":"Shift, Ctrl and Alt stay on after one tap and switch off after the next key, so you never have to hold two keys at once.",
 "tip: Hold to edit":"Hold a key for a moment to open its editor. A quick tap still types the key, so the editor does not open by accident.",
@@ -145,7 +169,8 @@ nl:{"Edit Keyboard":"Toetsenbord bewerken","General":"Algemeen","Accessibility":
 "Apply":"Toe&passen","Cancel":"Ann&uleren",
 "Sticky modifiers":"Plaktoetsen (Sticky &Keys)","Hold to edit":"&Ingedrukt houden voor bewerkingsmodus","Slow keys":"La&ngzame toetsen","Dwell click":"Automatis&che klik",
 "Show timing animation":"Voo&rtgangsanimatie tonen","Show Shift and AltGr labels":"Shi&ft- en AltGr-labels tonen",
-"kbd: timing hint":"Langzame toetsen en automatische klik sluiten elkaar uit: de ene aanzetten zet de andere uit. De voortgangsanimatie is beschikbaar zolang een van beide aanstaat.",
+"kbd: Timing aid":"Tijdhulp","kbd: Off":"Uit",
+"tip: Timing off":"Geen tijdhulp: een toets wordt geregistreerd zodra u erop drukt of klikt.",
 "milliseconds":"milliseconden",
 "tip: Sticky modifiers":"Shift, Ctrl en Alt blijven na één tik aan en gaan uit na de volgende toets, zodat nooit twee toetsen tegelijk ingehouden hoeven te worden.",
 "tip: Hold to edit":"Houd een toets even ingedrukt om de editor te openen. Een korte tik typt de toets gewoon, zodat de editor niet per ongeluk opent.",
@@ -159,17 +184,23 @@ function t(k){return (S[lang][k]!==undefined?S[lang][k]:S.en[k])}
 function vis(s){return s.replace(/&(.)/,"<u>$1</u>")}
 function plain(s){return s.replace("&","")}
 var slow={ms:300,min:100,max:3000,step:50}, dwell={ms:1000,min:100,max:5000,step:100};
+var mode="off";                       /* the timing aid: exactly one of off / slow / dwell (radio buttons) */
+var MODES=["off","slow","dwell"];
 function on(id){return document.getElementById(id).classList.contains("on")}
 function setOn(id,v){var e=document.getElementById(id);e.classList.toggle("on",v);e.setAttribute("aria-checked",v)}
 function sync(){
-  [["slow","k-slow","s-slow",slow],["dwell","k-dwell","s-dwell",dwell]].forEach(function(a){
-    var st=document.getElementById(a[2]), e=on(a[1]);
+  MODES.forEach(function(m){
+    var r=document.getElementById("r-"+m), sel=(m===mode);
+    r.classList.toggle("on",sel);r.setAttribute("aria-checked",sel);r.tabIndex=sel?0:-1;   /* roving tab stop: one stop for the group */
+  });
+  [["slow","s-slow",slow],["dwell","s-dwell",dwell]].forEach(function(a){
+    var st=document.getElementById(a[1]), e=(mode===a[0]);                                  /* only the chosen option's stepper is active */
     st.classList.toggle("off",!e);
     st.querySelectorAll(".sb").forEach(function(b){b.disabled=!e});
-    st.querySelector(".sv").textContent=a[3].ms;
+    st.querySelector(".sv").textContent=a[2].ms;
     st.setAttribute("aria-label",plain(t(a[0]==="slow"?"Slow keys":"Dwell click"))+" ("+t("milliseconds")+")");
   });
-  var avail=on("k-slow")||on("k-dwell"), an=document.getElementById("k-anim");
+  var avail=(mode!=="off"), an=document.getElementById("k-anim");
   an.classList.toggle("dis",!avail);an.tabIndex=avail?0:-1;an.setAttribute("aria-disabled",!avail);
 }
 function render(){
@@ -177,7 +208,7 @@ function render(){
   document.querySelectorAll("[data-i]").forEach(function(e){e.innerHTML=vis(t(e.dataset.i))});
   document.querySelectorAll("[data-tip]").forEach(function(e){e.title=plain(t(e.dataset.tip))});
   document.querySelectorAll(".unit").forEach(function(e){e.title=t("milliseconds")});
-  ["k-slow","k-dwell","k-anim"].forEach(function(id){document.getElementById(id).setAttribute("aria-description",t("kbd: timing hint"))});
+  document.getElementById("k-anim").setAttribute("aria-description",t("tip: Show timing animation"));
   sync();
   document.getElementById("b-en").setAttribute("aria-pressed",lang==="en");
   document.getElementById("b-nl").setAttribute("aria-pressed",lang==="nl");
@@ -196,13 +227,22 @@ document.getElementById("b-nl").onclick=function(){lang="nl";render()};
 document.querySelectorAll(".check").forEach(function(c){
   function flip(){
     if(c.classList.contains("dis"))return;
-    var v=!c.classList.contains("on"); setOn(c.id,v);
-    if(v&&c.id==="k-slow")setOn("k-dwell",false);      /* mutual exclusion, as in the old dialog */
-    if(v&&c.id==="k-dwell")setOn("k-slow",false);
+    setOn(c.id,!c.classList.contains("on"));
     sync();
   }
   c.setAttribute("aria-checked",c.classList.contains("on"));
   c.onclick=flip;c.onkeydown=function(e){if(e.key===" "){e.preventDefault();flip()}};
+});
+/* Radio buttons: click selects; Up / Left and Down / Right move the selection (and focus) like the real control. */
+document.querySelectorAll(".radio").forEach(function(r){
+  function pick(m){mode=m;sync();document.getElementById("r-"+m).focus()}
+  r.onclick=function(){pick(r.dataset.mode)};
+  r.onkeydown=function(e){
+    var i=MODES.indexOf(r.dataset.mode);
+    if(e.key==="ArrowDown"||e.key==="ArrowRight"){e.preventDefault();pick(MODES[(i+1)%3])}
+    else if(e.key==="ArrowUp"||e.key==="ArrowLeft"){e.preventDefault();pick(MODES[(i+2)%3])}
+    else if(e.key===" "){e.preventDefault();pick(r.dataset.mode)}
+  };
 });
 render();
 </script>

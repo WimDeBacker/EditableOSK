@@ -62,6 +62,11 @@ Status tags: **fixed**, **open**, **unverified** (not tested).
 - **`Control.Visible` is false in a form that was never shown.** A test that asserted "this check box is hidden for the standard group" through `Visible` was true by accident (and a state check `Visible && Checked` inside the form logic was wrong for the same reason). Use `Enabled` or an explicit field instead; the form's own logic must not depend on `Visible`.
 - **Idle hints named a button that no longer had a name:** "Press Record…" while the button was icon-only. Reworded to "record button". Lesson: when a control loses its text, search for the texts that refer to it.
 
+## 3b. Layout rules (from the owner's reviews)
+
+- **Neighbouring controls share one width (2026-10-04).** The old Keyboard Editor looked untidy because controls that stand under each other differed a little in width (Background, Always on top, Hide title bar; Sticky modifiers and Hold to enter edit mode; Slow keys and Dwell click), so no right edge lined up. Rules: (a) controls stacked in one column get the width of the widest of them; (b) buttons side by side (Save / Save As / Load, Promote / Reject) get one common width; (c) choosers under each other get one width; (d) a stepper next to a control sits in its own column so the steppers line up too. Built with `OptionStack` and `ButtonRow` (planned, spec D23) and checked by `UiGuard.StackedEdges`. The Group and Key Editors have no stacked check boxes, so they were not affected; check them against this rule when touched again.
+- **"Exactly one of these" is a radio group, not two check boxes with an explanatory sentence (2026-10-04).** A group is a frame with a caption (the caption is its accessible name), button-shaped rows with a round mark, a 2 px accent border on the selected row (not only the dot), one tab stop with arrow keys inside, and the values that belong to an option (steppers) enabled only for the selected option. Planned components `TouchRadioButton` and `TouchGroup` (spec D24).
+
 ## 4. Accessibility (WCAG AAA)
 
 - The whole palette was below AAA: white on the blue, green and red buttons (4.5–5.7:1), hint and secondary text (5.3–6.5:1), the neutral border (1.3:1), and dark-theme text (1.9–5:1). Fixed. The blue, green and red buttons are now darker throughout the app, which is visible.

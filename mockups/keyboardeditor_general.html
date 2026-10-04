@@ -60,7 +60,7 @@ body{margin:0;background:var(--desk);color:var(--text);font-family:"Segoe UI Var
 :root:not([data-theme=dark]) .btn.success{border-color:var(--success)}
 .btn.success:hover{background:#08500A}
 .btn[disabled]{background:var(--dis-fill);border-color:var(--dis-border);color:var(--dis-text);cursor:default}
-.choice{justify-content:space-between;min-width:240px;padding:0 14px;gap:14px}
+.choice{justify-content:space-between;width:280px;min-width:280px;padding:0 14px;gap:14px}   /* both choosers: one width */
 .choice .arr{width:26px;text-align:center}
 .stepper{display:inline-flex;width:176px;height:44px;gap:4px}
 .stepper .sb{width:44px;min-width:44px;padding:0;font-size:21px;font-weight:700}
@@ -76,6 +76,13 @@ body{margin:0;background:var(--desk);color:var(--text);font-family:"Segoe UI Var
 .check.dis .box{background:var(--dis-fill);border-color:var(--dis-border)}
 .check.dis.on .box{background:var(--dis-text)}
 .unit{color:var(--text)}
+/* Alignment rule (owner, 2026-10-04): controls that stand under each other share one width, so their right edges line up.
+   .stack = one column as wide as its widest member; .btnrow = buttons side by side with one common width. */
+.stack{display:grid;grid-template-columns:max-content;gap:8px}
+.stack>*{width:100%;justify-content:flex-start}
+.stack>.chip{justify-content:center}
+.btnrow{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:8px;width:max-content}
+.btnrow>.btn{width:100%}
 .footer{display:flex;justify-content:flex-end;gap:8px;padding:8px 16px 0}
 u{text-decoration:underline;text-underline-offset:2px}
 :focus-visible{outline:3px solid var(--focus);outline-offset:1px}
@@ -115,22 +122,22 @@ u{text-decoration:underline;text-underline-offset:2px}
         <div class="lbl" data-i="Opacity"></div>
         <div class="cell"><span class="stepper" id="s-op" data-tip="tip: Opacity"><button class="btn sb" aria-label="Decrease">&#8722;</button><span class="sv" role="spinbutton" aria-valuemin="0" aria-valuemax="80"></span><button class="btn sb" aria-label="Increase">+</button></span><span class="unit">%</span></div>
 
-        <!-- G5 Background chip -->
-        <div class="wide"><button class="chip" id="chip-bg" style="background:#1A1A2E" data-tip="tip: Background" data-i="Background"></button></div>
-
-        <!-- G6, G7 -->
-        <div class="wide"><span class="check" role="checkbox" tabindex="0" id="k-top" data-tip="tip: Always on top"><span class="box"></span><span data-i="Always on top"></span></span></div>
-        <div class="wide"><span class="check" role="checkbox" tabindex="0" id="k-hide" data-tip="tip: Hide title bar"><span class="box"></span><span data-i="Hide title bar"></span></span></div>
+        <!-- G5 Background chip, G6, G7: one stack, one width (the widest of the three), right edges aligned -->
+        <div class="wide"><div class="stack">
+          <button class="chip" id="chip-bg" style="background:#1A1A2E" data-tip="tip: Background" data-i="Background"></button>
+          <span class="check" role="checkbox" tabindex="0" id="k-top" data-tip="tip: Always on top"><span class="box"></span><span data-i="Always on top"></span></span>
+          <span class="check" role="checkbox" tabindex="0" id="k-hide" data-tip="tip: Hide title bar"><span class="box"></span><span data-i="Hide title bar"></span></span>
+        </div></div>
 
         <!-- G8 heading -->
         <div class="heading" data-i="Layout file"></div>
 
         <!-- G9 Save, Save As, Load -->
-        <div class="wide">
+        <div class="wide"><div class="btnrow">
           <button class="btn" data-i="Save" data-tip="tip: Save settings"></button>
           <button class="btn" data-i="Save As…" data-tip="tip: Save settings as"></button>
           <button class="btn" data-i="Load…" data-tip="tip: Load"></button>
-        </div>
+        </div></div>
       </div>
     </div>
     <div class="footer">

@@ -53,6 +53,13 @@ body{margin:0;background:var(--desk);color:var(--text);font-family:"Segoe UI Var
 .lbl{display:flex;align-items:center;min-height:44px;margin:4px 0;max-width:260px}
 .cell{margin:4px 0;display:flex;align-items:center;min-width:0}
 .cell .btn{width:100%}
+/* Alignment rule (owner, 2026-10-04): controls that stand under each other share one width, so their right edges line up
+   (the check box, the database chooser and Export fill the column); buttons side by side get one common width. */
+.col>.wide.full{display:block}
+.col>.wide.full>*{display:flex;width:100%;justify-content:flex-start}
+.col>.wide.full>.btn{justify-content:center}
+.btnrow2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.btnrow2>.btn{width:100%;min-width:0}
 .wide{margin:4px 0;display:flex;align-items:center;gap:8px}
 .heading{font-weight:700;margin:0 0 8px}
 .hint{font-size:14.67px;color:var(--hint);margin:4px 0}
@@ -108,7 +115,7 @@ u{text-decoration:underline;text-underline-offset:2px}
         <!-- left: settings -->
         <div class="col">
           <!-- W1 -->
-          <div class="wide"><span class="check on" role="checkbox" tabindex="0" id="k-learn" data-tip="wp: tip remember"><span class="box"></span><span data-i="wp: Remember typed words"></span></span></div>
+          <div class="wide full"><span class="check on" role="checkbox" tabindex="0" id="k-learn" data-tip="wp: tip remember"><span class="box"></span><span data-i="wp: Remember typed words"></span></span></div>
           <!-- W2 -->
           <div class="row2">
             <div class="lbl" data-i="wp: Database"></div>
@@ -119,7 +126,7 @@ u{text-decoration:underline;text-underline-offset:2px}
           <!-- W4 export hint (always present, one line reserved) -->
           <div class="hint l1" id="exphint"></div>
           <!-- W5 -->
-          <div class="wide"><button class="btn" id="b-export" data-i="wp: Export…" data-tip="wp: tip export"></button></div>
+          <div class="wide full"><button class="btn" id="b-export" data-i="wp: Export…" data-tip="wp: tip export"></button></div>
         </div>
         <!-- right: candidates -->
         <div class="col">
@@ -128,10 +135,10 @@ u{text-decoration:underline;text-underline-offset:2px}
           <!-- W7 -->
           <div class="frame" id="frame" role="listbox" tabindex="0" data-tip="wp: tip candidates" data-aria="wp: Candidates"></div>
           <!-- W8 -->
-          <div class="wide" style="margin-top:0">
+          <div class="wide" style="margin-top:0;display:block"><div class="btnrow2">
             <button class="btn" id="b-promote" data-i="wp: Promote" data-tip="wp: tip promote"></button>
             <button class="btn" id="b-reject" data-i="wp: Reject" data-tip="wp: tip reject"></button>
-          </div>
+          </div></div>
           <!-- W9 (always present, two lines reserved) -->
           <div class="hint l2" data-i="wp: immediate"></div>
         </div>
