@@ -30,6 +30,8 @@ namespace OnScreenKeyboard
             try
             {
                 CheckDialogGuards("Wizard (blank grid)", Wizard);
+                CheckDialogGuards("Special keys window", () => new SpecialKeysDialog(false));
+                CheckDialogGuards("Special keys window (Dutch labels)", () => new SpecialKeysDialog(true));
 
                 CheckDialogGuards("Wizard (pasted labels)", () =>
                 {
@@ -56,6 +58,95 @@ namespace OnScreenKeyboard
                 });
             }
             finally { try { Directory.Delete(tmp, true); } catch { } }
+        }
+
+        private static void T_WizardSpecialKeys()
+        {
+            Section("Wizard paste text — modifier, navigation and function keys");
+            WizardKeyParser.KeySpec One(string text, bool dutch = false) => WizardKeyParser.Parse(text, dutch)[0][0];
+
+            // Modifier keys: the label must be one the keyboard recognises as a modifier, the send text the one the stock layouts use.
+            foreach (var (token, label, send) in new[] {
+                ("shift", "Shift", ""), ("ctrl", "Ctrl", "^"), ("alt", "Alt", "%"), ("altgr", "AltGr", ""),
+                ("win", "Win", "win:"), ("caps", "Caps", "{CAPSLOCK}") })
+            {
+                var k = One("[" + token + "]");
+                Assert(k.Label == label && k.Send == send && !k.IsBlank, $"[{token}] is the {label} key (send '{send}')");
+                Assert(KeyLayout.ModifierLabels.Contains(k.Label), $"[{token}]: the keyboard treats the key as a modifier");
+                Assert(NewKeyboardWizard.ClassifyKey(k.Label, k.Send) == "Besturing", $"[{token}] is put in the Besturing group");
+            }
+            Assert(One("[SHIFT]").Label == "Shift" && One("[AltGr]").Label == "AltGr" && One("[Windows]").Label == "Win" && One("[Control]").Label == "Ctrl",
+                "key names are not case sensitive and have common aliases");
+
+            // Navigation and editing keys use SendKeys names.
+            foreach (var (token, label, send) in new[] {
+                ("home", "Home", "{HOME}"), ("end", "End", "{END}"), ("pageup", "PgUp", "{PGUP}"), ("PgDn", "PgDn", "{PGDN}"),
+                ("insert", "Ins", "{INSERT}"), ("prtsc", "PrtSc", "{PRTSC}"), ("numlock", "NumLk", "{NUMLOCK}"),
+                ("scrolllock", "ScrLk", "{SCROLLLOCK}"), ("pause", "Pause", "{BREAK}") })
+            {
+                var k = One("[" + token + "]");
+                Assert(k.Label == label && k.Send == send, $"[{token}] is {label} (send {send})");
+                Assert(NewKeyboardWizard.ClassifyKey(k.Label, k.Send) == "Besturing", $"[{token}] is put in the Besturing group");
+            }
+            Assert(One("[einde]", dutch: true).Send == "{END}" && One("[invoegen]", dutch: true).Send == "{INSERT}", "Dutch aliases for End and Insert");
+
+            // Function keys F1 to F16, nothing else.
+            for (int n = 1; n <= 16; n++)
+                Assert(One($"[f{n}]").Send == "{F" + n + "}" && One($"[F{n}]").Label == "F" + n, $"[f{n}] is the F{n} key");
+            foreach (string bad in new[] { "f0", "f17", "f01", "f", "fx", "f1x" })
+                Assert(One("[" + bad + "]").Send == bad, $"[{bad}] is not a function key: it stays ordinary text");
+
+            // Dead keys: the accent as label, "dead:X" as send text; only the five accents SendKeysHelper can compose.
+            foreach (char ch in WizardKeyParser.DeadChars)
+            {
+                var k = One("[dead:" + ch + "]");
+                Assert(k.Label == ch.ToString() && k.Send == "dead:" + ch, $"[dead:{ch}] is a dead key ('{ch}')");
+                Assert(NewKeyboardWizard.ClassifyKey(k.Label, k.Send) == "Leestekens", $"[dead:{ch}] is put in the Leestekens group");
+            }
+            Assert(One("[tilde]").Send == "dead:~" && One("[Grave]").Send == "dead:`" && One("[acute]").Send == "dead:´" &&
+                   One("[circumflex]").Send == "dead:^" && One("[umlaut]").Send == "dead:¨" && One("[trema]").Send == "dead:¨" && One("[DEAD:~]").Send == "dead:~",
+                "dead keys by name, in any case");
+            Assert(One("[dead:x]").Send == "dead:x" && One("[dead:x]").Label == "dead:x" && One("[dead:]").Send == "dead:", "[dead:x] with a character that cannot be composed stays ordinary text");
+
+            // The "?" window lists exactly what the parser understands: every spelling parses to a key, and no spelling is missing.
+            var inHelp = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var helpRow in WizardKeyParser.Help)
+                foreach (var token in helpRow.Tokens)
+                {
+                    inHelp.Add(token);
+                    Assert(WizardKeyParser.LabelOf(token, false) != null, $"help: [{token}] is a key the parser knows");
+                }
+            var table = (System.Collections.IDictionary)typeof(WizardKeyParser).GetField("SpecialKeys", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
+            foreach (string key in table.Keys)
+                Assert(inHelp.Contains(key), $"help: the parser's [{key}] is listed in the window");
+            foreach (string name in new[] { "circumflex", "diaeresis", "umlaut", "trema", "tilde", "grave", "acute" })
+                Assert(inHelp.Contains(name), $"help: the dead key name [{name}] is listed in the window");
+            foreach (char ch in WizardKeyParser.DeadChars)
+                Assert(inHelp.Contains("dead:" + ch), $"help: [dead:{ch}] is listed in the window");
+
+            using (var dlg = new SpecialKeysDialog(false))
+            {
+                DevGallery.Show(dlg);
+                var shown = UiGuard.All(dlg).OfType<Label>().Select(l => l.Text).ToList();
+                foreach (var helpRow in WizardKeyParser.Help)
+                    Assert(shown.Contains(helpRow.Display), $"help window shows '{helpRow.Display}'");
+            }
+            Assert(Priv<FluentButton>(Wizard(), "_btnKeyHelp").Text == "?", "the paste page has a ? button");
+
+            // A row mixing them with letters keeps every column.
+            var row = WizardKeyParser.Parse("[shift] a b [altgr] [win] [alt] [ctrl] [home] [end]", false)[0];
+            Assert(row.Count == 9 && row[1].Label == "a" && row[4].Label == "Win" && row[8].Label == "End", "a mixed row keeps one key per token");
+
+            // Through the wizard: the created layout holds these keys, and the modifiers are recognised as modifiers.
+            using var w = Wizard();
+            Priv<TouchRadioButton>(w, "_rbPaste").Checked = true;
+            WizSet(w, "_txtPaste", "[shift] q [altgr]\r\n[ctrl] [win] [alt] [home] [f5]");
+            var (layout, _, _, _) = WizCall<(GridLayout, VisualTheme, WindowState, LayoutMeta)>(w, "BuildLayoutData");
+            string LabelAtCell(int r, int c) => layout.Cells.First(x => x.Row == r && x.Col == c).Props.Label;
+            Assert(LabelAtCell(0, 0) == "Shift" && LabelAtCell(0, 2) == "AltGr" && LabelAtCell(1, 1) == "Win" && LabelAtCell(1, 3) == "Home" && LabelAtCell(1, 4) == "F5",
+                "the created layout has the special keys in their cells");
+            Assert(layout.Cells.First(x => x.Row == 1 && x.Col == 2).Props.Send == "%" && layout.Cells.First(x => x.Row == 1 && x.Col == 3).Props.GroupName == "Besturing",
+                "the created keys carry the send text and group of the stock layouts");
         }
 
         private static void T_Wizard()

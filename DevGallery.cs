@@ -417,6 +417,7 @@ namespace OnScreenKeyboard
                     string theme = light ? "light" : "dark";
                     using var w = new NewKeyboardWizard();
                     var t = typeof(NewKeyboardWizard);
+                    using (var keys = new SpecialKeysDialog(tag == "nl")) { Show(keys); Save(keys, Path.Combine(outDir, $"wizard_keys_{theme}_{tag}.png")); }
                     ((RadioButton)t.GetField("_rbPaste", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).GetValue(w)).Checked = true;
                     ((TextBox)t.GetField("_txtPaste", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).GetValue(w)).Text =
                         "q w e r t y u i o p\r\na s d f g h j k l\r\nz x c v b n m [Backspace]\r\n[Space] \"good morning\"";

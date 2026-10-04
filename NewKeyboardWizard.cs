@@ -110,6 +110,7 @@ namespace OnScreenKeyboard
         // Page 2: grid and labels (what shows depends on page 1)
         private TouchStepper      _stpRows, _stpCols;
         private Label             _lblPasteSize, _lblCopyInfo, _lblPasteErr;
+        private FluentButton      _btnKeyHelp;
         private TextBox           _txtPaste;
         private WizardGridPreview _previewBlank, _previewPaste;
         private int _gridRows = 4, _gridCols = 8;
@@ -188,11 +189,11 @@ namespace OnScreenKeyboard
             foreach (var b in all) b.MinimumSize = new Size(w, Touch.Target);
         }
 
-        private Label Hint(Func<string> text, int indent = 0)
+        private Label Hint(Func<string> text, int indent = 0, int? maxWidth = null)
         {
             var l = new Label
             {
-                Text = text(), AutoSize = true, UseMnemonic = false, MaximumSize = new Size(indent > 0 ? GroupTextWidth : PageTextWidth, 0),
+                Text = text(), AutoSize = true, UseMnemonic = false, MaximumSize = new Size(maxWidth ?? (indent > 0 ? GroupTextWidth : PageTextWidth), 0),
                 Font = Fluent.FontLabel, ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent,
                 Padding = new Padding(indent, 0, 0, 0), AccessibleName = text(),
             };
@@ -300,7 +301,24 @@ namespace OnScreenKeyboard
 
             // Paste: the hint, the box, the size that follows from it, and the preview with the labels.
             PageTitle(paste, () => Lang.T("wiz: p2 title"), () => Lang.T("wiz: p2 sub paste"));
-            AddWideRow(paste, Hint(() => Lang.T("wiz: paste hint 2")));
+            // The list of special keys, with a "?" that opens the full list of everything that can be typed in brackets.
+            _btnKeyHelp = new FluentButton
+            {
+                Text = "?", Style = FluentButton.Variant.Neutral, TabStop = true, AutoSize = false,
+                Size = new Size(Touch.Target, Touch.Target), MinimumSize = new Size(Touch.Target, Touch.Target),
+                Margin = new Padding(Touch.Gap, 0, 0, 0), AccessibleName = Lang.T("wiz: Special keys help"),
+            };
+            _btnKeyHelp.Click += (s, e) => { using var d = new SpecialKeysDialog(IsDutch()); d.ShowDialog(this); };
+            SetTip(_btnKeyHelp, () => Lang.T("wiz: Special keys help"));
+            var hintKeys = new TableLayoutPanel { ColumnCount = 2, RowCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink };
+            hintKeys.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            hintKeys.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            var hint2 = Hint(() => Lang.T("wiz: paste hint 2"), maxWidth: PageTextWidth - Touch.Target - Touch.Gap - 8);
+            hint2.Anchor = AnchorStyles.Left;
+            hint2.Margin = Padding.Empty;       // in line with the other hint lines
+            hintKeys.Controls.Add(hint2, 0, 0);
+            hintKeys.Controls.Add(_btnKeyHelp, 1, 0);
+            AddWideRow(paste, hintKeys);
             AddWideRow(paste, Hint(() => Lang.T("wiz: paste hint 3")));
             _txtPaste = new TextBox
             {
@@ -902,7 +920,7 @@ namespace OnScreenKeyboard
             // Text labels for control-class keys
             if (label == "Esc" || label == "Del" || label == "Tab" ||
                 label == "Shift" || label == "Ctrl" || label == "Alt" ||
-                label == "AltGr" || label == "CapsLock")
+                label == "AltGr" || label == "CapsLock" || label == "Caps" || label == "Win")
                 return "Besturing";
 
             // ── Classify by first significant character ────────────────
@@ -953,6 +971,7 @@ namespace OnScreenKeyboard
             for (int i=0;i<_tiles.Length;i++) _tiles[i].Text=Lang.T("wiz: theme "+Presets[i].Id);
             _tileFile.Text=Lang.T("wiz: From file…");
             foreach (var b in new[]{ _btnBrowseCopy, _btnBrowseTheme, _btnBrowseFolder }) b.AccessibleName=Lang.T("wiz: Browse");
+            _btnKeyHelp.AccessibleName=Lang.T("wiz: Special keys help");
             _txtPaste.AccessibleName=Lang.StripMnemonic(Lang.T("wiz: Key labels"));
             RefreshGrid();
             UpdateSummary();
