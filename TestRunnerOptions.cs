@@ -44,6 +44,14 @@ namespace OnScreenKeyboard
 
         private static void Step(Action group) => Step(group.Method.Name, group);
 
+        /// <summary>A group that only runs when a filter names it (a slow report, not a test): <c>--test NarrowWidthReport</c>.</summary>
+        private static void StepOnDemand(Action group)
+        {
+            ReadOptions();
+            if (_filter.Count == 0) return;
+            Step(group.Method.Name, group);
+        }
+
         /// <summary>Runs one group of tests when it matches the filter (all groups when there is none), and times it.</summary>
         private static void Step(string name, Action group)
         {

@@ -96,6 +96,51 @@ namespace OnScreenKeyboard
             return bad;
         }
 
+        /// <summary>
+        /// Controls that are cut off: part of the control lies outside the visible area of one of the containers above it, and no
+        /// scrolling container in between makes that part reachable. Unlike <see cref="Overflow"/> this also sees docked controls and
+        /// content that a table cell clips silently (the Action row of the Key Editor at 463 px: the value box was simply not there).
+        /// </summary>
+        public static List<string> CutOff(Control root, bool visibleOnly)
+        {
+            var bad = new List<string>();
+            foreach (var c in All(root))
+            {
+                if ((visibleOnly && !c.Visible) || c is Form || c.Parent == null || c.Width == 0 || c.Height == 0) continue;
+                var r = c.Parent.RectangleToScreen(c.Bounds);
+                string where = null;
+                for (Control a = c.Parent; a != null && !(a is Form) && where == null; a = a.Parent)
+                {
+                    var clip = a.RectangleToScreen(a.ClientRectangle);
+                    bool scrolls = a is ScrollableControl sc && sc.AutoScroll;
+                    if (r.Right > clip.Right + 1) { if (scrolls) r.Width = clip.Right - r.X; else where = $"right edge {r.Right - clip.Right} px past {a.GetType().Name}"; }
+                    if (where == null && r.Bottom > clip.Bottom + 1) { if (scrolls) r.Height = clip.Bottom - r.Y; else where = $"bottom edge {r.Bottom - clip.Bottom} px past {a.GetType().Name}"; }
+                }
+                if (where != null) bad.Add($"{Describe(c)} cut off: {where}");
+            }
+            return bad;
+        }
+
+        /// <summary>
+        /// Visible controls of one container whose rectangles overlap by more than a pixel (a chooser squeezed under its neighbouring
+        /// button: in the Key Editor at 480 px the group chooser was drawn under "Manage Groups…" and nothing else noticed).
+        /// </summary>
+        public static List<string> Overlaps(Control root, bool visibleOnly)
+        {
+            var bad = new List<string>();
+            foreach (var parent in All(root).Append(root))
+            {
+                var kids = parent.Controls.Cast<Control>().Where(k => (!visibleOnly || k.Visible) && k.Width > 0 && k.Height > 0).ToList();
+                for (int i = 0; i < kids.Count; i++)
+                    for (int j = i + 1; j < kids.Count; j++)
+                    {
+                        var r = Rectangle.Intersect(kids[i].Bounds, kids[j].Bounds);
+                        if (r.Width > 1 && r.Height > 1) bad.Add($"{Describe(kids[i])} overlaps {Describe(kids[j])} by {r.Width}x{r.Height} in {parent.GetType().Name}");
+                    }
+            }
+            return bad;
+        }
+
         /// <summary>Controls that extend past the container that holds them (scrolling containers may grow downwards).</summary>
         public static List<string> Overflow(Control root, bool visibleOnly)
         {

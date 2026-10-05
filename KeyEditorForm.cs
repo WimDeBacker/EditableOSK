@@ -47,6 +47,10 @@ namespace OnScreenKeyboard
         private const int Layers = 3;                    // Normal, Shift, AltGr
         private const int LabelColumnWidth = 124;        // a key label is short: room for about 11 characters
 
+        // The most the window may grow when the one-line action row needs it (a long translation or a large font); beyond that
+        // the row takes two lines (the AdaptiveTable). Only a cap: the window is as wide as its content needs, not as this.
+        protected override int ContentMaxWidth => 880;
+
         // ── Controls ──────────────────────────────────────────────────
         // One row per layer: label, action type, action value, contextual picker (Browse / Record).
         private readonly TouchTextBox[]      _labels  = new TouchTextBox[Layers];
@@ -54,7 +58,7 @@ namespace OnScreenKeyboard
         private readonly TouchTextBox[]      _values  = new TouchTextBox[Layers];
         private readonly FluentButton[]      _pickers = new FluentButton[Layers];
         private readonly Label[]             _layerNames = new Label[Layers];
-        private TableLayoutPanel _grid;
+        private AdaptiveTable _grid;
         private Panel            _valueHost0;            // holds the Normal layer's value box and the modifier chooser
         private TouchChoiceButton _modChooser;           // which modifier (Normal layer, Modifier type)
         private Label            _lblHint;               // recording / picker messages, hidden when empty
@@ -226,6 +230,7 @@ namespace OnScreenKeyboard
             UpdatePickerTexts();
             if (_valueShowsWp) ShowWpValue();
             if (LayersDisabled) SetHint(WpHint);
+            _grid.Reevaluate();          // the translated headers and names change how wide the one-line arrangement is
         }
 
         // ══════════════════════════════════════════════════════════════
@@ -305,24 +310,25 @@ namespace OnScreenKeyboard
 
         private void BuildKeySection(TableLayoutPanel key)
         {
-            _grid = new TableLayoutPanel { ColumnCount = 5, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink };
+            // The rows of this grid are arranged by the AdaptiveTable (see the variants below): the five columns on one line when they fit,
+            // and the value box with its button on a second line under the label when they do not.
+            _grid = new AdaptiveTable { ColumnCount = 5 };
             _grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));                        // layer name
             _grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, LabelColumnWidth));       // label: short, so narrow
             _grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));                        // action type
             _grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));                    // action value
             _grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));                        // Browse / Record
 
-            _grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            _grid.Controls.Add(GridHeader(() => Lang.StripMnemonic(Lang.T("Label"))), 1, 0);
-            var action = GridHeader(() => Lang.T("Action"));
-            _grid.Controls.Add(action, 2, 0);
-            _grid.SetColumnSpan(action, 3);
+            var headerLabel  = GridHeader(() => Lang.StripMnemonic(Lang.T("Label")));
+            var headerAction = GridHeader(() => Lang.T("Action"));
+            _grid.Controls.Add(headerLabel);
+            _grid.Controls.Add(headerAction);
+            var valueCells = new Control[Layers];
 
             int ti = 0;
             for (int i = 0; i < Layers; i++)
             {
-                int layer = i, row = i + 1;
-                _grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                int layer = i;
 
                 var name = new Label
                 {
@@ -332,15 +338,15 @@ namespace OnScreenKeyboard
                 };
                 _layerNames[i] = name;
                 _transLabels.Add((name, () => LayerName(layer)));
-                _grid.Controls.Add(name, 0, row);
+                _grid.Controls.Add(name);
 
                 _labels[i] = new TouchTextBox { Dock = DockStyle.Fill, Margin = new Padding(0, 4, Touch.Gap, 4), AccessibleName = LayerLabelName(i), TabIndex = ti++ };
-                _grid.Controls.Add(_labels[i], 1, row);
+                _grid.Controls.Add(_labels[i]);
 
                 _types[i] = new TouchChoiceButton { RowHeight = 56, Dock = DockStyle.Fill, Margin = new Padding(0, 4, Touch.Gap, 4), TabIndex = ti++ };
                 _types[i].SetItems(TypeItems(restricted: i > 0), 0);
                 _types[i].AccessibleDescription = Lang.T("Action");
-                _grid.Controls.Add(_types[i], 2, row);
+                _grid.Controls.Add(_types[i]);
 
                 // A minimum width: with long translations the other columns must not squeeze the value away.
                 _values[i] = new TouchTextBox { Dock = DockStyle.Fill, AccessibleName = ValueName(i), MinimumSize = new Size(150, Touch.Target) };
@@ -368,12 +374,14 @@ namespace OnScreenKeyboard
                     _values[i].Margin = new Padding(0, 4, Touch.Gap, 4);
                     _values[i].TabIndex = ti++;
                 }
-                _grid.Controls.Add(valueCell, 3, row);
+                valueCells[i] = valueCell;
+                _grid.Controls.Add(valueCell);
 
                 _pickers[i] = NewPicker();
                 _pickers[i].TabIndex = ti++;
                 _pickers[i].Visible = false;
-                _grid.Controls.Add(_pickers[i], 4, row);
+                _grid.Controls.Add(_pickers[i]);
+                _pickers[i].VisibleChanged += (s, e) => _grid.Rearrange();      // the narrow arrangement gives the value box the button's room while it is hidden
                 SetTip(_pickers[i], () => ModeOf(layer) == SendMode.Layout ? Lang.T("tip: Browse layout")
                                         : _recording && _recordLayer == layer ? Lang.T("tip: Stop recording") : Lang.T("tip: Record"));
 
@@ -382,6 +390,38 @@ namespace OnScreenKeyboard
                 _labels[i].TextChanged += (s, e) => { if (layer == 0) Refresh2(); };
                 _pickers[i].Click += (s, e) => OnPickerClick(layer);
             }
+
+            // Wide: name | label | type | value | button on one line per layer, under the two column headers.
+            _grid.AddVariant(() =>
+            {
+                var cells = new List<AdaptiveTable.Cell> { new AdaptiveTable.Cell(headerLabel, 1, 0), new AdaptiveTable.Cell(headerAction, 2, 0, 3) };
+                for (int i = 0; i < Layers; i++)
+                {
+                    int row = i + 1;
+                    cells.Add(new AdaptiveTable.Cell(_layerNames[i], 0, row));
+                    cells.Add(new AdaptiveTable.Cell(_labels[i], 1, row));
+                    cells.Add(new AdaptiveTable.Cell(_types[i], 2, row));
+                    cells.Add(new AdaptiveTable.Cell(valueCells[i], 3, row));
+                    cells.Add(new AdaptiveTable.Cell(_pickers[i], 4, row));
+                }
+                return cells;
+            });
+            // Narrow: line 1 = name, label, type (the type chooser takes the rest of the line); line 2 = the value box under the label,
+            // with the button at the right end (the whole width when there is no button).
+            _grid.AddVariant(() =>
+            {
+                var cells = new List<AdaptiveTable.Cell> { new AdaptiveTable.Cell(headerLabel, 1, 0), new AdaptiveTable.Cell(headerAction, 2, 0, 3) };
+                for (int i = 0; i < Layers; i++)
+                {
+                    int first = 1 + 2 * i, second = first + 1;
+                    cells.Add(new AdaptiveTable.Cell(_layerNames[i], 0, first));
+                    cells.Add(new AdaptiveTable.Cell(_labels[i], 1, first));
+                    cells.Add(new AdaptiveTable.Cell(_types[i], 2, first, 3));
+                    cells.Add(new AdaptiveTable.Cell(valueCells[i], 1, second, _pickers[i].Visible ? 3 : 4));
+                    cells.Add(new AdaptiveTable.Cell(_pickers[i], 4, second));
+                }
+                return cells;
+            });
             AddWideRow(key, _grid);
 
             _lblHint = new Label
@@ -419,15 +459,24 @@ namespace OnScreenKeyboard
         private void BuildAppearanceSection(TableLayoutPanel look)
         {
             // Group: a chooser plus the button that manages the groups.
-            var group = new TableLayoutPanel { ColumnCount = 2, RowCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink };
+            // Beside each other when they fit, the button under the chooser when they do not (a chooser squeezed to nothing helps nobody).
+            var group = new AdaptiveTable { ColumnCount = 2 };
             group.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             group.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            _cmbGroup = new TouchChoiceButton { RowHeight = 44, Dock = DockStyle.Fill, Margin = new Padding(0, 0, Touch.Gap, 0), TabIndex = 0 };
+            _cmbGroup = new TouchChoiceButton { RowHeight = 44, Dock = DockStyle.Fill, Margin = new Padding(0, 0, Touch.Gap, 0), TabIndex = 0, MinimumSize = new Size(Touch.InputMinWidth / 2, Touch.Target) };
             _btnGroupEdit = MakeTouchButton(() => Lang.T("Manage Groups…"));
             _btnGroupEdit.Margin = Padding.Empty;
             _btnGroupEdit.TabIndex = 1;
-            group.Controls.Add(_cmbGroup, 0, 0);
-            group.Controls.Add(_btnGroupEdit, 1, 0);
+            group.AddVariant(() =>
+            {
+                _cmbGroup.Margin = new Padding(0, 0, Touch.Gap, 0);
+                return new[] { new AdaptiveTable.Cell(_cmbGroup, 0, 0), new AdaptiveTable.Cell(_btnGroupEdit, 1, 0) };
+            });
+            group.AddVariant(() =>
+            {
+                _cmbGroup.Margin = new Padding(0, 0, 0, Touch.Gap / 2);
+                return new[] { new AdaptiveTable.Cell(_cmbGroup, 0, 0, 2), new AdaptiveTable.Cell(_btnGroupEdit, 0, 1, 2) };
+            });
             AddRow(look, () => Lang.T("Group"), group);
             RebuildGroupChooser("", refresh: false);
             SetTip(_btnGroupEdit, () => Lang.T("tip: Manage Groups"));

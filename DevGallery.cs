@@ -94,6 +94,21 @@ namespace OnScreenKeyboard
                     d.PerformLayout();
                     Save(d, Path.Combine(outDir, $"keyeditor_real_appearance_{theme}_{tag}.png"));
 
+                    // A narrow screen (480 design px: a small tablet, or 200 % scaling on a laptop): the Action row takes two lines.
+                    using (var n = new KeyEditorForm(props, null, groups: groups, layoutDir: AppDomain.CurrentDomain.BaseDirectory))
+                    {
+                        Show(n);
+                        n.MinimumSize = Size.Empty;
+                        n.ClientSize = new Size(480, n.ClientSize.Height);
+                        Application.DoEvents();
+                        n.PerformLayout();
+                        Save(n, Path.Combine(outDir, $"keyeditor_narrow_key_{theme}_{tag}.png"));
+                        n.SectionBarAccess.Select(1, focus: false);
+                        Application.DoEvents();
+                        n.PerformLayout();
+                        Save(n, Path.Combine(outDir, $"keyeditor_narrow_appearance_{theme}_{tag}.png"));
+                    }
+
                     // A word prediction key: its Shift and AltGr rows are empty and disabled.
                     var wpProps = new KeyProps("w", "wp:1", "W", "x", "€", "y");
                     using var w = new KeyEditorForm(wpProps, null, groups: groups, layoutDir: AppDomain.CurrentDomain.BaseDirectory);
