@@ -16,7 +16,7 @@ namespace OnScreenKeyboard
         public SpecialKeysDialog(bool dutch)
         {
             Text = Lang.T("wiz: keys title");
-            FormBorderStyle = FormBorderStyle.FixedDialog;
+            FormBorderStyle = FormBorderStyle.Sizable;       // the groups reflow with the width
 
             var close = MakeTouchButton(() => Lang.T("wiz: Close"), FluentButton.Variant.Primary);
             BuildFrame(MakeFooter(null, close), withSections: false);

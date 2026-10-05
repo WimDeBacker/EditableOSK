@@ -96,7 +96,8 @@ namespace OnScreenKeyboard
                     Width  = Math.Min(Width,  wa.Width  - 10);
                     Height = Math.Min(Height, wa.Height - 10);
                 }
-                MinimumSize = new Size(Math.Min(Width, 480), Math.Min(Height, 320));
+                // The narrowest window the layout is built for: 480 design pixels (responsive_spec.md), whatever the display scaling.
+                MinimumSize = new Size(Math.Min(Width, (int)Math.Round(480 * DeviceDpi / 96.0)), Math.Min(Height, 320));
                 ApplyTheme();
                 UpdateWrapWidths();
             };

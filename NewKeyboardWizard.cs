@@ -135,7 +135,8 @@ namespace OnScreenKeyboard
         public NewKeyboardWizard()
         {
             Text            = Lang.T("New Keyboard");
-            FormBorderStyle = FormBorderStyle.FixedDialog;
+            // Resizable like the editors: the layout follows the width (responsive_spec.md); the smallest width is the one it is built for.
+            FormBorderStyle = FormBorderStyle.Sizable;
 
             BuildUI();
             // Everything is built visible, so the window is measured for the tallest case (copy row, paste box and blank

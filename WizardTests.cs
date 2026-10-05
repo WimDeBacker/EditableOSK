@@ -152,6 +152,10 @@ namespace OnScreenKeyboard
                 using (var w = Wizard())
                 {
                     DevGallery.Show(w);
+                    Assert(w.FormBorderStyle == FormBorderStyle.Sizable, "the wizard can be resized, like the editors");
+                    int built = (int)Math.Round(480 * w.DeviceDpi / 96.0);
+                    Assert(w.MinimumSize.Width == Math.Min(w.Width, built),
+                        $"the wizard cannot be made narrower than the 480 design px it is built for (minimum {w.MinimumSize.Width}px, window {w.Width}px)");
                     var back = Priv<FluentButton>(w, "_btnBack"); var next = Priv<FluentButton>(w, "_btnNext");
                     var create = Priv<FluentButton>(w, "_btnCreate"); var cancel = Priv<FluentButton>(w, "_btnCancel");
                     Assert(WizPage(w) == 0 && !back.Visible && next.Visible && !create.Visible, "page 1: Next only (no Back, no Create)");
