@@ -5,6 +5,8 @@
 - Tests: the app is a WinExe, so console output is not captured by a pipe. Run it with output redirected to a file:
   `Start-Process bin\Debug\net10.0-windows\OnScreenKeyboard.exe -ArgumentList "--test" -RedirectStandardOutput $env:TEMP\t_out.txt -Wait -PassThru -NoNewWindow`
   Exit code 0 = all passed. Failed tests are listed in `bin\Debug\net10.0-windows\test_failures.txt`.
+- **Work with a filter, finish with the full suite.** `--test <term>[,<term>]` runs only the groups whose name contains a term (`--test Wizard`); add `--quick` to run the layout guards for English and +80 % text in the light theme only. A partial run says `PARTIAL RUN` and is for iterating; the full run (about 2 minutes, no arguments) is the only one that counts, and runs once before a commit. Every run prints its slowest groups and writes all timings to `test_timing.txt`.
+- Run the tests in the background (`run_in_background`) and read the output file when the notification arrives; do not poll or sleep.
 - Never run the test mode from Bash: it can open a hidden console and wait for a key.
 - Gallery screenshots of the dialogs: `OnScreenKeyboard.exe --gallery <folder>`.
 - If the build fails because OnScreenKeyboard.exe is running: ask the user to close it. Do not kill it and do not build in another folder.
@@ -12,6 +14,8 @@
 ## Working rules
 - Change files with the Edit/Write tools, not with Python scripts.
 - A fix is not done until the build is clean and the full test suite passes.
+- Layout work: read the whole list of guard failures and look at the gallery pictures before changing anything, then fix every cause in one go. One guess per full run is the slowest way to work. A change that made things worse is reverted at once, not built upon.
+- Stress-test strings (`xxxx` appended) cannot wrap inside a word: keep each translated line short (under about 70 characters) instead of making the layout wider.
 - For visual fixes, render the gallery and look at it in English and Dutch; a passing test is not enough.
 - Every new UI string goes in `LanguageManager.cs` (English) and `lang_nl.xml` (Dutch).
 - Throwaway preview pages go in the project folder (not the scratchpad) and must inline their images.

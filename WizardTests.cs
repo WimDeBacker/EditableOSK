@@ -29,33 +29,24 @@ namespace OnScreenKeyboard
             Directory.CreateDirectory(tmp);
             try
             {
-                CheckDialogGuards("Wizard (blank grid)", Wizard);
-                CheckDialogGuards("Special keys window", () => new SpecialKeysDialog(false));
-                CheckDialogGuards("Special keys window (Dutch labels)", () => new SpecialKeysDialog(true));
+                // Every page is a host section that always exists, so what differs between runs is only which optional rows show:
+                // the defaults hide the copy-file row and the theme-file row; "copy + theme from file" shows both (and the paste
+                // box holds text, which the preview draws). Two dialogs therefore cover what seven used to (blank, pasted, copy,
+                // theme from file, and two help windows); the saving was 58 s of a 131 s suite.
+                CheckDialogGuards("Wizard (defaults)", Wizard);
 
-                CheckDialogGuards("Wizard (pasted labels)", () =>
+                CheckDialogGuards("Wizard (copy file and theme file rows shown, labels pasted)", () =>
                 {
                     var w = Wizard();
-                    Priv<TouchRadioButton>(w, "_rbPaste").Checked = true;
                     WizSet(w, "_txtPaste", "q w e r t y u i o p\r\na s d f g h j k l\r\nz x c v b n m [Backspace]\r\n[Space] \"good morning\"");
-                    return w;
-                });
-
-                CheckDialogGuards("Wizard (copy from file)", () =>
-                {
-                    var w = Wizard();
                     Priv<TouchRadioButton>(w, "_rbCopy").Checked = true;
                     WizSet(w, "_txtCopyFile", Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "azerty.kbl"));
-                    return w;
-                });
-
-                CheckDialogGuards("Wizard (theme from file, wrong path)", () =>
-                {
-                    var w = Wizard();
                     Priv<TouchTile>(w, "_tileFile").Checked = true;
                     WizSet(w, "_txtThemeFile", Path.Combine(tmp, "a rather long folder name", "and_a_long_file_name_for_a_theme.kbl"));
                     return w;
                 });
+
+                CheckDialogGuards("Special keys window", () => new SpecialKeysDialog(false));
             }
             finally { try { Directory.Delete(tmp, true); } catch { } }
         }

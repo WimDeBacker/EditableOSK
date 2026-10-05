@@ -398,12 +398,14 @@ namespace OnScreenKeyboard
         // ════════════════════════════════════════════════════════════════
         private static void CheckDialogGuards(string dialog, Func<FluentDialogBase> make)
         {
-            var cases = new (string Name, string Code, double Pseudo)[]
-                { ("en", "en", 0), ("nl", "nl", 0), ("+40%", "en", 0.4), ("+80%", "en", 0.8) };
+            // Quick mode (--quick) is for working on one dialog: English and the widest text, light theme. The full matrix runs before a commit.
+            var cases = Quick
+                ? new (string Name, string Code, double Pseudo)[] { ("en", "en", 0), ("+80%", "en", 0.8) }
+                : new (string Name, string Code, double Pseudo)[] { ("en", "en", 0), ("nl", "nl", 0), ("+40%", "en", 0.4), ("+80%", "en", 0.8) };
             bool wasLight = ToolbarButton.IsLightTheme;
             try
             {
-                foreach (bool light in new[] { true, false })
+                foreach (bool light in Quick ? new[] { true } : new[] { true, false })
                 {
                     ToolbarButton.IsLightTheme = light;          // read when a dialog is created
                     foreach (var (name, code, pseudo) in cases)

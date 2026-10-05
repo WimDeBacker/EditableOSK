@@ -33,76 +33,76 @@ namespace OnScreenKeyboard
             Console.WriteLine("═══════════════════════════════════════════");
             Console.ResetColor();
 
-            T_KeyProps();
-            T_SendKeysHelper_Escape();
-            T_SendKeysHelper_Modifiers();
-            T_SendKeysHelper_IsPlainText();
-            T_SendKeysHelper_HumanReadable();
-            T_SettingsManager_RoundTrip();
-            T_SettingsManager_AtomicSave();
-            T_SettingsManager_Robustness();
-            T_SettingsManager_Sentinels();
-            T_KeyLayout();
-            T_LanguageManager();
-            T_LanguageXmlSafety();
-            T_GridLayout();
-            T_FontSizing();
-            T_CharacterRouting();
-            T_SlowReceiverStress();
-            T_UndoRedo();
-            T_SendKeysStripping();
-            T_AutoScaleMode_Dialogs();
-            T_GrowWindowOnEditMode();
-            T_PaintHandlerAudit();
-            T_SlowKeysDwell();
-            T_AccessibilityControls();
-            T_Accelerators();
-            T_SvgIconLoader_Cache();
-            T_TouchControls();
-            T_TouchGroupComponents();
-            T_TouchChoiceButton();
-            T_ColorFlyout();
-            T_TouchDialogFrame();
-            T_ColourContrastAaa();
-            T_ControlBorders();
-            T_KeyRings();
-            T_CornerLabels();
-            T_DisabledLook();
-            T_KeyEditorGuards();
-            T_GroupEditorGuards();
-            T_GroupEditor();
-            T_GroupDialogs();
-            T_KeyboardEditorGuards();
-            T_KeyboardEditor();
-            T_KeyboardEditorAlignment();
-            T_StickyModifiers();
-            T_WizardControls();
-            T_WizardSpecialKeys();
-            T_Wizard();
-            T_WizardGuards();
-            T_KeyEditorRoundTrip();
-            T_ValidationBlocksApply();
-            T_MissingFontHandling();
-            T_FluentDialogBase_DisposeWithoutShow();
-            T_WizardKeyParser();
-            T_WizardKeyClassifier();
-            T_WizardThemePresets();
-            T_WizardBuildLayoutData_ThemeFileMerge();
-            T_WizardThemePage_GroupSwatchColors();
-            T_StyleGroups();
-            T_XmlRobustness();
+            // Every group of tests is a named step, so a run can be limited to some of them (see ParseOptions) and timed.
+            Step(T_KeyProps);
+            Step(T_SendKeysHelper_Escape);
+            Step(T_SendKeysHelper_Modifiers);
+            Step(T_SendKeysHelper_IsPlainText);
+            Step(T_SendKeysHelper_HumanReadable);
+            Step(T_SettingsManager_RoundTrip);
+            Step(T_SettingsManager_AtomicSave);
+            Step(T_SettingsManager_Robustness);
+            Step(T_SettingsManager_Sentinels);
+            Step(T_KeyLayout);
+            Step(T_LanguageManager);
+            Step(T_LanguageXmlSafety);
+            Step(T_GridLayout);
+            Step(T_FontSizing);
+            Step(T_CharacterRouting);
+            Step(T_SlowReceiverStress);
+            Step(T_UndoRedo);
+            Step(T_SendKeysStripping);
+            Step(T_AutoScaleMode_Dialogs);
+            Step(T_GrowWindowOnEditMode);
+            Step(T_PaintHandlerAudit);
+            Step(T_SlowKeysDwell);
+            Step(T_AccessibilityControls);
+            Step(T_Accelerators);
+            Step(T_SvgIconLoader_Cache);
+            Step(T_TouchControls);
+            Step(T_TouchGroupComponents);
+            Step(T_TouchChoiceButton);
+            Step(T_ColorFlyout);
+            Step(T_TouchDialogFrame);
+            Step(T_ColourContrastAaa);
+            Step(T_ControlBorders);
+            Step(T_KeyRings);
+            Step(T_CornerLabels);
+            Step(T_DisabledLook);
+            Step(T_KeyEditorGuards);
+            Step(T_GroupEditorGuards);
+            Step(T_GroupEditor);
+            Step(T_GroupDialogs);
+            Step(T_KeyboardEditorGuards);
+            Step(T_KeyboardEditor);
+            Step(T_KeyboardEditorAlignment);
+            Step(T_StickyModifiers);
+            Step(T_WizardControls);
+            Step(T_WizardSpecialKeys);
+            Step(T_Wizard);
+            Step(T_WizardGuards);
+            Step(T_KeyEditorRoundTrip);
+            Step(T_ValidationBlocksApply);
+            Step(T_MissingFontHandling);
+            Step(T_FluentDialogBase_DisposeWithoutShow);
+            Step(T_WizardKeyParser);
+            Step(T_WizardKeyClassifier);
+            Step(T_WizardThemePresets);
+            Step(T_WizardBuildLayoutData_ThemeFileMerge);
+            Step(T_WizardThemePage_GroupSwatchColors);
+            Step(T_StyleGroups);
+            Step(T_XmlRobustness);
 
-            // Run word prediction tests (uses shared Assert/Section → failures go to report)
-            WordPredictionTests.Run(Assert, Section);
-            // Run end-to-end predictor tests
-            WordPredictorE2ETests.Run(Assert, Section);
-            // Run word database robustness tests (graceful failure on bad/missing DB)
-            WordDatabaseRobustnessTests.Run(Assert, Section);
-            // Run LanguageRegistry tests (database discovery and grouping)
-            LanguageRegistryTests.Run(Assert, Section);
+            // Word prediction tests (use the shared Assert/Section, so failures go to the report), end-to-end predictor tests,
+            // word database robustness tests (graceful failure on bad/missing DB), LanguageRegistry tests (database discovery).
+            Step("WordPredictionTests", () => WordPredictionTests.Run(Assert, Section));
+            Step("WordPredictorE2ETests", () => WordPredictorE2ETests.Run(Assert, Section));
+            Step("WordDatabaseRobustnessTests", () => WordDatabaseRobustnessTests.Run(Assert, Section));
+            Step("LanguageRegistryTests", () => LanguageRegistryTests.Run(Assert, Section));
 
             // ── Final summary and report (after ALL tests including prediction) ──
             Console.WriteLine();
+            WriteTimings();
             if (_fail == 0)
             {
                 Console.ForegroundColor = ConsoleColor.Green;
@@ -112,6 +112,11 @@ namespace OnScreenKeyboard
             {
                 Console.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine($"  {_fail} FAILED  /  {_pass} passed");
+            }
+            if (_filter.Count > 0 || Quick)
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine($"  PARTIAL RUN ({_ran} of {_ran + _skipped} groups{(Quick ? ", quick layout guards" : "")}): run without a filter before committing.");
             }
             Console.ResetColor();
 
@@ -124,6 +129,9 @@ namespace OnScreenKeyboard
                     "On-Screen Keyboard — Test Failure Report",
                     $"Generated: {DateTime.Now:yyyy-MM-dd HH:mm:ss}",
                     $"Failed: {_fail}  Passed: {_pass}  Total: {_fail + _pass}",
+                    _filter.Count > 0 || Quick
+                        ? $"PARTIAL RUN: {_ran} of {_ran + _skipped} groups{(_filter.Count > 0 ? ", filter " + string.Join(",", _filter) : "")}{(Quick ? ", quick layout guards" : "")}"
+                        : "Full run",
                     new string('═', 60), ""
                 };
                 if (_failures.Count == 0) lines.Add("All tests passed — no failures.");
