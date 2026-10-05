@@ -119,7 +119,7 @@ namespace OnScreenKeyboard
         private FluentButton     _btnBrowseTheme;
         private Label            _lblThemeFile, _lblThemeErr;
         private Control          _themeFileInput;
-        private SampleStrip      _strip;
+        private AdaptiveTable    _strip;
         private int              _selectedPreset = 0;
 
         // Page 4: save
@@ -410,17 +410,35 @@ namespace OnScreenKeyboard
             _lblThemeErr = ErrorLine();
             AddWideRow(t, _lblThemeErr);
             // Repaint the sample keys once a theme file is chosen or typed.
-            _txtThemeFile.TextChanged += (s, e) => { _lblThemeErr.Text = ""; _strip?.Invalidate(); };
+            _txtThemeFile.TextChanged += (s, e) => { _lblThemeErr.Text = ""; RefreshSamples(); };
 
-            _strip = new SampleStrip(this) { Dock = DockStyle.Fill, Height = 100, MinimumSize = new Size(0, 100) };
+            // The ten sample keys, one per group, on the colour of the keyboard's background: all on one line when they fit, else two
+            // lines of five (they used to be drawn in one line whatever the width, and the right-hand ones fell off the window).
+            var keys = new List<Control>();
+            foreach (var (label, group) in SampleKeys) keys.Add(new SampleKey(this, label, group) { Dock = DockStyle.Fill });
+            _strip = ReflowRows.Tiles(keys, keys.Count, 5);
+            _strip.Padding = new Padding(Touch.Gap);
+            _strip.Tag = "notheme";                         // its background is the keyboard's, not the dialog's
+            _strip.AccessibleRole = AccessibleRole.Grouping;
             AddWideRow(t, MakeGroup(() => Lang.T("wiz: Sample keys"), _strip));
+            RefreshSamples();
+        }
+
+        /// <summary>Gives the sample keys and their background the colours of the chosen theme.</summary>
+        private void RefreshSamples()
+        {
+            if (_strip == null) return;
+            _strip.BackColor = GetPreviewBgColor();
+            _strip.AccessibleName = Lang.T("wiz: Sample keys") + ": " + ThemeDisplayName();
+            foreach (Control k in _strip.Controls) k.Invalidate();
+            _strip.Invalidate();
         }
 
         private void SelectPreset(int idx)
         {
             _selectedPreset = idx;
             ApplyThemeMode();
-            _strip?.Invalidate();
+            RefreshSamples();
         }
 
         private void ApplyThemeMode()
@@ -431,16 +449,24 @@ namespace OnScreenKeyboard
             if (!file) _lblThemeErr.Text = "";
         }
 
-        /// <summary>The ten sample keys, one per group, in the colours of the chosen theme.</summary>
-        private sealed class SampleStrip : Panel
+        /// <summary>One sample key, painted in the colours of its group in the chosen theme.</summary>
+        private sealed class SampleKey : Control
         {
             private readonly NewKeyboardWizard _w;
-            public SampleStrip(NewKeyboardWizard w)
+            private readonly string _label, _group;
+            public SampleKey(NewKeyboardWizard w, string label, string group)
             {
-                _w = w; DoubleBuffered = true;
+                _w = w; _label = label; _group = group;
+                SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
+                MinimumSize = new Size(56, 48);
+                Size = MinimumSize;
+                Margin = Padding.Empty;
+                TabStop = false;
                 AccessibleRole = AccessibleRole.Graphic;
+                AccessibleName = label;
+                Tag = "notheme";
             }
-            protected override void OnPaint(PaintEventArgs e) { base.OnPaint(e); _w.PaintSamples(e.Graphics, ClientSize); }
+            protected override void OnPaint(PaintEventArgs e) => _w.PaintSampleKey(e.Graphics, ClientSize, _label, _group);
         }
 
         private static readonly (string Label, string Group)[] SampleKeys =
@@ -449,28 +475,19 @@ namespace OnScreenKeyboard
             ("↵", "Besturing"), ("⌫", "Besturing"), (".", "Leestekens"), ("abc", "Woord"), ("⚙", null),
         };
 
-        private void PaintSamples(Graphics g, Size size)
+        private void PaintSampleKey(Graphics g, Size size, string label, string group)
         {
-            Color bg = GetPreviewBgColor(), borC = GetPreviewBorderColor();
+            Color borC = GetPreviewBorderColor();
             int borT = GetPreviewBorderThick();
-            g.Clear(bg);
-            if (_strip != null) _strip.AccessibleName = Lang.T("wiz: Sample keys") + ": " + ThemeDisplayName();
-
-            int n = SampleKeys.Length, gap = 4, kh = Math.Min(56, size.Height - 16);
-            int kw = Math.Max(34, Math.Min(72, (size.Width - 16 - (n - 1) * gap) / n));
-            int totalW = n * kw + (n - 1) * gap;
-            int ox = Math.Max(4, (size.Width - totalW) / 2), oy = (size.Height - kh) / 2;
-            using var borPen = borT > 0 ? new Pen(borC, borT) : null;
-            for (int i = 0; i < n; i++)
-            {
-                var r = new Rectangle(ox + i * (kw + gap), oy, kw, kh);
-                using (var b = new SolidBrush(GetGroupKeyColor(SampleKeys[i].Group))) g.FillRectangle(b, r);
-                // The border lies inside the key, the same width on all four sides (a pen on the edge put the right and
-                // bottom lines one pixel outside the fill).
-                if (borPen != null) g.DrawRectangle(borPen, r.X + borT / 2f, r.Y + borT / 2f, r.Width - borT, r.Height - borT);
-                TextRenderer.DrawText(g, SampleKeys[i].Label, Fluent.FontLabel, r, GetGroupFontColor(SampleKeys[i].Group),
-                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
-            }
+            var r = new Rectangle(0, 0, size.Width, size.Height);
+            using (var b = new SolidBrush(GetGroupKeyColor(group))) g.FillRectangle(b, r);
+            // The border lies inside the key, the same width on all four sides (a pen on the edge put the right and bottom lines
+            // one pixel outside the fill).
+            if (borT > 0)
+                using (var borPen = new Pen(borC, borT))
+                    g.DrawRectangle(borPen, r.X + borT / 2f, r.Y + borT / 2f, r.Width - borT, r.Height - borT);
+            TextRenderer.DrawText(g, label, Fluent.FontLabel, r, GetGroupFontColor(group),
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
         }
 
         // ── Page 4: save ─────────────────────────────────────────────────
@@ -978,7 +995,7 @@ namespace OnScreenKeyboard
             RefreshGrid();
             UpdateSummary();
             EqualiseFooter();
-            _strip?.Invalidate();
+            RefreshSamples();
         }
     }
 

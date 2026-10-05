@@ -2,6 +2,7 @@
 // the live preview, theme tiles, and the Create step (invalid names, overwrite check).
 
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -179,6 +180,26 @@ namespace OnScreenKeyboard
 
                     ClickButton(cancel);
                     Assert(w.DialogResult == DialogResult.Cancel, "Cancel closes the wizard with Cancel");
+                }
+
+                // The ten sample keys of the theme page: one line when there is room, two lines of five when there is not, and every key
+                // inside the strip (they used to be painted in one line whatever the width, and the right-hand ones fell off the window).
+                using (var w = Wizard())
+                {
+                    DevGallery.Show(w);
+                    w.MinimumSize = Size.Empty;
+                    var strip = Priv<Control>(w, "_strip");
+                    List<Control> Keys() => UiGuard.All(w).Where(c => c.GetType().Name == "SampleKey").ToList();
+                    void Layout(int width, int section) { w.ClientSize = new Size(width, w.ClientSize.Height); w.ShowSectionForGuard(section); Application.DoEvents(); w.PerformLayout(); Application.DoEvents(); w.PerformLayout(); }
+                    Layout(1000, 4);
+                    var wide = Keys();
+                    Assert(wide.Count == 10, "the theme page has ten sample keys");
+                    Assert(wide.Select(k => k.Top).Distinct().Count() == 1, "wide window: the sample keys are on one line");
+                    Layout(480, 4);
+                    var narrow = Keys();
+                    Assert(narrow.Select(k => k.Top).Distinct().Count() == 2, "narrow window: the sample keys take two lines");
+                    Assert(narrow.All(k => k.Left >= 0 && k.Right <= strip.ClientSize.Width), "narrow window: every sample key lies inside the strip");
+                    Assert(NarrowProblemAt(w, 480) == null, "narrow window: nothing on the theme page is cut off");
                 }
 
                 // Footer buttons side by side have one width, in both languages (rule D23).
