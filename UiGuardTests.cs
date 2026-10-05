@@ -318,7 +318,7 @@ namespace OnScreenKeyboard
                 {
                     Lang.Load(code);
                     Lang.PseudoExpansion = pseudo;
-                    using var d = new TouchSpikeForm();
+                    using var d = new FrameFixtureForm();
                     DevGallery.Show(d);
 
                     // Sized from its content, not a constant, and fits a 1366 x 768 laptop.
@@ -350,27 +350,27 @@ namespace OnScreenKeyboard
             // ── Validation on a hidden section ──
             {
                 Lang.Load("en");
-                using var d = new TouchSpikeForm();
+                using var d = new FrameFixtureForm();
                 DevGallery.Show(d);
                 d.SelectSection(0);
                 d.SectionButtons.Select(0, focus: false);
                 Assert(!d.CheckSections(), "validation: no error, nothing to show");
 
-                ((TextBox)d.KeySwatch.Tag).Text = "zzz";           // invalid hex on the Appearance section
+                d.HexBox.Text = "zzz";                            // invalid hex on the Appearance section
                 Assert(d.SectionButtons.SelectedIndex == 0, "validation: typing the error does not switch section by itself");
                 Assert(d.CheckSections(), "validation: an error is found");
                 Assert(d.SectionButtons.SelectedIndex == 2, "validation: jumps to the section that holds the error");
                 Assert(d.SectionButtons.HasError(2) && !d.SectionButtons.HasError(0), "validation: only that section is marked");
                 Assert(d.SectionButtons.Tabs[2].Text.Contains("⚠"), "validation: the marked section shows the warning sign");
 
-                ((TextBox)d.KeySwatch.Tag).Text = "#FF0000";
+                d.HexBox.Text = "#FF0000";
                 Assert(!d.CheckSections() && !d.SectionButtons.HasError(2), "validation: fixing the value clears the marker");
             }
 
             // ── Ctrl+Tab and language change ──
             {
                 Lang.Load("en");
-                using var d = new TouchSpikeForm();
+                using var d = new FrameFixtureForm();
                 DevGallery.Show(d);
                 var pm = typeof(Form).GetMethod("ProcessCmdKey", BindingFlags.Instance | BindingFlags.NonPublic);
                 Message msg = default;

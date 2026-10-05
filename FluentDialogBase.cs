@@ -37,8 +37,6 @@ namespace OnScreenKeyboard
         protected readonly List<(Control Ctrl, Func<string> GetText)> _transTexts
             = new List<(Control, Func<string>)>();
 
-        protected string _pendingAccessibleName;
-
         // ── Content-sized dialogs (touch-friendly editors) ───────────────
         // A dialog built with the parameterless constructor and BuildFrame() sizes itself from its
         // content when it opens (FitToContent), instead of taking a constant size.
@@ -400,7 +398,6 @@ namespace OnScreenKeyboard
             };
             _transLabels.Add((lbl, label));
             NameInput(input, Lang.StripMnemonic(label()));
-            _pendingAccessibleName = Lang.StripMnemonic(label());
 
             PrepareInput(input, fill);
             input.TabIndex = _nextTab++;
@@ -554,60 +551,6 @@ namespace OnScreenKeyboard
                 f.Controls.Add(buttons[i], 2 + i, 0);
             }
             return f;
-        }
-
-        /// <summary>
-        /// A colour row for a section table: a 44 px hex box that fills the row plus a 44 x 44
-        /// swatch. Same behaviour and error handling as <see cref="AddColorRow"/>; the returned
-        /// row is placed with <see cref="AddRow"/>, the swatch works with <see cref="GetSwatchHex"/> /
-        /// <see cref="SetSwatchHex"/>.
-        /// </summary>
-        protected Control MakeColorRow(out Button swatch, Action onChanged = null)
-        {
-            var txtHex = new TouchTextBox { Font = Fluent.FontCourier };
-            var sw = new ColorSwatchButton
-            {
-                BackColor = Color.Gray, Size = new Size(Touch.Target, Touch.Target),
-                MinimumSize = new Size(Touch.Target, Touch.Target), TabStop = true,
-            };
-            string colorName = _pendingAccessibleName;
-            _pendingAccessibleName = null;
-            if (colorName != null)
-            {
-                txtHex.AccessibleName = colorName + " hex";
-                sw.AccessibleName     = colorName + " swatch";
-            }
-            SetTip(txtHex, () => Lang.T("tip: Hex color"));
-            SetTip(sw,     () => Lang.T("tip: Color swatch"));
-            // The error icon sits inside the hex box's right end instead of outside the row.
-            _err.SetIconAlignment(txtHex, ErrorIconAlignment.MiddleRight);
-            _err.SetIconPadding(txtHex, -24);
-            txtHex.TextChanged += (s, e) =>
-            {
-                var parsed = ParseColor(txtHex.Text, Color.Empty);
-                sw.BackColor = parsed.IsEmpty ? sw.BackColor : parsed;
-                onChanged?.Invoke();
-                bool bad = !string.IsNullOrWhiteSpace(txtHex.Text) && parsed.IsEmpty;
-                _err.SetError(txtHex, bad ? Lang.T("err: invalid hex") : "");
-            };
-            sw.Click += (s, e) =>
-            {
-                using var dlg = new ColorDialog { Color = sw.BackColor };
-                if (dlg.ShowDialog() == DialogResult.OK) txtHex.Text = SettingsManager.Hex(dlg.Color);
-            };
-            sw.Tag = txtHex;
-
-            var row = new TableLayoutPanel { ColumnCount = 2, RowCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink };
-            row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            txtHex.Dock   = DockStyle.Fill;
-            txtHex.Margin = new Padding(0, 0, Touch.Gap, 0);
-            sw.Margin     = Padding.Empty;
-            txtHex.MinimumSize = new Size(140, Touch.Target);
-            row.Controls.Add(txtHex, 0, 0);
-            row.Controls.Add(sw, 1, 0);
-            swatch = sw;
-            return row;
         }
 
         // ── Sizing ───────────────────────────────────────────────────────

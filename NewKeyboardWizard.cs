@@ -531,11 +531,11 @@ namespace OnScreenKeyboard
         /// <summary>Index of the host section on show.</summary>
         internal int CurrentSection { get; private set; }
 
-        internal override void ShowSectionForGuard(int index) => ShowSection(index);
+        internal override void ShowSectionForGuard(int index) => GoToSection(index);
 
-        private void ShowPage(int index) => ShowSection(SectionOfPage(index));
+        private void ShowPage(int index) => GoToSection(SectionOfPage(index));
 
-        private void ShowSection(int section)
+        private void GoToSection(int section)
         {
             int index = PageOfSection(section);
             _currentPage = index;

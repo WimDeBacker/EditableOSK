@@ -374,9 +374,6 @@ namespace OnScreenKeyboard
             ["wiz: p1 title"]                   = "How do you want to start?",
             ["wiz: p1 sub"]                     = "Choose the starting point for your new keyboard layout.",
             ["wiz: p2 title"]                   = "Grid & key labels",
-            ["wiz: p2 sub"]                     = "Set the grid size and optionally type the key labels.",
-            ["wiz: p3 title"]                   = "Window settings",
-            ["wiz: p3 sub"]                     = "Configure the keyboard window behaviour.",
             ["wiz: p4 title"]                   = "Theme",
             ["wiz: p4 sub"]                     = "Choose a colour theme for the keyboard.",
             ["wiz: p5 title"]                   = "Save as",
@@ -386,16 +383,12 @@ namespace OnScreenKeyboard
             ["wiz: Copy from file"]             = "Copy from an existing layout file",
             ["wiz: Layout file"]                = "Layout file",
             ["wiz: Key labels"]                 = "Key labels",
-            ["wiz: Grid size"]                  = "Grid size",
             ["wiz: Rows"]                       = "Rows",
             ["wiz: Columns"]                    = "Columns",
             ["wiz: Preview"]                    = "Preview",
             ["wiz: Language"]                   = "Keyboard language",
             ["wiz: Theme file"]                 = "Theme file",
             ["wiz: From file…"]                 = "From file…",
-            ["wiz: Validate with"]              = "Validate imported theme with:",
-            ["wiz: suite contrast"]             = "Color contrast (WCAG AA — 4.5 : 1 minimum)",
-            ["wiz: suite focus"]                = "Focus ring visibility (key vs. background 3 : 1 minimum)",
             ["wiz: File name"]                  = "File name",
             ["wiz: Folder"]                     = "Folder",
             ["wiz: default filename"]           = "new keyboard",
@@ -414,12 +407,9 @@ namespace OnScreenKeyboard
             ["wiz: tip Blank grid"]             = "An empty grid; you fill in the keys in the editor.",
             ["wiz: tip Paste labels"]           = "One row per line, words separated by spaces.",
             ["wiz: tip Copy from file"]         = "Starts from the keys of an existing layout file.",
-            ["wiz: tip always on top"]          = "Keep the keyboard floating above all other windows.",
-            ["wiz: tip hide title bar"]         = "Hide the Windows title bar for a cleaner floating keyboard look.",
-            ["wiz: tip paste"]                  = "One row per line, words separated by spaces or tabs.\n[Enter]  [Backspace]  [Tab]  [Space]  [Up]  [Down]  [Left]  [Right]  [Esc]  [Del]\n\"quoted phrase\"  →  one key with that label\n_  →  blank spacer",
+            ["wiz: tip paste"]                  = "One row per line, words separated by spaces or tabs.\nSpecial keys go in square brackets, such as [Enter] or [Shift]; the ? button lists them all.\n\"quoted phrase\"  →  one key with that label\n_  →  blank spacer",
             ["wiz: tip folder"]                 = "Folder where the new layout file will be saved.",
-            // Paste hint
-            ["wiz: paste hint"]                 = "One row per line · words = keys · [Enter] [Backspace] [Tab] [Space] [Up] [Down] [Left] [Right] · \"quoted phrase\" · _ = blank",
+            // Special keys help
             ["wiz: Special keys help"]          = "All special keys",
             ["wiz: Close"]                      = "Close",
             ["wiz: keys title"]                 = "Special keys in the key labels",
@@ -432,7 +422,6 @@ namespace OnScreenKeyboard
             ["wiz: keys group other"]           = "Other keys",
             ["wiz: keys group dead"]            = "Dead keys (accents)",
             ["wiz: keys dead note"]             = "A dead key puts its accent on the next letter that is typed.",
-            ["wiz: paste hint 1"]               = "One row per line, one key per word.",
             ["wiz: paste hint 2"]               = "Special keys: [Enter] [Backspace] [Tab] [Space] [Up] [Down] [Left] [Right]",
             ["wiz: paste hint 3"]               = "\"quoted phrase\" is one key; _ is a blank key.",
             // Select dialogs
@@ -461,15 +450,10 @@ namespace OnScreenKeyboard
             ["wiz: err no name"]                = "Please enter a file name.",
             ["wiz: err bad folder"]             = "The selected folder does not exist.",
             // Validation results
-            ["wiz: validation title"]           = "Theme validation warnings",
-            ["wiz: validation header"]          = "The following issues were found with the imported theme:",
-            ["wiz: fail contrast"]              = "• Color contrast ratio is {0:F1} : 1 — below the WCAG AA minimum of 4.5 : 1.",
-            ["wiz: fail focus"]                 = "• Focus ring contrast is {0:F1} : 1 — below the minimum of 3 : 1.",
             // Summary
             ["wiz: sum rows cols"]              = "Grid: {0} rows × {1} columns (last column reserved for the settings button)",
             ["wiz: sum theme"]                  = "Theme: {0}",
             ["wiz: sum language"]               = "Language: {0}",
-            ["wiz: sum always on top"]          = "Always on top: {0}",
         };
 
         // ── Active overrides for the selected non-English language ────────────
