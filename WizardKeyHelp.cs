@@ -10,12 +10,8 @@ namespace OnScreenKeyboard
 {
     internal sealed class SpecialKeysDialog : FluentDialogBase
     {
-        private const int MaxWidth = 1040;
-        private const int TextWidth = MaxWidth - 4 * Fluent.Pad;     // window minus the padding of frame and section
-
-        // Three columns of groups side by side, so the window stays short enough for a laptop screen.
         private static readonly Font MonoFont = new Font("Courier New", 10.5f);
-        protected override int ContentMaxWidth => MaxWidth;
+        protected override int ContentMaxWidth => 1040;
 
         public SpecialKeysDialog(bool dutch)
         {
@@ -29,51 +25,47 @@ namespace OnScreenKeyboard
             ActiveControl = close;
 
             var t = AddSection(() => Lang.T("wiz: keys title"));
-            AddWideRow(t, Note(() => Lang.T("wiz: keys intro"), TextWidth));
-            AddWideRow(t, Note(() => Lang.T("wiz: keys intro 2"), TextWidth));
+            AddWideRow(t, Note(() => Lang.T("wiz: keys intro")));
+            AddWideRow(t, Note(() => Lang.T("wiz: keys intro 2")));
 
-            // Two columns of groups, side by side; each group is a small two-column table (what to type | the key it makes).
-            var cols = new[]
+            // The groups, each a small two-column table (what to type | the key it makes), in three columns when they fit, else in two or
+            // one. A tall group (the navigation keys) spans two rows of the three-column arrangement.
+            var typing = Group("typing", dutch); var other = Group("other", dutch); var nav = Group("nav", dutch);
+            var mod = Group("mod", dutch);       var dead = Group("dead", dutch);
+            foreach (var g in new[] { typing, other, nav, mod, dead })
+            { g.Anchor = AnchorStyles.Top | AnchorStyles.Left; g.Margin = new Padding(0, 0, Fluent.Pad, Touch.Gap / 2); }
+            var both = new AdaptiveTable { ColumnCount = 3 };
+            both.AddVariant(() => new[]
             {
-                Column(Group("typing", dutch), Group("other", dutch)),
-                Column(Group("nav", dutch), Group("func", dutch)),
-                Column(Group("mod", dutch), Group("dead", dutch)),
-            };
-            var both = new TableLayoutPanel { ColumnCount = cols.Length, RowCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink };
-            for (int i = 0; i < cols.Length; i++)
+                new AdaptiveTable.Cell(typing, 0, 0), new AdaptiveTable.Cell(other, 0, 1),
+                new AdaptiveTable.Cell(nav, 1, 0, 1, 2),
+                new AdaptiveTable.Cell(mod, 2, 0), new AdaptiveTable.Cell(dead, 2, 1),
+            }, 3);
+            both.AddVariant(() => new[]
             {
-                both.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-                cols[i].Margin = new Padding(0, 0, i < cols.Length - 1 ? Fluent.Pad : 0, 0);
-                cols[i].Anchor = AnchorStyles.Top | AnchorStyles.Left;
-                both.Controls.Add(cols[i], i, 0);
-            }
+                new AdaptiveTable.Cell(typing, 0, 0), new AdaptiveTable.Cell(nav, 1, 0),
+                new AdaptiveTable.Cell(other, 0, 1), new AdaptiveTable.Cell(mod, 1, 1),
+                new AdaptiveTable.Cell(dead, 0, 2),
+            }, 2);
+            both.AddVariant(() => new[]
+            {
+                new AdaptiveTable.Cell(typing, 0, 0), new AdaptiveTable.Cell(other, 0, 1), new AdaptiveTable.Cell(nav, 0, 2),
+                new AdaptiveTable.Cell(mod, 0, 3),    new AdaptiveTable.Cell(dead, 0, 4),
+            }, 1);
             AddWideRow(t, both, fill: false);
-            AddWideRow(t, Note(() => Lang.T("wiz: keys dead note"), TextWidth));
+            AddWideRow(t, Note(() => Lang.T("wiz: keys dead note")));
         }
 
-        private Label Note(Func<string> text, int maxWidth)
+        /// <summary>A line of text that wraps at the width the window leaves it.</summary>
+        private Label Note(Func<string> text)
         {
-            var l = new Label
+            var l = Wrap(new Label
             {
-                Text = text(), AutoSize = true, UseMnemonic = false, MaximumSize = new Size(maxWidth, 0), Font = Fluent.FontLabel,
+                Text = text(), AutoSize = true, UseMnemonic = false, Font = Fluent.FontLabel,
                 ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent, AccessibleName = text(), Margin = new Padding(0, 0, 0, Touch.Gap),
-            };
+            });
             _transLabels.Add((l, () => { string s = text(); l.AccessibleName = s; return s; }));
             return l;
-        }
-
-        private static TableLayoutPanel Column(params Control[] groups)
-        {
-            var c = new TableLayoutPanel { ColumnCount = 1, RowCount = groups.Length, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink };
-            c.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            for (int i = 0; i < groups.Length; i++)
-            {
-                c.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-                groups[i].Anchor = AnchorStyles.Top | AnchorStyles.Left;
-                groups[i].Margin = new Padding(0, 0, 0, Touch.Gap / 2);
-                c.Controls.Add(groups[i], 0, i);
-            }
-            return c;
         }
 
         private TableLayoutPanel NewGroup(string groupKey, Func<string> note = null)
@@ -120,10 +112,10 @@ namespace OnScreenKeyboard
             {
                 if (row.GroupKey != groupKey) continue;
                 string first = WizardKeyParser.LabelOf(row.Tokens[0], dutch);
-                string shown = groupKey == "func" ? WizardKeyParser.LabelOf("f1", dutch) + " … " + WizardKeyParser.LabelOf("f16", dutch) : first;
+                string shown = row.Display.StartsWith("[f1]") ? WizardKeyParser.LabelOf("f1", dutch) + " … " + WizardKeyParser.LabelOf("f16", dutch) : first;
                 AddKeyRow(g, row.Display, shown);
             }
-            if (note != null) AddSpan(g, Note(note, 300));
+            if (note != null) AddSpan(g, Note(note));
             return g;
         }
     }

@@ -34,8 +34,14 @@ namespace OnScreenKeyboard
             AutoSize    = false;      // a tile is sized by its container (equal tiles in a row)
         }
 
-        public override Size GetPreferredSize(Size proposedSize) =>
-            new Size(MinimumSize.Width, MinimumSize.Height);      // the container decides the width; a long name wraps
+        // As wide as the longest word of the name needs (a long name may wrap between words, never inside one): this is the width the
+        // responsive grid of tiles looks at when it decides how many tiles fit on a line.
+        public override Size GetPreferredSize(Size proposedSize)
+        {
+            int widest = 0;
+            foreach (var word in (Text ?? "").Split(' ')) widest = Math.Max(widest, Touch.TextWidth(word, Font));
+            return new Size(Math.Max(MinimumSize.Width, widest + Padding.Horizontal + 16), MinimumSize.Height);
+        }
 
         protected override void OnMouseEnter(EventArgs e) { _hover = true;  base.OnMouseEnter(e); }
         protected override void OnMouseLeave(EventArgs e) { _hover = false; base.OnMouseLeave(e); }

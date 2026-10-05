@@ -157,7 +157,7 @@ namespace OnScreenKeyboard
                     Assert(WizPage(w) == 0 && !back.Visible && next.Visible && !create.Visible, "page 1: Next only (no Back, no Create)");
                     Assert(w.AcceptButton == next, "Enter means Next on page 1");
                     Assert(w.CancelButton == cancel && cancel.Visible, "Escape means Cancel, and there is a Cancel button");
-                    Assert(Priv<Label>(w, "_lblStep").Text == "Step 1 of 4", "the footer says which step this is");
+                    Assert(Priv<Label>(w, "_lblStep").Text == "Step 1 of 4", $"the footer says which step this is (it says '{Priv<Label>(w, "_lblStep").Text}')");
 
                     WizCall<object>(w, "Navigate", 1);
                     Assert(WizPage(w) == 1 && back.Visible && next.Visible && !create.Visible, "page 2: Back and Next");

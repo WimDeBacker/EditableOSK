@@ -40,6 +40,7 @@ namespace OnScreenKeyboard
                     SaveGroupEditor(outDir, tag);
                     SaveKeyboardEditor(outDir, tag);
                     SaveWizard(outDir, tag);
+                    SaveNarrow(outDir, tag);
                 }
             }
             finally { Lang.PseudoExpansion = 0; Lang.Load("en"); }
@@ -217,6 +218,34 @@ namespace OnScreenKeyboard
                 }
             }
             finally { ToolbarButton.IsLightTheme = wasLight; }
+        }
+
+        /// <summary>Every dialog at 480 design pixels (a small tablet, or 200 % scaling on a laptop): one picture per section, English and Dutch.</summary>
+        private static void SaveNarrow(string outDir, string tag)
+        {
+            if (tag == "pseudo") return;
+            var groups = new List<KeyGroup> { new KeyGroup { Name = SettingsManager.StandardGroupName }, new KeyGroup { Name = "Klinkers" } };
+            var dialogs = new (string Name, Func<FluentDialogBase> Make)[]
+            {
+                ("groupeditor",    () => new GroupEditorForm(groups, "Klinkers")),
+                ("keyboardeditor", () => new KeyboardEditorForm(new VisualTheme(), new WindowState(), new LayoutMeta { StickyModifiers = true, SlowKeysMs = 300 }, null)),
+                ("wizard",         () => new NewKeyboardWizard()),
+                ("specialkeys",    () => new SpecialKeysDialog(tag == "nl")),
+            };
+            foreach (var (name, make) in dialogs)
+            {
+                using var d = make();
+                Show(d);
+                d.MinimumSize = Size.Empty;
+                d.ClientSize = new Size(480, d.ClientSize.Height);
+                int sections = Math.Max(1, d.HostSectionCount > 0 ? d.HostSectionCount : (d.SectionBarAccess?.Count ?? 1));
+                for (int i = 0; i < sections; i++)
+                {
+                    d.ShowSectionForGuard(i);
+                    Application.DoEvents(); d.PerformLayout(); Application.DoEvents(); d.PerformLayout();
+                    Save(d, Path.Combine(outDir, $"narrow_{name}_{i + 1}_{tag}.png"));
+                }
+            }
         }
 
         /// <summary>Every page of the New Keyboard Wizard in both themes, with pasted labels so the preview and the summary show real content.</summary>

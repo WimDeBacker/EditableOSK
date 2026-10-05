@@ -1,6 +1,6 @@
 # Responsive dialog layout: specification (todo 2.4.6)
 
-Status: **proposal, 2026-10-05, awaiting owner review.** Written from reading the code and from the width measurement in `NarrowWidthTests.cs`; nothing of this is built. It replaces the earlier idea of "stack the columns below N pixels in every dialog".
+Status: **built, 2026-10-05 (branch `responsive-layout`), see "As built" at the end.** Originally a proposal. Written from reading the code and from the width measurement in `NarrowWidthTests.cs`; nothing of this is built. It replaces the earlier idea of "stack the columns below N pixels in every dialog".
 
 ## 1. Goal and rule
 
@@ -91,3 +91,16 @@ Cells per layer: layer name, label box, action type, value box, picker button.
 - Narrator reading order after a reflow is not checked yet.
 - At the minimum width the Group Editor's list and the Keyboard Editor's candidate list need a minimum height, or they would shrink to nothing; the exact values are to be judged in the pictures.
 - Cost: this touches every dialog; the suite stays the safety net, and the work is done in the steps of D8, each ending with a clean build and the full suite (during a step, `--test <group> --quick`).
+
+## 10. As built (2026-10-05)
+
+Decisions D1–D8 were taken as proposed (supported minimum 480 design px). What differs from sections 4 to 8:
+
+- **No `ReflowPanel`.** `AdaptiveTable` with variants does what the panel would have done (`ReflowRows.Rows / Tiles / Buttons`: N controls per line for each N in a list, widest first), so there is one container, not two. `InlineRow`, `ButtonRow` and `MakeFooter` of `FluentDialogBase` are built from it, so every dialog got wrapping rows without being edited.
+- **`WrapLabel` is a registry, not a control:** `FluentDialogBase.Wrap(control, reserveRight)` keeps a control no wider than the room the window leaves it (`MaximumSize`, updated on resize and section change). Labels, check boxes, radio buttons (two lines when needed) and containers that keep their own width use it.
+- **The `AddRow` rule (labels above inputs) was not needed** at 480 px: with the choosers allowed to shrink (160–280 px) and the rows wrapping, label and input fit side by side. It stays available if a longer translation ever needs it.
+- **The decision comes from the host, not from the container:** the width available to a table is the visible width of the dialog's body (minus what lies between it and the table and the room for the scroll bar). The nearest container is often sized by its content, which made the table's answer depend on itself.
+- **The natural width of an arrangement is worked out from the controls** (widest control per column with margins, row and column spans, equal columns = columns × widest), not asked from the layout engine, whose answer was out of date after a margin change.
+- **Measuring does not choose.** `GetPreferredSize` measures what is on show; the choice is made in `Select`, from the real width. The window is first made as wide as it may become, then sized (and measured again), so it opens wide and short instead of narrow and tall.
+- **Measured result** (narrowest width at which every section still passes the guards, design px; English / Dutch / +40 % / +80 %): Key Editor 444 / 452 / 504 / 572, Group Editor 468 / 460 / 516 / 600, Keyboard Editor 396 / 404 / 444 / 520, wizard 400 / 444 / 456 / (768), special-keys window 396 / 396 / 460 / (788). Before: 676–892 for all of them.
+- **New guards:** `UiGuard.CutOff` (a control lies outside the visible area of a container above it), `UiGuard.Overlaps` (neighbouring controls overlap). Both found defects the older guards could not see.

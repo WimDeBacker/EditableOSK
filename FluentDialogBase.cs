@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
@@ -81,7 +82,14 @@ namespace OnScreenKeyboard
 
             Load += (s, e) =>
             {
-                if (_contentSized && _sizingRoot != null) FitToContent();
+                if (_contentSized && _sizingRoot != null)
+                {
+                    FitToContent();
+                    // The responsive tables choose their arrangement from the window they are in: once for the first size, then the
+                    // height is measured again for the arrangement they chose (a narrow screen: the same content, taller).
+                    PerformLayout();
+                    FitToContent();
+                }
                 var wa = Screen.FromControl(this).WorkingArea;
                 if (Width > wa.Width - 10 || Height > wa.Height - 10)
                 {
@@ -90,6 +98,7 @@ namespace OnScreenKeyboard
                 }
                 MinimumSize = new Size(Math.Min(Width, 480), Math.Min(Height, 320));
                 ApplyTheme();
+                UpdateWrapWidths();
             };
 
             _onPrefChanged = (s, e) =>
@@ -288,7 +297,7 @@ namespace OnScreenKeyboard
             if (withSections)
             {
                 Sections = new SectionBar { Anchor = AnchorStyles.Left | AnchorStyles.Right };
-                Sections.SelectedIndexChanged += (s, e) => _host.ShowSection(Sections.SelectedIndex);
+                Sections.SelectedIndexChanged += (s, e) => { _host.ShowSection(Sections.SelectedIndex); UpdateWrapWidths(); };
                 root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
                 Control top = Sections;
                 if (headerRight != null)
@@ -306,6 +315,7 @@ namespace OnScreenKeyboard
                 root.Controls.Add(top, 0, row++);
             }
             _host = new SectionHost { Dock = DockStyle.Fill };
+            _host.SizeChanged += (s, e) => { UpdateWrapWidths(); AdaptiveTable.ReselectAll(_host); };
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             root.Controls.Add(_host, 0, row++);
             footer.Anchor = AnchorStyles.Left | AnchorStyles.Right;
@@ -334,7 +344,52 @@ namespace OnScreenKeyboard
         internal int HostSectionCount => _host?.SectionCount ?? 0;
 
         /// <summary>Shows one section or page by index (for a dialog without a section bar, such as a wizard).</summary>
-        protected void ShowHostSection(int index) => _host.ShowSection(index);
+        protected void ShowHostSection(int index) { _host.ShowSection(index); UpdateWrapWidths(); }
+
+        // ── Text that wraps at the width the window allows ───────────────
+        // A label, check box or radio button added with Wrap() is never wider than what is left of the window to its right, so a long text
+        // takes more lines instead of being cut off. The limit is kept up to date when the window is resized, a section is shown or the
+        // language changes; before the window exists it is the dialog's widest allowed content (design pixels).
+
+        private readonly List<Control> _wrapControls = new List<Control>();
+        private readonly Dictionary<Control, int> _wrapCaps = new Dictionary<Control, int>();      // a width the control was given on purpose (0: none)
+        private readonly Dictionary<Control, int> _wrapReserve = new Dictionary<Control, int>();   // room kept free to the right (design pixels)
+
+        /// <summary>
+        /// Registers a control whose width is limited to the room the window leaves it (text, and anything that keeps its own width);
+        /// returns the control. A <see cref="Control.MaximumSize"/> set before is kept as the upper limit.
+        /// </summary>
+        /// <param name="control">The control to limit.</param>
+        /// <param name="reserveRight">Room to keep free to its right (a button standing beside it), in design pixels.</param>
+        protected T Wrap<T>(T control, int reserveRight = 0) where T : Control
+        {
+            if (_wrapCaps.ContainsKey(control)) return control;
+            int cap = control.MaximumSize.Width;
+            _wrapCaps[control] = cap;
+            _wrapReserve[control] = reserveRight;
+            control.MaximumSize = new Size(cap > 0 ? cap : ContentMaxWidth - 4 * Fluent.Pad - reserveRight, 0);
+            _wrapControls.Add(control);
+            return control;
+        }
+
+        /// <summary>Sets the width limit of every registered text control from the window as it is now.</summary>
+        internal void UpdateWrapWidths()
+        {
+            if (_host == null || !_host.IsHandleCreated || _wrapControls.Count == 0) return;            // The body scrolls vertically; the room for its scroll bar is kept free (it appears when the content gets taller than the window).
+            int hostRight = _host.RectangleToScreen(_host.ClientRectangle).Right - SystemInformation.VerticalScrollBarWidth;
+            foreach (var c in _wrapControls)
+            {
+                if (c.IsDisposed || c.Parent == null || !c.Visible) continue;
+                int chrome = c.Margin.Right;
+                for (Control a = c.Parent; a != null && a != _host; a = a.Parent)
+                    chrome += a.Padding.Right + (a is TouchGroup ? 3 : 0);
+                int left = c.Parent.RectangleToScreen(new Rectangle(c.Left, 0, 0, 0)).X;
+                int avail = Math.Max(80, hostRight - left - chrome - (int)Math.Round(_wrapReserve[c] * DeviceDpi / 96.0));
+                int cap = _wrapCaps[c];
+                if (cap > 0) avail = Math.Min(avail, (int)Math.Round(cap * DeviceDpi / 96.0));       // the cap was given in design pixels
+                if (Math.Abs(c.MaximumSize.Width - avail) > 1) c.MaximumSize = new Size(avail, 0);
+            }
+        }
 
         /// <summary>For the UI guard tests: shows section (or wizard page) <paramref name="index"/> the way the user would reach it.</summary>
         internal virtual void ShowSectionForGuard(int index)
@@ -400,6 +455,9 @@ namespace OnScreenKeyboard
             NameInput(input, Lang.StripMnemonic(label()));
 
             PrepareInput(input, fill);
+            // A container that keeps its own width (a group, a stack of options, a row) is never wider than the window allows. Not a
+            // single control such as a stepper: a MaximumSize on one of those left it with no height while the row was measured.
+            if (!fill && input is Panel) Wrap(input);
             input.TabIndex = _nextTab++;
             int r = t.RowCount++;
             t.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -412,6 +470,7 @@ namespace OnScreenKeyboard
         protected void AddWideRow(TableLayoutPanel t, Control c, bool fill = true)
         {
             PrepareInput(c, fill);
+            if (!fill && c is Panel) Wrap(c);        // see AddRow
             c.TabIndex = _nextTab++;
             int r = t.RowCount++;
             t.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -422,7 +481,7 @@ namespace OnScreenKeyboard
         /// <summary>A touch-sized check box whose text follows language changes; add it with <see cref="AddWideRow"/>.</summary>
         protected TouchCheckBox NewCheck(Func<string> text)
         {
-            var c = new TouchCheckBox { Text = text() };
+            var c = Wrap(new TouchCheckBox { Text = text() });
             _transTexts.Add((c, text));
             return c;
         }
@@ -430,27 +489,22 @@ namespace OnScreenKeyboard
         /// <summary>A touch-sized radio button whose text follows language changes. Radio buttons with the same parent are one group.</summary>
         protected TouchRadioButton NewRadio(Func<string> text)
         {
-            var r = new TouchRadioButton { Text = text() };
+            var r = Wrap(new TouchRadioButton { Text = text() });
             _transTexts.Add((r, text));
             return r;
         }
 
         /// <summary>
-        /// Controls side by side on one line, each in a column that sizes to it (no wrapping). Used instead of a wrapping
-        /// FlowLayoutPanel: inside a table a flow panel is measured at a narrow width first, which inflated the table's height
-        /// and opened a gap in its last row, and it under-measured its own width.
+        /// Controls side by side on one line, each in a column that sizes to it; when they do not fit the width the window leaves
+        /// them, they go one per line (an <see cref="AdaptiveTable"/>). Used instead of a wrapping FlowLayoutPanel: inside a table
+        /// a flow panel is measured at a narrow width first, which inflated the table's height and opened a gap in its last row.
         /// </summary>
         protected static TableLayoutPanel InlineRow(params Control[] items)
         {
+            foreach (var c in items) c.Anchor = AnchorStyles.Left | AnchorStyles.Top;
+            var row = ReflowRows.Rows(items, Enumerable.Range(1, items.Length).Reverse().ToArray());       // all on one line, else one fewer, … one per line
             // A little room on the right: an auto-sized column can come out a pixel or two narrower than the long caption it holds.
-            var row = new TableLayoutPanel { ColumnCount = items.Length, RowCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(0, 0, Touch.Gap, 0) };
-            row.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            for (int i = 0; i < items.Length; i++)
-            {
-                row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-                items[i].Anchor = AnchorStyles.Left;
-                row.Controls.Add(items[i], i, 0);
-            }
+            row.Padding = new Padding(0, 0, Touch.Gap, 0);
             return row;
         }
 
@@ -476,7 +530,7 @@ namespace OnScreenKeyboard
         /// Alignment rule (spec D23): buttons side by side get <b>one common width, the widest</b>. Re-measured when a button's text
         /// changes (language), so the buttons stay equal.
         /// </summary>
-        protected static TableLayoutPanel ButtonRow(params Control[] buttons) => new ButtonRowPanel(buttons);
+        protected static TableLayoutPanel ButtonRow(params Control[] buttons) => ReflowRows.Buttons(buttons, buttons.Length, 1);
 
         /// <summary>A bold heading in the label column of a section table, spanning both columns; its text follows language changes.</summary>
         protected Label Heading(Func<string> text)
@@ -536,20 +590,32 @@ namespace OnScreenKeyboard
         /// </summary>
         protected TableLayoutPanel MakeFooter(Control leftSlot, params Control[] buttons)
         {
-            var f = new TableLayoutPanel
+            var f = new AdaptiveTable
             {
-                ColumnCount = 2 + buttons.Length, RowCount = 1, AutoSize = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(0, Touch.Gap, 0, 0),
+                ColumnCount = 2 + buttons.Length,
+                Padding = new Padding(0, Touch.Gap, 0, 0),
             };
             f.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             f.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             for (int i = 0; i < buttons.Length; i++) f.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            if (leftSlot != null) { leftSlot.Anchor = AnchorStyles.Left; f.Controls.Add(leftSlot, 0, 0); }
-            for (int i = 0; i < buttons.Length; i++)
+            if (leftSlot != null) leftSlot.Anchor = AnchorStyles.Left;
+            foreach (var b in buttons) b.Anchor = AnchorStyles.Right;
+            // One line: the left slot, then the buttons at the right. When they do not fit together the buttons take a line of their own
+            // under the left slot (the wizard's "Step 2 of 4").
+            f.AddVariant(() =>
             {
-                buttons[i].Anchor = AnchorStyles.Right;
-                f.Controls.Add(buttons[i], 2 + i, 0);
-            }
+                var cells = new List<AdaptiveTable.Cell>();
+                if (leftSlot != null) cells.Add(new AdaptiveTable.Cell(leftSlot, 0, 0));
+                for (int i = 0; i < buttons.Length; i++) cells.Add(new AdaptiveTable.Cell(buttons[i], 2 + i, 0));
+                return cells;
+            });
+            if (leftSlot != null)
+                f.AddVariant(() =>
+                {
+                    var cells = new List<AdaptiveTable.Cell> { new AdaptiveTable.Cell(leftSlot, 0, 0, 2 + buttons.Length) };
+                    for (int i = 0; i < buttons.Length; i++) cells.Add(new AdaptiveTable.Cell(buttons[i], 2 + i, 1));
+                    return cells;
+                });
             return f;
         }
 
@@ -588,7 +654,13 @@ namespace OnScreenKeyboard
             var nonC = new Size(Width - ClientSize.Width, Height - ClientSize.Height);
             int maxW = wa.Width  - 10 - nonC.Width;
             int maxH = wa.Height - 10 - nonC.Height;
-            var pref = MeasureContent(Math.Min((int)Math.Round(ContentMaxWidth * DeviceDpi / 96.0), maxW));
+            int widest = Math.Min((int)Math.Round(ContentMaxWidth * DeviceDpi / 96.0), maxW);
+            // The responsive tables choose their arrangement from the window they are in. The window has its small starting size at this
+            // point, so it is first made as wide as it may become: the tables then take their widest arrangement, and the width and height
+            // measured are those of the dialog at its best. (Otherwise it opened narrow and tall.)
+            ClientSize = new Size(widest, ClientSize.Height);
+            PerformLayout();
+            var pref = MeasureContent(widest);
             ClientSize = new Size(Math.Min(pref.Width, maxW), Math.Min(pref.Height, maxH));
             if (Owner != null || StartPosition == FormStartPosition.CenterParent)
             {

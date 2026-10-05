@@ -312,7 +312,6 @@
   <String key="wiz: keys group typing"      value="Typeertoetsen" />
   <String key="wiz: keys group nav"         value="Verplaatsen en bewerken" />
   <String key="wiz: keys group mod"         value="Wijzigingstoetsen" />
-  <String key="wiz: keys group func"        value="Functietoetsen" />
   <String key="wiz: keys group other"       value="Overige toetsen" />
   <String key="wiz: keys group dead"        value="Dode toetsen (accenten)" />
   <String key="wiz: keys dead note"         value="Een dode toets zet zijn accent op de volgende letter die wordt getypt." />

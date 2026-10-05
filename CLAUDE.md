@@ -27,5 +27,6 @@
 ## UI conventions
 - Touch targets are at least 44 x 44 px (`Touch.Target`); the standard is WCAG 2.1 AAA, light and dark theme.
 - New dialogs use `FluentDialogBase` (content-sized, `BuildFrame` / `AddSection` / `AddRow`) and the `Touch*` controls, not hand-positioned controls.
+- Dialogs are responsive down to 480 design px (`responsive_spec.md`, section 10): no fixed widths for text or rows. Text that may wrap is registered with `Wrap()`; rows and grids that must move use `InlineRow`, `ButtonRow` or `AdaptiveTable` variants (the arrangement is chosen by the measured width); a new dialog is added to `NarrowDialogs()` in `NarrowWidthTests.cs`. Check it with `--test NarrowDialogs` and look at the `narrow_*` gallery pictures.
 - Borders and rings: `Fluent.CrispBorderRect`, `FluentPainter.DrawRoundedRing`, `Fluent.DrawSquareRing`.
 - Icons are SVGs in `icons\`, 24 px grid, stroke `#1a1a1c`, red accent `#bf534e`, loaded with `SvgIconLoader`.

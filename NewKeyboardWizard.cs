@@ -90,10 +90,7 @@ namespace OnScreenKeyboard
         private const int PAGE_START=0, PAGE_GRID=1,
                           PAGE_THEME=2, PAGE_SAVE=3, PAGE_COUNT=4;
 
-        private const int MaxWidth = 900;
-        /// <summary>Widest a line of text may be on a page (window minus the padding of frame and page), and inside a group.</summary>
-        private const int PageTextWidth = MaxWidth - 4 * Fluent.Pad, GroupTextWidth = PageTextWidth - 36, SummaryTextWidth = GroupTextWidth - 24;
-        protected override int ContentMaxWidth => MaxWidth;
+        protected override int ContentMaxWidth => 900;
 
         private int _currentPage = PAGE_START;
         private FluentButton _btnCancel, _btnBack, _btnNext, _btnCreate;
@@ -189,26 +186,27 @@ namespace OnScreenKeyboard
             foreach (var b in all) b.MinimumSize = new Size(w, Touch.Target);
         }
 
-        private Label Hint(Func<string> text, int indent = 0, int? maxWidth = null)
+        /// <summary>A line of text that wraps at the width the window leaves it (<paramref name="reserveRight"/>: room kept for a button beside it).</summary>
+        private Label Hint(Func<string> text, int indent = 0, int reserveRight = 0)
         {
-            var l = new Label
+            var l = Wrap(new Label
             {
-                Text = text(), AutoSize = true, UseMnemonic = false, MaximumSize = new Size(maxWidth ?? (indent > 0 ? GroupTextWidth : PageTextWidth), 0),
+                Text = text(), AutoSize = true, UseMnemonic = false,
                 Font = Fluent.FontLabel, ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent,
                 Padding = new Padding(indent, 0, 0, 0), AccessibleName = text(),
-            };
+            }, reserveRight);
             _transLabels.Add((l, () => { string s = text(); l.AccessibleName = s; return s; }));
             return l;
         }
 
         private Label ErrorLine()
         {
-            return new Label
+            return Wrap(new Label
             {
-                Text = "", AutoSize = true, UseMnemonic = false, MaximumSize = new Size(PageTextWidth, 0),
+                Text = "", AutoSize = true, UseMnemonic = false,
                 MinimumSize = new Size(0, 24), Font = Fluent.FontLabel, BackColor = Color.Transparent,
                 ForeColor = _dark ? Fluent.DialogDarkDanger : Fluent.Danger, AccessibleRole = AccessibleRole.Alert,
-            };
+            });
         }
 
         private void PageTitle(TableLayoutPanel t, Func<string> title, Func<string> sub)
@@ -231,7 +229,7 @@ namespace OnScreenKeyboard
             var row = new TableLayoutPanel { ColumnCount = 2, RowCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink };
             row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            box.Dock = DockStyle.Fill; box.Margin = Padding.Empty; box.MinimumSize = new Size(Touch.InputMinWidth, Touch.Target);
+            box.Dock = DockStyle.Fill; box.Margin = Padding.Empty; box.MinimumSize = new Size(Touch.InputMinWidth / 2, Touch.Target);      // a path scrolls inside the box
             row.Controls.Add(box, 0, 0);
             row.Controls.Add(b, 1, 0);
             browse = b;
@@ -266,9 +264,10 @@ namespace OnScreenKeyboard
             _txtCopyFile.TextChanged += (s, e) => _lblCopyErr.Text = "";
 
             // The language of the new keyboard's labels and tips (it also decides how pasted words such as "Space" are read).
-            _cmbLanguage = new TouchChoiceButton { RowHeight = 44, AutoSize = false, Size = new Size(280, Touch.Target), MinimumSize = new Size(280, Touch.Target) };
+            _cmbLanguage = new TouchChoiceButton { RowHeight = 44, AutoSize = false, Size = new Size(280, Touch.Target), MinimumSize = new Size(Touch.InputMinWidth * 2 / 3, Touch.Target), MaximumSize = new Size(280, Touch.Target) };
             _cmbLanguage.SetItems(new[] { new TouchChoice { Text = "English (en)" }, new TouchChoice { Text = "Nederlands (nl)" } }, Lang.CurrentCode == "nl" ? 1 : 0);
             AddRow(t, () => Lang.T("wiz: Language"), _cmbLanguage, fill: false);
+            _cmbLanguage.Anchor = AnchorStyles.Left | AnchorStyles.Right;       // 280 wide when there is room, narrower when there is not
             SetTip(_cmbLanguage, () => Lang.T("tip: Language"));
 
             _rbBlank.CheckedChanged += (s, e) => ApplyStartMode();
@@ -313,7 +312,7 @@ namespace OnScreenKeyboard
             var hintKeys = new TableLayoutPanel { ColumnCount = 2, RowCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink };
             hintKeys.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             hintKeys.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            var hint2 = Hint(() => Lang.T("wiz: paste hint 2"), maxWidth: PageTextWidth - Touch.Target - Touch.Gap - 8);
+            var hint2 = Hint(() => Lang.T("wiz: paste hint 2"), reserveRight: Touch.Target + Touch.Gap + 8);     // the ? button stands beside it
             hint2.Anchor = AnchorStyles.Left;
             hint2.Margin = Padding.Empty;       // in line with the other hint lines
             hintKeys.Controls.Add(hint2, 0, 0);
@@ -375,13 +374,12 @@ namespace OnScreenKeyboard
         {
             PageTitle(t, () => Lang.T("wiz: p4 title"), () => Lang.T("wiz: p4 sub"));
 
-            var tiles = new TableLayoutPanel { ColumnCount = Presets.Length + 1, RowCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(0, 0, 0, Touch.Gap) };
+            var tileList = new List<Control>();
             _tiles = new TouchTile[Presets.Length];
             for (int i = 0; i <= Presets.Length; i++)
             {
-                tiles.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / (Presets.Length + 1)));
                 bool file = i == Presets.Length;
-                var tile = new TouchTile { Dock = DockStyle.Fill, Margin = new Padding(0, 0, i == Presets.Length ? 0 : Touch.Gap, 0) };
+                var tile = new TouchTile { Dock = DockStyle.Fill };
                 if (!file)
                 {
                     var p = Presets[i];
@@ -393,8 +391,11 @@ namespace OnScreenKeyboard
                 int idx = file ? -1 : i;
                 tile.CheckedChanged += (s, e) => { if (((TouchTile)s).Checked) SelectPreset(idx); };
                 tile.TabIndex = i;
-                tiles.Controls.Add(tile, i, 0);
+                tileList.Add(tile);
             }
+            // All five on a line when they fit (each wide enough for the longest word of its name), else 3 + 2, 2 + 2 + 1, one under the other.
+            var tiles = ReflowRows.Tiles(tileList, tileList.Count, 3, 2, 1);
+            tiles.Padding = new Padding(0, 0, 0, Touch.Gap);
             _tiles[0].Checked = true;
             AddWideRow(t, tiles);
 
@@ -496,8 +497,8 @@ namespace OnScreenKeyboard
             sum.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             for (int i = 0; i < _sumLines.Length; i++)
             {
-                _sumLines[i] = new Label { AutoSize = true, UseMnemonic = false, Font = Fluent.FontLabel, BackColor = Color.Transparent,
-                    MaximumSize = new Size(SummaryTextWidth, 0), Margin = new Padding(0, 4, 0, 4) };
+                _sumLines[i] = Wrap(new Label { AutoSize = true, UseMnemonic = false, Font = Fluent.FontLabel, BackColor = Color.Transparent,
+                    Margin = new Padding(0, 4, 0, 4) });
                 sum.RowStyles.Add(new RowStyle(SizeType.AutoSize));
                 sum.Controls.Add(_sumLines[i], 0, i);
             }

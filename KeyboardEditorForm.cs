@@ -182,7 +182,8 @@ namespace OnScreenKeyboard
         private void BuildGeneral(TableLayoutPanel t)
         {
             // Language: live (the dialog and the app translate at once); restored on Cancel.
-            _cmbLanguage = new TouchChoiceButton { RowHeight = 44, AutoSize = false, Size = new Size(280, Touch.Target), MinimumSize = new Size(280, Touch.Target) };
+            // 280 wide when there is room, narrower when there is not (a long label next to it on a narrow window).
+            _cmbLanguage = new TouchChoiceButton { RowHeight = 44, AutoSize = false, Size = new Size(280, Touch.Target), MinimumSize = new Size(Touch.InputMinWidth * 2 / 3, Touch.Target), MaximumSize = new Size(280, Touch.Target) };
             foreach (var (code, name) in Lang.GetAvailable()) _languageCodes.Add(code);
             _cmbLanguage.SetItems(Lang.GetAvailable().Select(l => new TouchChoice { Text = l.Name }), 0);
             _cmbLanguage.SelectedIndexChanged += (s, e) =>
@@ -193,13 +194,15 @@ namespace OnScreenKeyboard
             };
             SetTip(_cmbLanguage, () => Lang.T("tip: Language"));
             AddRow(t, () => Lang.T("Language"), _cmbLanguage, fill: false);
+            _cmbLanguage.Anchor = AnchorStyles.Left | AnchorStyles.Right;       // takes the column's width, up to its maximum
 
             AddWideRow(t, Heading(() => Lang.T("Window")), fill: false);
 
-            _cmbToolbarTheme = new TouchChoiceButton { RowHeight = 44, AutoSize = false, Size = new Size(280, Touch.Target), MinimumSize = new Size(280, Touch.Target) };
+            _cmbToolbarTheme = new TouchChoiceButton { RowHeight = 44, AutoSize = false, Size = new Size(280, Touch.Target), MinimumSize = new Size(Touch.InputMinWidth * 2 / 3, Touch.Target), MaximumSize = new Size(280, Touch.Target) };
             _cmbToolbarTheme.SetItems(ToolbarThemeItems(), 0);
             SetTip(_cmbToolbarTheme, () => Lang.T("tip: Toolbar theme"));
             AddRow(t, () => Lang.T("Toolbar theme"), _cmbToolbarTheme, fill: false);
+            _cmbToolbarTheme.Anchor = AnchorStyles.Left | AnchorStyles.Right;   // same width as the language chooser at every window width
 
             // Transparency: 0 = opaque … 80 = nearly transparent (a stepper: a slider thumb is not a 44 px target).
             _stpOpacity = new TouchStepper { Minimum = 0, Maximum = 80, Increment = 5, Margin = new Padding(0, 0, Touch.Gap, 0) };
@@ -267,24 +270,40 @@ namespace OnScreenKeyboard
             SetTip(_chkTimingAnimation, () => Lang.T("tip: Show timing animation"));
             _chkTimingAnimation.AccessibleDescription = Lang.T("tip: Show timing animation");
 
-            var grid = new TableLayoutPanel { ColumnCount = 3, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink };
+            // Wide: radio | stepper | unit on one line each, the steppers aligned at the right of their column. Narrow: the stepper and its
+            // unit go on a line of their own under the radio button.
+            var grid = new AdaptiveTable { ColumnCount = 3 };
             for (int i = 0; i < 3; i++) grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            void Cell(Control c, int col, int row)
-            {
-                while (grid.RowStyles.Count <= row) { grid.RowStyles.Add(new RowStyle(SizeType.AutoSize)); grid.RowCount = grid.RowStyles.Count; }
-                grid.Controls.Add(c, col, row);
-            }
             Control Unit() => new Label { Text = "ms", AutoSize = true, Anchor = AnchorStyles.Left, UseMnemonic = false, Font = Fluent.FontLabel, ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent, Margin = new Padding(Touch.Gap, 0, 0, 0) };
             foreach (var r in new Control[] { _optTimingOff, _optSlowKeys, _optDwell, _chkTimingAnimation })
             { r.Dock = DockStyle.Fill; r.Margin = new Padding(0, 4, Touch.Gap, 4); }
             _optTimingOff.TabIndex = 0; _optSlowKeys.TabIndex = 1; _optDwell.TabIndex = 2;
-            Cell(_optTimingOff, 0, 0);
-            Cell(_optSlowKeys, 0, 1); Cell(_stpSlowKeys, 1, 1); Cell(Unit(), 2, 1);
-            Cell(_optDwell, 0, 2);    Cell(_stpDwell, 1, 2);    Cell(Unit(), 2, 2);
+            var unitSlow = Unit(); var unitDwell = Unit();
             var sep = new Panel { Height = 1, Dock = DockStyle.Fill, Margin = new Padding(0, 8, 0, 8), Tag = "notheme", BackColor = _dark ? Fluent.DialogDarkBorder : Fluent.BorderCard };
-            Cell(sep, 0, 3); grid.SetColumnSpan(sep, 3);
-            Cell(_chkTimingAnimation, 0, 4);
-            _stpSlowKeys.Anchor = AnchorStyles.Right; _stpDwell.Anchor = AnchorStyles.Right;
+            grid.AddVariant(() =>
+            {
+                _stpSlowKeys.Anchor = AnchorStyles.Right; _stpDwell.Anchor = AnchorStyles.Right;
+                return new[]
+                {
+                    new AdaptiveTable.Cell(_optTimingOff, 0, 0),
+                    new AdaptiveTable.Cell(_optSlowKeys, 0, 1), new AdaptiveTable.Cell(_stpSlowKeys, 1, 1), new AdaptiveTable.Cell(unitSlow, 2, 1),
+                    new AdaptiveTable.Cell(_optDwell, 0, 2),    new AdaptiveTable.Cell(_stpDwell, 1, 2),    new AdaptiveTable.Cell(unitDwell, 2, 2),
+                    new AdaptiveTable.Cell(sep, 0, 3, 3),
+                    new AdaptiveTable.Cell(_chkTimingAnimation, 0, 4),      // the radio buttons' column: one width, one right edge
+                };
+            });
+            grid.AddVariant(() =>
+            {
+                _stpSlowKeys.Anchor = AnchorStyles.Left; _stpDwell.Anchor = AnchorStyles.Left;
+                return new[]
+                {
+                    new AdaptiveTable.Cell(_optTimingOff, 0, 0, 3),
+                    new AdaptiveTable.Cell(_optSlowKeys, 0, 1, 3), new AdaptiveTable.Cell(_stpSlowKeys, 0, 2), new AdaptiveTable.Cell(unitSlow, 1, 2),
+                    new AdaptiveTable.Cell(_optDwell, 0, 3, 3),    new AdaptiveTable.Cell(_stpDwell, 0, 4),    new AdaptiveTable.Cell(unitDwell, 1, 4),
+                    new AdaptiveTable.Cell(sep, 0, 5, 3),
+                    new AdaptiveTable.Cell(_chkTimingAnimation, 0, 6, 3),
+                };
+            });
 
             foreach (var r in new[] { _optTimingOff, _optSlowKeys, _optDwell })
                 r.CheckedChanged += (s, e) => { if (((TouchRadioButton)s).Checked) OnTimingModeChanged(); };
@@ -323,12 +342,14 @@ namespace OnScreenKeyboard
 
         private void BuildWordPrediction(TableLayoutPanel section)
         {
-            var cols = new TableLayoutPanel { ColumnCount = 2, RowCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink };
+            // Side by side in two equal halves; on a narrow window the candidates go under the settings.
+            var cols = new AdaptiveTable { ColumnCount = 2 };
             cols.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
             cols.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-            cols.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            cols.Controls.Add(BuildWordSettings(), 0, 0);
-            cols.Controls.Add(BuildCandidates(), 1, 0);
+            var settings = BuildWordSettings();
+            var candidates = BuildCandidates();
+            cols.AddVariant(() => new[] { new AdaptiveTable.Cell(settings, 0, 0), new AdaptiveTable.Cell(candidates, 1, 0) });
+            cols.AddVariant(() => new[] { new AdaptiveTable.Cell(settings, 0, 0, 2), new AdaptiveTable.Cell(candidates, 0, 1, 2) });
             AddWideRow(section, cols);
         }
 
@@ -396,11 +417,19 @@ namespace OnScreenKeyboard
             SetTip(_btnWPReject,  () => Lang.T("wp: tip reject"));
             _btnWPPromote.Click += (s, e) => PromoteSelected();
             _btnWPReject.Click  += (s, e) => RejectSelected();
-            var halves = new TableLayoutPanel { ColumnCount = 2, RowCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink };
+            var halves = new AdaptiveTable { ColumnCount = 2 };
             halves.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
             halves.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-            halves.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            halves.Controls.Add(_btnWPPromote, 0, 0); halves.Controls.Add(_btnWPReject, 1, 0);
+            halves.AddVariant(() =>
+            {
+                _btnWPPromote.Margin = new Padding(0, 0, Touch.Gap / 2, 0); _btnWPReject.Margin = new Padding(Touch.Gap / 2, 0, 0, 0);
+                return new[] { new AdaptiveTable.Cell(_btnWPPromote, 0, 0), new AdaptiveTable.Cell(_btnWPReject, 1, 0) };
+            });
+            halves.AddVariant(() =>
+            {
+                _btnWPPromote.Margin = new Padding(0, 0, 0, Touch.Gap / 2); _btnWPReject.Margin = Padding.Empty;
+                return new[] { new AdaptiveTable.Cell(_btnWPPromote, 0, 0, 2), new AdaptiveTable.Cell(_btnWPReject, 0, 1, 2) };
+            });
             AddWideRow(t, halves);
 
             _lblImmediateHint = HintLabel(2);
@@ -409,12 +438,12 @@ namespace OnScreenKeyboard
         }
 
         /// <summary>A hint line that is always there (empty when there is nothing to say), with its height reserved, so the window is measured with it.</summary>
-        private Label HintLabel(int lines) => new Label
+        private Label HintLabel(int lines) => Wrap(new Label
         {
             AutoSize = true, UseMnemonic = false, Font = Fluent.FontHint, BackColor = Color.Transparent, ForeColor = Fluent.TextPrimary,
             MaximumSize = new Size(Touch.LabelMaxWidth * 3 / 2 + 60, 0), MinimumSize = new Size(0, Fluent.FontHint.Height * lines + 4),
             Margin = new Padding(0, 4, 0, 4),
-        };
+        });
 
         // ── Filling the controls ────────────────────────────────────
 

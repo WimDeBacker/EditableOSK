@@ -162,7 +162,7 @@ namespace OnScreenKeyboard
             Add("mod", "caps", "capslock");
             var f = new string[16];
             for (int n = 1; n <= 16; n++) f[n - 1] = "f" + n;
-            rows.Add(new HelpRow("func", "[f1] … [f16]", f));
+            rows.Add(new HelpRow("other", "[f1] … [f16]", f));       // with the other keys: a group of its own made the window two rows taller
             Add("other", "printscreen", "prtsc"); Add("other", "numlock"); Add("other", "scrolllock"); Add("other", "pause", "break");
             // The window shows two spellings of each dead key; the parser also accepts [diaeresis] and [trema] for [dead:¨].
             rows.Add(new HelpRow("dead", "[dead:^] or [circumflex]", "dead:^", "circumflex"));

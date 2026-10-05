@@ -43,6 +43,21 @@ Status tags: **fixed**, **open**, **unverified** (not tested).
 | **Lesson: a page that shows different things per mode must not hold all of them at once.** The three variants of page 2 as separate host sections keep the window as tall as the tallest instead of their sum. | learned |
 | A hard-coded "Always on top: Yes" in the summary; the preview used the colours of preset 0 whatever was chosen. | fixed (summary text states the defaults; the preview uses neutral dialog colours) |
 
+### 1e. Responsive layout: flaws found and lessons (2026-10-05; see `responsive_spec.md`, section 10)
+
+| Flaw or lesson | Status |
+|---|---|
+| The dialogs were as wide as their content and cut off what did not fit: the Key Editor's Action row lost its value box and button at 175 % scaling (811 px), with no scroll bar. The old overflow guard skipped docked controls and never saw it. | fixed (responsive tables; `UiGuard.CutOff`) |
+| Fixed pixel widths stood in for layout: hint lines capped at 836 px, a 280 px language chooser, 240 px minimum text boxes, five tiles in a row, three help columns in a row. | fixed (wrapping text, choosers 160–280 px, tiles and columns chosen by width) |
+| **Lesson: pick the arrangement from the dialog's real width, not from the nearest container.** That container is usually sized by its content, i.e. by the table: the answer depended on itself and the table flipped between arrangements (a layout loop that hung the test run). | learned |
+| **Lesson: the layout engine's own preferred width is not reliable right after margins change**, and it proposes all kinds of widths while it measures (a `GetPreferredSize` that picked an arrangement per proposal made the dialog 180 px too tall). Work the width out from the controls; let measuring answer for what is on show. | learned |
+| **Lesson: remember measured widths, but forget them** when the form is scaled, the language or font changes, or a child appears, disappears or changes text (deferred, once: deciding after every one of hundreds of text changes made the dialogs 4–5× slower). | learned |
+| **Lesson: a section that is not on show gets no layout**, so its tables keep the choice made at the small starting size and the window is measured too tall (`ReselectAll`). The window must also be made as wide as it may become before it is measured. | learned |
+| **Lesson: a table that changes arrangement must have its container laid out again**, after the container's own pass has ended (inside it the request is ignored): otherwise the last row was cut off 10 px. | learned |
+| **Lesson: a `MaximumSize` with height 0 on a single control** (a stepper) left it with no height while the row was measured; only containers and text controls get a width limit. | learned |
+| **Lesson: a stress text must be breakable.** An unbroken run of x's as long as a sentence made wrapping labels impossible to fit; `Lang.Pseudo` now adds words. | learned |
+| The suite got slower (104 s → 216 s): the narrow-width test and slower dialog guards. | open (todo 2.4.6.12) |
+
 ### 1c. Flaws in the original Keyboard Editor (found when it was migrated, 2026-10-04; full list in `keyboardeditor_inventory.md`)
 
 | Flaw | Status |

@@ -210,7 +210,7 @@ namespace OnScreenKeyboard
                 }
                 var v1 = new Button { Text = "a", Size = new Size(100, 44) };
                 var v2 = new Button { Text = "b", Size = new Size(150, 44) };
-                var unevenRow = new ButtonRowPanel(new Control[] { v1, v2 });
+                var unevenRow = ReflowRows.Buttons(new Control[] { v1, v2 }, 2, 1);
                 using (var host = HostFor(unevenRow, 400, 80))
                 {
                     v1.MinimumSize = Size.Empty; v2.MinimumSize = Size.Empty;

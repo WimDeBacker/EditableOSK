@@ -49,7 +49,7 @@ namespace OnScreenKeyboard
 
         // The most the window may grow when the one-line action row needs it (a long translation or a large font); beyond that
         // the row takes two lines (the AdaptiveTable). Only a cap: the window is as wide as its content needs, not as this.
-        protected override int ContentMaxWidth => 880;
+        protected override int ContentMaxWidth => 1000;
 
         // ── Controls ──────────────────────────────────────────────────
         // One row per layer: label, action type, action value, contextual picker (Browse / Record).
@@ -432,13 +432,13 @@ namespace OnScreenKeyboard
             AddWideRow(key, _lblHint, fill: false);
 
             // Key width and height side by side (they wrap onto two lines when the window is narrow).
-            var span = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = true };
-            _stpColSpan = NewSpan(span, () => Lang.T("Key width"),  "tip: Key width", _maxCols);
-            _stpRowSpan = NewSpan(span, () => Lang.T("Key height"), "tip: Row span",  _maxRows);
-            AddWideRow(key, span);
+            var pairs = new List<Control>();
+            _stpColSpan = NewSpan(pairs, () => Lang.T("Key width"),  "tip: Key width", _maxCols);
+            _stpRowSpan = NewSpan(pairs, () => Lang.T("Key height"), "tip: Row span",  _maxRows);
+            AddWideRow(key, ReflowRows.Rows(pairs, 2, 1));              // side by side, else one under the other
         }
 
-        private TouchStepper NewSpan(FlowLayoutPanel parent, Func<string> label, string tip, int max)
+        private TouchStepper NewSpan(List<Control> pairs, Func<string> label, string tip, int max)
         {
             var pair = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = new Padding(0, 0, Touch.Gap * 2, 0) };
             var lbl = new Label
@@ -452,7 +452,7 @@ namespace OnScreenKeyboard
             SetTip(st.ValueBox, () => Lang.T(tip));
             pair.Controls.Add(lbl);
             pair.Controls.Add(st);
-            parent.Controls.Add(pair);
+            pairs.Add(pair);
             return st;
         }
 
@@ -505,9 +505,7 @@ namespace OnScreenKeyboard
             _stpFontSize.ValueChanged += (s, e) => Refresh2();
             _chkAutoSize = NewCheck(() => Lang.T("Auto"));
             _chkAutoSize.CheckedChanged += (s, e) => { _stpFontSize.Enabled = !_chkAutoSize.Checked; Refresh2(); };
-            var sizeRow = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = true };
-            sizeRow.Controls.Add(_stpFontSize);
-            sizeRow.Controls.Add(_chkAutoSize);
+            var sizeRow = InlineRow(_stpFontSize, _chkAutoSize);       // the check box goes under the stepper when they do not fit side by side
             AddRow(look, () => Lang.T("Font size"), sizeRow, fill: false);
 
             // Colours on one row: three labelled chips (font, key, border); the flyout has palette, hex and the Windows dialog.
@@ -517,9 +515,8 @@ namespace OnScreenKeyboard
             _transTexts.Add((_chipFont, () => Lang.T("chip: Font")));
             _transTexts.Add((_chipKey, () => Lang.T("chip: Key")));
             _transTexts.Add((_chipBorder, () => Lang.T("chip: Border")));
-            var chips = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = true };
             _chipFont.TabIndex = 0; _chipKey.TabIndex = 1; _chipBorder.TabIndex = 2;
-            chips.Controls.AddRange(new Control[] { _chipFont, _chipKey, _chipBorder });
+            var chips = ReflowRows.Rows(new Control[] { _chipFont, _chipKey, _chipBorder }, 3, 2, 1);      // three on a line, else two, else one
             foreach (var chip in new[] { _chipFont, _chipKey, _chipBorder })
             {
                 chip.ValueChanged += (s, e) => Refresh2();

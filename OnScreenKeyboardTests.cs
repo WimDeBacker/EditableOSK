@@ -79,7 +79,7 @@ namespace OnScreenKeyboard
             Step(T_StickyModifiers);
             Step(T_WizardControls);
             Step(T_AdaptiveTable);
-            Step(T_KeyEditorNarrow);
+            Step(T_NarrowDialogs);
             StepOnDemand(T_NarrowWidthReport);      // a report that takes minutes: run it with --test NarrowWidthReport
             Step(T_WizardSpecialKeys);
             Step(T_Wizard);

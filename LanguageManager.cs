@@ -418,7 +418,6 @@ namespace OnScreenKeyboard
             ["wiz: keys group typing"]          = "Typing keys",
             ["wiz: keys group nav"]             = "Moving and editing",
             ["wiz: keys group mod"]             = "Modifier keys",
-            ["wiz: keys group func"]            = "Function keys",
             ["wiz: keys group other"]           = "Other keys",
             ["wiz: keys group dead"]            = "Dead keys (accents)",
             ["wiz: keys dead note"]             = "A dead key puts its accent on the next letter that is typed.",
@@ -640,9 +639,20 @@ namespace OnScreenKeyboard
         /// </summary>
         internal static double PseudoExpansion { get; set; }
 
-        /// <summary>Appends filler at the end, so mnemonics (&amp;) and {n} placeholders stay intact.</summary>
-        private static string Pseudo(string text) =>
-            text + new string('x', (int)Math.Ceiling(text.Length * PseudoExpansion));
+        /// <summary>
+        /// Appends filler at the end, so mnemonics (&amp;) and {n} placeholders stay intact. A text of several words grows by more words
+        /// ("xxxxx xxxxx …"), as a real translation does, so it can still wrap between them; one word (a button, a short label) grows by letters.
+        /// An unbroken run of x's as long as a whole sentence made a wrapping label impossible to fit, which no translation does.
+        /// </summary>
+        private static string Pseudo(string text)
+        {
+            int extra = (int)Math.Ceiling(text.Length * PseudoExpansion);
+            if (extra <= 0) return text;
+            if (text.IndexOf(' ') < 0) return text + new string('x', extra);
+            var sb = new System.Text.StringBuilder(text);
+            while (extra > 0) { int n = Math.Min(extra - 1 > 0 ? extra - 1 : 1, 5); sb.Append(' ').Append('x', n); extra -= n + 1; }
+            return sb.ToString();
+        }
 
         /// <summary>
         /// Strips the WinForms mnemonic marker (<c>&amp;</c>) from a text string so it

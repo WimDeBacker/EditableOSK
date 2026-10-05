@@ -58,10 +58,12 @@ namespace OnScreenKeyboard
             host.Width = wide - 40; Application.DoEvents();
             Assert(table.CurrentVariant >= 1, "container narrowed: a narrower arrangement by itself");
 
-            // A measurement for a given width (what the dialog does) chooses by that width.
+            // A measurement does not choose (the layout engine measures at all kinds of widths): it answers for what is on show.
             host.Width = wide - 1; Application.DoEvents();
-            var sized = table.GetPreferredSize(new Size(wide - 1, 0));
-            Assert(table.CurrentVariant == 1 && sized.Width <= wide - 1, "GetPreferredSize(width) answers for the arrangement that fits that width");
+            Assert(table.CurrentVariant == 1, "container one pixel too narrow: second arrangement");
+            table.GetPreferredSize(new Size(5, 0));
+            table.GetPreferredSize(new Size(5000, 0));
+            Assert(table.CurrentVariant == 1, "measuring at other widths does not change the arrangement");
         }
     }
 }

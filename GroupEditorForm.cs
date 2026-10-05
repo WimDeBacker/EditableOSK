@@ -194,12 +194,14 @@ namespace OnScreenKeyboard
 
             // Two columns: the list of groups (fixed width) and, on the right, the preview in the top right corner (where the
             // Key Editor has it) with the style of the selected group below it.
-            var md = new TableLayoutPanel { ColumnCount = 2, RowCount = 1, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink };
+            // On a narrow window the two columns do not fit side by side: the style (with the preview) goes under the list.
+            var md = new AdaptiveTable { ColumnCount = 2 };
             md.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, ListColumnWidth));
             md.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            md.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            md.Controls.Add(BuildListColumn(), 0, 0);
-            md.Controls.Add(BuildRightColumn(), 1, 0);
+            var list = BuildListColumn();
+            var right = BuildRightColumn();
+            md.AddVariant(() => new[] { new AdaptiveTable.Cell(list, 0, 0), new AdaptiveTable.Cell(right, 1, 0) });
+            md.AddVariant(() => new[] { new AdaptiveTable.Cell(list, 0, 0, 2), new AdaptiveTable.Cell(right, 0, 1, 2) });
             AddWideRow(body, md);
         }
 
@@ -303,13 +305,13 @@ namespace OnScreenKeyboard
             _txtName.TextChanged += (s, e) => SaveCurrentName();
             AddRow(t, () => Lang.T("Name"), _txtName);
             // Always present (empty when there is nothing to say), so a message appearing later never moves the rows below it.
-            _lblNameError = new Label
+            _lblNameError = Wrap(new Label
             {
                 AutoSize = true, UseMnemonic = false, MaximumSize = new Size(Touch.LabelMaxWidth * 2, 0),
                 MinimumSize = new Size(0, Fluent.FontHint.Height + 4),
                 Font = Fluent.FontHint, BackColor = Color.Transparent, ForeColor = _dark ? Fluent.DialogDarkDanger : Fluent.Danger,
                 Margin = Padding.Empty,
-            };
+            });
             int r = t.RowCount++;
             t.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             t.Controls.Add(_lblNameError, 1, r);

@@ -58,6 +58,23 @@ namespace OnScreenKeyboard
         /// </summary>
         public static TextFormatFlags PrefixFlag(bool showCues) => showCues ? TextFormatFlags.Default : TextFormatFlags.HidePrefix;
 
+        /// <summary>
+        /// Size of a one-row control (check box, radio button) whose text may wrap: its natural single-line width when that fits in
+        /// <paramref name="limitA"/> and <paramref name="limitB"/> (0, or a huge value, means no limit), otherwise the limit as width and the
+        /// height of the wrapped text. Never shorter than <paramref name="minHeight"/>.
+        /// </summary>
+        public static Size WrappingRowSize(string text, Font font, Padding padding, int limitA, int limitB, int minHeight)
+        {
+            int limit = int.MaxValue;
+            if (limitA > 0 && limitA < int.MaxValue / 2) limit = Math.Min(limit, limitA);
+            if (limitB > 0 && limitB < int.MaxValue / 2) limit = Math.Min(limit, limitB);
+            int natural = padding.Horizontal + TextWidth(text, font);
+            if (natural <= limit) return new Size(natural, minHeight);
+            int textWidth = Math.Max(60, limit - padding.Horizontal);
+            var wrapped = TextRenderer.MeasureText(text ?? "", font, new Size(textWidth, int.MaxValue), TextFormatFlags.WordBreak | TextFormatFlags.NoPadding);
+            return new Size(Math.Max(limit, padding.Horizontal + 60), Math.Max(minHeight, wrapped.Height + 2 * 10));
+        }
+
         /// <summary>Width of <paramref name="text"/> on one line as it is drawn (an "&amp;" accelerator marker takes no room).</summary>
         public static int TextWidth(string text, Font font) =>
             string.IsNullOrEmpty(text) ? 0
@@ -294,8 +311,10 @@ namespace OnScreenKeyboard
             Cursor      = Cursors.Hand;
         }
 
+        // One line when it fits; when the control is given less width (its MaximumSize, kept up to date by the dialog) the text takes more lines.
+        // The width a table proposes is not used: tables propose all kinds of widths while measuring, and the check box shrank to fit them.
         public override Size GetPreferredSize(Size proposedSize) =>
-            new Size(Padding.Horizontal + Touch.TextWidth(Text, Font), Math.Max(Touch.Target, MinimumSize.Height));
+            Touch.WrappingRowSize(Text, Font, Padding, MaximumSize.Width, 0, Math.Max(Touch.Target, MinimumSize.Height));
 
         protected override void OnMouseEnter(EventArgs e) { _hovered = true;  Invalidate(); base.OnMouseEnter(e); }
         protected override void OnMouseLeave(EventArgs e) { _hovered = false; Invalidate(); base.OnMouseLeave(e); }
@@ -347,7 +366,7 @@ namespace OnScreenKeyboard
             // wide for its rectangle and gets an ellipsis ("A…"). "&" marks the accelerator (underlined while the cues show).
             TextRenderer.DrawText(g, Text, Font, new Rectangle(Padding.Left, 0, Math.Max(0, Width - Padding.Horizontal), Height),
                 hc ? (Enabled ? SystemColors.ControlText : SystemColors.GrayText) : Enabled ? Fluent.TextPrimary : off.Text,
-                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis |
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.WordBreak | TextFormatFlags.EndEllipsis |
                 TextFormatFlags.NoPadding | Touch.PrefixFlag(ShowKeyboardCues));
 
             if (Focused)
@@ -387,7 +406,7 @@ namespace OnScreenKeyboard
         }
 
         public override Size GetPreferredSize(Size proposedSize) =>
-            new Size(Padding.Horizontal + Touch.TextWidth(Text, Font), Math.Max(Touch.Target, MinimumSize.Height));
+            Touch.WrappingRowSize(Text, Font, Padding, MaximumSize.Width, 0, Math.Max(Touch.Target, MinimumSize.Height));
 
         protected override void OnMouseEnter(EventArgs e) { _hovered = true;  Invalidate(); base.OnMouseEnter(e); }
         protected override void OnMouseLeave(EventArgs e) { _hovered = false; Invalidate(); base.OnMouseLeave(e); }
@@ -477,7 +496,7 @@ namespace OnScreenKeyboard
 
             TextRenderer.DrawText(g, Text, Font, new Rectangle(Padding.Left, 0, Math.Max(0, Width - Padding.Horizontal), Height),
                 hc ? (Enabled ? SystemColors.ControlText : SystemColors.GrayText) : Enabled ? Fluent.TextPrimary : off.Text,
-                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis |
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.WordBreak | TextFormatFlags.EndEllipsis |
                 TextFormatFlags.NoPadding | Touch.PrefixFlag(ShowKeyboardCues));
 
             if (Focused)
@@ -495,43 +514,7 @@ namespace OnScreenKeyboard
     /// <summary>A one-column table whose members all have one width (marker type: the UI guard checks every instance).</summary>
     internal sealed class OptionStackPanel : TableLayoutPanel { }
 
-    /// <summary>
-    /// Buttons side by side that all have the same width: the widest of their preferred widths (and at least their own
-    /// minimum, normally 120). Re-measured whenever a button's text changes.
-    /// </summary>
-    internal sealed class ButtonRowPanel : TableLayoutPanel
-    {
-        private readonly Control[] _buttons;
-
-        public ButtonRowPanel(Control[] buttons)
-        {
-            _buttons = buttons;
-            ColumnCount = buttons.Length;
-            RowCount    = 1;
-            AutoSize     = true;
-            AutoSizeMode = AutoSizeMode.GrowAndShrink;
-            RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            for (int i = 0; i < buttons.Length; i++)
-            {
-                ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-                buttons[i].Anchor = AnchorStyles.Left;
-                buttons[i].Margin = new Padding(i == 0 ? 0 : Touch.Gap, 0, 0, 0);
-                if (buttons[i] is Button bb) { bb.AutoSize = true; bb.AutoSizeMode = AutoSizeMode.GrowAndShrink; }   // so a shorter text can shrink the row again
-                buttons[i].TextChanged += (s, e) => Equalise();
-                Controls.Add(buttons[i], i, 0);
-            }
-            Equalise();
-        }
-
-        /// <summary>Gives every button the width of the widest one.</summary>
-        internal void Equalise()
-        {
-            foreach (var b in _buttons) b.MinimumSize = new Size(120, Touch.Target);       // forget the previous common width first
-            int w = 120;
-            foreach (var b in _buttons) w = Math.Max(w, b.GetPreferredSize(Size.Empty).Width);
-            foreach (var b in _buttons) b.MinimumSize = new Size(w, Touch.Target);
-        }
-    }
+    // (Buttons side by side with one common width are built by ReflowRows.Buttons, see AdaptiveTable.cs.)
 
     // ════════════════════════════════════════════════════════════════════
     //  TouchGroup
