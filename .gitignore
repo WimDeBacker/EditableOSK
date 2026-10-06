@@ -5,3 +5,9 @@ obj/
 # Large word-frequency source — filtered version produced by
 # the external database builder before being committed.
 worddb_EN.xml
+
+# Visual Studio: caches and personal settings, recreated by the IDE.
+.vs/
+
+# Private font archive (not ours to publish): once pushed by mistake.
+schoolkxnew.zip
