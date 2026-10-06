@@ -393,7 +393,8 @@ namespace OnScreenKeyboard
                 else
                     // Rounded like the button itself. The colour must show on the dark toolbar: the accent blue only
                     // does on the light theme (the AAA accent is dark), so the dark theme gets a light ring (>= 3 : 1).
-                    FluentPainter.DrawRoundedRing(e.Graphics, Width, Height, Fluent.RadiusBtn, inset: 2.5f, penWidth: 2f,
+                    // On the active tab of the dark theme the outline of the tab itself takes the edge: the ring sits inside it.
+                    FluentPainter.DrawRoundedRing(e.Graphics, Width, Height, Fluent.RadiusBtn, inset: IsActive && !IsLightTheme ? 4.5f : 2.5f, penWidth: 2f,
                         color: IsLightTheme ? Fluent.Accent : Fluent.DialogDarkText);
             }
         }
@@ -704,6 +705,11 @@ namespace OnScreenKeyboard
             if (bgFill.A > 0)
                 using (var br = new SolidBrush(bgFill))
                     g.FillPath(br, path);
+
+            // The active tab on a dark panel: the blue is dark (white text on it is 7.8 : 1) and so only 2.1 : 1 against the
+            // panel; a light outline round it is what makes it stand out there (>= 3 : 1). The light theme needs none.
+            if (active && !lightTheme)
+                FluentPainter.DrawRoundedRing(g, r.Width, r.Height, radius, inset: 1.5f, penWidth: 2f, color: Fluent.DialogDarkText);
 
             // Draw a subtle border around each button in light mode so buttons
             // are distinguishable against the light panel background.

@@ -66,6 +66,7 @@ namespace OnScreenKeyboard
             Step(T_FlyoutsFromControls);
             Step(T_TouchDialogFrame);
             Step(T_ColourContrastAaa);
+            Step(T_ToolbarContrast);
             Step(T_ControlBorders);
             Step(T_KeyRings);
             Step(T_CornerLabels);

@@ -134,8 +134,10 @@ namespace OnScreenKeyboard
         // Subtle white border (22% opacity) around dark toolbar buttons.
         internal static readonly Color DarkBorder  = Color.FromArgb(55,  255, 255, 255);
 
-        // Solid Microsoft blue — highlights the currently active keyboard layout tab.
-        internal static readonly Color DarkActive  = Color.FromArgb(0,   120, 212);
+        // Blue that highlights the currently active toolbar tab, in both toolbar themes: white on it is 7.8 : 1 (AAA).
+        // On the dark panels this blue alone is only 2.1 : 1 against the panel, so the dark theme also draws a light 2 px
+        // outline round the active tab (FluentPainter.PaintDark), which is what makes the tab stand out there.
+        internal static readonly Color DarkActive  = Color.FromArgb(0,   84,  150);
 
         // ── Dark theme for dialogs ─────────────────────────────────────
         //
