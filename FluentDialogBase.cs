@@ -70,6 +70,10 @@ namespace OnScreenKeyboard
             TopMost         = true;
             Font            = Fluent.FontLabel;
 
+            // The dialog is always-on-top like the keyboard under it. Two always-on-top windows are ordered by when each was last
+            // raised, so the dialog raises itself once it is shown: it must open in front of the keyboard, never behind it.
+            Shown += (s, e) => { if (TopMost) BringToFront(); ForceForeground(this); };
+
             _tip = new ToolTip { InitialDelay = 400, AutoPopDelay = 10000, ShowAlways = true };
             _err = new ErrorProvider { ContainerControl = this, BlinkStyle = ErrorBlinkStyle.BlinkIfDifferentError };
             // Warning-triangle icon (vs. _err's default) so the two read as different severities.
@@ -645,6 +649,37 @@ namespace OnScreenKeyboard
                 height += p.Height + c.Margin.Vertical;
             }
             return new Size(width + pad.Horizontal, height);
+        }
+
+        // ── Coming to the front ──────────────────────────────────────────
+        // The keys of the keyboard answer a click with MA_NOACTIVATE (the program being typed into keeps the focus), so when a dialog
+        // is opened from a key the keyboard's process is not the foreground process. Windows then puts a window of that process
+        // behind the foreground program, or where it happens to fit: in front of the keyboard one time and behind another program
+        // the next. A dialog therefore takes the foreground itself once it is shown.
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hWnd);
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+
+        /// <summary>Makes <paramref name="form"/> the foreground window although its process was not (briefly sharing the input queue of the current foreground window, the usual way to be allowed).</summary>
+        internal static void ForceForeground(Form form)
+        {
+            if (form == null || form.IsDisposed || !form.IsHandleCreated) return;
+            // Not for the invisible windows of the tests and the gallery: they must not take the focus from whatever the user is doing.
+            if (SendKeysHelper.TestMode || form.Opacity < 0.1) return;
+            try
+            {
+                IntPtr fg = GetForegroundWindow();
+                if (fg == form.Handle) return;
+                uint fgThread = fg == IntPtr.Zero ? 0 : GetWindowThreadProcessId(fg, out _);
+                uint me = GetCurrentThreadId();
+                bool attached = fgThread != 0 && fgThread != me && AttachThreadInput(me, fgThread, true);
+                try { SetForegroundWindow(form.Handle); }
+                finally { if (attached) AttachThreadInput(me, fgThread, false); }
+            }
+            catch (Exception) { /* a dialog that cannot take the foreground still works: it is just not raised */ }
         }
 
         /// <summary>Sizes the window to its content, limited to the screen's working area, and centres it on its parent.</summary>

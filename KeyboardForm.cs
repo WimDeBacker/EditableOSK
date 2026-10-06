@@ -373,7 +373,9 @@ namespace OnScreenKeyboard
             };
             SizeChanged += (s, e) => { if (!_inModeTransition) LayoutButtons(); };
             Shown       += (s, e) => { LayoutButtons(); ForceTopMost(); _gearBtn.BringToFront(); _predictor.OnSentenceStart(); };
-            Activated   += (s, e) => ForceTopMost();
+            // Not while a dialog is open over it (ShowDialog disables its owner): putting the keyboard at the top of the
+            // always-on-top windows then lifts it above that dialog, which opens or stays behind the keyboard.
+            Activated   += (s, e) => { if (Enabled) ForceTopMost(); };
             KeyDown     += OnFormKeyDown;
             RegisterFocusHook();
             FormClosing += (s, e) =>
