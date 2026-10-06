@@ -426,5 +426,117 @@ namespace OnScreenKeyboard
                     "typing the code of a palette colour moves the palette cursor there");
             }
         }
+
+        // ════════════════════════════════════════════════════════════════
+        // The flyouts opened from a real chip / button on a shown form: placement, keyboard, focus return, closing.
+        // (The flyouts stay open on their own with KeepOpen, as in the gallery; "More colours…" is a modal Windows dialog: by hand.)
+        // ════════════════════════════════════════════════════════════════
+        private static void T_FlyoutsFromControls()
+        {
+            Section("Flyouts opened from a chip and a choice button — placement, keyboard, focus, closing");
+
+            var wa = Screen.PrimaryScreen.WorkingArea;
+            // The host is shown invisibly at a given spot; the chip and the button sit at its top left.
+            (Form Host, ColorChip Chip, TouchChoiceButton Choice) MakeHost(int x, int y)
+            {
+                var host = new Form { StartPosition = FormStartPosition.Manual, ClientSize = new Size(400, 200), Location = new Point(x, y) };
+                var chip = new ColorChip("Key", Color.Red) { Location = new Point(10, 10), InheritText = "Back to the group" };
+                var choice = new TouchChoiceButton { Location = new Point(10, 80), Size = new Size(200, Touch.Target) };
+                choice.SetItems(Choices(5), 0);
+                host.Controls.Add(chip);
+                host.Controls.Add(choice);
+                DevGallery.Show(host);
+                host.Location = new Point(x, y);          // Show puts the window at (20, 20)
+                Application.DoEvents();
+                return (host, chip, choice);
+            }
+            Rectangle Screen_(Control c) => c.RectangleToScreen(c.ClientRectangle);
+
+            // ── Chip: below the chip when there is room ──
+            var (host1, chip1, choice1) = MakeHost(wa.Left + 100, wa.Top + 100);
+            try
+            {
+                int raised = 0;
+                chip1.ValueChanged += (s, e) => raised++;
+                var f = chip1.OpenPicker(keepOpen: true);
+                Assert(f != null && f.Visible && !f.IsDisposed, "chip: the flyout opens");
+                Assert(f.Top >= Screen_(chip1).Bottom && f.Left == Screen_(chip1).Left, "chip: the flyout is under the chip, left edges aligned");
+                Assert(ReferenceEquals(chip1.OpenPicker(keepOpen: true), f), "chip: opening again does not open a second flyout");
+
+                // Keyboard: Right, Right, Enter picks the swatch next to the cursor, applies it and closes the flyout.
+                var pal = Priv<object>(f, "_palette");
+                Key((Control)pal, Keys.Right);
+                Key((Control)pal, Keys.Enter);
+                Assert(f.IsDisposed, "chip: Enter on a swatch closes the flyout");
+                Assert(raised == 1 && !chip1.Inherited && chip1.Value.ToArgb() != Color.Red.ToArgb(), "chip: the picked colour is applied and raised once");
+                Assert(host1.ActiveControl == chip1, "chip: the focus returns to the chip");
+
+                // Escape closes without changing anything.
+                raised = 0;
+                var before = chip1.Value;
+                f = chip1.OpenPicker(keepOpen: true);
+                Key(f, Keys.Escape);
+                Assert(f.IsDisposed && raised == 0 && chip1.Value == before, "chip: Escape closes the flyout and changes nothing");
+                Assert(chip1.OpenPicker(keepOpen: true) is ColorFlyout again && !ReferenceEquals(again, f), "chip: after closing, the next click opens a fresh flyout");
+                chip1.OpenPicker(keepOpen: true).Close();
+
+                // The inherit button hands the colour back to the parent.
+                f = chip1.OpenPicker(keepOpen: true);
+                ClickButton(Priv<FluentButton>(f, "_inherit"));
+                Assert(chip1.Inherited && raised == 1 && f.IsDisposed, "chip: 'inherit' marks the chip as inherited, raises once and closes the flyout");
+                chip1.SetOwn(Color.Red);
+                Assert(!chip1.Inherited, "chip: choosing an own colour ends the inheritance");
+
+                // Losing focus closes it, unless a dialog is open on top of it ("More colours…").
+                f = chip1.OpenPicker(keepOpen: true);
+                f.KeepOpen = false;
+                typeof(ColorFlyout).GetField("_dialogOpen", NonPublic).SetValue(f, true);
+                Send(f, "OnDeactivate", EventArgs.Empty);
+                Assert(!f.IsDisposed, "chip: the flyout stays open while the standard colour dialog is on top of it");
+                typeof(ColorFlyout).GetField("_dialogOpen", NonPublic).SetValue(f, false);
+                Send(f, "OnDeactivate", EventArgs.Empty);
+                Assert(f.IsDisposed, "chip: the flyout closes when it loses focus");
+
+                // ── Choice button: below the button, keyboard, focus return ──
+                var p = choice1.OpenPopup(keepOpen: true);
+                Assert(p != null && p.Visible, "choice: the flyout opens");
+                Assert(p.Top >= Screen_(choice1).Bottom, "choice: the flyout is under the button when there is room");
+                Assert(ReferenceEquals(choice1.OpenPopup(keepOpen: true), p), "choice: opening again does not open a second flyout");
+                int changed = 0;
+                choice1.SelectedIndexChanged += (s, e) => changed++;
+                Key(p, Keys.Down);
+                Key(p, Keys.Enter);
+                Assert(p.IsDisposed && choice1.SelectedIndex == 1 && changed == 1, "choice: Down and Enter choose the next row and close the flyout");
+                Assert(host1.ActiveControl == choice1, "choice: the focus returns to the button");
+
+                p = choice1.OpenPopup(keepOpen: true);
+                Key(p, Keys.Down);
+                Key(p, Keys.Escape);
+                Assert(p.IsDisposed && choice1.SelectedIndex == 1 && changed == 1, "choice: Escape closes the flyout and keeps the choice");
+
+                // Alt+Down and F4 open it from the keyboard, as on a normal drop-down.
+                Key(choice1, Keys.F4);
+                var viaKey = typeof(TouchChoiceButton).GetField("_popup", NonPublic).GetValue(choice1) as ChoicePopup;
+                Assert(viaKey != null && !viaKey.IsDisposed, "choice: F4 opens the flyout");
+                viaKey?.Close();
+            }
+            finally { host1.Dispose(); }
+
+            // ── Placement: no room below → above; no room at the right → moved left, inside the working area ──
+            var (host2, chip2, choice2) = MakeHost(wa.Right - 80, wa.Bottom - 150);
+            try
+            {
+                var f = chip2.OpenPicker(keepOpen: true);
+                Assert(f.Bottom <= Screen_(chip2).Top, "chip near the bottom: the flyout opens above the chip");
+                Assert(f.Left >= wa.Left && f.Right <= wa.Right && f.Top >= wa.Top, "chip near the right edge: the flyout stays inside the working area");
+                f.Close();
+
+                var p = choice2.OpenPopup(keepOpen: true);
+                Assert(p.Bottom <= Screen_(choice2).Top, "button near the bottom: the flyout opens above the button");
+                Assert(p.Left >= wa.Left && p.Right <= wa.Right && p.Top >= wa.Top, "button near the right edge: the flyout stays inside the working area");
+                p.Close();
+            }
+            finally { host2.Dispose(); }
+        }
     }
 }

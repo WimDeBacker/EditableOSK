@@ -226,6 +226,8 @@
   <String key="Manage Groups…"         value="Groepe&amp;n beheren…" />
   <String key="Group"                  value="Groep" />
   <String key="(no group)"             value="(geen groep)" />
+  <String key="title: leave group"     value="De toets uit de groep halen?" />
+  <String key="ask: leave group"       value="Deze toets volgt groep ‘{0}’. Een wijziging haalt de toets uit de groep: hij houdt zijn eigen uiterlijk en volgt de groep niet meer." />
   <String key="Manage Groups"          value="Groepen beheren" />
   <String key="Groups"                 value="Groepen" />
   <String key="Style"                  value="Stijl" />

@@ -345,6 +345,8 @@ namespace OnScreenKeyboard
             ["Manage Groups…"]          = "&Manage Groups…",
             ["Group"]                   = "Group",
             ["(no group)"]              = "(no group)",
+            ["title: leave group"]      = "Take the key out of its group?",
+            ["ask: leave group"]        = "This key follows group ‘{0}’. Changing it takes the key out of the group: it keeps its own look and no longer follows the group.",
             ["Manage Groups"]           = "Manage Groups",
             ["Groups"]                  = "Groups",
             ["Style"]                   = "Style",

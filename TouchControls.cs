@@ -316,6 +316,15 @@ namespace OnScreenKeyboard
         public override Size GetPreferredSize(Size proposedSize) =>
             Touch.WrappingRowSize(Text, Font, Padding, MaximumSize.Width, 0, Math.Max(Touch.Target, MinimumSize.Height));
 
+        /// <summary>Asked before the user's click (or Space) toggles the box; false: nothing happens. Programmatic changes are not asked.</summary>
+        internal Func<bool> BeforeToggle;
+
+        protected override void OnClick(EventArgs e)
+        {
+            if (BeforeToggle != null && !BeforeToggle()) return;
+            base.OnClick(e);
+        }
+
         protected override void OnMouseEnter(EventArgs e) { _hovered = true;  Invalidate(); base.OnMouseEnter(e); }
         protected override void OnMouseLeave(EventArgs e) { _hovered = false; Invalidate(); base.OnMouseLeave(e); }
         protected override void OnGotFocus(EventArgs e)   { Invalidate(); base.OnGotFocus(e); }
@@ -626,15 +635,24 @@ namespace OnScreenKeyboard
             _dec.MouseUp   += (s, e) => EndRepeat(_dec, e);
             _inc.MouseUp   += (s, e) => EndRepeat(_inc, e);
             // Click also fires after a mouse press; only a keyboard click (Space/Enter) steps here.
-            _dec.Click += (s, e) => { if (_mouseStep) _mouseStep = false; else Step(-1); };
-            _inc.Click += (s, e) => { if (_mouseStep) _mouseStep = false; else Step(+1); };
+            _dec.Click += (s, e) => { if (_mouseStep) _mouseStep = false; else if (Allowed()) Step(-1); };
+            _inc.Click += (s, e) => { if (_mouseStep) _mouseStep = false; else if (Allowed()) Step(+1); };
 
             _txt.TextChanged += (s, e) => OnTyped();
             _txt.Leave       += (s, e) => SyncText();
             _txt.KeyDown     += (s, e) =>
             {
-                if (e.KeyCode != Keys.Up && e.KeyCode != Keys.Down) return;
-                Step(e.KeyCode == Keys.Up ? +1 : -1);
+                bool arrow = e.KeyCode == Keys.Up || e.KeyCode == Keys.Down;
+                if (!arrow)
+                {
+                    // Only a key that would change the number is asked about; Tab, arrows left / right and the like are not.
+                    bool edits = e.KeyCode == Keys.Back || e.KeyCode == Keys.Delete || e.KeyCode == Keys.OemMinus || e.KeyCode == Keys.Subtract
+                              || (e.KeyCode >= Keys.D0 && e.KeyCode <= Keys.D9 && !e.Control && !e.Alt) || (e.KeyCode >= Keys.NumPad0 && e.KeyCode <= Keys.NumPad9)
+                              || (e.Control && (e.KeyCode == Keys.V || e.KeyCode == Keys.X));
+                    if (edits && !Allowed()) e.Handled = e.SuppressKeyPress = true;
+                    return;
+                }
+                if (Allowed()) Step(e.KeyCode == Keys.Up ? +1 : -1);
                 e.Handled = e.SuppressKeyPress = true;
             };
 
@@ -680,6 +698,14 @@ namespace OnScreenKeyboard
 
         /// <summary>Moves the value one increment down (-1) or up (+1), stopping at the limits.</summary>
         internal void Step(int direction) => Value += direction * _step;
+
+        /// <summary>
+        /// Asked before the user changes the value (a click on − / +, an arrow key, typing); false: nothing changes. The answer may
+        /// open a window, so it is asked once per action, not per repeat. Setting <see cref="Value"/> from code is not asked.
+        /// </summary>
+        internal Func<bool> BeforeChange;
+
+        private bool Allowed() => BeforeChange == null || BeforeChange();
 
         // ── Accessibility ───────────────────────────────────────────────
 
@@ -732,7 +758,13 @@ namespace OnScreenKeyboard
         {
             if (e.Button != MouseButtons.Left) return;
             _mouseStep = true;
+            bool allowed = Allowed();
+            // A window opened by the question swallowed the button release: no Click follows and repeating would never stop.
+            bool released = BeforeChange != null && (Control.MouseButtons & MouseButtons.Left) == 0;
+            if (released) _mouseStep = false;
+            if (!allowed) return;
             Step(dir);
+            if (released) return;
             _repeatDir = dir;
             _repeat.Interval = 450;   // pause before repeating, so a plain tap steps once
             _repeat.Start();

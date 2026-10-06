@@ -97,12 +97,15 @@ namespace OnScreenKeyboard
                     foreach (var (label, code, pseudo, minimum) in new[] { ("en", "en", 0.0, normal), ("nl", "nl", 0.0, normal), ("+40%", "en", 0.4, plus40), ("+80%", "en", 0.8, plus80) })
                     {
                         if (minimum == 0) continue;
+                        if (Quick && label is "nl" or "+40%") continue;      // --quick: English and the widest text only
                         Lang.Load(code);
                         Lang.PseudoExpansion = pseudo;
                         using var d = make();
                         DevGallery.Show(d);
                         var problems = new List<string>();
-                        foreach (int w in new[] { minimum, 800 })          // the narrowest, and a laptop at 150 %
+                        // The narrowest width; a laptop at 150 % (800) only in English: the other languages are covered at that width by
+                        // CheckDialogGuards, and a dialog that fits at its minimum fits wider.
+                        foreach (int w in label == "en" ? new[] { minimum, 800 } : new[] { minimum })
                         {
                             string p = NarrowProblemAt(d, w);
                             if (p != null) problems.Add($"{w}px: {p}");

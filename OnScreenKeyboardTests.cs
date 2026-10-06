@@ -2,7 +2,7 @@
 //  OnScreenKeyboardTests.cs  —  Self-contained test runner
 //
 //  HOW TO RUN:
-//      dotnet run -- --test
+//      OnScreenKeyboard.exe --test [<term>[,<term>]] [--quick]   (see TestRunnerOptions.cs)
 //
 //  Exit code 0 = all passed.  Exit code 1 = one or more failures.
 // ═══════════════════════════════════════════════════════════════════════════
@@ -33,7 +33,7 @@ namespace OnScreenKeyboard
             Console.WriteLine("═══════════════════════════════════════════");
             Console.ResetColor();
 
-            // Every group of tests is a named step, so a run can be limited to some of them (see ParseOptions) and timed.
+            // Every group of tests is a named step, so a run can be limited to some of them (see ReadOptions) and timed.
             Step(T_KeyProps);
             Step(T_SendKeysHelper_Escape);
             Step(T_SendKeysHelper_Modifiers);
@@ -63,6 +63,7 @@ namespace OnScreenKeyboard
             Step(T_TouchGroupComponents);
             Step(T_TouchChoiceButton);
             Step(T_ColorFlyout);
+            Step(T_FlyoutsFromControls);
             Step(T_TouchDialogFrame);
             Step(T_ColourContrastAaa);
             Step(T_ControlBorders);

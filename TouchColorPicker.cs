@@ -140,10 +140,14 @@ namespace OnScreenKeyboard
             }
         }
 
-        /// <summary>Opens the flyout under the chip (above it when there is no room below).</summary>
+        /// <summary>Asked before the flyout opens; false: it does not open (the dialog may need the user's agreement to change this colour).</summary>
+        internal Func<bool> BeforeOpen;
+
+        /// <summary>Opens the flyout under the chip (above it when there is no room below); null when <see cref="BeforeOpen"/> refused.</summary>
         internal ColorFlyout OpenPicker(bool keepOpen = false)
         {
             if (_flyout != null && !_flyout.IsDisposed) return _flyout;
+            if (BeforeOpen != null && !BeforeOpen()) return null;
             var f = new ColorFlyout(Value, DeviceDpi / 96f, InheritText) { KeepOpen = keepOpen };
             f.Picked += c => { SetOwn(c); ValueChanged?.Invoke(this, EventArgs.Empty); };
             f.InheritChosen += () => { Inherited = true; ValueChanged?.Invoke(this, EventArgs.Empty); };

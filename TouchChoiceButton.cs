@@ -147,6 +147,12 @@ namespace OnScreenKeyboard
             Invalidate();
         }
 
+        /// <summary>
+        /// Asked before the user opens the list or changes the choice with the arrow keys; false: nothing happens. Choosing from code
+        /// (<see cref="SelectedIndex"/>, <see cref="SelectSilently"/>) is not asked.
+        /// </summary>
+        internal Func<bool> BeforeChange;
+
         protected override void OnClick(EventArgs e)
         {
             base.OnClick(e);
@@ -162,8 +168,9 @@ namespace OnScreenKeyboard
             else if (e.KeyCode == Keys.Up || e.KeyCode == Keys.Down)
             {
                 int dir = e.KeyCode == Keys.Down ? 1 : -1;
-                for (int i = _selected + dir; i >= 0 && i < Items.Count; i += dir)
-                    if (Items[i].Enabled) { SelectedIndex = i; break; }
+                if (BeforeChange == null || BeforeChange())
+                    for (int i = _selected + dir; i >= 0 && i < Items.Count; i += dir)
+                        if (Items[i].Enabled) { SelectedIndex = i; break; }
                 e.Handled = true;
             }
             base.OnKeyDown(e);
@@ -177,6 +184,7 @@ namespace OnScreenKeyboard
         internal ChoicePopup OpenPopup(bool keepOpen = false, int? maxHeightOverride = null)
         {
             if (_popup != null && !_popup.IsDisposed) return _popup;
+            if (BeforeChange != null && !BeforeChange()) return null;
             float scale = DeviceDpi / 96f;
             var wa    = Screen.FromControl(this).WorkingArea;
             var below = PointToScreen(new Point(0, Height + 2));

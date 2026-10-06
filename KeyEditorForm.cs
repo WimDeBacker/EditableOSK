@@ -69,6 +69,11 @@ namespace OnScreenKeyboard
         private TouchStepper  _stpColSpan, _stpRowSpan, _stpFontSize, _stpBorderThickness;
         private TouchCheckBox _chkAutoSize;
         private TouchChoiceButton _cmbGroup, _cmbFont;
+        /// <summary>
+        /// Test seam: answers the question "take the key out of its group?" (title, text) instead of a window being opened
+        /// (a modal window would stop a test that clicks on a shown dialog).
+        /// </summary>
+        internal Func<string, string, bool> LeaveGroupAnswer;
         private FluentButton  _btnGroupEdit;
         private ColorChip     _chipFont, _chipKey, _chipBorder;
         private KeyPreviewCard _preview;
@@ -130,9 +135,13 @@ namespace OnScreenKeyboard
         private bool   _recording;
         private int    _recordLayer;
         private readonly string[] _recordedLabel = new string[Layers];   // the label a recording put in a layer (so a re-recording may replace it)
+        private readonly string[] _autoLabelBefore = new string[Layers]; // the label the shortcut that a recording replaces would have got
         private bool   _winHeld;              // tracked separately because the hook suppresses the Win key-up
         private IntPtr _hookHandle = IntPtr.Zero;
         private LowLevelKeyboardProc _hookProc;   // kept in a field so the GC cannot free it while the hook is active
+
+        /// <summary>Test seam: <see cref="StartRecording"/> does not install the system-wide hook.</summary>
+        internal bool HookDisabledForTest;
 
         // ── Title ─────────────────────────────────────────────────────
 
@@ -531,6 +540,11 @@ namespace OnScreenKeyboard
             SetTip(_stpBorderThickness.ValueBox, () => Lang.T("tip: Border thickness"));
             _stpBorderThickness.ValueChanged += (s, e) => Refresh2();
             AddRow(look, () => Lang.T("Border thickness"), _stpBorderThickness, fill: false);
+
+            // Every way of changing the look of a key that is in a group asks first: take the key out of the group, yes or no.
+            _chipFont.BeforeOpen = _chipKey.BeforeOpen = _chipBorder.BeforeOpen = ConfirmLeaveGroup;
+            _cmbFont.BeforeChange = _stpFontSize.BeforeChange = _stpBorderThickness.BeforeChange = ConfirmLeaveGroup;
+            _chkAutoSize.BeforeToggle = ConfirmLeaveGroup;
         }
 
         private void OpenGroupEditor()
@@ -930,7 +944,12 @@ namespace OnScreenKeyboard
             _winHeld     = false;
             UpdatePickerTexts();                // the stop symbol; clicking the button again cancels
             SetHint(Lang.T("Perform the key combination you want on the keyboard."));
+            // The label that the shortcut being replaced would have got: a label like that (also one saved in an earlier session)
+            // was not written by the user, so the new recording may replace it.
+            _autoLabelBefore[layer] = ModeOf(layer) == SendMode.KeySequence ? LabelOfSend(FromHuman(_values[layer].Text)) : null;
             _values[layer].Text = "";
+
+            if (HookDisabledForTest) return;    // tests drive CompleteRecording directly: a real hook would catch the keys of the whole machine
 
             _hookProc   = LowLevelHookCallback;
             _hookHandle = SetWindowsHookEx(WH_KEYBOARD_LL, _hookProc, GetModuleHandle(null), 0);
@@ -962,51 +981,82 @@ namespace OnScreenKeyboard
             bool isDown = wParam == (IntPtr)WM_KEYDOWN || wParam == (IntPtr)WM_SYSKEYDOWN;
             bool isUp   = wParam == (IntPtr)WM_KEYUP   || wParam == (IntPtr)WM_SYSKEYUP;
 
-            // Key-up events always pass: suppressing them would leave the OS thinking a key is still held.
-            if (isUp)
+            switch (ClassifyHookKey(kbd.vkCode, isDown, isUp))
             {
-                if (kbd.vkCode == VK_LWIN || kbd.vkCode == VK_RWIN) _winHeld = false;
-                return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+                case HookKeyAction.WinUp:
+                    _winHeld = false;
+                    return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+                case HookKeyAction.WinDown:
+                    _winHeld = true;
+                    return (IntPtr)1;
+                case HookKeyAction.Pass:
+                    return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
             }
-            if (!isDown) return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
-
-            // Escape is a key like any other (Ctrl+Esc, Alt+Esc ... are shortcuts): it is recorded. Recording is cancelled by
-            // clicking the stop button (or by leaving the window).
-
-            // Win key: remember it and suppress it so the Start menu does not react.
-            if (kbd.vkCode == VK_LWIN || kbd.vkCode == VK_RWIN) { _winHeld = true; return (IntPtr)1; }
-
-            // A bare Ctrl / Alt / Shift is not a complete shortcut: wait for the real key.
-            if (kbd.vkCode == 0x10 || kbd.vkCode == 0xA0 || kbd.vkCode == 0xA1 ||
-                kbd.vkCode == 0x11 || kbd.vkCode == 0xA2 || kbd.vkCode == 0xA3 ||
-                kbd.vkCode == 0x12 || kbd.vkCode == 0xA4 || kbd.vkCode == 0xA5)
-                return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
 
             bool ctrl  = (Control.ModifierKeys & Keys.Control) != 0;
             bool alt   = (Control.ModifierKeys & Keys.Alt)     != 0;
             bool shift = (Control.ModifierKeys & Keys.Shift)   != 0;
-            string send = BuildSendFromHook(kbd.vkCode, ctrl, alt, shift, _winHeld);
-            int layer = _recordLayer;
-
-            BeginInvoke((Action)(() =>
-            {
-                // Switch to the type that fits the recorded combination (silently: the value is filled in below).
-                var newMode = layer == 0 ? DetectSendMode(send, _labels[0].Text) : DetectLayerMode(send);
-                if (newMode != ModeOf(layer))
-                {
-                    bool was = _initialising;
-                    _initialising = true;
-                    SelectModeSilently(layer, newMode);
-                    ApplyMode(layer, applyPicker: false);
-                    _initialising = was;
-                }
-                _layerTouched[layer] = true;
-                _values[layer].Text = ToHuman(send);            // "{Ctrl}c", not "^c"
-                ApplyRecordedLabel(layer, BuildHumanLabel(kbd.vkCode, ctrl, alt, shift, _winHeld));
-                StopRecording(cancelled: false);
-            }));
+            bool win   = _winHeld;                      // read now: the key-up of the Win key may arrive before the UI thread runs the line below
+            int layer  = _recordLayer;
+            uint vk    = kbd.vkCode;
+            BeginInvoke((Action)(() => CompleteRecording(layer, vk, ctrl, alt, shift, win)));
 
             return (IntPtr)1;   // suppress: the key must not type into the app behind the editor
+        }
+
+        /// <summary>What the recorder's hook does with one keyboard event.</summary>
+        internal enum HookKeyAction
+        {
+            /// <summary>Let the key through to the system.</summary>
+            Pass,
+            /// <summary>The Win key was released: forget it, let the key-up through.</summary>
+            WinUp,
+            /// <summary>The Win key was pressed: remember it and suppress it so the Start menu does not react.</summary>
+            WinDown,
+            /// <summary>A complete shortcut: record it and suppress the key.</summary>
+            Record,
+        }
+
+        /// <summary>Decides what the hook does with a key event, without touching any state (see <see cref="HookKeyAction"/>).</summary>
+        internal static HookKeyAction ClassifyHookKey(uint vk, bool isDown, bool isUp)
+        {
+            bool win = vk == VK_LWIN || vk == VK_RWIN;
+            // Key-up events always pass: suppressing them would leave the OS thinking a key is still held.
+            if (isUp) return win ? HookKeyAction.WinUp : HookKeyAction.Pass;
+            if (!isDown) return HookKeyAction.Pass;
+
+            // Escape is a key like any other (Ctrl+Esc, Alt+Esc ... are shortcuts): it is recorded. Recording is cancelled by
+            // clicking the stop button (or by leaving the window).
+            if (win) return HookKeyAction.WinDown;
+
+            // A bare Ctrl / Alt / Shift is not a complete shortcut: wait for the real key.
+            if (vk == 0x10 || vk == 0xA0 || vk == 0xA1 ||
+                vk == 0x11 || vk == 0xA2 || vk == 0xA3 ||
+                vk == 0x12 || vk == 0xA4 || vk == 0xA5)
+                return HookKeyAction.Pass;
+
+            return HookKeyAction.Record;
+        }
+
+        /// <summary>Puts a recorded combination in <paramref name="layer"/>: the type that fits it, its value, and a label if the user wrote none; then stops recording.</summary>
+        internal void CompleteRecording(int layer, uint vk, bool ctrl, bool alt, bool shift, bool win)
+        {
+            string send = BuildSendFromHook(vk, ctrl, alt, shift, win);
+
+            // Switch to the type that fits the recorded combination (silently: the value is filled in below).
+            var newMode = layer == 0 ? DetectSendMode(send, _labels[0].Text) : DetectLayerMode(send);
+            if (newMode != ModeOf(layer))
+            {
+                bool was = _initialising;
+                _initialising = true;
+                SelectModeSilently(layer, newMode);
+                ApplyMode(layer, applyPicker: false);
+                _initialising = was;
+            }
+            _layerTouched[layer] = true;
+            _values[layer].Text = ToHuman(send);            // "{Ctrl}c", not "^c"
+            ApplyRecordedLabel(layer, BuildHumanLabel(vk, ctrl, alt, shift, win));
+            StopRecording(cancelled: false);
         }
 
         /// <summary>
@@ -1016,9 +1066,37 @@ namespace OnScreenKeyboard
         private void ApplyRecordedLabel(int layer, string label)
         {
             string cur = _labels[layer].Text;
-            if (!string.IsNullOrWhiteSpace(cur) && cur != _recordedLabel[layer]) return;
+            bool ownLabel = !string.IsNullOrWhiteSpace(cur) && cur != _recordedLabel[layer]
+                            && !string.Equals(cur, _autoLabelBefore[layer], StringComparison.OrdinalIgnoreCase);
+            if (ownLabel) return;
             _recordedLabel[layer] = label;
             _labels[layer].Text = label;
+        }
+
+        /// <summary>
+        /// The label a recording would give a stored shortcut ("^c" gives "Ctrl+C", "win:+s" gives "Win+Shift+S"), or null when
+        /// <paramref name="send"/> is not a shortcut of that shape. Compared without regard to case: stock layouts write "Ctrl+c".
+        /// </summary>
+        internal static string LabelOfSend(string send)
+        {
+            if (string.IsNullOrEmpty(send)) return null;
+            var parts = new List<string>();
+            if (send.StartsWith("win:", StringComparison.Ordinal)) { parts.Add("Win"); send = send.Substring(4); }
+            int i = 0;
+            for (; i < send.Length; i++)
+            {
+                if (send[i] == '^') parts.Add("Ctrl");
+                else if (send[i] == '%') parts.Add("Alt");
+                else if (send[i] == '+') parts.Add("Shift");
+                else break;
+            }
+            string key = send.Substring(i);
+            if (key.Length > 2 && key[0] == '{' && key[key.Length - 1] == '}') key = key.Substring(1, key.Length - 2);
+            else if (key.Length == 1) key = key.ToUpperInvariant();
+            else return null;                         // typed text, a group in parentheses: not a single shortcut
+            if (parts.Count == 0) return null;        // a bare key is not a shortcut: its label is the user's
+            parts.Add(key);
+            return string.Join("+", parts);
         }
 
         /// <summary>The internal send string from raw hook data: ^ Ctrl, % Alt, + Shift, or "win:" for the Win key.</summary>
@@ -1252,20 +1330,16 @@ namespace OnScreenKeyboard
             bool isNoGroup = _cmbGroup.SelectedIndex == 0;
             string groupName = isNoGroup ? "" : (_cmbGroup.SelectedItem?.Text ?? "");
 
-            Color parsedFc = _chipFont.Value, parsedKc = _chipKey.Value, parsedBc = _chipBorder.Value;
-            string curFont = _cmbFont.SelectedItem?.Text ?? "";
+            Color parsedFc = _chipFont.Value, parsedKc = _chipKey.Value, parsedBc = _chipBorder.Value;            string curFont = _cmbFont.SelectedItem?.Text ?? "";
             int rawFs = (_chkAutoSize.Checked || _stpFontSize.Value == 0) ? 0 : (int)_stpFontSize.Value;
             int rawBt = (int)_stpBorderThickness.Value;
 
             // A group is selected but a field was changed away from what the group provides: detach the key so the
             // explicit values are kept.
-            if (!isNoGroup)
+            if (!isNoGroup && AppearanceDiffersFromGroup())
             {
-                bool anyChanged =
-                    !ColorsMatchRgb(parsedFc, _groupFontColor)   || !ColorsMatchRgb(parsedKc, _groupKeyColor) ||
-                    !ColorsMatchRgb(parsedBc, _groupBorderColor) || _fontUserChanged ||
-                    rawFs != _groupFontSize || rawBt != _groupBorderThickness;
-                if (anyChanged) { isNoGroup = true; groupName = ""; }
+                isNoGroup = true;
+                groupName = "";
             }
 
             Color fc, kc, bc;
@@ -1306,6 +1380,38 @@ namespace OnScreenKeyboard
             };
             DialogResult = DialogResult.OK;
             Close();
+        }
+
+        /// <summary>
+        /// True when a colour, the font, the font size or the border thickness no longer matches what the selected group provides:
+        /// <see cref="Apply"/> then takes the key out of the group (it keeps its own look). The user is asked before it comes to that
+        /// (<see cref="ConfirmLeaveGroup"/>); this stays as the safety net for a change that did not pass the question.
+        /// </summary>
+        private bool AppearanceDiffersFromGroup()
+        {
+            int rawFs = (_chkAutoSize.Checked || _stpFontSize.Value == 0) ? 0 : (int)_stpFontSize.Value;
+            int rawBt = (int)_stpBorderThickness.Value;
+            return !ColorsMatchRgb(_chipFont.Value,   _groupFontColor) || !ColorsMatchRgb(_chipKey.Value, _groupKeyColor) ||
+                   !ColorsMatchRgb(_chipBorder.Value, _groupBorderColor) || _fontUserChanged ||
+                   rawFs != _groupFontSize || rawBt != _groupBorderThickness;
+        }
+
+        /// <summary>
+        /// Asked before the user changes the look of a key that is in a group (a click on a colour, the font, the size, the border
+        /// thickness or "Auto"): Yes takes the key out of the group, "(no group)" is chosen at once and the action goes on; No leaves
+        /// everything as it was and the action does not happen. The key keeps the values it shows (those of the group): <see cref="Apply"/>
+        /// then saves them as its own. Without a group, or while the dialog is being filled, nothing is asked.
+        /// </summary>
+        private bool ConfirmLeaveGroup()
+        {
+            if (_initialising || _cmbGroup == null || _cmbGroup.SelectedIndex <= 0) return true;
+            string title = Lang.T("title: leave group");
+            string text  = string.Format(Lang.T("ask: leave group"), _cmbGroup.SelectedItem?.Text);
+            bool yes = LeaveGroupAnswer != null ? LeaveGroupAnswer(title, text)
+                     : !IsHandleCreated || !Visible || TouchMessage.Confirm(this, title, text);     // not on screen: no window to ask in
+            if (!yes) return false;
+            _cmbGroup.SelectSilently(0);                              // raises nothing: the shown values stay, only the group goes
+            return true;
         }
 
         /// <summary>True when both colours are set and have identical R/G/B components.</summary>

@@ -7,9 +7,8 @@
 //   • nothing sticks out of the area that holds it                          (Overflow)
 //   • a dialog fits a 1366 x 768 laptop screen                              (ScreenFit)
 //
-// The guards run strictly on the new touch dialog. The three existing editors are only
-// *reported* (ui_guard_report.txt next to the test results) until each is migrated; migrating a
-// dialog means moving it from the report to the strict list.
+// The guards run strictly on every dialog (CheckDialogGuards): each section, in four languages, in the light theme
+// (the guards measure geometry; the theme only changes colours).
 
 using System;
 using System.Collections.Generic;
@@ -445,14 +444,15 @@ namespace OnScreenKeyboard
         // ════════════════════════════════════════════════════════════════
         private static void CheckDialogGuards(string dialog, Func<FluentDialogBase> make)
         {
-            // Quick mode (--quick) is for working on one dialog: English and the widest text, light theme. The full matrix runs before a commit.
+            // Quick mode (--quick) is for working on one dialog: English and the widest text. The full matrix runs before a commit.
+            // The guards measure geometry only and the theme changes colours only (contrast: T_ColourContrastAaa), so one theme is enough.
             var cases = Quick
                 ? new (string Name, string Code, double Pseudo)[] { ("en", "en", 0), ("+80%", "en", 0.8) }
                 : new (string Name, string Code, double Pseudo)[] { ("en", "en", 0), ("nl", "nl", 0), ("+40%", "en", 0.4), ("+80%", "en", 0.8) };
             bool wasLight = ToolbarButton.IsLightTheme;
             try
             {
-                foreach (bool light in Quick ? new[] { true } : new[] { true, false })
+                foreach (bool light in new[] { true })
                 {
                     ToolbarButton.IsLightTheme = light;          // read when a dialog is created
                     foreach (var (name, code, pseudo) in cases)
@@ -499,6 +499,9 @@ namespace OnScreenKeyboard
             // A key that uses every part of the dialog: a shortcut, a Shift layout jump and an AltGr text.
             var props = new KeyProps("Ctrl+c", "^c", "A", "layout:azerty.kbl", "€", "€") { GroupName = "Klinkers" };
             CheckDialogGuards("KeyEditorForm", () => new KeyEditorForm(props, null, groups: groups, layoutDir: AppDomain.CurrentDomain.BaseDirectory));
+            // The question asked before a change takes the key out of its group (a window of its own, with the real text).
+            CheckDialogGuards("TouchMessage (take the key out of its group?)", () =>
+                new TouchMessage(Lang.T("title: leave group"), string.Format(Lang.T("ask: leave group"), "Klinkers"), question: true));
         }
 
         // ════════════════════════════════════════════════════════════════
@@ -981,6 +984,94 @@ namespace OnScreenKeyboard
                 Assert(labels[0].Text == "Ctrl+Z", "recording: a label the user cleared is filled again");
             }
 
+            // ── Which keyboard events the recorder's hook records, passes or suppresses (the hook itself is only tested by hand) ──
+            const int Down = 1, Up = 2;
+            KeyEditorForm.HookKeyAction Hook(uint vk, int kind) => KeyEditorForm.ClassifyHookKey(vk, kind == Down, kind == Up);
+            Assert(Hook(A, Down) == KeyEditorForm.HookKeyAction.Record, "hook: a letter key-down is recorded");
+            Assert(Hook(F4, Down) == KeyEditorForm.HookKeyAction.Record, "hook: a function key-down is recorded");
+            Assert(Hook(0x1B, Down) == KeyEditorForm.HookKeyAction.Record, "hook: Escape is a key like any other and is recorded");
+            Assert(Hook(A, Up) == KeyEditorForm.HookKeyAction.Pass, "hook: a key-up always passes (the system must not think a key is still held)");
+            Assert(Hook(A, 0) == KeyEditorForm.HookKeyAction.Pass, "hook: an event that is neither down nor up passes");
+            foreach (uint mod in new uint[] { 0x10, 0xA0, 0xA1, 0x11, 0xA2, 0xA3, 0x12, 0xA4, 0xA5 })
+                Assert(Hook(mod, Down) == KeyEditorForm.HookKeyAction.Pass, $"hook: a bare Ctrl / Alt / Shift (0x{mod:X}) is not a shortcut yet and passes");
+            foreach (uint win in new uint[] { 0x5B, 0x5C })
+            {
+                Assert(Hook(win, Down) == KeyEditorForm.HookKeyAction.WinDown, $"hook: the Win key (0x{win:X}) down is remembered and suppressed");
+                Assert(Hook(win, Up) == KeyEditorForm.HookKeyAction.WinUp, $"hook: the Win key (0x{win:X}) up is forgotten and passes");
+            }
+
+            // ── A recording fills the layer: type, value, label; then recording stops ──
+            {
+                void Recorded(string name, KeyProps props, int layer, uint vk, bool ctrl, bool alt, bool shift, bool win, Action<KeyEditorForm> check)
+                {
+                    using var f = new KeyEditorForm(props, null) { HookDisabledForTest = true };
+                    typeof(KeyEditorForm).GetMethod("StartRecording", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(f, new object[] { layer });
+                    Assert(Field<bool>(f, "_recording"), $"recording ({name}): started without a hook");
+                    f.CompleteRecording(layer, vk, ctrl, alt, shift, win);
+                    Assert(!Field<bool>(f, "_recording"), $"recording ({name}): stops after the combination");
+                    Assert(Field<Label>(f, "_lblHint").Text == Lang.T("Recorded — edit if needed"), $"recording ({name}): the help text says it was recorded");
+                    check(f);
+                }
+                Recorded("Ctrl+C on an empty Normal layer", new KeyProps("", ""), 0, 0x43, true, false, false, false, f =>
+                {
+                    Assert(Current(Field<TouchChoiceButton[]>(f, "_types")[0]) == Key, "recording: the Normal layer switches to Key/Shortcut");
+                    Assert(Field<TouchTextBox[]>(f, "_values")[0].Text == "{Ctrl}c", $"recording: the value is the readable form (is '{Field<TouchTextBox[]>(f, "_values")[0].Text}')");
+                    Assert(Field<TouchTextBox[]>(f, "_labels")[0].Text == "Ctrl+C", "recording: an empty label gets the label of the shortcut");
+                });
+                Recorded("Win+Shift+S", new KeyProps("", ""), 0, 0x53, false, false, true, true, f =>
+                {
+                    Assert(Field<TouchTextBox[]>(f, "_values")[0].Text == "{Win}{Shift}s", "recording: a Win combination is stored with the Win token");
+                    Assert(Field<TouchTextBox[]>(f, "_labels")[0].Text == "Win+Shift+S", "recording: the label names the Win key (read when the key was pressed)");
+                });
+                Recorded("a label the user wrote", new KeyProps("Paste", ""), 0, 0x56, true, false, false, false, f =>
+                    Assert(Field<TouchTextBox[]>(f, "_labels")[0].Text == "Paste", "recording: a label the user typed is kept"));
+                Recorded("on the Shift layer", new KeyProps("a", "a", "A", "A"), 1, 0x56, true, false, false, false, f =>
+                {
+                    Assert(Current(Field<TouchChoiceButton[]>(f, "_types")[1]) == Key && Field<TouchTextBox[]>(f, "_values")[1].Text == "{Ctrl}v",
+                        "recording: the Shift layer switches to Key/Shortcut and takes the value");
+                    Assert(Field<TouchTextBox[]>(f, "_values")[0].Text == "a" && Field<TouchTextBox[]>(f, "_labels")[0].Text == "a", "recording: the Normal layer is left alone");
+                });
+
+                // Recording again: the label that came from a shortcut is replaced, one the user wrote is kept — also for a key that was
+                // saved earlier (a new editor knows nothing about the recording that made its label).
+                string RecordTwice(KeyProps props, uint vk1, bool ctrl1, uint vk2, bool ctrl2)
+                {
+                    using var f = new KeyEditorForm(props, null) { HookDisabledForTest = true };
+                    var start = typeof(KeyEditorForm).GetMethod("StartRecording", BindingFlags.NonPublic | BindingFlags.Instance);
+                    if (vk1 != 0) { start.Invoke(f, new object[] { 0 }); f.CompleteRecording(0, vk1, ctrl1, false, false, false); }
+                    start.Invoke(f, new object[] { 0 });
+                    f.CompleteRecording(0, vk2, ctrl2, false, false, false);
+                    return Field<TouchTextBox[]>(f, "_labels")[0].Text;
+                }
+                const uint C = 0x43, V = 0x56;
+                Assert(RecordTwice(new KeyProps("", ""), C, true, V, true) == "Ctrl+V", "recording twice in one session: the second shortcut gives the label");
+                Assert(RecordTwice(new KeyProps("Ctrl+C", "^c"), 0, false, V, true) == "Ctrl+V", "recording over a saved shortcut: the label that came with it is replaced");
+                Assert(RecordTwice(new KeyProps("Ctrl+c", "^c"), 0, false, V, true) == "Ctrl+V", "…also when the stock layout wrote it as 'Ctrl+c'");
+                Assert(RecordTwice(new KeyProps("Paste", "^c"), 0, false, V, true) == "Paste", "recording over a saved shortcut: a label the user wrote is kept");
+                Assert(KeyEditorForm.LabelOfSend("^c") == "Ctrl+C" && KeyEditorForm.LabelOfSend("win:+s") == "Win+Shift+S" && KeyEditorForm.LabelOfSend("%{F4}") == "Alt+F4",
+                    "label of a stored shortcut: Ctrl+C, Win+Shift+S, Alt+F4");
+                Assert(KeyEditorForm.LabelOfSend("a") == null && KeyEditorForm.LabelOfSend("hello") == null && KeyEditorForm.LabelOfSend("") == null,
+                    "label of a stored send that is no shortcut: none");
+
+                // The result of an applied recording is the shortcut itself.
+                r = Apply(new KeyProps("", ""), f =>
+                {
+                    f.HookDisabledForTest = true;
+                    typeof(KeyEditorForm).GetMethod("StartRecording", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(f, new object[] { 0 });
+                    f.CompleteRecording(0, 0x43, true, false, false, false);
+                });
+                Assert(r != null && r.Send == "^c" && r.Label == "Ctrl+C", $"recording: Apply stores the recorded shortcut (send '{r?.Send}', label '{r?.Label}')");
+
+                // A second click on the Record button cancels instead of starting again.
+                using var g = new KeyEditorForm(new KeyProps("a", "a"), null) { HookDisabledForTest = true };
+                Pick(Field<TouchChoiceButton[]>(g, "_types")[0], Key);
+                var onPicker = typeof(KeyEditorForm).GetMethod("OnPickerClick", BindingFlags.NonPublic | BindingFlags.Instance);
+                onPicker.Invoke(g, new object[] { 0 });
+                Assert(Field<bool>(g, "_recording"), "Record button: the first click starts recording");
+                onPicker.Invoke(g, new object[] { 0 });
+                Assert(!Field<bool>(g, "_recording") && Field<Label>(g, "_lblHint").Text == Lang.T("Cancelled"), "Record button: the second click cancels");
+            }
+
             // ── The Record / Browse button is an icon-only 44 px square in every language and state, so it never covers its neighbour ──
             foreach (var lang in new[] { "en", "nl" })
             {
@@ -1029,6 +1120,123 @@ namespace OnScreenKeyboard
             Assert(r.GroupName == "Klinkers" && r.KeyColor.IsEmpty, "untouched key stays in its group and keeps no colour of its own");
             r = Apply(new KeyProps("a", "a") { GroupName = "Klinkers" }, f => Field<ColorChip>(f, "_chipKey").Value = Color.Blue, groups: groups);
             Assert(r.GroupName == "" && r.KeyColor.ToArgb() == Color.Blue.ToArgb(), "changing a colour detaches the key and keeps the new colour");
+
+            // ── Changing the look of a key in a group asks first: take the key out of the group, yes or no ──
+            {
+                string grpTitle = null, grpText = null; int asked = 0; bool answer = false;
+                KeyEditorForm Grouped()
+                {
+                    var f = new KeyEditorForm(new KeyProps("a", "a") { GroupName = "Klinkers" }, null, groups: groups);
+                    asked = 0; grpTitle = grpText = null;
+                    f.LeaveGroupAnswer = (title, text) => { asked++; grpTitle = title; grpText = text; return answer; };
+                    return f;
+                }
+                int GroupIndex(KeyEditorForm f) => Field<TouchChoiceButton>(f, "_cmbGroup").SelectedIndex;
+                int inGroup = groups.FindIndex(g => g.Name == "Klinkers") + 1;       // index 0 of the chooser is "(no group)"
+                Assert(inGroup > 0, "leave group: the test group exists");
+
+                // The question itself.
+                answer = false;
+                using (var f = Grouped())
+                {
+                    var chip = Field<ColorChip>(f, "_chipKey");
+                    Assert(chip.OpenPicker(keepOpen: true) == null, "leave group, No: the colour flyout does not open");
+                    Assert(asked == 1 && GroupIndex(f) == inGroup, "leave group, No: asked once, the key stays in its group");
+                    Assert(grpTitle == Lang.T("title: leave group") && grpText.Contains("Klinkers"), $"leave group: the question names the group ('{grpText}')");
+                }
+                answer = true;
+                using (var f = Grouped())
+                {
+                    var chip = Field<ColorChip>(f, "_chipKey");
+                    var before = chip.Value;
+                    var fly = chip.OpenPicker(keepOpen: true);
+                    Assert(fly != null && !fly.IsDisposed, "leave group, Yes: the colour flyout opens at once");
+                    fly?.Close();
+                    Assert(GroupIndex(f) == 0 && Field<TouchChoiceButton>(f, "_cmbGroup").Text == Lang.T("(no group)"), "leave group, Yes: the group becomes '(no group)'");
+                    Assert(chip.Value == before, "leave group, Yes: the colours the key showed (the group's) stay");
+                    chip.OpenPicker(keepOpen: true)?.Close();
+                    Assert(asked == 1, "leave group: once the key is out of the group nothing is asked again");
+                }
+
+                // Every control that changes the look asks, in the way it is used.
+                answer = false;
+                using (var f = Grouped())
+                {
+                    foreach (var name in new[] { "_chipFont", "_chipKey", "_chipBorder" })
+                        Assert(Field<ColorChip>(f, name).BeforeOpen != null, $"leave group: {name} asks before it opens");
+                    var font = Field<TouchChoiceButton>(f, "_cmbFont");
+                    int fontIndex = font.SelectedIndex;
+                    Send(font, "OnKeyDown", new KeyEventArgs(Keys.Down));
+                    Assert(font.SelectedIndex == fontIndex && asked == 1, "leave group, No: the arrow keys on the font do not change it");
+                    Assert(font.OpenPopup(keepOpen: true) == null && asked == 2, "leave group, No: the font list does not open");
+
+                    var size = Field<TouchStepper>(f, "_stpFontSize");
+                    var thick = Field<TouchStepper>(f, "_stpBorderThickness");
+                    decimal s0 = size.Value, t0 = thick.Value;
+                    ClickButton(size.IncreaseButton); ClickButton(thick.DecreaseButton);
+                    Send(thick.ValueBox, "OnKeyDown", new KeyEventArgs(Keys.Up));
+                    Assert(size.Value == s0 && thick.Value == t0, "leave group, No: the steppers do not change (keyboard click, arrow key)");
+                    var typed = new KeyEventArgs(Keys.D5);
+                    Send(thick.ValueBox, "OnKeyDown", typed);
+                    Assert(typed.SuppressKeyPress, "leave group, No: typing a digit in the stepper is refused");
+                    var tab = new KeyEventArgs(Keys.Tab);
+                    int before = asked;
+                    Send(thick.ValueBox, "OnKeyDown", tab);
+                    Assert(!tab.SuppressKeyPress && asked == before, "leave group: Tab in the stepper does not ask anything");
+
+                    var auto = Field<TouchCheckBox>(f, "_chkAutoSize");
+                    bool a0 = auto.Checked;
+                    Send(auto, "OnClick", EventArgs.Empty);
+                    Assert(auto.Checked == a0, "leave group, No: the Auto box does not change");
+                    Assert(GroupIndex(f) == inGroup, "leave group, No everywhere: the key is still in its group");
+                }
+                answer = true;
+                using (var f = Grouped())
+                {
+                    var auto = Field<TouchCheckBox>(f, "_chkAutoSize");
+                    bool a0 = auto.Checked;
+                    Send(auto, "OnClick", EventArgs.Empty);
+                    Assert(auto.Checked != a0 && GroupIndex(f) == 0 && asked == 1, "leave group, Yes: the Auto box changes at once and the key is out of the group");
+                }
+                using (var f = Grouped())
+                {
+                    var thick = Field<TouchStepper>(f, "_stpBorderThickness");
+                    decimal t0 = thick.Value;
+                    ClickButton(thick.IncreaseButton);
+                    Assert(thick.Value == t0 + 1 && GroupIndex(f) == 0, "leave group, Yes: the stepper changes at once and the key is out of the group");
+                }
+                using (var f = Grouped())
+                {
+                    var font = Field<TouchChoiceButton>(f, "_cmbFont");
+                    int fi = font.SelectedIndex;
+                    Send(font, "OnKeyDown", new KeyEventArgs(Keys.Down));
+                    Assert(font.SelectedIndex != fi && GroupIndex(f) == 0, "leave group, Yes: the font changes at once and the key is out of the group");
+                }
+
+                // What is saved after Yes: no group, the colours of the group as its own.
+                r = Apply(new KeyProps("a", "a") { GroupName = "Klinkers" }, f => { f.LeaveGroupAnswer = (t, m) => true; Field<ColorChip>(f, "_chipFont").OpenPicker(keepOpen: true)?.Close(); }, groups: groups);
+                Assert(r.GroupName == "" && r.KeyColor.ToArgb() == Color.Red.ToArgb(), $"leave group, Yes: the key is saved without a group, with the group's colours as its own ({r.GroupName}, {r.KeyColor})");
+                r = Apply(new KeyProps("a", "a") { GroupName = "Klinkers" }, f => { f.LeaveGroupAnswer = (t, m) => false; Field<ColorChip>(f, "_chipFont").OpenPicker(keepOpen: true)?.Close(); }, groups: groups);
+                Assert(r.GroupName == "Klinkers" && r.KeyColor.IsEmpty, "leave group, No: the key is saved as it was, in its group");
+
+                // Without a group nothing is asked; and the question is translated.
+                using (var f = new KeyEditorForm(new KeyProps("a", "a"), null, groups: groups))
+                {
+                    int n = 0; f.LeaveGroupAnswer = (t, m) => { n++; return true; };
+                    Field<ColorChip>(f, "_chipKey").OpenPicker(keepOpen: true)?.Close();
+                    ClickButton(Field<TouchStepper>(f, "_stpBorderThickness").IncreaseButton);
+                    Assert(n == 0, "leave group: a key without a group is never asked");
+                }
+                Lang.Load("nl");
+                try
+                {
+                    answer = false;
+                    using var f = Grouped();
+                    Field<ColorChip>(f, "_chipKey").OpenPicker(keepOpen: true);
+                    Assert(grpTitle == "De toets uit de groep halen?" && grpText.Contains("volgt groep ‘Klinkers’"), $"leave group: the question in Dutch ('{grpTitle}' / '{grpText}')");
+                }
+                finally { Lang.Load("en"); }
+            }
         }
 
         // ════════════════════════════════════════════════════════════════
