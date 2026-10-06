@@ -1,6 +1,8 @@
 # New Keyboard Wizard: inventory (todo 2.4.5.3)
 
-Written 2026-10-04 from reading `NewKeyboardWizard.cs` (1,282 lines), `WizardKeyParser.cs`, `KeyboardForm.OpenNewWizard` and the tests. Nothing was run or photographed for this file. Companion: `wizard_spec.md`, `mockups/wizard.html`.
+Written 2026-10-04 from reading `NewKeyboardWizard.cs` (1,282 lines), `WizardKeyParser.cs`, `KeyboardForm.OpenNewWizard` and the tests. Nothing was run or photographed for this file. Companion: `wizard_spec.md`.
+
+> **Status, 2026-10-06:** this file describes the **old** wizard (hand-positioned controls, 880 × 820 window, message boxes). It was rebuilt on 2026-10-04/05 (`wizard_spec.md`, "Current state" at the top). Of the defects below, W1–W13 are fixed (W13: the unused strings were removed on 2026-10-06); only **W14** (the Colorful preset is below AA contrast) remains, and it is a design decision for the keyboard itself, not for the dialog (todo 2.5.4). The test table in section 3 lists the tests as they were before the rebuild: the reflection tests still run, now over the new controls (`TouchTextBox`, `TouchRadioButton` are still `TextBox` and `RadioButton`).
 
 ## 1. What the wizard does
 

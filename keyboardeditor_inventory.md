@@ -1,6 +1,8 @@
 # Keyboard Editor: inventory of the old dialog (`KeyboardEditorForm.cs`, commit 27aa301)
 
-Written 2026-10-02 from reading the code only. Nothing was built, run or photographed. The new design is in `keyboardeditor_spec.md`; mock-ups are in `mockups/`.
+Written 2026-10-02 from reading the code only. Nothing was built, run or photographed. The new design is in `keyboardeditor_spec.md`.
+
+> **Status, 2026-10-06:** this file describes the **old** dialog (the 1,130-line `KeyboardEditorForm` that was replaced on 2026-10-04). Every defect listed here is fixed in the new one, except where `keyboardeditor_spec.md` ("Current state" at the top) says otherwise. It is kept as the record of what the old dialog did and which hidden state had to survive the rebuild.
 
 Legend: EN / NL = English / Dutch text, with the accelerator letter in brackets. "built-in &" means the `&` is inside the translation string; "prefixed" means the code writes `"&" + Lang.T(...)`, so the accelerator is the first letter of the translation and differs per language.
 

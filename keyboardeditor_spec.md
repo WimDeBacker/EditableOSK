@@ -4,7 +4,18 @@ Status: proposal, written 2026-10-02 against commit 27aa301 (branch `claude/keyb
 
 **Review round, 2026-10-04 (owner).** Confirmed as proposed: D3, D4, D6, D8 (two columns), D12. D1 confirmed with an addition: Save / Save As / Load stay in the dialog **and** in the toolbar. D7 **changed**: Slow keys and Dwell click become radio buttons in a framed "Timing aid" group (sections 5 and 11). New rule from the owner: **controls that stand under each other share one width, so their right edges line up** (D23, section 1). The text and the mock-ups below follow these answers.
 
-Companion files: `keyboardeditor_inventory.md` (what the old dialog does, defects, hidden state, tests that touch it) and `mockups/keyboardeditor_general.html`, `mockups/keyboardeditor_accessibility.html`, `mockups/keyboardeditor_wordprediction.html` (static pictures with a light/dark and an English/Dutch switch, using exactly the strings of this document).
+Companion file: `keyboardeditor_inventory.md` (what the old dialog does, defects, hidden state, tests that touch it). The HTML mock-ups that once belonged to this document were deleted on 2026-10-06; the gallery (`OnScreenKeyboard.exe --gallery <folder>`) shows the real dialog.
+
+## Current state (2026-10-06)
+
+Built on 2026-10-04 as `KeyboardEditorForm : FluentDialogBase` (todo 2.4.5.2), with the decisions of the review round above. The text below is the design as proposed; this is what differs or was added since:
+
+- **Three sections** in a `SectionBar`: General (language, toolbar theme, opacity stepper, background colour chip, Always on top, Hide title bar, Save / Save As / Load), Accessibility (Sticky modifiers, Hold to enter edit mode, the framed "Timing aid" radio group with its steppers and the animation check box, corner labels), Word prediction (learning, database chooser, candidates list with Promote / Reject, Export). Footer: Cancel, Apply. `ContentMaxWidth` 920.
+- **Responsive (2026-10-05, `responsive_spec.md`, section 10).** Nothing has a fixed width that could cut it off: the language and toolbar-theme choosers are 280 px wide when there is room and shrink to 160 px; hint and check-box texts wrap (`Wrap`); the Timing aid grid puts a stepper and its unit on a line under the radio button when they do not fit beside it; the word-prediction settings and candidates are side by side, else the candidates go under the settings; Promote / Reject are side by side, else stacked; Save / Save As / Load share one width and stack when they do not fit. The arrangement is chosen from the measured width of the controls, not from a typed-in breakpoint.
+- **Fits from** 396 px (English), 404 (Dutch), 444 (+40 % text), 520 (+80 %) design pixels; the permanent test (`T_NarrowDialogs`) requires 480 / 480 / 520 / 540.
+- **Sticky modifiers** are explained by their tooltip (tap twice to lock, a third time to release; `ModifierLatch`, `T_StickyModifiers`).
+- **Tests:** `T_KeyboardEditorGuards` (all states, four text sizes, both themes), `T_KeyboardEditor` (every control writes its field, Save / Save As / Load, language restore on Cancel, database and candidates through the `WordPredictionBackend` seam), `T_KeyboardEditorAlignment` (rule D23), `T_NarrowDialogs`.
+- **Pictures:** `OnScreenKeyboard.exe --gallery <folder>` saves `keyboardeditor2_*` (normal width) and `narrow_keyboardeditor_*` (480 px).
 
 ## 1. Goal and rules that apply
 
@@ -345,7 +356,7 @@ Each step ends with `dotnet build -nologo -v q` clean and the full test run exit
 | S5 | Accessibility section (A1 to A4, the radio group) + its tests (radio behaviour, animation, corner labels, accelerators, alignment). | green |
 | S6 | General section (G1 to G9) + tests (stepper, chip, chooser, language restore, Save / Save As `FileAction`, Load). | green |
 | S7 | Word prediction section (W1 to W9) + tests (candidates, export, database warning, `Loaded` handler). | green |
-| S8 | `T_KeyboardEditorGuards` (all states, +40 % / +80 %, both themes), tab-order test, gallery pictures; look at the gallery in English and Dutch against `mockups/`. Adjust (section 10 fallbacks). | green + pictures reviewed |
+| S8 | `T_KeyboardEditorGuards` (all states, +40 % / +80 %, both themes), tab-order test, gallery pictures; look at the gallery in English and Dutch (the HTML mock-ups this once referred to are gone). Adjust (section 10 fallbacks). | green + pictures reviewed |
 | S9 | Switch: `KeyboardForm.OpenKeyboardEditor` uses the new constructor and `FileAction`; rename `KeyboardEditorForm2` to `KeyboardEditorForm`, delete the old file; adapt the old tests (12.2); delete `T_UiGuardBaseline`. | green |
 | S10 | Docs: `todo.md` 2.4.5.2 done and the 9.4 / 9.7 notes, `formdesign.md` (flaws B1 to B15 as a new subsection, lessons, "not verified" list), remove `ROW_H` / `HDR_H` / `WrapInScrollPanel` / old `AddColorRow` if nothing else uses them (todo 2.4.7). | green |
 

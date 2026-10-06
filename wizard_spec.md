@@ -1,6 +1,18 @@
 # New Keyboard Wizard redesign: specification (todo 2.4.5.3)
 
-Status: **approved by the owner on 2026-10-04: D1-D10 as proposed (D3 = read-only grid size text), plus: the preview shows the key labels live** (section 2, page 2). Written from reading the code only; nothing is built or run yet. Inventory and defects (W1-W14): `wizard_inventory.md`. Mock-up: `mockups/wizard.html` (four pages, light / dark, English / Dutch text switch).
+Status: **approved by the owner on 2026-10-04: D1-D10 as proposed (D3 = read-only grid size text), plus: the preview shows the key labels live** (section 2, page 2). Written from reading the code only; nothing is built or run yet. Inventory and defects (W1-W14): `wizard_inventory.md`.
+## Current state (2026-10-06)
+
+Built on 2026-10-04/05 as `NewKeyboardWizard : FluentDialogBase` (todo 2.4.5.3). The proposal below was approved; this is what the wizard is now and where it differs:
+
+- **Pages and sections.** Four pages (Start, Grid, Theme, Save) shown in six host sections: page 2 is one of three sections (blank grid: rows / columns steppers and a preview; pasted labels: the box, a size line and a preview; copy from file: one line), chosen from page 1, so the window is as tall as the tallest section, not the sum.
+- **Footer** (standard, adaptive): "Step n of 4", Cancel, Back, Next / Create, all one width; the step text goes above the buttons when they do not fit together. Enter = Next / Create, Escape = Cancel.
+- **Resizable** (changed on 2026-10-06; D8 said "not resizable"): `Sizable`, not narrower than 480 design px. Everything reflows: hint and error lines wrap (`Wrap`), the five theme tiles are `Tiles(5, 3, 2, 1)` (a tile is as wide as its longest word needs), the ten sample keys are controls on one line, else two of five, the language chooser is 160–280 px wide, browse text boxes keep 120 px at least. The permanent test (`T_NarrowDialogs`) requires it to fit from 480 px (520 at +40 % text); measured on 2026-10-05 it fitted from 400 / 444 / 456 px.
+- **Validation** is inline under the field (no message boxes); an existing file is only replaced after a Yes / No question (default No); invalid file-name characters are refused with a clear reason.
+- **Pasted labels** support more than letters: `[shift] [ctrl] [alt] [altgr] [win] [caps]`, `[home] [end] [pageup] [pagedown] [insert] [printscreen] [numlock] [scrolllock] [pause]`, `[f1]` … `[f16]` and dead keys (`[dead:^]` or `[circumflex] [umlaut] [tilde] [grave] [acute]`), any case, with a few English / Dutch aliases. A **? button** next to the special-keys hint opens the full list (`SpecialKeysDialog`, `WizardKeyHelp.cs`, built from `WizardKeyParser.Help`; a test checks that the list and the parser agree).
+- **Deviations from the proposal:** the overwrite question is a plain Yes / No, not "Replace / Choose another name"; the descriptions under the start options are single short lines; the paste page has no separate hint line for "one row per line" (it is the page subtitle); D8 as above.
+- **Tests:** `T_Wizard` (navigation, validation, preview, tiles and sample keys, create), `T_WizardGuards` (all pages in four text sizes, both themes, two dialog states), `T_WizardControls`, `T_WizardSpecialKeys`, `T_NarrowDialogs`, and the older `T_WizardKeyParser`, `T_WizardKeyClassifier`, `T_WizardThemePresets`, `T_WizardBuildLayoutData_ThemeFileMerge`, `T_WizardThemePage_GroupSwatchColors`.
+- **Pictures:** `OnScreenKeyboard.exe --gallery <folder>` saves `wizard_*` and `wizard_keys_*` (normal width) and `narrow_wizard_*`, `narrow_specialkeys_*` (480 px). The HTML mock-up that belonged to this document was deleted.
 
 ## 1. Goal and rules
 
