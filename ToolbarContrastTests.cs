@@ -85,22 +85,29 @@ namespace OnScreenKeyboard
                 Info($"unused DarkBorder on {SettingsManager.Hex(panelBg)}", Over(Fluent.DarkBorder, panelBg), panelBg, 3);
             }
 
-            // The AA floor: everything that matters, nothing may get worse.
-            AssertAll(rows.Where(r => !r.Info), r => r.Ratio >= r.Aa, r => $"{r.Name} = {r.Ratio:F2}:1 (floor {r.Aa}:1)",
-                "toolbar: every pair reaches its WCAG AA floor (text 4.5 : 1, ring and active tab 3 : 1)");
+            ContrastReport("toolbar", "toolbar_contrast_report.txt", rows);
+        }
 
-            // The AAA gaps, for the owner.
+        /// <summary>
+        /// The end of a contrast group: asserts the AA floor of every pair that matters (nothing may get worse), and reports the pairs
+        /// below AAA in the console and in <paramref name="file"/> next to the program, with all the numbers.
+        /// </summary>
+        private static void ContrastReport(string what, string file, List<(string Name, double Ratio, double Aaa, double Aa, bool Info)> rows)
+        {
+            AssertAll(rows.Where(r => !r.Info), r => r.Ratio >= r.Aa, r => $"{r.Name} = {r.Ratio:F2}:1 (floor {r.Aa}:1)",
+                $"{what}: every pair reaches its WCAG AA floor (text 4.5 : 1, boundaries and focus rings 3 : 1)");
+
             var gaps = rows.Where(r => !r.Info && r.Ratio < r.Aaa).ToList();
-            var lines = new List<string> { $"Toolbar colour contrast, {DateTime.Now:yyyy-MM-dd HH:mm}", "AAA: text 7 : 1, ring and active tab 3 : 1.", "" };
+            var lines = new List<string> { $"Colour contrast of the {what}, {DateTime.Now:yyyy-MM-dd HH:mm}", "AAA: text 7 : 1, boundaries and focus rings 3 : 1.", "" };
             lines.Add($"{gaps.Count} of {rows.Count(r => !r.Info)} pairs are below AAA:");
             lines.AddRange(gaps.Select(r => $"  GAP   {r.Ratio,5:F2} : 1   needs {r.Aaa,2}   {r.Name}"));
             lines.Add("");
             lines.Add("All pairs:");
             lines.AddRange(rows.Select(r => $"  {(r.Info ? "info" : r.Ratio >= r.Aaa ? "ok  " : "GAP ")} {r.Ratio,5:F2} : 1   needs {r.Aaa,2}   {r.Name}"));
-            try { File.WriteAllLines(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "toolbar_contrast_report.txt"), lines); } catch (Exception) { }
+            try { File.WriteAllLines(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, file), lines); } catch (Exception) { }
 
             Console.ForegroundColor = gaps.Count > 0 ? ConsoleColor.Yellow : ConsoleColor.Green;
-            Console.WriteLine($"  Toolbar: {gaps.Count} of {rows.Count(r => !r.Info)} pairs below AAA (toolbar_contrast_report.txt)");
+            Console.WriteLine($"  {what}: {gaps.Count} of {rows.Count(r => !r.Info)} pairs below AAA ({file})");
             foreach (var g in gaps) Console.WriteLine($"    {g.Ratio,5:F2} : 1  (needs {g.Aaa})  {g.Name}");
             Console.ResetColor();
         }

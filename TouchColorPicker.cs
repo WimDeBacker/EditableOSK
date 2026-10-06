@@ -48,12 +48,18 @@ namespace OnScreenKeyboard
             set
             {
                 BackColor = value;
-                double lum = (0.299 * value.R + 0.587 * value.G + 0.114 * value.B) / 255.0;
-                ForeColor = lum > 0.55 ? Color.Black : Color.White;      // the label stays readable on any colour
+                ForeColor = LabelColorFor(value);                        // the label stays readable on any colour
                 UpdateAccessibleName();
                 Invalidate();
             }
         }
+
+        /// <summary>
+        /// Black or white, whichever reads better on <paramref name="fill"/> (the higher WCAG contrast; black on a tie). One of the two is
+        /// always at least 4.58 : 1. (It used to be decided by perceived brightness, which gave white on orange at 3.1 : 1 where black has 6.7 : 1.)
+        /// </summary>
+        internal static Color LabelColorFor(Color fill) =>
+            WizardThemeValidator.ContrastRatio(Color.Black, fill) >= WizardThemeValidator.ContrastRatio(Color.White, fill) ? Color.Black : Color.White;
 
         // ── Inheriting the colour from a parent (a group inherits from the standard group) ──
 
