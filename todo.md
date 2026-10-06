@@ -2,9 +2,48 @@
 
 ## Pending
 
-Numbering: **P** = priority, then sub-sections (**2.1**), then steps (**2.4.3**), then details (**2.4.3.1**). Status marks: ✓ done, ▶ in progress, ☐ not started.
+Numbering: **P** = priority, then sub-sections, steps and details (**1.1**, **3.4**). The open priorities were numbered from 1 again on 2026-10-06; the items under Completed keep the numbers they had when they were done (so "Priority 7" there is not Priority 7 here). Status marks: ✓ done, ▶ in progress, ☐ not started.
 
-### Priority 2 — Touch-friendly controls and sectioned editor windows ▶ *(accessibility / UI)*
+### Priority 1 — Scanning ☐ *(accessibility)*
+
+- 1.1 Auto-advance a highlight through keys/rows at a fixed interval.
+- 1.2 The user confirms with a single switch input.
+
+### Priority 2 — Bundled keyboard layouts ☐ *(content)*
+
+- 2.1 Ship 8 ready-made `.kbl` files: 4 wizard themes × 2 key arrangements (AZERTY Dutch, QWERTY English).
+- 2.2 Users can load one immediately without running the wizard.
+
+### Priority 3 — `OnScreenKeyboard.exe` stays in Task Manager after closing the window in edit mode ▶ *(bug; no longer reproducible after the safety net, root cause unknown)*
+
+- 3.0 **Update (2026-10-02):** the user closed the keyboard in edit mode with the new build: the process ended, and no `OnScreenKeyboard_error.log` was written, so no exception was thrown while closing. Either `Environment.Exit(0)` ends a process that something kept alive after the window closed, or the lingering did not happen this time. Kept open until it either stays away for a while or is explained; if it comes back, a lingering process without a log means the main thread is stuck or a foreground thread is alive — inspect its threads before ending it.
+
+- 3.1 **Symptom (found by the user, 2026-10-02)** — close the keyboard while edit mode is active: the window disappears but the process stays, which locks the exe for the next build and start. Closing from normal mode ends the process cleanly (checked: `WM_CLOSE` on the real window, exit code 0).
+- 3.2 **Not reproduced by script** (edit mode cannot be entered headlessly). Ruled out by reading: no foreground threads (the send worker is a background thread), no extra `Application.Exit` path, the only hooks are the focus hook (removed in `FormClosing`) and the recorder's hook.
+- 3.3 **Suspect** — an exception during `FormClosing` / disposal that only happens in edit mode (the edit toolbars and their icons): the standard "unhandled exception" dialog is a window of its own, and with an always-on-top main window it can sit hidden behind other windows, keeping the process alive.
+- 3.4 **Done** — `Program.cs`: UI-thread and unhandled exceptions are logged to `OnScreenKeyboard_error.log` next to the exe instead of showing the dialog, and `Environment.Exit(0)` runs when the main window has closed.
+- 3.5 **To do** — close once in edit mode with the new build: if `OnScreenKeyboard_error.log` appears, its stack trace is the real bug (fix it); if the process still lingers with no log, the main thread is stuck inside `FormClosing` (inspect the threads of the lingering process before ending it).
+
+### Priority 4 — Rings and borders on the keys of the keyboard itself ▶ *(UI / accessibility; mostly done, see Completed)*
+
+Still open (all need a look at the running app, no headless check):
+
+- 4.1 **Display scaling** — the keys' borders and the selection ring at 125 % / 150 %.
+- 4.2 **Toolbar** — the keyboard-navigation ring (`ToolbarButton.HasNavFocus`, rounded since 2026-09-19) and the toolbar buttons' outlines on the real toolbar, light and dark theme; **since 2026-10-06 also the active tab** (darker blue with a light outline in the dark theme, 2.5.1).
+- 4.3 **Not checked** — the dwell / slow-key progress fill, and the wizard's theme tiles and their selection mark (**since 2026-10-06 the mark is Accent blue in both themes, 2.5.2: look at it in the dark theme**).
+
+## Ideas
+
+Not planned; decided later, if at all (from the touch-friendly work, 2.4.8):
+
+- I.1 The same flyout for every other list (Language, Toolbar theme, word-database choice).
+- I.2 A shortcut builder (`Ctrl`/`Alt`/`Shift`/`Win` toggles + key) instead of "Record", for people who cannot type combinations.
+
+---
+
+## Completed
+
+### Touch-friendly controls and sectioned editor windows ✓ *(accessibility / UI; was Priority 2, completed 2026-10-06; its step numbers 2.x are kept because tests and documents refer to them)*
 
 Merged from the former Priorities 2 (touch target sizes) and 5 (editor windows too tall), because both change the size of the editor windows: bigger targets make windows taller, so the two must be designed together. **Touch-friendly sizing is the default on every desktop, not a setting** — the software must be easy to use for people with a motor disability.
 
@@ -66,7 +105,7 @@ Mock-up in `KeyEditorMockups.cs`, screenshots via `--gallery`.
   - 2.4.4.1 `TouchChoiceButton` / `ChoicePopup`: selection rules (an unavailable or out-of-range row cannot be chosen, the same row raises nothing, `SelectSilently` / `SetItems` raise nothing and clamp), Up / Down on the closed button skip unavailable rows, flyout height (3 rows no scroll; 30 rows scroll, at most `MaxVisibleRows`, never above the room given), the selected row is visible on opening, scrolling stays within 0 … MaxTop (wheel, PageUp / PageDown, Home / End), the highlight skips unavailable rows, picking (Enter / Space / click; an unavailable row stays open; Esc picks nothing), filter (case, spaces, no match, original index of a filtered pick, Space and Home / End belong to the search box, scroll returns to the top).
   - 2.4.4.2 `ColorFlyout` / `ColorChip`: hex box (valid code applies, no `#`, lower case; half-typed, non-hex, too long and empty apply nothing and an invalid code turns red), palette keyboard (arrows, row steps, bounds, Enter / Space), click on a swatch and in the gap, Esc, hex ↔ palette in step, chip text colour and accessible name.
   - 2.4.4.3 **Bug found and fixed:** Home (or End) with the first (last) rows unavailable did nothing — `ChoicePopup.MoveHot` only searched onward past the target, never back to the nearest available row. It now falls back to the nearest available row (also for PageDown into an unavailable tail).
-  - 2.4.4.4 **Noted, fixed in 2.4.5.1:** the selected-swatch ring in the colour palette had the same off-by-one as the rings fixed in Priority 7 (now `Fluent.DrawSquareRing`). **Not covered:** opening the flyouts from a real chip / button (`OpenPopup`, `OpenPicker`: placement above / below, focus return), "More colours…" (the standard dialog), `OnDeactivate` closing.
+  - 2.4.4.4 **Noted, fixed in 2.4.5.1:** the selected-swatch ring in the colour palette had the same off-by-one as the rings fixed under "Rings and borders on the keys of the keyboard itself" below (now `Fluent.DrawSquareRing`). **Not covered:** opening the flyouts from a real chip / button (`OpenPopup`, `OpenPicker`: placement above / below, focus return), "More colours…" (the standard dialog), `OnDeactivate` closing.
 
 - **2.4.5 ✓ Group Editor and its sub-dialogs, Keyboard Editor, wizard** — same pattern as the Key Editor.
   - 2.4.5.1 ✓ **Group Editor and its sub-dialogs (2026-10-02)** — master/detail, content-sized, no tabs. `GroupEditorForm.cs` rewritten (1,505 → ~640 lines) on the touch components; same public API (`ResultGroups`, `SelectedGroupName`, the internal `ImportAction` / `ApplyImportDecisions` / `CommitToResult` / `TryAddGroup` / `TryRenameCurrentGroup`).
@@ -123,50 +162,15 @@ Mock-up in `KeyEditorMockups.cs`, screenshots via `--gallery`.
   - 2.4.7.3 ✓ 16 unused wizard strings removed from `LanguageManager.cs` and `lang_nl.xml` (`wiz: p2 sub`, `p3 title`, `p3 sub`, `Grid size`, `Validate with`, `suite contrast`, `suite focus`, `tip always on top`, `tip hide title bar`, `paste hint`, `paste hint 1`, `validation title`, `validation header`, `fail contrast`, `fail focus`, `sum always on top`); the paste tooltip now points to the ? button instead of listing a few keys. Still there on purpose: `wiz: theme *` and `wiz: keys group *` (built from an id at run time).
   - 2.4.7.2 ✓ The accelerator test already checks "unique per dialog" in English and Dutch (it covers the new Keyboard Editor too).
 
-- **2.4.8 ☐ Decide later**
-  - 2.4.8.1 The same flyout for every other list (Language, Toolbar theme, word-database choice).
-  - 2.4.8.2 A shortcut builder (`Ctrl`/`Alt`/`Shift`/`Win` toggles + key) instead of "Record", for people who cannot type combinations.
+- **2.4.8 ✓ Decide later → moved to the Ideas section (2026-10-06):** the same flyout for every other list, and a shortcut builder instead of "Record".
 
-#### 2.5 Not yet audited for AAA
+#### 2.5 AAA audit (done 2026-10-06)
 
-- 2.5.1 ▶ The main keyboard toolbar (`Dark*` palette, `DarkTextDim`). **Measured 2026-10-06** (`T_ToolbarContrast`, `ToolbarContrastTests.cs`; full list in `toolbar_contrast_report.txt` next to the program): the colour that is really painted (hover and press overlays blended over the panel) in both themes on both panels, 33 pairs; the AA floor is asserted, AAA gaps are reported. 31 of 33 reached AAA at the measurement (now 34 of 35, see (1) below) (labels at rest and on hover 8 to 17 : 1, focus ring 6 to 13 : 1, file name 7.7 to 9.7 : 1, selected-key panel text 11 to 17 : 1). **Two gaps, both owner decisions because a change alters how the toolbar looks:** (1) **done 2026-10-06, owner chose variant B (mock-up `mockup_toolbar_contrast.html`): the active tab is the darker blue `Fluent.DarkActive` #005496 (white label 7.8 : 1, was #0078D4 at 4.53 : 1) in both themes, and on the dark theme a light 2 px outline (`DialogDarkText`) round the tab (`FluentPainter.PaintDark`; 13 : 1 against the panel) makes it stand out, because the blue alone is only 2.1 : 1 against a dark panel; the keyboard focus ring on an active dark tab sits inside the outline (inset 4.5).** `T_ToolbarContrast` now asserts the tab edge and the ring on the tab. Not yet seen in the real app; (2) **left as it is, owner decision 2026-10-06 (accepted at AA, 6.48 : 1; the press is momentary): the pressed button on the dark edit toolbar: **dark edit toolbar, pressed button 6.48 : 1**: a lower press overlay (white alpha 60 to 50 gives 7.5 : 1) fixes it; the press is momentary and almost as bright as the hover (40), so the difference between the two gets smaller. Not an AAA matter: the disabled labels (exempt) and the light-theme button outline (1.3 : 1; the label names the button). `Fluent.DarkTextDim` and `Fluent.DarkBorder` are not used by any code (candidates for removal; `DarkTextDim` would be 6.4 : 1 on the edit panel).
-- 2.5.2 The wizard's own pages.
-- 2.5.3 ▶ The existing editors' hand-typed colours. **Measured 2026-10-06** (`T_EditorContrast`, `EditorContrastTests.cs`; `editor_contrast_report.txt` next to the program). The `C_*` tokens of the three editors are gone since their rebuild on `Fluent.*` (the dialog palette is checked by `T_ColourContrastAaa`); what is left are the literals in the controls: the hover fill #E1E1E1 of check boxes, radio buttons and tiles, the white check box, the scroll strips of a list flyout (#F0F0F0 / #3E3E3E), the preview card (#FAFAFA) and the starting colours of a key preview. **All of these reach AAA** (labels 8 to 15 : 1, boundaries and rings 3.9 to 8 : 1). **One real fault found and fixed: the label of a colour chip was chosen by perceived brightness, not by contrast** (white on orange #F7630C was 3.1 : 1, on #808080 3.95 : 1, on #4A8FD4 3.4 : 1, on bright green #00E13C 1.8 : 1): `ColorChip.LabelColorFor` now takes black or white by the higher contrast; the worst case over a sample of 5,832 colours went from 1.8 : 1 to 4.58 : 1 (AA everywhere; 0 of 5,832 below 4.5 : 1). **Left open, inherent:** for mid-tone colours neither black nor white reaches 7 : 1 (2,194 of the 5,832 sampled colours, 11 of the 24 palette colours; best 4.6 to 6.7 : 1). AAA there needs another solution (for instance the hex code on a neutral backdrop under the chip, or a text-size or outline treatment): a design decision for the owner. Cleanup noted: the dark literals (58,58,58), (150,150,150) in `WizardControls.cs` repeat `DialogDarkInput` and `DialogDarkBorder` and could use the tokens.
-- 2.5.4 The wizard theme presets: Colorful is below AA (Klinkers 3.4 : 1, Leestekens 3.8 : 1). AAA for preset colours is a design decision for the keyboard itself, not for the dialogs (see also the finding under test-suite item B7 in Completed).
-
----
-
-### Priority 3 — Scanning ☐ *(accessibility)*
-
-- 3.1 Auto-advance a highlight through keys/rows at a fixed interval.
-- 3.2 The user confirms with a single switch input.
-
-### Priority 4 — Bundled keyboard layouts ☐ *(content)*
-
-- 4.1 Ship 8 ready-made `.kbl` files: 4 wizard themes × 2 key arrangements (AZERTY Dutch, QWERTY English).
-- 4.2 Users can load one immediately without running the wizard.
-
-### Priority 8 — `OnScreenKeyboard.exe` stays in Task Manager after closing the window in edit mode ▶ *(bug; no longer reproducible after the safety net, root cause unknown)*
-
-- 8.0 **Update (2026-10-02):** the user closed the keyboard in edit mode with the new build: the process ended, and no `OnScreenKeyboard_error.log` was written, so no exception was thrown while closing. Either `Environment.Exit(0)` ends a process that something kept alive after the window closed, or the lingering did not happen this time. Kept open until it either stays away for a while or is explained; if it comes back, a lingering process without a log means the main thread is stuck or a foreground thread is alive — inspect its threads before ending it.
-
-- 8.1 **Symptom (found by the user, 2026-10-02)** — close the keyboard while edit mode is active: the window disappears but the process stays, which locks the exe for the next build and start. Closing from normal mode ends the process cleanly (checked: `WM_CLOSE` on the real window, exit code 0).
-- 8.2 **Not reproduced by script** (edit mode cannot be entered headlessly). Ruled out by reading: no foreground threads (the send worker is a background thread), no extra `Application.Exit` path, the only hooks are the focus hook (removed in `FormClosing`) and the recorder's hook.
-- 8.3 **Suspect** — an exception during `FormClosing` / disposal that only happens in edit mode (the edit toolbars and their icons): the standard "unhandled exception" dialog is a window of its own, and with an always-on-top main window it can sit hidden behind other windows, keeping the process alive.
-- 8.4 **Done** — `Program.cs`: UI-thread and unhandled exceptions are logged to `OnScreenKeyboard_error.log` next to the exe instead of showing the dialog, and `Environment.Exit(0)` runs when the main window has closed.
-- 8.5 **To do** — close once in edit mode with the new build: if `OnScreenKeyboard_error.log` appears, its stack trace is the real bug (fix it); if the process still lingers with no log, the main thread is stuck inside `FormClosing` (inspect the threads of the lingering process before ending it).
-
-### Priority 7 — Rings and borders on the keys of the keyboard itself ▶ *(UI / accessibility; mostly done, see Completed)*
-
-Still open (all need a look at the running app, no headless check):
-
-- 7.1 **Display scaling** — the keys' borders and the selection ring at 125 % / 150 %.
-- 7.2 **Toolbar** — the keyboard-navigation ring (`ToolbarButton.HasNavFocus`, rounded since 2026-09-19) and the toolbar buttons' outlines on the real toolbar, light and dark theme.
-- 7.3 **Not checked** — the dwell / slow-key progress fill, and the wizard's theme tiles and their selection mark.
-
----
-
-## Completed
+- 2.5.1 ✓ The main keyboard toolbar (`Dark*` palette, `DarkTextDim`). **Measured 2026-10-06** (`T_ToolbarContrast`, `ToolbarContrastTests.cs`; full list in `toolbar_contrast_report.txt` next to the program): the colour that is really painted (hover and press overlays blended over the panel) in both themes on both panels, 33 pairs; the AA floor is asserted, AAA gaps are reported. 31 of 33 reached AAA at the measurement (now 34 of 35, see (1) below) (labels at rest and on hover 8 to 17 : 1, focus ring 6 to 13 : 1, file name 7.7 to 9.7 : 1, selected-key panel text 11 to 17 : 1). **Two gaps, both owner decisions because a change alters how the toolbar looks:** (1) **done 2026-10-06, owner chose variant B (mock-up `mockup_toolbar_contrast.html`): the active tab is the darker blue `Fluent.DarkActive` #005496 (white label 7.8 : 1, was #0078D4 at 4.53 : 1) in both themes, and on the dark theme a light 2 px outline (`DialogDarkText`) round the tab (`FluentPainter.PaintDark`; 13 : 1 against the panel) makes it stand out, because the blue alone is only 2.1 : 1 against a dark panel; the keyboard focus ring on an active dark tab sits inside the outline (inset 4.5).** `T_ToolbarContrast` now asserts the tab edge and the ring on the tab. Not yet seen in the real app; (2) **left as it is, owner decision 2026-10-06 (accepted at AA, 6.48 : 1; the press is momentary): the pressed button on the dark edit toolbar: **dark edit toolbar, pressed button 6.48 : 1**: a lower press overlay (white alpha 60 to 50 gives 7.5 : 1) fixes it; the press is momentary and almost as bright as the hover (40), so the difference between the two gets smaller. Not an AAA matter: the disabled labels (exempt) and the light-theme button outline (1.3 : 1; the label names the button). `Fluent.DarkTextDim` and `Fluent.DarkBorder` are not used by any code (candidates for removal; `DarkTextDim` would be 6.4 : 1 on the edit panel).
+- 2.5.2 ✓ The wizard's own pages. **Measured 2026-10-06** (`T_WizardContrast`, `WizardContrastTests.cs`; `wizard_contrast_report.txt` next to the program): the text, error lines and buttons of the pages use the dialog palette (checked by `T_ColourContrastAaa`); what is the wizard's own are the theme tiles, the grid preview and the fall-back colours of the sample keys. The grid preview (labels 9 to 17 : 1, outlines 3.9 to 6 : 1, focus frame 6.9 to 13 : 1) and the tile edge (4.1 to 14.6 : 1) are in order. **One real fault found and fixed: in the dark theme the selection ring, the tick and the keyboard focus ring of a theme tile were 1.05 to 1.11 : 1 on the tile**, because the tile keeps its light fill in both themes but the mark switched to the light dialog text colour: a selected or focused tile could not be seen in the dark theme. `TouchTile` (`WizardControls.cs`) now draws the mark and the ring in `Accent` in both themes (6.9 : 1 on the tile); the test also paints a selected tile on a light and on a dark dialog and compares the painted ring pixel with the painted fill pixel. **Left as it is, minor:** the fall-back of the sample keys when a theme file cannot be read, white on `Color.DimGray`, is 5.5 : 1 (AA, not AAA; only in that error state). The colours of the presets themselves are 2.5.4. Not yet seen in the real app: the dark theme tile (point 7.3 below).
+- 2.5.3 ✓ The existing editors' hand-typed colours. **Measured 2026-10-06** (`T_EditorContrast`, `EditorContrastTests.cs`; `editor_contrast_report.txt` next to the program). The `C_*` tokens of the three editors are gone since their rebuild on `Fluent.*` (the dialog palette is checked by `T_ColourContrastAaa`); what is left are the literals in the controls: the hover fill #E1E1E1 of check boxes, radio buttons and tiles, the white check box, the scroll strips of a list flyout (#F0F0F0 / #3E3E3E), the preview card (#FAFAFA) and the starting colours of a key preview. **All of these reach AAA** (labels 8 to 15 : 1, boundaries and rings 3.9 to 8 : 1). **One real fault found and fixed: the label of a colour chip was chosen by perceived brightness, not by contrast** (white on orange #F7630C was 3.1 : 1, on #808080 3.95 : 1, on #4A8FD4 3.4 : 1, on bright green #00E13C 1.8 : 1): `ColorChip.LabelColorFor` now takes black or white by the higher contrast; the worst case over a sample of 5,832 colours went from 1.8 : 1 to 4.58 : 1 (AA everywhere; 0 of 5,832 below 4.5 : 1). **Left open, inherent:** for mid-tone colours neither black nor white reaches 7 : 1 (2,194 of the 5,832 sampled colours, 11 of the 24 palette colours; best 4.6 to 6.7 : 1). AAA there needs another solution (for instance the hex code on a neutral backdrop under the chip, or a text-size or outline treatment): a design decision for the owner. Cleanup noted: the dark literals (58,58,58), (150,150,150) in `WizardControls.cs` repeat `DialogDarkInput` and `DialogDarkBorder` and could use the tokens.
+- 2.5.4 ✓ The wizard theme presets. **Decided by the owner 2026-10-06: the Colorful preset does not have to reach AAA** (nor AA): it is meant for another target group, and people with a visual impairment have the High Contrast preset. So Colorful stays as it is (Klinkers 3.4 : 1, Leestekens 3.8 : 1); `T_WizardThemePresets` keeps pinning its 3 : 1 floor (Dark, Light and High Contrast are checked at their own, higher floors). Closes wizard_inventory W14 and the finding under test-suite item B7 in Completed. Should the Colorful colours ever change, the pinned floor is what a change must not go below.
+- 2.5.5 ✓ From the measurements of 2.5.3: the label of a colour chip on a mid-tone colour cannot reach 7 : 1 with black or white (11 of the 24 palette colours; 4.6 to 6.7 : 1, AA everywhere). **Decided by the owner 2026-10-06: not worth a large change; it stays as it is** (black or white by the higher contrast, `ColorChip.LabelColorFor`).
 
 ### Option to hide the Shift / AltGr labels on the keys ✓ *(accessibility, requested by the user, 2026-10-02)*
 
@@ -179,9 +183,9 @@ Still open (all need a look at the running app, no headless check):
   - 9.6 **Not tested headlessly:** the single `if (_meta.ShowCornerLabels)` in `OnButtonPaint` (`KeyboardForm` is never constructed in the suite) and that the main label still shows the Shift character while Shift is active (that code is separate from the corner labels). **Try by hand:** Edit Keyboard → Accessibility → untick the option, Apply, and press Shift.
   - 9.7 **For the Keyboard Editor redesign (2.4.5.2):** the Accessibility section now has Sticky modifiers, Hold to edit, Slow keys, Dwell click, Show timing animation and this option. **Done in 2.4.5.2:** the option sits in the Accessibility section of the new editor (last row of the stack, accelerator F).
 
-### Rings and borders on the keys of the keyboard itself ✓ *(UI, 2026-10-02; the open remainder is Priority 7 above)*
+### Rings and borders on the keys of the keyboard itself ✓ *(UI, 2026-10-02; the open remainder is Priority 4 above)*
 
-- [x] **Priority 7 (part) — check the borders and rings drawn by `KeyboardForm` and the shared controls**
+- [x] **Priority 7 (part; the rest is now Priority 4) — check the borders and rings drawn by `KeyboardForm` and the shared controls**
   - **Keys' own border** (per-key or group thickness): it is the native flat border (`FlatAppearance`), not drawn by us. Checked by pixel at 0, 1, 2 and 3 px: left, right, top and bottom are equally wide. No change needed.
   - **Selection ring in edit mode — defect found and fixed.** The 2 px white band sat one pixel nearer the edge on the left/top than on the right/bottom (a pen of width 2 on whole coordinates). New `Fluent.DrawSquareRing` draws a ring as four non-overlapping filled strips (no pen joins, which left odd pixels at the corners; translucent colours are blended once). `KeyboardForm.DrawSelectionRing` uses it: first a 2 px white band on the very edge of the key (pixels 0–1), then a 2 px dark band just inside it (pixels 2–3) — one contiguous 4 px ring, no gap. (First version had a 1 px dark outer line and the white band at pixels 1–2; moved outwards by one pixel after the user's screenshots showed the white border too far from the key's edge. The dark outer line is gone: on a pale key the dark inner band carries the selection.)
   - **Same defect, same fix:** the colour swatch focus ring (`ColorSwatchButton.DrawFocusRing`), the selected-key chip on the edit toolbar (now `Fluent.CrispBorderRect` + `RoundedRectF`), and the wizard's theme preview keys (the border now lies inside the key; before, the right and bottom lines were one pixel outside the fill).

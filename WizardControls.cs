@@ -65,7 +65,9 @@ namespace OnScreenKeyboard
                 using (var p = new Pen(border))      g.DrawPath(p, path);
             }
 
-            Color sel = hc ? SystemColors.Highlight : dark ? Fluent.DialogDarkText : Fluent.Accent;
+            // The mark and the ring are drawn on the tile's own fill, which is light in both themes: Accent (6.9 : 1 on it). The light
+            // dialog text colour that the dark theme uses elsewhere was 1.1 : 1 here, so a selected tile could not be told from the others.
+            Color sel = hc ? SystemColors.Highlight : Fluent.Accent;
             if (Checked)
             {
                 using (var path = Fluent.RoundedRectF(new RectangleF(1.5f, 1.5f, Width - 3, Height - 3), Math.Max(1, Fluent.RadiusBtn - 1)))
@@ -102,7 +104,7 @@ namespace OnScreenKeyboard
             if (Focused)
             {
                 if (hc) ControlPaint.DrawFocusRectangle(g, new Rectangle(4, 4, Width - 9, Height - 9));
-                else FluentPainter.DrawRoundedRing(g, Width, Height, Fluent.RadiusBtn, 3f, 2f, dark ? Fluent.DialogDarkText : Fluent.Accent);
+                else FluentPainter.DrawRoundedRing(g, Width, Height, Fluent.RadiusBtn, 3f, 2f, Fluent.Accent);      // inside the light tile: see sel above
             }
         }
     }

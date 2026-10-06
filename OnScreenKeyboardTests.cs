@@ -68,6 +68,7 @@ namespace OnScreenKeyboard
             Step(T_ColourContrastAaa);
             Step(T_ToolbarContrast);
             Step(T_EditorContrast);
+            Step(T_WizardContrast);
             Step(T_ControlBorders);
             Step(T_KeyRings);
             Step(T_CornerLabels);
