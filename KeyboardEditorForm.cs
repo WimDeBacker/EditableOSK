@@ -370,8 +370,9 @@ namespace OnScreenKeyboard
             _cmbWPDatabase.SelectedIndexChanged += (s, e) => { if (!_loading) { UpdateDatabaseWarning(); UpdateWPInfo(); } };
             _cmbWPDatabase.AccessibleName = Lang.StripMnemonic(Lang.T("wp: Database"));
             // The label sits above the chooser (not beside it): a long translation or a long file name then gets the whole column.
-            var dbLabel = new Label { Text = Lang.T("wp: Database"), AutoSize = true, UseMnemonic = false, Font = Fluent.FontLabel, ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent, Margin = new Padding(0, 4, 0, 0) };
+            var dbLabel = new AccelLabel { Text = Lang.T("wp: Database"), AutoSize = true, Font = Fluent.FontLabel, ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent, Margin = new Padding(0, 4, 0, 0) };
             _transLabels.Add((dbLabel, () => Lang.T("wp: Database")));
+            dbLabel.SetTargets(_cmbWPDatabase);
             AddWideRow(t, dbLabel, fill: false);
             AddWideRow(t, _cmbWPDatabase);
 
@@ -392,9 +393,11 @@ namespace OnScreenKeyboard
             var t = NewTable();
             t.Padding = Padding.Empty;
             t.Dock = DockStyle.None; t.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            AddWideRow(t, Heading(() => Lang.T("wp: Candidates")), fill: false);
+            var candidatesHeading = Heading(() => Lang.T("wp: Candidates"));
+            AddWideRow(t, candidatesHeading, fill: false);
 
             _lstWPCandidates = new TouchList { Dock = DockStyle.Fill, AccessibleName = Lang.StripMnemonic(Lang.T("wp: Candidates")), TabIndex = 0 };
+            candidatesHeading.SetTargets(_lstWPCandidates);
             _candidateFrame = new Panel
             {
                 Padding = new Padding(1), Dock = DockStyle.Fill, Margin = new Padding(0, 4, 0, 4),

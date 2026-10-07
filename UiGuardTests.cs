@@ -284,8 +284,8 @@ namespace OnScreenKeyboard
                 Assert(st.ValueBox.AccessibleName == "Key width", "stepper: the value box is named after the field");
                 Assert(st.DecreaseButton.AccessibleName.Contains("Key width") && st.IncreaseButton.AccessibleName.Contains("Key width"),
                     "stepper: the buttons say which value they change");
-                Assert(!st.TabStop && st.ValueBox.TabStop && !st.DecreaseButton.TabStop && !st.IncreaseButton.TabStop,
-                    "stepper: one Tab stop (the value box)");
+                Assert(st.TabStop && st.ValueBox.TabStop && !st.DecreaseButton.TabStop && !st.IncreaseButton.TabStop,
+                    "stepper: one Tab stop (the value box; the stepper itself is a stop only so the form enters it)");
                 st.Enabled = false;
                 Assert(!st.ValueBox.Enabled && !st.IncreaseButton.Enabled, "stepper: disabling it disables its parts");
             }
@@ -431,8 +431,8 @@ namespace OnScreenKeyboard
                 string before = d.SectionButtons.Tabs[2].Text;
                 Lang.Load("nl");
                 Application.DoEvents();
-                Assert(d.SectionButtons.Tabs[2].Text == Lang.T("Appearance"), "language change: section titles follow the language");
-                Assert(UiGuard.All(d).OfType<FluentButton>().Any(b => b.Text == Lang.T("Cancel")),
+                Assert(Accel.Plain(d.SectionButtons.Tabs[2].Text) == Accel.Plain(Lang.T("Appearance")), "language change: section titles follow the language");
+                Assert(UiGuard.All(d).OfType<FluentButton>().Any(b => Accel.Plain(b.Text) == Accel.Plain(Lang.T("Cancel"))),
                     "language change: buttons follow the language");
                 Lang.Load("en");
             }

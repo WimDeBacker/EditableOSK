@@ -339,10 +339,10 @@ namespace OnScreenKeyboard
             {
                 int layer = i;
 
-                var name = new Label
+                var name = new AccelLabel
                 {
                     Text = LayerName(i), AutoSize = true, Anchor = AnchorStyles.Left, Font = Fluent.FontBtnLg,
-                    ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent, UseMnemonic = false,
+                    ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent,
                     Margin = new Padding(0, 4, Fluent.Pad, 4),
                 };
                 _layerNames[i] = name;
@@ -385,6 +385,7 @@ namespace OnScreenKeyboard
                 }
                 valueCells[i] = valueCell;
                 _grid.Controls.Add(valueCell);
+                name.SetTargets(_labels[i], _types[i], valueCell);        // Alt+letter of the layer name: its label, pressed again its action type, then its value
 
                 _pickers[i] = NewPicker();
                 _pickers[i].TabIndex = ti++;
@@ -450,15 +451,16 @@ namespace OnScreenKeyboard
         private TouchStepper NewSpan(List<Control> pairs, Func<string> label, string tip, int max)
         {
             var pair = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false, Margin = new Padding(0, 0, Touch.Gap * 2, 0) };
-            var lbl = new Label
+            var lbl = new AccelLabel
             {
-                Text = label(), AutoSize = true, TextAlign = ContentAlignment.MiddleLeft, UseMnemonic = true,
+                Text = label(), AutoSize = true, TextAlign = ContentAlignment.MiddleLeft,
                 Margin = new Padding(0, 0, Touch.Gap, 0), MinimumSize = new Size(0, Touch.Target),
                 ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent, Font = Fluent.FontLabel, TabIndex = 0,
             };
             _transLabels.Add((lbl, label));
             var st = new TouchStepper { Minimum = 1, Maximum = max, Value = 1, AccessibleName = Lang.StripMnemonic(label()), Margin = Padding.Empty, TabIndex = 1 };
             SetTip(st.ValueBox, () => Lang.T(tip));
+            lbl.SetTargets(st);
             pair.Controls.Add(lbl);
             pair.Controls.Add(st);
             pairs.Add(pair);

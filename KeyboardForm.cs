@@ -90,7 +90,7 @@ namespace OnScreenKeyboard
         {
             // WS_EX_NOACTIVATE: clicking keyboard never steals focus from target app.
             // WS_EX_TOOLWINDOW removed — it caused a small non-standard title bar and
-            // suppressed minimize/maximize buttons. ShowInTaskbar=false hides from taskbar instead.
+            // suppressed minimize/maximize buttons. The taskbar button stays (ShowInTaskbar = true).
             get { var cp = base.CreateParams; cp.ExStyle |= WS_EX_NOACTIVATE | 0x02000000; return cp; }  // 0x02000000 = WS_EX_COMPOSITED
         }
 
@@ -306,7 +306,7 @@ namespace OnScreenKeyboard
         /// <para>
         /// In order:
         /// <list type="number">
-        ///   <item>Sets window chrome properties (no taskbar button, always on top, no focus stealing).</item>
+        ///   <item>Sets window chrome properties (taskbar button, always on top, no focus stealing).</item>
         ///   <item>Loads the English translation and the word-prediction database if present.</item>
         ///   <item>Wires the predictor events (predictions changed → refresh buttons, shift latch → capitalise, inject send → type).</item>
         ///   <item>Builds the default QWERTY layout, gear button, edit strip, and toolbars.</item>
@@ -324,7 +324,9 @@ namespace OnScreenKeyboard
             BackColor       = _theme.BackgroundColor;
             Opacity         = _theme.Opacity;
             TopMost         = true;
-            ShowInTaskbar   = false;   // hide from taskbar without WS_EX_TOOLWINDOW
+            // A taskbar button, like the Windows on-screen keyboard has: a minimized keyboard stays visible and one click restores it
+            // (WS_EX_NOACTIVATE does not keep a window off the taskbar; only WS_EX_TOOLWINDOW does, and that is not used).
+            ShowInTaskbar   = true;
             MinimumSize     = new Size(400, 150);
             Size            = new Size(1050, 290);
             FormBorderStyle = FormBorderStyle.Sizable;

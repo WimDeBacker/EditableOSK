@@ -86,6 +86,7 @@ namespace OnScreenKeyboard
 
             Load += (s, e) =>
             {
+                RefreshAccelerators();
                 if (_contentSized && _sizingRoot != null)
                 {
                     FitToContent();
@@ -174,10 +175,121 @@ namespace OnScreenKeyboard
             foreach (var (ctrl, getText) in _transTexts)    ctrl.Text = getText();
             foreach (var (ctrl, getTip)  in _transTooltips) _tip.SetToolTip(ctrl, getTip());
             Sections?.RefreshTitles();
+            if (_accelReady) RefreshAccelerators();          // the letters depend on the words
             Invalidate(true);
             // A longer translation may need more room: grow (never shrink) once layout has settled.
             if (_contentSized && _sizingRoot != null && IsHandleCreated)
                 BeginInvoke((Action)GrowToContent);
+        }
+
+        // ── Alt+letter accelerators (see Accelerators.cs) ────────────────
+
+        private bool _accelReady, _accelBusy, _accelQueued;
+        private readonly HashSet<Control> _accelWatched = new HashSet<Control>();
+
+        /// <summary>One control that carries an accelerator: where it is (scope -1 = the frame, else the section or page), and its letter ('\0': none left).</summary>
+        internal sealed class AccelEntry
+        {
+            public Control Control; public int Scope; public char Letter; public string Plain; public char Preferred;
+        }
+
+        /// <summary>Whether a control takes part in the accelerators: it is reached by its text, and the text has a letter to mark.</summary>
+        private static bool TakesAccelerator(Control c, out string plain)
+        {
+            plain = null;
+            if (c.IsDisposed) return false;
+            if (c is AccelLabel al) { if (al.Targets.Count == 0 || !al.HasReachableTarget()) return false; }
+            else if (c is TouchChoiceButton) return false;                 // its text is the chosen item; its label carries the letter
+            else if (!(c is FluentButton || c is ColorChip || c is TouchCheckBox || c is TouchRadioButton)) return false;
+            plain = Accel.Plain(c.Text);
+            return plain.Any(char.IsLetterOrDigit);
+        }
+
+        private void CollectAccelerators(Control parent, List<AccelEntry> into)
+        {
+            foreach (Control c in parent.Controls)
+            {
+                if (TakesAccelerator(c, out string plain))
+                    into.Add(new AccelEntry { Control = c, Scope = ScopeOf(c), Plain = plain, Preferred = Accel.Marked(c.Text) });
+                CollectAccelerators(c, into);
+            }
+        }
+
+        /// <summary>
+        /// Gives every control that is reached by its name an Alt+letter, in the language now on screen, and writes the "&amp;" into its text.
+        /// Letters are unique within the frame together with one section (or page): a section's letters may be used again in another section.
+        /// A "&amp;" already in a text is a preference, kept when the letter is free. Runs when the dialog opens, when the language changes and
+        /// when the text of one of these controls changes. Returns what was assigned (for the tests).
+        /// </summary>
+        internal List<AccelEntry> RefreshAccelerators()
+        {
+            _accelReady = true;
+            var all = new List<AccelEntry>();
+            CollectAccelerators(this, all);          // Scope: the section the control sits in (-1 = outside the sections)
+
+            var frameTaken = new HashSet<char>();
+            AssignLetters(all.Where(e => e.Scope < 0).ToList(), frameTaken);
+            foreach (var group in all.Where(e => e.Scope >= 0).GroupBy(e => e.Scope))
+                AssignLetters(group.ToList(), new HashSet<char>(frameTaken));
+
+            _accelBusy = true;
+            try
+            {
+                foreach (var e in all)
+                {
+                    string text = e.Letter == '\0' ? e.Plain : Accel.Mark(e.Plain, e.Letter);
+                    if (e.Control.Text != text) e.Control.Text = text;
+                    if (_accelWatched.Add(e.Control)) e.Control.TextChanged += OnAccelTextChanged;
+                }
+            }
+            finally { _accelBusy = false; }
+            return all;
+        }
+
+        private int ScopeOf(Control c)
+        {
+            if (_host == null) return -1;
+            for (Control p = c; p != null && p.Parent != null; p = p.Parent)
+                if (p.Parent == _host)
+                    for (int i = 0; i < _host.SectionCount; i++) if (_host.SectionAt(i) == p) return i;
+            return -1;
+        }
+
+        private static void AssignLetters(List<AccelEntry> list, HashSet<char> taken)
+        {
+            // 1. A letter that was asked for (written into a string) and is free.
+            // Each takes the first of its letters that is free: the one asked for in its string, then the word initials, then any other; when none is
+            // free, a control that already holds one of them moves to another of its own letters if it can (augmenting paths), so nobody is left
+            // without while a letter remains.
+            var open = list.ToList();
+            var holder = new Dictionary<char, AccelEntry>();
+            foreach (var e in open)
+                TryPlace(e, open, taken, holder, new HashSet<AccelEntry>());
+            foreach (var kv in holder) { kv.Value.Letter = kv.Key; taken.Add(kv.Key); }
+        }
+
+        private static bool TryPlace(AccelEntry e, List<AccelEntry> open, HashSet<char> taken, Dictionary<char, AccelEntry> holder, HashSet<AccelEntry> seen)
+        {
+            if (!seen.Add(e)) return false;
+            var options = Accel.Preferred(e.Plain).Where(c => !taken.Contains(c)).ToList();
+            if (e.Preferred != '\0' && options.Remove(e.Preferred)) options.Insert(0, e.Preferred);
+            foreach (char c in options)
+                if (!holder.ContainsKey(c)) { holder[c] = e; return true; }
+            foreach (char c in options)
+            {
+                var other = holder[c];
+                if (TryPlace(other, open, taken, holder, seen)) { holder[c] = e; return true; }
+            }
+            return false;
+        }
+
+        private void OnAccelTextChanged(object sender, EventArgs e)
+        {
+            if (_accelBusy || IsDisposed) return;
+            if (!IsHandleCreated) { RefreshAccelerators(); return; }
+            if (_accelQueued) return;
+            _accelQueued = true;
+            BeginInvoke((Action)(() => { _accelQueued = false; if (!IsDisposed) RefreshAccelerators(); }));
         }
 
         // ── Shared UI-builder helpers ────────────────────────────────────
@@ -447,9 +559,9 @@ namespace OnScreenKeyboard
         /// </summary>
         protected Label AddRow(TableLayoutPanel t, Func<string> label, Control input, bool fill = true)
         {
-            var lbl = new Label
+            var lbl = new AccelLabel
             {
-                Text = label(), AutoSize = true, UseMnemonic = true,
+                Text = label(), AutoSize = true,
                 Anchor = AnchorStyles.Left, TextAlign = ContentAlignment.MiddleLeft,
                 Margin = new Padding(0, 4, Fluent.Pad, 4),
                 MaximumSize = new Size(Touch.LabelMaxWidth, 0),
@@ -457,6 +569,7 @@ namespace OnScreenKeyboard
                 TabIndex = _nextTab++,
             };
             _transLabels.Add((lbl, label));
+            lbl.SetTargets(input);
             NameInput(input, Lang.StripMnemonic(label()));
 
             PrepareInput(input, fill);
@@ -538,11 +651,11 @@ namespace OnScreenKeyboard
         protected static TableLayoutPanel ButtonRow(params Control[] buttons) => ReflowRows.Buttons(buttons, buttons.Length, 1);
 
         /// <summary>A bold heading in the label column of a section table, spanning both columns; its text follows language changes.</summary>
-        protected Label Heading(Func<string> text)
+        protected AccelLabel Heading(Func<string> text)
         {
-            var lbl = new Label
+            var lbl = new AccelLabel
             {
-                Text = text(), AutoSize = true, Anchor = AnchorStyles.Left, UseMnemonic = false, Font = Fluent.FontBtnLg,
+                Text = text(), AutoSize = true, Anchor = AnchorStyles.Left, Font = Fluent.FontBtnLg,
                 ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent, Margin = new Padding(0, 0, 0, Touch.Gap),
             };
             _transLabels.Add((lbl, text));

@@ -217,7 +217,7 @@ namespace OnScreenKeyboard
                         Priv<TouchChoiceButton>(f, "_cmbLanguage").SelectedIndex = nl;
                         Assert(Lang.CurrentCode == "nl", "the language changes live");
                         Assert(f.Text == Lang.T("Edit Keyboard") && f.Text != "Edit Keyboard", "…and the dialog translates itself (title)");
-                        Assert(f.SectionBarAccess.Tabs[0].Text == "Algemeen" && f.SectionBarAccess.Tabs[1].Text == "Toegankelijkheid", "…and the section titles");
+                        Assert(Accel.Plain(f.SectionBarAccess.Tabs[0].Text) == "Algemeen" && Accel.Plain(f.SectionBarAccess.Tabs[1].Text) == "Toegankelijkheid", "…and the section titles");
                         Assert(Priv<TouchChoiceButton>(f, "_cmbToolbarTheme").Items[0].Text == "Donker", "…and the toolbar theme rows (the old dialog translated them once)");
                         Assert(Priv<TouchChoiceButton>(f, "_cmbWPDatabase").Items[0].Text == "(automatisch)", "…and the '(auto)' database row");
                         Assert(Priv<Label>(f, "_lblImmediateHint").Text.StartsWith("Toevoegen"), "…and the hint labels");

@@ -536,7 +536,7 @@ namespace OnScreenKeyboard
     /// </summary>
     internal sealed class TouchGroup : TableLayoutPanel
     {
-        private readonly Label _caption;
+        private readonly AccelLabel _caption;
 
         public TouchGroup(string caption)
         {
@@ -549,9 +549,9 @@ namespace OnScreenKeyboard
             ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             RowStyles.Add(new RowStyle(SizeType.AutoSize));
             RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            _caption = new Label
+            _caption = new AccelLabel
             {
-                Text = caption, AutoSize = true, UseMnemonic = false, Font = Fluent.FontBtnLg,
+                Text = caption, AutoSize = true, Font = Fluent.FontBtnLg,
                 ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent, Margin = new Padding(0, 0, 0, Touch.Gap),
                 Anchor = AnchorStyles.Left, AccessibleName = Lang.StripMnemonic(caption),
             };
@@ -568,6 +568,7 @@ namespace OnScreenKeyboard
         {
             content.Dock = DockStyle.Fill;
             Controls.Add(content, 0, 1);
+            _caption.SetTargets(content);        // Alt+letter of the caption goes to the first control in the group
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -611,7 +612,9 @@ namespace OnScreenKeyboard
         public TouchStepper()
         {
             AutoScaleMode = AutoScaleMode.None;
-            TabStop       = false;
+            // A container is entered by Tab only when it is a Tab stop itself (it passes focus on to its first Tab stop inside, the value
+            // box); with TabStop = false the form skips the whole stepper.
+            TabStop       = true;
             Size          = new Size(Touch.Target * 4, Touch.Target);
             MinimumSize   = new Size(Touch.Target * 3, Touch.Target);
 
@@ -638,6 +641,15 @@ namespace OnScreenKeyboard
             _dec.Click += (s, e) => { if (_mouseStep) _mouseStep = false; else if (Allowed()) Step(-1); };
             _inc.Click += (s, e) => { if (_mouseStep) _mouseStep = false; else if (Allowed()) Step(+1); };
 
+            // Reached by keyboard (Tab, or Alt+letter of its label) the value is selected, which also shows that the field is active.
+            // Done again once the focus change has settled: a layout pass or a scroll into view right after it must not take the selection away.
+            _txt.GotFocus    += (s, e) =>
+            {
+                if (MouseButtons != MouseButtons.None) return;
+                _txt.SelectAll();
+                if (_txt.IsHandleCreated)
+                    _txt.BeginInvoke((Action)(() => { if (_txt.Focused && MouseButtons == MouseButtons.None) { _txt.SelectAll(); _txt.Invalidate(); } }));
+            };
             _txt.TextChanged += (s, e) => OnTyped();
             _txt.Leave       += (s, e) => SyncText();
             _txt.KeyDown     += (s, e) =>

@@ -58,6 +58,8 @@ namespace OnScreenKeyboard
             Step(T_SlowKeysDwell);
             Step(T_AccessibilityControls);
             Step(T_Accelerators);
+            Step(T_TabReach);
+            Step(T_AltReachesStepper);
             Step(T_SvgIconLoader_Cache);
             Step(T_TouchControls);
             Step(T_TouchGroupComponents);
@@ -4330,7 +4332,7 @@ namespace OnScreenKeyboard
             {
                 foreach (Control child in c.Controls)
                 {
-                    if (child.TabStop)
+                    if (child.TabStop && !(child is UserControl))      // a user control only hands the focus on; its parts are checked below
                     {
                         bool ok = !string.IsNullOrWhiteSpace(child.AccessibleName)
                                || !string.IsNullOrWhiteSpace(child.Text);
@@ -4848,64 +4850,170 @@ namespace OnScreenKeyboard
         // Collects every "&x" mnemonic on every control of a dialog, in English and Dutch.
         // Many labels are built as "&" + Lang.T(...), so the accelerator is the FIRST LETTER
         // of the translation and differs per language — a clash can exist in one language only.
-        private static List<(char Key, string Ctrl, string Text)> CollectAccelerators(Control root)
+        /// <summary>The innermost control that has focus inside <paramref name="root"/> (follows ActiveControl through nested containers).</summary>
+        private static Control ActiveLeaf(ContainerControl root)
         {
-            var found = new List<(char, string, string)>();
-            void Walk(Control c)
+            Control c = root.ActiveControl;
+            while (c is ContainerControl cc && cc.ActiveControl != null) c = cc.ActiveControl;
+            return c;
+        }
+
+        private static bool ProcessMnemonicOn(Form f, char letter) =>
+            (bool)typeof(Control).GetMethod("ProcessMnemonic", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public).Invoke(f, new object[] { letter });
+
+        /// <summary>Every value box, text box and chooser of a dialog section is reached by Tab (the Opacity stepper once was not).</summary>
+        private static void T_TabReach()
+        {
+            Section("Tab reaches every field of every section");
+            foreach (var (name, make) in new (string, Func<FluentDialogBase>)[] { ("KeyboardEditorForm", () => KeyboardEditor()), ("KeyEditorForm", NarrowKeyEditor), ("GroupEditorForm", () => new GroupEditorForm(SampleGroups(), "Klinkers")) })
             {
-                string t = c.Text ?? "";
-                for (int i = 0; i < t.Length - 1; i++)
+                using var d = make();
+                DevGallery.Show(d);
+                d.Activate();
+                Application.DoEvents();
+                for (int i = 0; i < Math.Max(1, d.HostSectionCount); i++)
                 {
-                    if (t[i] != '&') continue;
-                    if (t[i + 1] == '&') { i++; continue; }          // "&&" = literal ampersand
-                    found.Add((char.ToUpperInvariant(t[i + 1]), c.GetType().Name, t));
-                    break;
+                    d.ShowSectionForGuard(i);
+                    Application.DoEvents();
+                    var visited = new List<Control>();
+                    Control cur = null;
+                    for (int n = 0; n < 120; n++)
+                    {
+                        typeof(ContainerControl).GetMethod("ProcessTabKey", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(d, new object[] { true });      // the Tab key as the form handles it
+                        cur = ActiveLeaf(d);
+                        if (cur == null || visited.Contains(cur)) break;
+                        visited.Add(cur);
+                        if (cur is TouchTextBox tb && tb.Parent is TouchStepper && tb.Text.Length > 0)
+                            Assert(tb.SelectionLength == tb.Text.Length, $"Tab reach {name} section {i + 1}: the value of \"{tb.AccessibleName}\" is selected when Tab arrives");
+                    }
+                    var missed = new List<string>();
+                    void Walk(Control c)
+                    {
+                        foreach (Control k in c.Controls)
+                        {
+                            bool field = k is TouchTextBox || k is TouchChoiceButton || k is TouchList;
+                            if (field && k.Visible && k.Enabled && k.Parent != null && !visited.Contains(k) && !(k.Parent is Panel pp && pp.Parent == null))
+                                missed.Add(k.GetType().Name + " \"" + (k.AccessibleName ?? k.Text) + "\"");
+                            Walk(k);
+                        }
+                    }
+                    Walk(d);
+                    Assert(missed.Count == 0, $"Tab reach {name} section {i + 1}: every field is a Tab stop" + (missed.Count == 0 ? "" : " — missed: " + string.Join("; ", missed)));
                 }
-                foreach (Control child in c.Controls) Walk(child);
             }
-            Walk(root);
-            return found;
+        }
+
+        /// <summary>Alt+letter of Transparency, as Windows delivers it (ProcessDialogChar on the focused control), lands in the value box with the value selected.</summary>
+        private static void T_AltReachesStepper()
+        {
+            Section("Alt+letter of a stepper's label focuses its value box and selects the value");
+            foreach (string lang in new[] { "en", "nl" })
+            {
+                Lang.Load(lang);
+                using var d = KeyboardEditor();
+                DevGallery.Show(d);
+                d.Activate(); Application.DoEvents();
+                var acc = d.RefreshAccelerators();
+                var op = acc.First(e => e.Control is AccelLabel al && al.Targets.Count > 0 && al.Targets[0].Controls.OfType<TouchStepper>().Any());
+                char letter = op.Letter;
+                var pdc = typeof(Control).GetMethod("ProcessDialogChar", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+                bool r = (bool)pdc.Invoke(ActiveLeaf(d), new object[] { char.ToLower(letter) });
+                Application.DoEvents();
+                var leaf = ActiveLeaf(d) as TouchTextBox;
+                Assert(r && leaf != null && leaf.Parent == ((AccelLabel)op.Control).Targets[0].Controls.OfType<TouchStepper>().First() && leaf.SelectionLength == leaf.Text.Length && leaf.Text.Length > 0,
+                    $"Alt+{op.Letter} [{lang}]: the Transparency value box has the focus and its value is selected");
+            }
+            Lang.Load("en");
         }
 
         private static void T_Accelerators()
         {
-            Section("Accelerators — no duplicate Alt+letter within a dialog, English and Dutch");
+            Section("Accelerators — every named control has an Alt+letter, unique where it is visible together, English and Dutch");
 
             foreach (string lang in new[] { "en", "nl" })
             {
                 Lang.Load(lang);
-                var dialogs = new List<(string Name, Form F)>
+                var dialogs = new (string Name, Func<FluentDialogBase> Make, int Min)[]
                 {
-                    ("GroupEditorForm",    new GroupEditorForm(new List<KeyGroup> { new KeyGroup { Name = SettingsManager.StandardGroupName } })),
-                    ("KeyEditorForm",      new KeyEditorForm(new KeyProps("A", "A"), owner: null)),
-                    ("KeyboardEditorForm", new KeyboardEditorForm(new VisualTheme(), new WindowState(), new LayoutMeta(), owner: null)),
+                    ("GroupEditorForm",    () => new GroupEditorForm(SampleGroups(), "Klinkers"), 10),
+                    ("KeyEditorForm",      NarrowKeyEditor,                                       16),
+                    ("KeyboardEditorForm", () => KeyboardEditor(),                                28),
+                    ("NewKeyboardWizard",  () => new NewKeyboardWizard(),                         14),
+                    ("SpecialKeysDialog",  () => new SpecialKeysDialog(lang == "nl"),             1),
+                    ("NameDialog",         () => new NameDialog("Name", s => null),               2),
+                    ("ImportDialog",       () => new ImportDialog(new List<KeyGroup> { new KeyGroup { Name = "A" } }, new HashSet<string>()), 2),
+                    ("TouchMessage",       () => new TouchMessage("T", "text", question: true),   2),
                 };
                 try
                 {
-                    foreach (var (name, form) in dialogs)
+                    foreach (var (name, make, min) in dialogs)
                     {
-                        var accels = CollectAccelerators(form);
-                        // Guard against the collector silently finding nothing.
-                        // The Key Editor has fewer labelled rows since the layers share one grid (its action types are
-                        // chosen from a flyout, which has no accelerators).
-                        // The Group Editor has no label-per-row accelerators on its chips and font chooser either.
-                        int min = name == "KeyEditorForm" ? 6 : name == "GroupEditorForm" ? 6 : 10;
-                        Assert(accels.Count >= min,
-                            $"accelerators [{lang}] {name}: found {accels.Count} mnemonics (expected at least {min})");
+                        using var d = make();
+                        var all = d.RefreshAccelerators();
+                        string at = $"accelerators [{lang}] {name}";
+                        Assert(all.Count >= min, $"{at}: found {all.Count} named controls (expected at least {min})");
 
-                        var clashes = accels.GroupBy(a => a.Key).Where(g => g.Count() > 1).ToList();
-                        Assert(clashes.Count == 0,
-                            $"accelerators [{lang}] {name}: no letter is used twice" +
-                            (clashes.Count == 0 ? "" : " — duplicated: " + string.Join("; ",
-                                clashes.Select(g => g.Key + " = " + string.Join(" / ",
-                                    g.Select(a => a.Text.Replace("&", "&")))))));
+                        var without = all.Where(e => e.Letter == '\0').ToList();
+                        Assert(without.Count == 0, $"{at}: every named control has a letter" +
+                            (without.Count == 0 ? "" : " — none for: " + string.Join("; ", without.Select(e => e.Plain))));
+                        Assert(all.All(e => e.Letter == '\0' || Accel.Marked(e.Control.Text) == e.Letter && Control.IsMnemonic(e.Letter, e.Control.Text)),
+                            $"{at}: the letter is written into the text and Windows recognises it");
+
+                        // Unique among what is visible together: the frame plus one section.
+                        var bad = new List<string>();
+                        foreach (int scope in all.Where(e => e.Scope >= 0).Select(e => e.Scope).Distinct().DefaultIfEmpty(-1))
+                            foreach (var g in all.Where(e => (e.Scope < 0 || e.Scope == scope) && e.Letter != '\0').GroupBy(e => e.Letter).Where(g => g.Count() > 1))
+                                bad.Add($"{g.Key} = " + string.Join(" / ", g.Select(e => e.Plain)));
+                        Assert(bad.Count == 0, $"{at}: no letter is used twice together" + (bad.Count == 0 ? "" : " — " + string.Join("; ", bad)));
+
+                        // A second pass changes nothing (the text with the markers gives the same letters).
+                        var again = d.RefreshAccelerators();
+                        Assert(again.Count == all.Count && again.Zip(all, (a, b) => a.Letter == b.Letter).All(x => x),
+                            $"{at}: assigning again gives the same letters");
+                    }
+
+                    // The fields the owner found without a letter, by name (Edit Keyboard).
+                    using (var kb = KeyboardEditor())
+                    {
+                        var all = kb.RefreshAccelerators();
+                        foreach (string key in new[] { "Language", "Toolbar theme", "Opacity", "Background", "Always on top", "Hide title bar", "Save", "Load…",
+                                                       "Sticky modifiers", "Hold to edit", "kbd: Off", "Slow keys", "Dwell click", "Show timing animation",
+                                                       "kbd: Timing aid", "wp: Remember typed words", "wp: Database", "wp: Export…", "wp: Candidates",
+                                                       "wp: Promote", "wp: Reject", "General", "Accessibility", "wp: Word prediction", "Apply", "Cancel" })
+                            Assert(all.Any(e => e.Letter != '\0' && Accel.Plain(e.Control.Text) == Accel.Plain(Lang.T(key))),
+                                $"accelerators [{lang}] Edit Keyboard: \"{Accel.Plain(Lang.T(key))}\" has a letter");
+                    }
+
+                    // Alt+letter really reaches the field a label names (the form handles it as the keyboard would).
+                    foreach (var (name, make) in new (string, Func<FluentDialogBase>)[] { ("KeyboardEditorForm", () => KeyboardEditor()), ("KeyEditorForm", NarrowKeyEditor), ("GroupEditorForm", () => new GroupEditorForm(SampleGroups(), "Klinkers")) })
+                    {
+                        using var d = make();
+                        DevGallery.Show(d);
+                        int sections = Math.Max(1, d.HostSectionCount);
+                        var unreached = new List<string>();
+                        int tried = 0;
+                        for (int i = 0; i < sections; i++)
+                        {
+                            d.ShowSectionForGuard(i);
+                            Application.DoEvents();
+                            foreach (var e in d.RefreshAccelerators().Where(x => x.Control is AccelLabel && (x.Scope < 0 || x.Scope == i)))
+                            {
+                                var label = (AccelLabel)e.Control;
+                                var first = AccelLabel.FocusableIn(label.Targets[0]);
+                                if (first == null) continue;                                    // its field is off or disabled now
+                                tried++;
+                                d.ActiveControl = null;
+                                bool handled = ProcessMnemonicOn(d, e.Letter);
+                                var leaf = ActiveLeaf(d);
+                                if (!handled || leaf != first || first.Controls.Count > 0 || !first.TabStop) unreached.Add($"{e.Plain} (Alt+{e.Letter})");
+                                else if (leaf is TextBoxBase tb && tb.Text.Length > 0 && tb.SelectionLength != tb.Text.Length) unreached.Add($"{e.Plain} (Alt+{e.Letter}): value not selected");
+                            }
+                        }
+                        Assert(tried > 0 && unreached.Count == 0, $"accelerators [{lang}] {name}: Alt+letter of every field label focuses its field ({tried} tried)" +
+                            (unreached.Count == 0 ? "" : " — not reached: " + string.Join("; ", unreached)));
                     }
                 }
-                finally
-                {
-                    foreach (var (_, form) in dialogs) form.Dispose();
-                    Lang.Load("en");
-                }
+                finally { Lang.Load("en"); }
             }
         }
 

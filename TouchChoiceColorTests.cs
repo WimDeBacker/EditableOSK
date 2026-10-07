@@ -413,7 +413,7 @@ namespace OnScreenKeyboard
             }
             using (var f = new ColorFlyout(palette[0], 1f))
             {
-                Key(f, Keys.Escape);
+                typeof(Control).GetMethod("ProcessCmdKey", NonPublic).Invoke(f, new object[] { new Message(), Keys.Escape });      // Esc as the form receives it
                 Assert(f.IsDisposed, "Escape closes the flyout");
             }
 
@@ -474,13 +474,22 @@ namespace OnScreenKeyboard
                 // Escape closes without changing anything.
                 raised = 0;
                 var before = chip1.Value;
+                // (Esc as the form receives it: through ProcessCmdKey, whichever control inside has the focus.)
+                bool Esc(ColorFlyout fl) => (bool)typeof(Control).GetMethod("ProcessCmdKey", NonPublic | BindingFlags.Instance).Invoke(fl, new object[] { new Message(), Keys.Escape });
                 f = chip1.OpenPicker(keepOpen: true);
-                Key(f, Keys.Escape);
+                Assert(Esc(f), "chip: the flyout handles Escape");
                 Assert(f.IsDisposed && raised == 0 && chip1.Value == before, "chip: Escape closes the flyout and changes nothing");
+                // …and a colour typed into the hex box meanwhile is taken back.
+                f = chip1.OpenPicker(keepOpen: true);
+                Priv<TouchTextBox>(f, "_hex").Text = "#00FF00";
+                Assert(chip1.Value.ToArgb() == Color.FromArgb(0, 255, 0).ToArgb(), "chip: a typed hex colour applies at once");
+                Esc(f);
+                Assert(f.IsDisposed && chip1.Value.ToArgb() == before.ToArgb(), "chip: Escape takes back a colour typed meanwhile");
                 Assert(chip1.OpenPicker(keepOpen: true) is ColorFlyout again && !ReferenceEquals(again, f), "chip: after closing, the next click opens a fresh flyout");
                 chip1.OpenPicker(keepOpen: true).Close();
 
                 // The inherit button hands the colour back to the parent.
+                raised = 0;
                 f = chip1.OpenPicker(keepOpen: true);
                 ClickButton(Priv<FluentButton>(f, "_inherit"));
                 Assert(chip1.Inherited && raised == 1 && f.IsDisposed, "chip: 'inherit' marks the chip as inherited, raises once and closes the flyout");

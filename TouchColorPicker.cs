@@ -109,6 +109,14 @@ namespace OnScreenKeyboard
         }
 
         private bool _hovered;
+
+        // Alt shows or hides the accelerator underline (WM_UPDATEUISTATE); a self-painted control repaints itself for it.
+        protected override void WndProc(ref Message m)
+        {
+            base.WndProc(ref m);
+            if (m.Msg == 0x0128) Invalidate();
+        }
+
         protected override void OnMouseEnter(EventArgs e) { _hovered = true;  Invalidate(); base.OnMouseEnter(e); }
         protected override void OnMouseLeave(EventArgs e) { _hovered = false; Invalidate(); base.OnMouseLeave(e); }
 
@@ -135,7 +143,7 @@ namespace OnScreenKeyboard
                     g.DrawPath(pen, path);
             }
             TextRenderer.DrawText(g, Text, Font, ClientRectangle, ForeColor,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | Touch.PrefixFlag(ShowKeyboardCues));
 
             // Two-tone focus ring, visible on any chip colour (WCAG 2.4.7).
             if (Focused)
@@ -155,7 +163,14 @@ namespace OnScreenKeyboard
             if (_flyout != null && !_flyout.IsDisposed) return _flyout;
             if (BeforeOpen != null && !BeforeOpen()) return null;
             var f = new ColorFlyout(Value, DeviceDpi / 96f, InheritText) { KeepOpen = keepOpen };
+            Color before = Value; bool wasInherited = _inherited;
             f.Picked += c => { SetOwn(c); ValueChanged?.Invoke(this, EventArgs.Empty); };
+            f.Cancelled += () =>
+            {
+                if (Value.ToArgb() == before.ToArgb() && _inherited == wasInherited) return;      // nothing was changed meanwhile
+                if (wasInherited) SetInherited(before); else SetOwn(before);
+                ValueChanged?.Invoke(this, EventArgs.Empty);
+            };
             f.InheritChosen += () => { Inherited = true; ValueChanged?.Invoke(this, EventArgs.Empty); };
             f.FormClosed += (s, e) => { _flyout = null; if (!IsDisposed) Focus(); };
 
@@ -323,10 +338,14 @@ namespace OnScreenKeyboard
             }
         }
 
-        protected override void OnKeyDown(KeyEventArgs e)
+        /// <summary>Raised when the flyout is closed with Esc: nothing is chosen, and a colour typed into the hex box meanwhile is taken back.</summary>
+        public event Action Cancelled;
+
+        // Esc is handled here, not in KeyDown: the palette, the hex box and the buttons have the focus, and a key goes to them first.
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
-            base.OnKeyDown(e);
-            if (e.KeyCode == Keys.Escape) Close();
+            if (keyData == Keys.Escape) { Cancelled?.Invoke(); Close(); return true; }
+            return base.ProcessCmdKey(ref msg, keyData);
         }
 
         protected override void OnDeactivate(EventArgs e)
