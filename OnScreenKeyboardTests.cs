@@ -70,6 +70,7 @@ namespace OnScreenKeyboard
             Step(T_EditorContrast);
             Step(T_WizardContrast);
             Step(T_ControlBorders);
+            Step(T_KeyShape);
             Step(T_KeyRings);
             Step(T_CornerLabels);
             Step(T_DisabledLook);

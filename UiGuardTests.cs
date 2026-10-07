@@ -545,15 +545,29 @@ namespace OnScreenKeyboard
                 }
             }
 
+            var darkKeyboard = Color.FromArgb(32, 32, 32);
             foreach (var (w, h) in new[] { (60, 40), (61, 41), (27, 18) })
             {
-                using var sel = Draw(w, h, g => KeyboardForm.DrawSelectionRing(g, w, h));
+                // On a dark keyboard background: white outside, dark inside (what it always was).
+                using var sel = Draw(w, h, g => KeyboardForm.DrawSelectionRing(g, w, h, darkKeyboard));
                 Symmetric($"selection ring {w}x{h}", sel, 5);
                 var white = Color.FromArgb(255, 255, 255);
                 Assert(Same(sel.GetPixel(0, h / 2), white) && Same(sel.GetPixel(1, h / 2), white) &&
                        !Same(sel.GetPixel(2, h / 2), bg) && !Same(sel.GetPixel(3, h / 2), bg) && !Same(sel.GetPixel(2, h / 2), white) &&
                        Same(sel.GetPixel(4, h / 2), bg),
-                    $"selection ring {w}x{h}: 2 px white band on the edge, 2 px dark band inside it, then nothing");
+                    $"selection ring {w}x{h}, dark keyboard: 2 px white band on the edge, 2 px dark band inside it, then nothing");
+
+                // On a light keyboard background (white, or the pale yellow of a real layout) it is the other way round: a white ring cannot be seen there.
+                foreach (var light in new[] { Color.White, Color.FromArgb(240, 230, 140) })
+                {
+                    using var lsel = Draw(w, h, g => KeyboardForm.DrawSelectionRing(g, w, h, light));
+                    Symmetric($"selection ring {w}x{h} on {SettingsManager.Hex(light)}", lsel, 5);
+                    var black = Color.FromArgb(0, 0, 0);
+                    Assert(Same(lsel.GetPixel(0, h / 2), black) && Same(lsel.GetPixel(1, h / 2), black) &&
+                           !Same(lsel.GetPixel(2, h / 2), bg) && !Same(lsel.GetPixel(3, h / 2), bg) && !Same(lsel.GetPixel(2, h / 2), black) &&
+                           Same(lsel.GetPixel(4, h / 2), bg),
+                        $"selection ring {w}x{h}, keyboard background {SettingsManager.Hex(light)}: 2 px black band on the edge, 2 px light band inside it, then nothing");
+                }
 
                 using var foc = Draw(w, h, g => ColorSwatchButton.DrawFocusRing(g, w, h));
                 Symmetric($"swatch focus ring {w}x{h}", foc, 6);
@@ -582,18 +596,52 @@ namespace OnScreenKeyboard
                     $"key border {thick} px: left {left}, right {right}, top {top}, bottom {bottom} px wide");
             }
 
-            // Every layer of the key selection ring must be visible against both a dark and a pale key (the reason for the sandwich).
-            foreach (var key in new[] { Color.Black, Color.FromArgb(20, 40, 120), Color.White, Color.FromArgb(240, 240, 200) })
+            // The ring must show against the key (one of its two bands, whatever the key's colour: the reason for the sandwich) and against
+            // the keyboard's background (its outer band), whatever that colour is.
+            double Ratio(Color a, Color b)
             {
-                using var bmp = new Bitmap(40, 30);
-                using (var g = Graphics.FromImage(bmp)) { g.Clear(key); KeyboardForm.DrawSelectionRing(g, 40, 30); }
-                double Ratio(Color a, Color b)
+                double L(Color c) { double F(int v) { double s = v / 255.0; return s <= 0.03928 ? s / 12.92 : Math.Pow((s + 0.055) / 1.055, 2.4); } return 0.2126 * F(c.R) + 0.7152 * F(c.G) + 0.0722 * F(c.B); }
+                double x = L(a), y = L(b); return (Math.Max(x, y) + 0.05) / (Math.Min(x, y) + 0.05);
+            }
+            var keys        = new[] { Color.Black, Color.FromArgb(20, 40, 120), Color.White, Color.FromArgb(240, 240, 200), Color.FromArgb(192, 192, 192) };
+            var backgrounds = new[] { Color.Black, Color.FromArgb(28, 28, 40), Color.White, Color.FromArgb(240, 230, 140), Color.FromArgb(128, 128, 128), Color.FromArgb(235, 235, 235) };
+            foreach (var board in backgrounds)
+            {
+                foreach (var key in keys)
                 {
-                    double L(Color c) { double F(int v) { double s = v / 255.0; return s <= 0.03928 ? s / 12.92 : Math.Pow((s + 0.055) / 1.055, 2.4); } return 0.2126 * F(c.R) + 0.7152 * F(c.G) + 0.0722 * F(c.B); }
-                    double x = L(a), y = L(b); return (Math.Max(x, y) + 0.05) / (Math.Min(x, y) + 0.05);
+                    using var bmp = new Bitmap(40, 30);
+                    using (var g = Graphics.FromImage(bmp)) { g.Clear(key); KeyboardForm.DrawSelectionRing(g, 40, 30, board); }
+                    double best = new[] { 0, 2 }.Max(i => Ratio(bmp.GetPixel(i, 15), key));
+                    Assert(best >= 3.0, $"selection ring on key {SettingsManager.Hex(key)}, keyboard {SettingsManager.Hex(board)}: the ring contrasts at least 3:1 with the key ({best:0.0}:1)");
                 }
-                double best = new[] { 0, 2 }.Max(i => Ratio(bmp.GetPixel(i, 15), key));
-                Assert(best >= 3.0, $"selection ring on key {key.Name}/{key}: the ring contrasts at least 3:1 with the key ({best:0.0}:1)");
+                using var edge = new Bitmap(40, 30);
+                using (var g = Graphics.FromImage(edge)) { g.Clear(Color.Gray); KeyboardForm.DrawSelectionRing(g, 40, 30, board); }
+                double outside = Ratio(edge.GetPixel(0, 15), board);
+                Assert(outside >= 4.5, $"selection ring, keyboard background {SettingsManager.Hex(board)}: the outer band contrasts {outside:0.0}:1 with the background (at least 4.5:1)");
+            }
+        }
+
+        // The window shape of a key: its four corners must be cut exactly alike (the selection ring follows the shape; with a
+        // Region made from a GDI+ path the top-left corner was hardly rounded and the bottom-right one well rounded).
+        private static void T_KeyShape()
+        {
+            Section("Key shape — the four rounded corners are exactly alike");
+            foreach (var (w, h) in new[] { (60, 40), (61, 41), (46, 46), (120, 52), (15, 15) })
+            {
+                using var region = Fluent.RoundedRegion(w, h, 4);
+                bool In(int x, int y) => region.IsVisible(new Point(x, y));
+                int r = 4;
+                var mismatch = new List<string>();
+                for (int dy = 0; dy < r; dy++)
+                    for (int dx = 0; dx < r; dx++)
+                    {
+                        bool tl = In(dx, dy), tr = In(w - 1 - dx, dy), bl = In(dx, h - 1 - dy), br = In(w - 1 - dx, h - 1 - dy);
+                        if (!(tl == tr && tl == bl && tl == br)) mismatch.Add($"({dx},{dy}) tl={tl} tr={tr} bl={bl} br={br}");
+                    }
+                Assert(mismatch.Count == 0, $"{w}x{h}: the four corners are cut alike {(mismatch.Count > 0 ? "— " + mismatch[0] : "")}");
+                Assert(!In(0, 0) && !In(w - 1, 0) && !In(0, h - 1) && !In(w - 1, h - 1), $"{w}x{h}: the outermost corner pixels are cut off");
+                Assert(In(r, 0) && In(0, r) && In(w - 1 - r, h - 1) && In(w - 1, h - 1 - r), $"{w}x{h}: the straight edges are whole");
+                Assert(In(w / 2, h / 2), $"{w}x{h}: the middle is inside");
             }
         }
 

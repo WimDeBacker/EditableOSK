@@ -309,10 +309,23 @@ namespace OnScreenKeyboard
         /// <param name="radius">Corner radius in pixels.</param>
         internal static Region RoundedRegion(int w, int h, int radius)
         {
-            // We build the path just to hand it to Region, then dispose it —
-            // Region makes its own internal copy, so we don't need to keep the path.
-            using var p = RoundedRect(new Rectangle(0, 0, w, h), radius);
-            return new Region(p);
+            // Not a Region made from a GDI+ path: its rasterisation is lopsided by about half a pixel (found 2026-10-07 on the
+            // selection ring of a key: the bottom-right corner looked well rounded, the top-left one hardly at all, the other two
+            // in between). The corners are cut here row by row from a circle measured at the pixel centres, and the same cut is
+            // made at all four corners, so they are exactly alike.
+            radius = Math.Max(0, Math.Min(radius, Math.Min(w, h) / 2));
+            var region = new Region(new Rectangle(0, 0, w, h));
+            for (int i = 0; i < radius; i++)
+            {
+                double dy  = radius - (i + 0.5);                                         // the row's centre above the circle's centre
+                int    cut = (int)Math.Ceiling(radius - Math.Sqrt(radius * radius - dy * dy) - 0.5);   // pixels outside the circle on each side
+                if (cut <= 0) continue;
+                region.Exclude(new Rectangle(0,       i,         cut, 1));               // top left
+                region.Exclude(new Rectangle(w - cut, i,         cut, 1));               // top right
+                region.Exclude(new Rectangle(0,       h - 1 - i, cut, 1));               // bottom left
+                region.Exclude(new Rectangle(w - cut, h - 1 - i, cut, 1));               // bottom right
+            }
+            return region;
         }
 
         /// <summary>

@@ -130,7 +130,7 @@ Status tags: **fixed**, **open**, **unverified** (not tested).
 
 - **Priority 5 and 6 (`todo.md`) are fixed** (see section 3). Remaining: Modifier → Text clears the value but the label stays "Shift" by design (the user may want it); undecided.
 - **Record / Browse icons:** the Browse icon is the toolbar's `load.svg`; whether a folder icon reads as "pick a layout file" has not been tested with users. The record ring looks a little small in its button.
-- **Priority 7 (now Priority 4 in `todo.md`):** borders and focus rings on the keys of the keyboard itself were never checked.
+- **Priority 7 (done 2026-10-07, see Completed in `todo.md`):** borders and focus rings on the keys of the keyboard itself were never checked; they are checked now (equal on all four sides, equal corners, a ring colour that follows the keyboard's background).
 - **Still on the old layout:** the New Keyboard Wizard only. (The Group Editor was migrated on 2026-10-02, the Keyboard Editor on 2026-10-04.)
 - **Group Editor:** the list's scroll bar is the native thin one; the Name field keeps one empty line for its error message; "More colours…" still opens the standard Windows colour dialog.
 - **Narrow screens:** the Action row has five columns and fits 760 px; below that a stacked layout is not built.

@@ -1766,14 +1766,18 @@ namespace OnScreenKeyboard
         /// </para>
         /// </summary>
         /// <summary>
-        /// The edit-mode selection ring of a key: a 2 px white band on the very edge of the key and a 2 px dark band just inside it
-        /// (pixels 0-1 and 2-3). White shows on dark keys (e.g. blue), the dark band on pale ones. Every layer is exactly as wide on
-        /// all four sides (see <see cref="Fluent.DrawSquareRing"/>).
+        /// The edit-mode selection ring of a key: a 2 px band on the very edge of the key and a 2 px band of the opposite colour just
+        /// inside it (pixels 0-1 and 2-3). The outer band is black or white, whichever contrasts more with the keyboard's background
+        /// (<paramref name="background"/>: it is what lies right outside the key, and a white ring cannot be seen on a white or pale
+        /// background); the inner band is the other one, so whatever colour the key has, one of the two shows on it. Every layer is
+        /// exactly as wide on all four sides (see <see cref="Fluent.DrawSquareRing"/>).
         /// </summary>
-        internal static void DrawSelectionRing(Graphics g, int w, int h)
+        internal static void DrawSelectionRing(Graphics g, int w, int h, Color background)
         {
-            Fluent.DrawSquareRing(g, w, h, inset: 0, penWidth: 2, Color.White);
-            Fluent.DrawSquareRing(g, w, h, inset: 2, penWidth: 2, Color.FromArgb(200, 0, 0, 0));
+            Color outer = ColorChip.LabelColorFor(background);
+            Color inner = outer == Color.White ? Color.Black : Color.White;
+            Fluent.DrawSquareRing(g, w, h, inset: 0, penWidth: 2, outer);
+            Fluent.DrawSquareRing(g, w, h, inset: 2, penWidth: 2, Color.FromArgb(200, inner));
         }
 
         /// <summary>The small Shift label (top right) and AltGr label (top left) of a key, in the key's font colour at reduced opacity.</summary>
@@ -1810,7 +1814,7 @@ namespace OnScreenKeyboard
                 && ReferenceEquals(_chkSelBtn, btn);
             if (isSelectedKey)
             {
-                DrawSelectionRing(e.Graphics, btn.Width, btn.Height);
+                DrawSelectionRing(e.Graphics, btn.Width, btn.Height, BackColor);      // BackColor: the keyboard's background, as seen between the keys
             }
 
             if (btn.Tag is not (string ml, string sl, string al, Color fc, bool isWP, int typedLen)) return;
