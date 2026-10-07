@@ -2,7 +2,7 @@
 
 ## Pending
 
-Numbering: **P** = priority, then sub-sections, steps and details (**1.1**, **3.4**). The open priorities were numbered from 1 again on 2026-10-06; the items under Completed keep the numbers they had when they were done (so "Priority 7" there is not Priority 7 here). Status marks: ✓ done, ▶ in progress, ☐ not started.
+Numbering: **P** = priority, then sub-sections, steps and details (**1.1**, **3.4**). The open priorities were numbered from 1 again on 2026-10-06 (Priority 4 was added on 2026-10-07); the items under Completed keep the numbers they had when they were done (so "Priority 7" there is not Priority 7 here). Status marks: ✓ done, ▶ in progress, ☐ not started.
 
 ### Priority 1 — Scanning ☐ *(accessibility)*
 
@@ -16,6 +16,8 @@ Numbering: **P** = priority, then sub-sections, steps and details (**1.1**, **3.
 
 ### Priority 3 — `OnScreenKeyboard.exe` stays in Task Manager after closing the window in edit mode ▶ *(bug; no longer reproducible after the safety net, root cause unknown)*
 
+**Status (owner, 2026-10-07): stays pending.** The behaviour is unpredictable and has not occurred for a long time, so there is nothing to check or fix now. **The error-log mechanism of 3.4 stays** (`Program.cs`: exceptions to `OnScreenKeyboard_error.log`, `Environment.Exit(0)` after the main window closes); it is not to be removed until this item is closed. If a lingering process is seen again, follow 3.5.
+
 - 3.0 **Update (2026-10-02):** the user closed the keyboard in edit mode with the new build: the process ended, and no `OnScreenKeyboard_error.log` was written, so no exception was thrown while closing. Either `Environment.Exit(0)` ends a process that something kept alive after the window closed, or the lingering did not happen this time. Kept open until it either stays away for a while or is explained; if it comes back, a lingering process without a log means the main thread is stuck or a foreground thread is alive — inspect its threads before ending it.
 
 - 3.1 **Symptom (found by the user, 2026-10-02)** — close the keyboard while edit mode is active: the window disappears but the process stays, which locks the exe for the next build and start. Closing from normal mode ends the process cleanly (checked: `WM_CLOSE` on the real window, exit code 0).
@@ -23,6 +25,16 @@ Numbering: **P** = priority, then sub-sections, steps and details (**1.1**, **3.
 - 3.3 **Suspect** — an exception during `FormClosing` / disposal that only happens in edit mode (the edit toolbars and their icons): the standard "unhandled exception" dialog is a window of its own, and with an always-on-top main window it can sit hidden behind other windows, keeping the process alive.
 - 3.4 **Done** — `Program.cs`: UI-thread and unhandled exceptions are logged to `OnScreenKeyboard_error.log` next to the exe instead of showing the dialog, and `Environment.Exit(0)` runs when the main window has closed.
 - 3.5 **To do** — close once in edit mode with the new build: if `OnScreenKeyboard_error.log` appears, its stack trace is the real bug (fix it); if the process still lingers with no log, the main thread is stuck inside `FormClosing` (inspect the threads of the lingering process before ending it).
+
+### Priority 4 — Import of learned words ☐ *(word prediction; found by the owner 2026-10-07)*
+
+Keyboard Editor → Word prediction has **Export…** (copies the overlay file, e.g. `worddb_NL.learned.wfq`, to a place of the user's choice: "backup or transfer to another PC", tooltip `wp: tip export`), but **no way back**: nothing reads such a file in again. Until it exists the only way is by hand: close the keyboard, copy the file next to `OnScreenKeyboard.exe` under the same name, start it again (this overwrites what the PC had learned).
+
+- 4.1 **Decide first (owner):** replace what is learned on this PC, or merge (add the use counts of words and word pairs, take over new words and candidates). Proposed first version: **replace, with a confirmation question** (simplest and safest; the old file is kept as `.bak`, as `SettingsManager` does).
+- 4.2 **Button** "Import…" under "Export…" in the Word prediction section of the Keyboard Editor (`KeyboardEditorForm`, next to `_btnWPExport`): an `OpenFileDialog` for `*.wfq`, then the check below, then the confirmation, then the copy; the editor refreshes (`UpdateExportState`, candidates, info label) and the database is reloaded.
+- 4.3 **Checks before anything is replaced:** the file is a valid word database (the same header check `LanguageRegistry` does with its fast `XmlReader` peek: root element, `version`, `language`, `isPersonal`); it is a personal / overlay file (`isPersonal`), not a base database; its language matches the selected database (otherwise say so and do nothing); a corrupt or empty file leaves everything as it was, with a message (like "wp: Export failed" does for export). No import while the database is still loading (`IsLoading`).
+- 4.4 **Strings** in `LanguageManager.cs` and `lang_nl.xml`: button, tooltip (the export tooltip may then say "backup, or transfer and import on another PC"), dialog title, confirmation question, error messages. The new button joins the layout guards of the Keyboard Editor (44 px, no clipping, 480 px).
+- 4.5 **Tests:** import of a valid file replaces the overlay and keeps a `.bak`; wrong language, a base database, a corrupt file and a missing file change nothing; the confirmation "No" changes nothing; export then import gives back the same words (round trip); the backend seam (`_backend`, as used for export) is extended so the tests need no dialog.
 
 ## Ideas
 
