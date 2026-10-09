@@ -399,7 +399,7 @@ namespace OnScreenKeyboard
                 // Best-effort, same as SaveIfDirty's own catch: losing the last
                 // ~30 s of learned words is acceptable, losing the layout/window
                 // state and leaking GDI handles on every failed shutdown is not.
-                try { WordDatabase.SaveNow(); } catch { }
+                try { WordDatabase.SaveNow(); } catch (Exception ex) { Program.LogError("closing: saving the learned words", ex); }   // best effort, but not silent
                 _window.WindowWidth  = Width;
                 _window.WindowHeight = Height - ToolbarHeightForMode(_mode);
                 AutoSave();

@@ -291,6 +291,12 @@ return (IntPtr)1;
 
 ## Fix 7: error log without a cap, and Environment.Exit (Program.cs)
 
+**Status: applied** (2026-10-09), built and tested on Windows (filtered run: `T_ErrorLog`, 8 checks). The log is now `ErrorLog.Write` (in `Program.cs`, testable):
+the same error within 5 seconds is written once, and a log past 256 KB is moved to `.old` (one generation) before the next entry. `Program.LogError`
+is `internal` and `FormClosing` logs a failing `SaveNow` through it instead of `catch { }`. `Environment.Exit(0)` is kept; the extra `SaveNow`
+before it was not added: with Fix 8 the closing save waits for a running background write, the periodic timer is stopped in `FormClosing`, and
+nothing else is written after `Run`. Not tested: an exception in a real paint handler.
+
 ```csharp
 private const long MaxLogBytes = 256 * 1024;
 private static string _lastError; private static DateTime _lastErrorAt;

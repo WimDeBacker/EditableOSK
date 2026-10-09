@@ -60,6 +60,7 @@ namespace OnScreenKeyboard
             Step(T_Accelerators);
             Step(T_TabReach);
             Step(T_AltReachesStepper);
+            Step(T_ErrorLog);
             Step(T_SvgIconLoader_Cache);
             Step(T_TouchControls);
             Step(T_TouchGroupComponents);
@@ -5042,6 +5043,42 @@ namespace OnScreenKeyboard
                     $"Alt+{op.Letter} [{lang}]: the Transparency value box has the focus and its value is selected");
             }
             Lang.Load("en");
+        }
+
+        private static void T_ErrorLog()
+        {
+            Section("Error log — a repeated error is written once, the file has a size limit (review8_10 finding 7)");
+            string dir = Path.Combine(Path.GetTempPath(), "osk_errlog_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            string file = Path.Combine(dir, "OnScreenKeyboard_error.log");
+            int Entries(string path) => File.Exists(path) ? File.ReadAllText(path).Split(new[] { "[ui]" }, StringSplitOptions.None).Length - 1 : 0;
+            try
+            {
+                ErrorLog.Reset();
+                var t0 = new DateTime(2026, 10, 9, 12, 0, 0);
+                var boom = new InvalidOperationException("boom");
+                bool first = ErrorLog.Write(file, "ui", boom, t0);
+                bool again = ErrorLog.Write(file, "ui", boom, t0.AddSeconds(1)) | ErrorLog.Write(file, "ui", boom, t0.AddSeconds(3));
+                Assert(first && !again && Entries(file) == 1, "the same error again within the window (a paint handler on every repaint) is written once");
+                Assert(ErrorLog.Write(file, "ui", boom, t0.AddSeconds(10)) && Entries(file) == 2, "…and again once the window has passed");
+                Assert(ErrorLog.Write(file, "ui", new InvalidOperationException("other"), t0.AddSeconds(11)) && Entries(file) == 3, "a different error is written at once");
+                Assert(ErrorLog.Write(file, "ui", boom, t0.AddSeconds(12)) && Entries(file) == 4, "…and the first error is not 'the same' any more after another one came in between");
+
+                // Size limit: past the limit the file moves to ".old" (one generation) and a new file starts.
+                ErrorLog.Reset();
+                string small = Path.Combine(dir, "small.log");
+                for (int i = 0; i < 6; i++) ErrorLog.Write(small, "ui", new InvalidOperationException("error number " + i), t0.AddMinutes(i), maxBytes: 300);
+                Assert(File.Exists(small + ".old"), "past the size limit the log is moved to .old");
+                Assert(new FileInfo(small).Length <= 300 + 400 && Entries(small) >= 1 && Entries(small) < 6, "…and the log starts again, so it stays small");
+                Assert(!File.Exists(small + ".old.old"), "only one earlier generation is kept");
+
+                // Never throws: a folder that does not exist.
+                ErrorLog.Reset();
+                bool ok = true; bool wrote = true;
+                try { wrote = ErrorLog.Write(Path.Combine(dir, "missing", "x.log"), "ui", boom, t0); } catch { ok = false; }
+                Assert(ok && !wrote, "an unwritable log is ignored (no exception)");
+            }
+            finally { try { Directory.Delete(dir, true); } catch { } ErrorLog.Reset(); }
         }
 
         private static void T_Accelerators()

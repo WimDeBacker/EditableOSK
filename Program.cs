@@ -122,16 +122,46 @@ namespace OnScreenKeyboard
             return 0;
         }
 
-        /// <summary>Appends an error to <c>OnScreenKeyboard_error.log</c> next to the exe (best effort, never throws).</summary>
-        private static void LogError(string where, Exception ex)
+        /// <summary>Appends an error to <c>OnScreenKeyboard_error.log</c> next to the exe (best effort, never throws; see <see cref="ErrorLog"/>).</summary>
+        internal static void LogError(string where, Exception ex) =>
+            ErrorLog.Write(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "OnScreenKeyboard_error.log"), where, ex, DateTime.Now);
+    }
+
+    /// <summary>
+    /// The error log. An exception in a paint handler comes back on every repaint, so the log must neither grow without bound nor be written
+    /// again and again: the same error within a few seconds is written once, and a log past <see cref="MaxBytes"/> is moved to ".old"
+    /// (one generation is kept) before the next entry.
+    /// </summary>
+    internal static class ErrorLog
+    {
+        internal const long MaxBytes = 256 * 1024;
+        internal static readonly TimeSpan RepeatWindow = TimeSpan.FromSeconds(5);
+
+        private static string _lastText;
+        private static DateTime _lastAt;
+        private static readonly object _lock = new object();
+
+        /// <summary>Forgets the last error (for the tests, which write the same error on purpose).</summary>
+        internal static void Reset() { lock (_lock) { _lastText = null; _lastAt = default; } }
+
+        /// <summary>Writes one entry to <paramref name="file"/>; true when it was written, false when it was left out as a repeat or failed.</summary>
+        internal static bool Write(string file, string where, Exception ex, DateTime now, long maxBytes = MaxBytes)
         {
             try
             {
-                System.IO.File.AppendAllText(
-                    System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "OnScreenKeyboard_error.log"),
-                    $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} [{where}] {ex}{Environment.NewLine}{Environment.NewLine}");
+                lock (_lock)
+                {
+                    string text = $"[{where}] {ex}";
+                    if (text == _lastText && now - _lastAt < RepeatWindow) return false;     // the same error again: not logged
+                    _lastText = text; _lastAt = now;
+
+                    if (System.IO.File.Exists(file) && new System.IO.FileInfo(file).Length > maxBytes)
+                        System.IO.File.Move(file, file + ".old", overwrite: true);            // keep one earlier generation
+                    System.IO.File.AppendAllText(file, $"{now:yyyy-MM-dd HH:mm:ss} {text}{Environment.NewLine}{Environment.NewLine}");
+                    return true;
+                }
             }
-            catch { }
+            catch { return false; }
         }
     }
 }
