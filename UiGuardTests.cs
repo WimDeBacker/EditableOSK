@@ -1118,6 +1118,25 @@ namespace OnScreenKeyboard
                 Assert(Field<bool>(g, "_recording"), "Record button: the first click starts recording");
                 onPicker.Invoke(g, new object[] { 0 });
                 Assert(!Field<bool>(g, "_recording") && Field<Label>(g, "_lblHint").Text == Lang.T("Cancelled"), "Record button: the second click cancels");
+
+                // A second key (or the auto-repeat of the first) before the queued recording has run must not overwrite it (review8_10 finding 6).
+                using var h = new KeyEditorForm(new KeyProps("", ""), null) { HookDisabledForTest = true };
+                DevGallery.Show(h);
+                var startH = typeof(KeyEditorForm).GetMethod("StartRecording", BindingFlags.NonPublic | BindingFlags.Instance);
+                startH.Invoke(h, new object[] { 0 });
+                bool firstKey = h.QueueRecording(0x43, true, false, false, false);        // Ctrl+C
+                bool secondKey = h.QueueRecording(0x56, true, false, false, false);       // Ctrl+V, before the UI thread ran the first
+                Application.DoEvents();
+                Assert(firstKey && !secondKey, "recording: the second key before the first was processed is dropped");
+                Assert(Field<TouchTextBox[]>(h, "_values")[0].Text == "{Ctrl}c" && Field<TouchTextBox[]>(h, "_labels")[0].Text == "Ctrl+C",
+                    "recording: the first key is the one recorded, a later key does not overwrite it");
+                Assert(!Field<bool>(h, "_recording") && !h.QueueRecording(0x56, true, false, false, false), "recording: after it stopped, a key is not taken");
+
+                startH.Invoke(h, new object[] { 0 });                                      // a new recording: the pending flag starts clear
+                Assert(h.QueueRecording(0x56, true, false, false, false), "recording: a new recording takes its first key");
+                typeof(KeyEditorForm).GetMethod("StopRecording", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(h, new object[] { true });      // stop button, while queued
+                Application.DoEvents();
+                Assert(Field<TouchTextBox[]>(h, "_values")[0].Text == "", "recording: a recording that was stopped while queued is not completed afterwards");
             }
 
             // ── The Record / Browse button is an icon-only 44 px square in every language and state, so it never covers its neighbour ──

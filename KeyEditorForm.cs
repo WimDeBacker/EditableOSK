@@ -137,6 +137,7 @@ namespace OnScreenKeyboard
         private readonly string[] _recordedLabel = new string[Layers];   // the label a recording put in a layer (so a re-recording may replace it)
         private readonly string[] _autoLabelBefore = new string[Layers]; // the label the shortcut that a recording replaces would have got
         private bool   _winHeld;              // tracked separately because the hook suppresses the Win key-up
+        private bool   _recordPending;        // a key was taken and its recording is queued for the UI thread: further keys are swallowed until it ran
         private IntPtr _hookHandle = IntPtr.Zero;
         private LowLevelKeyboardProc _hookProc;   // kept in a field so the GC cannot free it while the hook is active
 
@@ -944,6 +945,7 @@ namespace OnScreenKeyboard
             _recording   = true;
             _recordLayer = layer;
             _winHeld     = false;
+            _recordPending = false;
             UpdatePickerTexts();                // the stop symbol; clicking the button again cancels
             SetHint(Lang.T("Perform the key combination you want on the keyboard."));
             // The label that the shortcut being replaced would have got: a label like that (also one saved in an earlier session)
@@ -966,6 +968,7 @@ namespace OnScreenKeyboard
         {
             _recording = false;
             _winHeld   = false;
+            _recordPending = false;
             if (_hookHandle != IntPtr.Zero)
             {
                 UnhookWindowsHookEx(_hookHandle);
@@ -999,11 +1002,27 @@ namespace OnScreenKeyboard
             bool alt   = (Control.ModifierKeys & Keys.Alt)     != 0;
             bool shift = (Control.ModifierKeys & Keys.Shift)   != 0;
             bool win   = _winHeld;                      // read now: the key-up of the Win key may arrive before the UI thread runs the line below
-            int layer  = _recordLayer;
-            uint vk    = kbd.vkCode;
-            BeginInvoke((Action)(() => CompleteRecording(layer, vk, ctrl, alt, shift, win)));
+            QueueRecording(kbd.vkCode, ctrl, alt, shift, win);
 
             return (IntPtr)1;   // suppress: the key must not type into the app behind the editor
+        }
+
+        /// <summary>
+        /// Takes the first complete key of a recording and queues it for the UI thread. A second key, or the auto-repeat of the first, that
+        /// arrives before the queued recording has run is dropped: it would otherwise run afterwards and overwrite the value, mode and label
+        /// of the recording with the later key. Returns false for such a key.
+        /// </summary>
+        internal bool QueueRecording(uint vk, bool ctrl, bool alt, bool shift, bool win)
+        {
+            if (!_recording || _recordPending) return false;
+            _recordPending = true;
+            int layer = _recordLayer;
+            BeginInvoke((Action)(() =>
+            {
+                if (!_recording) return;                      // stopped (stop button, focus left) while this was queued
+                CompleteRecording(layer, vk, ctrl, alt, shift, win);
+            }));
+            return true;
         }
 
         /// <summary>What the recorder's hook does with one keyboard event.</summary>

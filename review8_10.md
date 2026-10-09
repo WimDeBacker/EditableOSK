@@ -239,6 +239,11 @@ private void WarnIfFontsMissing(VisualTheme theme, GridLayout layout, bool fromL
 
 ## Fix 6: queued recordings overwrite each other (KeyEditorForm hook)
 
+**Status: applied** (2026-10-09), built and tested on Windows (filtered run: `KeyEditorRoundTrip`, `KeyEditorGuards`). Done as proposed, with the hook's
+queueing extracted as `KeyEditorForm.QueueRecording` (internal) so a test can drive it: `_recordPending` drops a second key or an
+auto-repeat, and the queued lambda checks `_recording`. The new test is in `T_KeyEditorRoundTrip`. With only the `_recording` check in the lambda
+the overwrite is already prevented; the flag additionally makes the dropped key explicit (and testable). Not tested with a real hook.
+
 The low-level hook callback runs on the UI thread, so a plain flag is enough.
 
 ```csharp
