@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<WordDatabase generated="2026-05-31T18:28:52.9604857Z" wordCount="14222">
+<WordDatabase generated="2026-05-31T18:28:52.9604857Z" wordCount="14210">
   <Word value="AA" frequency="282">
     <Next value="Gent" frequency="7" />
     <Next value="Anderlecht" frequency="6" />
@@ -11872,7 +11872,6 @@
     <Next value="rustig" frequency="1" />
     <Next value="raakten" frequency="1" />
     <Next value="riskeerde" frequency="1" />
-    <Next value="r" frequency="1" />
     <Next value="raakte" frequency="1" />
     <Next value="riskeer" frequency="1" />
     <Next value="houden" frequency="1" />
@@ -16530,24 +16529,6 @@
     <Next value="in" frequency="1" />
     <Next value="uit" frequency="1" />
     <Next value="uiteindelijk" frequency="1" />
-  </Word>
-  <Word value="B" frequency="16">
-    <Next value="verloor" frequency="1" />
-    <Next value="is" frequency="1" />
-    <Next value="in" frequency="1" />
-    <Next value="nu" frequency="1" />
-    <Next value="naar" frequency="1" />
-    <Next value="ligt" frequency="1" />
-    <Next value="aan" frequency="1" />
-    <Next value="raapt" frequency="1" />
-    <Next value="gooit" frequency="1" />
-    <Next value="gaan" frequency="1" />
-    <Next value="en" frequency="1" />
-    <Next value="komt" frequency="1" />
-    <Next value="Spelen" frequency="1" />
-    <Next value="speelt" frequency="1" />
-    <Next value="tegen" frequency="1" />
-    <Next value="of" frequency="1" />
   </Word>
   <Word value="BA" frequency="4">
     <Next value="door" frequency="1" />
@@ -24926,7 +24907,6 @@
     <Next value="uit" frequency="2" />
     <Next value="soms" frequency="2" />
     <Next value="plots" frequency="2" />
-    <Next value="x" frequency="2" />
     <Next value="door" frequency="1" />
     <Next value="druk" frequency="1" />
     <Next value="daarna" frequency="1" />
@@ -27653,7 +27633,6 @@
     <Next value="rustig" frequency="1" />
     <Next value="ruim" frequency="1" />
     <Next value="rekening" frequency="1" />
-    <Next value="r" frequency="1" />
     <Next value="regelmatig" frequency="1" />
     <Next value="Dominique" frequency="1" />
     <Next value="lastig" frequency="1" />
@@ -32138,7 +32117,6 @@
     <Next value="Verenigde" frequency="1" />
     <Next value="Volvo" frequency="1" />
     <Next value="VTM" frequency="1" />
-    <Next value="D" frequency="1" />
     <Next value="Delhaize" frequency="1" />
     <Next value="Dienstencheque" frequency="1" />
     <Next value="Doel" frequency="1" />
@@ -44212,16 +44190,6 @@
     <Next value="Brussel" frequency="2" />
     <Next value="op" frequency="1" />
   </Word>
-  <Word value="C" frequency="14">
-    <Next value="van" frequency="2" />
-    <Next value="in" frequency="2" />
-    <Next value="en" frequency="2" />
-    <Next value="maakte" frequency="1" />
-    <Next value="dat" frequency="1" />
-    <Next value="zal" frequency="1" />
-    <Next value="speelt" frequency="1" />
-    <Next value="Anderlecht" frequency="1" />
-  </Word>
   <Word value="cacao" frequency="13">
     <Next value="in" frequency="4" />
     <Next value="is" frequency="3" />
@@ -48126,7 +48094,6 @@
   </Word>
   <Word value="code" frequency="23">
     <Next value="van" frequency="2" />
-    <Next value="M" frequency="2" />
     <Next value="dat" frequency="2" />
     <Next value="elke" frequency="2" />
     <Next value="betalen" frequency="2" />
@@ -50647,18 +50614,6 @@
     <Next value="presenteerde" frequency="1" />
     <Next value="denk" frequency="1" />
     <Next value="verdient" frequency="1" />
-  </Word>
-  <Word value="D" frequency="12">
-    <Next value="in" frequency="2" />
-    <Next value="of" frequency="1" />
-    <Next value="is" frequency="1" />
-    <Next value="daardoor" frequency="1" />
-    <Next value="kan" frequency="1" />
-    <Next value="kreeg" frequency="1" />
-    <Next value="aardbeving" frequency="1" />
-    <Next value="speelt" frequency="1" />
-    <Next value="gebeurt" frequency="1" />
-    <Next value="nu" frequency="1" />
   </Word>
   <Word value="daad" frequency="11">
     <Next value="van" frequency="2" />
@@ -56428,7 +56383,6 @@
     <Next value="Moslimbroeders" frequency="8" />
     <Next value="Mont" frequency="8" />
     <Next value="Tom" frequency="8" />
-    <Next value="x" frequency="8" />
     <Next value="neus" frequency="7" />
     <Next value="naar" frequency="7" />
     <Next value="EC" frequency="7" />
@@ -68925,7 +68879,6 @@
     <Next value="dat" frequency="1" />
     <Next value="dokters" frequency="1" />
     <Next value="Maggie" frequency="1" />
-    <Next value="M" frequency="1" />
     <Next value="in" frequency="1" />
     <Next value="gevoel" frequency="1" />
     <Next value="glas" frequency="1" />
@@ -78542,7 +78495,6 @@
     <Next value="Disneyland" frequency="2" />
     <Next value="Delhaize" frequency="2" />
     <Next value="Denemarken" frequency="2" />
-    <Next value="D" frequency="2" />
     <Next value="Den" frequency="2" />
     <Next value="Godley" frequency="2" />
     <Next value="Glenn" frequency="2" />
@@ -90682,15 +90634,6 @@
     <Next value="startte" frequency="1" />
     <Next value="noemt" frequency="1" />
   </Word>
-  <Word value="g" frequency="7">
-    <Next value="en" frequency="1" />
-    <Next value="is" frequency="1" />
-    <Next value="naar" frequency="1" />
-    <Next value="wilde" frequency="1" />
-    <Next value="wordt" frequency="1" />
-    <Next value="dat" frequency="1" />
-    <Next value="zitten" frequency="1" />
-  </Word>
   <Word value="ga" frequency="433">
     <Next value="ik" frequency="14" />
     <Next value="je" frequency="13" />
@@ -97620,7 +97563,6 @@
     <Next value="uit" frequency="1" />
   </Word>
   <Word value="generatie" frequency="23">
-    <Next value="K" frequency="4" />
     <Next value="van" frequency="3" />
     <Next value="dan" frequency="2" />
     <Next value="naar" frequency="1" />
@@ -99186,7 +99128,6 @@
     <Next value="is" frequency="3" />
     <Next value="dan" frequency="3" />
     <Next value="als" frequency="2" />
-    <Next value="x" frequency="2" />
     <Next value="kinderen" frequency="2" />
     <Next value="wilden" frequency="2" />
     <Next value="dat" frequency="2" />
@@ -99221,7 +99162,6 @@
     <Next value="op" frequency="1" />
     <Next value="ouders" frequency="1" />
     <Next value="je" frequency="1" />
-    <Next value="M" frequency="1" />
     <Next value="hebben" frequency="1" />
     <Next value="het" frequency="1" />
     <Next value="speelt" frequency="1" />
@@ -105453,7 +105393,6 @@
     <Next value="Dageraad" frequency="4" />
     <Next value="in" frequency="3" />
     <Next value="ze" frequency="3" />
-    <Next value="K" frequency="3" />
     <Next value="masker" frequency="2" />
     <Next value="zij" frequency="2" />
     <Next value="deze" frequency="2" />
@@ -107617,7 +107556,6 @@
     <Next value="en" frequency="7" />
     <Next value="was" frequency="7" />
     <Next value="kreeg" frequency="6" />
-    <Next value="H" frequency="6" />
     <Next value="zou" frequency="6" />
     <Next value="FARC" frequency="6" />
     <Next value="vluchtelingen" frequency="5" />
@@ -107643,7 +107581,6 @@
     <Next value="niet" frequency="4" />
     <Next value="gaat" frequency="4" />
     <Next value="PKK" frequency="4" />
-    <Next value="B" frequency="4" />
     <Next value="vindt" frequency="3" />
     <Next value="wetenschappers" frequency="3" />
     <Next value="nu" frequency="3" />
@@ -107653,7 +107590,6 @@
     <Next value="Dez" frequency="3" />
     <Next value="Milk" frequency="3" />
     <Next value="fanatieke" frequency="3" />
-    <Next value="C" frequency="3" />
     <Next value="moet" frequency="2" />
     <Next value="moslims" frequency="2" />
     <Next value="door" frequency="2" />
@@ -107670,7 +107606,6 @@
     <Next value="wel" frequency="2" />
     <Next value="radicale" frequency="2" />
     <Next value="christenen" frequency="2" />
-    <Next value="D" frequency="2" />
     <Next value="GAIA" frequency="2" />
     <Next value="Afghanen" frequency="2" />
     <Next value="vrijwilligers" frequency="1" />
@@ -107838,7 +107773,6 @@
     <Next value="niet" frequency="2" />
     <Next value="radicale" frequency="2" />
     <Next value="is" frequency="2" />
-    <Next value="C" frequency="2" />
     <Next value="waren" frequency="1" />
     <Next value="werkten" frequency="1" />
     <Next value="wilden" frequency="1" />
@@ -109665,13 +109599,6 @@
   <Word value="gynaecoloog" frequency="3">
     <Next value="of" frequency="2" />
     <Next value="steeds" frequency="1" />
-  </Word>
-  <Word value="H" frequency="6">
-    <Next value="samen" frequency="2" />
-    <Next value="is" frequency="1" />
-    <Next value="de" frequency="1" />
-    <Next value="met" frequency="1" />
-    <Next value="tegen" frequency="1" />
   </Word>
   <Word value="Haag" frequency="49">
     <Next value="in" frequency="3" />
@@ -115173,7 +115100,6 @@
     <Next value="alle" frequency="1" />
     <Next value="afstand" frequency="1" />
     <Next value="Kuifje" frequency="1" />
-    <Next value="K" frequency="1" />
     <Next value="Kate" frequency="1" />
     <Next value="bende" frequency="1" />
     <Next value="bevolking" frequency="1" />
@@ -121547,7 +121473,6 @@
     <Next value="zijn" frequency="1" />
   </Word>
   <Word value="hongerstaking" frequency="3">
-    <Next value="g" frequency="1" />
     <Next value="in" frequency="1" />
     <Next value="het" frequency="1" />
   </Word>
@@ -137930,21 +137855,6 @@
     <Next value="gebruikt" frequency="1" />
     <Next value="Brussel" frequency="1" />
   </Word>
-  <Word value="K" frequency="14">
-    <Next value="voor" frequency="2" />
-    <Next value="omdat" frequency="1" />
-    <Next value="ook" frequency="1" />
-    <Next value="Ketnet" frequency="1" />
-    <Next value="bijzonder" frequency="1" />
-    <Next value="gaat" frequency="1" />
-    <Next value="filmt" frequency="1" />
-    <Next value="het" frequency="1" />
-    <Next value="heeft" frequency="1" />
-    <Next value="heb" frequency="1" />
-    <Next value="de" frequency="1" />
-    <Next value="kan" frequency="1" />
-    <Next value="ze" frequency="1" />
-  </Word>
   <Word value="kaak" frequency="4">
     <Next value="uit" frequency="1" />
     <Next value="zij" frequency="1" />
@@ -138671,7 +138581,6 @@
     <Next value="Lars" frequency="1" />
     <Next value="kon" frequency="1" />
     <Next value="Open" frequency="1" />
-    <Next value="C" frequency="1" />
     <Next value="als" frequency="1" />
   </Word>
   <Word value="kampen" frequency="84">
@@ -153775,7 +153684,6 @@
     <Next value="Turkije" frequency="1" />
     <Next value="Telemark" frequency="1" />
     <Next value="foute" frequency="1" />
-    <Next value="P" frequency="1" />
     <Next value="Pukkelpop" frequency="1" />
     <Next value="Santos" frequency="1" />
     <Next value="Spanje" frequency="1" />
@@ -163719,15 +163627,12 @@
     <Next value="uit" frequency="2" />
     <Next value="verschil" frequency="1" />
     <Next value="vanzelf" frequency="1" />
-    <Next value="B" frequency="1" />
-    <Next value="Z" frequency="1" />
     <Next value="zo" frequency="1" />
     <Next value="op" frequency="1" />
     <Next value="die" frequency="1" />
     <Next value="per" frequency="1" />
     <Next value="natuurlijk" frequency="1" />
     <Next value="te" frequency="1" />
-    <Next value="M" frequency="1" />
     <Next value="Griekenland" frequency="1" />
     <Next value="wel" frequency="1" />
   </Word>
@@ -165763,7 +165668,6 @@
     <Next value="nog" frequency="1" />
     <Next value="laat" frequency="1" />
     <Next value="laten" frequency="1" />
-    <Next value="B" frequency="1" />
     <Next value="slecht" frequency="1" />
     <Next value="sommige" frequency="1" />
     <Next value="soms" frequency="1" />
@@ -170544,16 +170448,6 @@
   </Word>
   <Word value="Lyubov" frequency="3">
     <Next value="Orlova" frequency="1" />
-  </Word>
-  <Word value="M" frequency="10">
-    <Next value="in" frequency="2" />
-    <Next value="is" frequency="1" />
-    <Next value="van" frequency="1" />
-    <Next value="mocht" frequency="1" />
-    <Next value="code" frequency="1" />
-    <Next value="staat" frequency="1" />
-    <Next value="tot" frequency="1" />
-    <Next value="of" frequency="1" />
   </Word>
   <Word value="ma" frequency="5">
     <Next value="en" frequency="2" />
@@ -177210,7 +177104,6 @@
     <Next value="gifgas" frequency="1" />
     <Next value="gevochten" frequency="1" />
     <Next value="geld" frequency="1" />
-    <Next value="M" frequency="1" />
     <Next value="jij" frequency="1" />
     <Next value="joggen" frequency="1" />
     <Next value="paus" frequency="1" />
@@ -181957,7 +181850,6 @@
     <Next value="het" frequency="1" />
     <Next value="in" frequency="1" />
     <Next value="waarin" frequency="1" />
-    <Next value="x" frequency="1" />
     <Next value="Habonimana" frequency="1" />
   </Word>
   <Word value="Mexicaanse" frequency="5">
@@ -191252,7 +191144,6 @@
     <Next value="aan" frequency="4" />
     <Next value="werd" frequency="3" />
     <Next value="was" frequency="3" />
-    <Next value="M" frequency="3" />
     <Next value="met" frequency="3" />
     <Next value="een" frequency="3" />
     <Next value="kreeg" frequency="3" />
@@ -191997,10 +191888,6 @@
   </Word>
   <Word value="mystery" frequency="3">
     <Next value="shoppers" frequency="1" />
-  </Word>
-  <Word value="n" frequency="3">
-    <Next value="g" frequency="1" />
-    <Next value="was" frequency="1" />
   </Word>
   <Word value="na" frequency="709">
     <Next value="de" frequency="37" />
@@ -216734,12 +216621,6 @@
     <Next value="brak" frequency="1" />
     <Next value="moet" frequency="1" />
   </Word>
-  <Word value="P" frequency="4">
-    <Next value="een" frequency="1" />
-    <Next value="al" frequency="1" />
-    <Next value="schreef" frequency="1" />
-    <Next value="het" frequency="1" />
-  </Word>
   <Word value="pa" frequency="5">
     <Next value="moeten" frequency="1" />
     <Next value="schrikken" frequency="1" />
@@ -218726,7 +218607,6 @@
   </Word>
   <Word value="parking" frequency="22">
     <Next value="van" frequency="3" />
-    <Next value="C" frequency="2" />
     <Next value="laten" frequency="2" />
     <Next value="was" frequency="1" />
     <Next value="kwam" frequency="1" />
@@ -224696,8 +224576,6 @@
     <Next value="blijft" frequency="4" />
     <Next value="ook" frequency="4" />
     <Next value="eindigde" frequency="4" />
-    <Next value="x" frequency="4" />
-    <Next value="B" frequency="4" />
     <Next value="als" frequency="3" />
     <Next value="volgend" frequency="3" />
     <Next value="wel" frequency="3" />
@@ -231272,7 +231150,6 @@
     <Next value="of" frequency="1" />
     <Next value="ook" frequency="1" />
     <Next value="Brugge" frequency="1" />
-    <Next value="K" frequency="1" />
     <Next value="sinds" frequency="1" />
     <Next value="Standard" frequency="1" />
   </Word>
@@ -231644,11 +231521,6 @@
     <Next value="vrouwen" frequency="1" />
     <Next value="voor" frequency="1" />
     <Next value="is" frequency="1" />
-  </Word>
-  <Word value="r" frequency="3">
-    <Next value="zelf" frequency="1" />
-    <Next value="tijd" frequency="1" />
-    <Next value="alleen" frequency="1" />
   </Word>
   <Word value="raad" frequency="116">
     <Next value="van" frequency="10" />
@@ -280897,7 +280769,6 @@
     <Next value="betogingen" frequency="3" />
     <Next value="begin" frequency="3" />
     <Next value="bijna" frequency="3" />
-    <Next value="Z" frequency="3" />
     <Next value="plots" frequency="3" />
     <Next value="deze" frequency="2" />
     <Next value="eerder" frequency="2" />
@@ -289303,7 +289174,6 @@
   <Word value="vak" frequency="37">
     <Next value="in" frequency="4" />
     <Next value="van" frequency="3" />
-    <Next value="Z" frequency="3" />
     <Next value="ik" frequency="2" />
     <Next value="dat" frequency="2" />
     <Next value="op" frequency="2" />
@@ -297166,7 +297036,6 @@
     <Next value="een" frequency="2" />
     <Next value="in" frequency="2" />
     <Next value="ze" frequency="2" />
-    <Next value="g" frequency="1" />
     <Next value="er" frequency="1" />
     <Next value="voor" frequency="1" />
     <Next value="heel" frequency="1" />
@@ -305584,8 +305453,6 @@
     <Next value="doet" frequency="1" />
   </Word>
   <Word value="vitamine" frequency="16">
-    <Next value="D" frequency="3" />
-    <Next value="C" frequency="2" />
     <Next value="eet" frequency="1" />
     <Next value="en" frequency="1" />
     <Next value="die" frequency="1" />
@@ -321070,7 +320937,6 @@
     <Next value="in" frequency="1" />
     <Next value="is" frequency="1" />
     <Next value="groene" frequency="1" />
-    <Next value="Z" frequency="1" />
   </Word>
   <Word value="Warande" frequency="5">
     <Next value="in" frequency="2" />
@@ -334187,7 +334053,6 @@
     <Next value="sinds" frequency="2" />
     <Next value="lijkt" frequency="2" />
     <Next value="blijft" frequency="2" />
-    <Next value="x" frequency="2" />
     <Next value="werd" frequency="1" />
     <Next value="wordt" frequency="1" />
     <Next value="warmer" frequency="1" />
@@ -337133,21 +336998,6 @@
     <Next value="voerde" frequency="1" />
     <Next value="zet" frequency="1" />
   </Word>
-  <Word value="x" frequency="37">
-    <Next value="meter" frequency="4" />
-    <Next value="de" frequency="3" />
-    <Next value="in" frequency="2" />
-    <Next value="Bolt" frequency="2" />
-    <Next value="games" frequency="2" />
-    <Next value="Dylan" frequency="1" />
-    <Next value="die" frequency="1" />
-    <Next value="drie" frequency="1" />
-    <Next value="dat" frequency="1" />
-    <Next value="het" frequency="1" />
-    <Next value="is" frequency="1" />
-    <Next value="of" frequency="1" />
-    <Next value="vanaf" frequency="1" />
-  </Word>
   <Word value="xander" frequency="3">
     <Next value="Cottens" frequency="1" />
   </Word>
@@ -337530,18 +337380,6 @@
     <Next value="werd" frequency="1" />
     <Next value="speelde" frequency="1" />
     <Next value="in" frequency="1" />
-  </Word>
-  <Word value="Z" frequency="10">
-    <Next value="volgende" frequency="1" />
-    <Next value="verneem" frequency="1" />
-    <Next value="de" frequency="1" />
-    <Next value="daarvoor" frequency="1" />
-    <Next value="daar" frequency="1" />
-    <Next value="was" frequency="1" />
-    <Next value="wil" frequency="1" />
-    <Next value="waarover" frequency="1" />
-    <Next value="kregen" frequency="1" />
-    <Next value="is" frequency="1" />
   </Word>
   <Word value="zaad" frequency="10">
     <Next value="van" frequency="2" />
