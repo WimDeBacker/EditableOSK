@@ -9,5 +9,6 @@ worddb_EN.xml
 # Visual Studio: caches and personal settings, recreated by the IDE.
 .vs/
 
-# Private font archive (not ours to publish): once pushed by mistake.
+# The downloaded archive of the SchoolKX_New font family: not needed in the repo. The one font file the program uses is in
+# installer/fonts (see installer/fonts/NOTICE.md for its source and terms).
 schoolkxnew.zip

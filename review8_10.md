@@ -534,6 +534,13 @@ bool shift = _heldMods.Any(v => ModBit(v) == 4);
 
 ## Fix 13: font redistribution in the installer (installer/setup.iss, .gitignore)
 
+**Status: decided** (2026-10-09), as "redistribution is allowed", on the owner's pointer to https://github.com/kostex/SchoolKX_New. Its README has informal terms and no licence file: do whatever you want with
+the fonts, except claim them as yours; commercial use is free, with a request to get in touch or show the product and to refer to the project site;
+redistribution and bundling in an installer are not mentioned separately. Done: `.gitignore` no longer says "private, not ours to publish"
+(the zip is only the downloaded archive), `installer/fonts/NOTICE.md` names the author, source and terms, and `README.md` has a credits line. Checked:
+the font's family name is `SchoolKX_New`, equal to `FontInstall` in `setup.iss`. Not done: asking the author for a formal licence (the README
+invites contact); the installer test on a clean machine.
+
 This is a decision, not a code change. The licence of SchoolKX / SchoolKX_New is not something I can see.
 
 - If redistribution is allowed: remove the "private, not ours to publish" wording from `.gitignore` (it contradicts the

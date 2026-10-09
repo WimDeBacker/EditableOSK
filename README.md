@@ -2,6 +2,9 @@
 
 A configurable on-screen keyboard for Windows, driven by XML layout files.
 
+**Credits / Dankwoord:** the coloured school layout uses the font *SchoolKX_New* by kostex, <https://github.com/kostex/SchoolKX_New>
+(free to use, not to be claimed as one's own; see `installer/fonts/NOTICE.md`).
+
 ---
 
 ## Security — Layout files and the `Send` field
