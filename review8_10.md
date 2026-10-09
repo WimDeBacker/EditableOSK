@@ -87,3 +87,406 @@ Ranked most severe first.
 Not reported (checked and found fine): UndoHistory ordering and cap, the `ShowCornerLabels` default in old files,
 `SaveIfDirty` dirty-flag ordering, the ConvertWordDb header checks, `Accel` parsing of `&&`, `DrawSelectionRing` colour
 comparison (named colours only).
+
+---
+
+# Suggested fixes
+
+Nothing below was built or run; the snippets are written against the code as read and need a build and the usual test
+runs (CLAUDE.md: filtered run while iterating, full suite before a commit). Each fix names the test to add. Strings
+that are new go in `LanguageManager.cs` and `lang_nl.xml`.
+
+Suggested order: 2, 8, 1, 6 (data loss or wrong data) -> 3, 4, 12, 14 (wrong behaviour) -> 5, 9, 10, 11 -> 7 -> 13 (a
+decision for the owner).
+
+## Fix 1: layer 0 key sequence is rewritten lossy (KeyEditorForm.BuildSend)
+
+Treat layer 0 like layers 1 and 2: while the value box is untouched, return what was stored.
+
+```csharp
+case SendMode.KeySequence:
+    if (!_layerTouched[0] && _origSend[0] != null) return _origSend[0];   // the readable form is lossy: keep the stored one
+    return FromHuman(text);
+```
+
+- Check first that `_origSend[0]` is filled where `_origSend[1..2]` are (it is probably only used for the shifted layers)
+  and that typing in `_values[0]` sets `_layerTouched[0]` (it must, or an edit is lost). `CompleteRecording` already sets it.
+- The same must hold when the mode is switched away and back: a mode change should also set `_layerTouched[0]`.
+- Better root fix, if wanted later: make `ToHuman` / `FromHuman` round-trip parentheses (`{Ctrl}(ab)`), then the guard
+  is only a safety net.
+- Test: a key with Send `^(ab)` -> open editor, Apply with no edit -> `Send == "^(ab)"`. Same after editing the label only.
+
+## Fix 2: AutoSave overwrites good files with an invalid layout (KeyboardForm.AutoSave)
+
+Keep `allowInvalid: true` (so the work is not lost), but never onto the named file or the default file. Write an invalid
+layout to a recovery file next to it.
+
+```csharp
+private void AutoSave()
+{
+    string path  = _currentFilePath ?? SettingsManager.DefaultPath;
+    bool   valid = _layout.IsValid();
+    try
+    {
+        if (valid)
+        {
+            _meta.LastFile = path;
+            SettingsManager.SaveSettings(_layout, _theme, _window, _meta, path);
+            if (path != SettingsManager.DefaultPath)
+                SettingsManager.SaveSettings(_layout, _theme, _window, _meta, SettingsManager.DefaultPath);
+        }
+        else
+        {
+            // Never replace a good file by one LoadSettings will reject: keep the work in a recovery file.
+            SettingsManager.SaveSettings(_layout, _theme, _window, _meta, path + ".recovery", allowInvalid: true);
+        }
+    }
+    catch { }
+}
+```
+
+- On a normal successful autosave delete `path + ".recovery"` so it never goes stale.
+- Optional: at startup, if a `.recovery` file is newer than the file, offer to open it (one extra string).
+- Do not change `_meta.LastFile` for the invalid case: it would point the next start at a file that does not load.
+- Test (in the SettingsManager tests): invalid layout -> AutoSave -> original file unchanged, `.recovery` exists.
+
+## Fix 3: recorded Win shortcuts that cannot be sent (SendKeysHelper.WinKeyPayloadToVk)
+
+Teach the sender every payload the recorder can produce. The recorder writes `" "` for Space, `{BACKSPACE}`, `{INSERT}`,
+`{PRTSC}`, `{BREAK}`, `{CAPSLOCK}`, `{NUMLOCK}`, `{SCROLLLOCK}`, `{NUMPAD0..9}`, and `{XX}` (two hex digits) for any other key.
+
+```csharp
+// before the {KEY} handling in WinKeyPayloadToVk:
+if (key == " ") return 0x20;                 // Space is a literal space in the recorder's output
+if (key == "+") return 0xBB;                 // VK_OEM_PLUS: "win:+" is Win and the plus key (Magnifier)
+
+// in the switch: add
+"BACKSPACE" => 0x08, "INSERT" => 0x2D, "PRTSC" => 0x2C, "BREAK" => 0x13,
+"CAPSLOCK" => 0x14, "NUMLOCK" => 0x90, "SCROLLLOCK" => 0x91,
+"NUMPAD0" => 0x60, ... "NUMPAD9" => 0x69,    // or: k.StartsWith("NUMPAD") && int.TryParse(...)
+
+// default branch (replace "_ => 0"): the recorder's {hex} fallback, e.g. {BE} = Win+. and {BC} = Win+,
+_ when k.Length == 2 && byte.TryParse(k, System.Globalization.NumberStyles.AllowHexSpecifier,
+                                      System.Globalization.CultureInfo.InvariantCulture, out byte hex) => hex,
+_ => 0,
+```
+
+- The F1-F12 cases are matched by the switch before the hex default, so `{F1}` is never read as 0xF1.
+- Make `WinKeyPayloadToVk` `internal` and add a round-trip test: for every vk the recorder offers (all of
+  `VkCodeToSendKeys`'s outputs, with `win:` in front) `WinKeyPayloadToVk(payload) != 0`. This keeps the two tables in step.
+- Also fix the comment at line 682: with the `+` case above it is true. Keep it, and add a test for `win:+` and `win:^`
+  (`^` has no virtual key of its own; if wanted, `0xDC`/layout dependent, so leave it unsupported and let the recorder
+  refuse it).
+- In `CompleteRecording`, when `win` is set and the payload maps to 0, show a hint ("This key cannot be combined with
+  Win") instead of storing a key that does nothing.
+
+## Fix 4: wizard modifier keys have a non-empty Send (WizardKeyParser)
+
+The stock layouts use `Send=""` for Ctrl, Alt, Win and AltGr (the engine recognises them by label). Only Caps keeps
+`{CAPSLOCK}`.
+
+```csharp
+["ctrl"]     = ("",           "Ctrl", "Ctrl"),
+["control"]  = ("",           "Ctrl", "Ctrl"),
+["alt"]      = ("",           "Alt",  "Alt"),
+["win"]      = ("",           "Win",  "Win"),
+["windows"]  = ("",           "Win",  "Win"),
+```
+
+- Fix the comment above the table: "Shift, Ctrl, Alt, Win and AltGr send nothing themselves; Caps sends {CAPSLOCK}".
+- Update `WizardTests` (around line 67): assert `Send == ""` for those tokens, and add: the key the wizard makes opens in
+  `KeyEditorForm` as `SendMode.Modifier` (via `DetectSendMode`).
+- Check `KeyboardForm` for any place that reads `Send == "^"` / `"%"` / `"win:"` from a modifier cell (grep `"win:"`),
+  in case the wizard output relied on it.
+
+## Fix 5: font warning dialog (KeyboardForm.WarnIfFontsMissing)
+
+Give the box an owner, never show it before the form is visible, and show it once per file.
+
+```csharp
+private readonly HashSet<string> _fontWarnedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+private void WarnIfFontsMissing(VisualTheme theme, GridLayout layout, bool fromLayoutKey = false)
+{
+    var missing = GetMissingFonts(theme, layout);
+    if (missing.Count == 0) return;
+    string key = _currentFilePath ?? "";
+    if (fromLayoutKey || !_fontWarnedFiles.Add(key)) return;          // once per file, not on every layout: switch
+
+    void Show() => MessageBox.Show(this,
+        string.Format(Lang.T("font missing msg"), string.Join(", ", missing)),
+        Lang.T("font missing title"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+
+    if (IsHandleCreated && Visible) Show();
+    else Shown += (s, e) => BeginInvoke((Action)Show);                 // startup: after the window is up
+}
+```
+
+- `ApplyLoadedSettings` is shared by the open dialog and the `layout:` key; give it a `fromLayoutKey` parameter (or a
+  field) so only a user-chosen open warns. A layout key press shows nothing (the font substitution is the same as
+  before).
+- `this` as owner is enough to keep the box in front of the always-on-top window; `TouchMessage` would match the new
+  dialogs better but is a larger change.
+- Test: `GetMissingFonts` already has one. Add: the warn path is called twice for the same file -> one call (inject the
+  `Show` as a delegate field so the test does not open a modal box).
+
+## Fix 6: queued recordings overwrite each other (KeyEditorForm hook)
+
+The low-level hook callback runs on the UI thread, so a plain flag is enough.
+
+```csharp
+private bool _recordPending;                         // a key was captured, CompleteRecording is queued
+
+// StartRecording and StopRecording: _recordPending = false;
+
+// in LowLevelHookCallback, replacing the last lines:
+if (_recordPending) return (IntPtr)1;                // second key or auto-repeat: swallow, record nothing
+_recordPending = true;
+...
+BeginInvoke((Action)(() => CompleteRecording(layer, vk, ctrl, alt, shift, win)));
+return (IntPtr)1;
+```
+
+- Do not put the guard inside `CompleteRecording` itself: the tests call it directly without a running recording.
+  If a guard there is wanted, use `if (!_recording && !_testing) return;`, but the flag above is enough.
+- Because `StopRecording` can also run from the stop button or on leaving the window while a `BeginInvoke` is queued,
+  have the queued lambda check `if (!_recording) return;` (the lambda, not `CompleteRecording`).
+- Test: call the callback path twice before the queue is pumped (extract `OnHookKey(vk, ...)` as internal so a test can
+  drive it) -> one recording, the first key.
+
+## Fix 7: error log without a cap, and Environment.Exit (Program.cs)
+
+```csharp
+private const long MaxLogBytes = 256 * 1024;
+private static string _lastError; private static DateTime _lastErrorAt;
+
+private static void LogError(string where, Exception ex)
+{
+    try
+    {
+        string text = $"[{where}] {ex}";
+        // The same error again within a few seconds (a paint handler that throws on every repaint): count it, do not log it.
+        if (text == _lastError && (DateTime.Now - _lastErrorAt).TotalSeconds < 5) return;
+        _lastError = text; _lastErrorAt = DateTime.Now;
+
+        string file = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "OnScreenKeyboard_error.log");
+        if (System.IO.File.Exists(file) && new System.IO.FileInfo(file).Length > MaxLogBytes)
+            System.IO.File.Move(file, file + ".old", overwrite: true);      // keep one generation
+        System.IO.File.AppendAllText(file, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {text}{Environment.NewLine}{Environment.NewLine}");
+    }
+    catch { }
+}
+```
+
+- `Environment.Exit(0)`: keep it (the comment explains why), but make sure everything that must be flushed is flushed
+  before it. With Fix 8 `WordDatabase.SaveNow` waits for a running background write, so the only thing that can be cut
+  off is gone. Optionally call `WordDatabase.SaveNow()` once more right before the `Exit` (cheap when not dirty).
+- Make `LogError` `internal` so `FormClosing`'s `catch { }` around `SaveNow` can log through it instead of hiding the error.
+
+## Fix 8: SaveNow races with the background save; Load clears the dirty flag too late (WordDatabase)
+
+One lock for every write of the overlay file:
+
+```csharp
+private static readonly object _writeLock = new object();
+
+public static void SaveNow()
+{
+    var snap = _snapshot;
+    if (!_isLoaded || snap.OverlayPath == null) return;
+    _dirty = false;                                   // before the copy, as SaveIfDirty does
+    SaveData data;
+    try   { data = BuildSaveData(snap); }
+    catch { _dirty = true; throw; }
+    try
+    {
+        lock (_writeLock) WriteSaveData(data, snap.OverlayPath);   // waits for a background write, and writes the newer data after it
+    }
+    catch { _dirty = true; throw; }
+}
+
+// SaveIfDirty, in the Task.Run body:
+try   { lock (_writeLock) WriteSaveData(data, path); }
+```
+
+- `SaveNow` builds its data after the background copy was taken, so when it gets the lock second, the newer data wins.
+- Load: publish after clearing, so a `RecordWord` right after the publish is not lost:
+
+```csharp
+_dirty = false;                // the previous file's changes are not ours any more
+_snapshot = snap;              // publish; any RecordWord from here on sets _dirty again
+LoadError = null;
+```
+
+- Also write the file atomically (`path + ".tmp"` then `File.Replace`/`Move(overwrite)`) inside `WriteSaveData`, if it does
+  not already; a crash mid-write then cannot truncate the learned words.
+- Test: start `SaveIfDirty` with a slow writer (inject a delay hook), call `SaveNow` -> no exception, final file holds
+  the later data.
+
+## Fix 9: renaming or deleting a group leaves keys pointing at it (GroupEditorForm)
+
+The dialog edits a copy (`_groups`), so the keys must be fixed by whoever applies the result. Track by group object, not
+by name:
+
+```csharp
+private readonly Dictionary<KeyGroup, string> _origName = new Dictionary<KeyGroup, string>();   // filled when the list is loaded
+
+/// <summary>Old name -> new name for renamed groups, and the names of deleted groups; valid after OK.</summary>
+internal Dictionary<string, string> Renames { get; private set; }
+internal HashSet<string>            Deleted { get; private set; }
+
+private void ComputeChanges()
+{
+    Renames = _groups.Where(g => _origName.TryGetValue(g, out var o) && o != g.Name).ToDictionary(g => _origName[g], g => g.Name);
+    Deleted = new HashSet<string>(_origName.Where(kv => !_groups.Contains(kv.Key)).Select(kv => kv.Value));
+}
+```
+
+- Call `ComputeChanges()` when the dialog closes with OK (after the last `CommitCurrent()`).
+- In the caller (`KeyboardForm`/`KeyboardEditorForm`, where the edited groups are copied back), do **one** pass over the
+  cells so a swap (A -> B, B -> A) works:
+
+```csharp
+foreach (var c in _layout.Cells)
+{
+    string n = c.Props.GroupName;
+    if (n != null && dlg.Renames.TryGetValue(n, out var nn)) c.Props.GroupName = nn;
+    else if (n != null && dlg.Deleted.Contains(n))           c.Props.GroupName = SettingsManager.StandardGroupName;   // or "": whatever "ungrouped" is in FindGroup
+}
+```
+
+- A group that is deleted and re-added under the same name in one session has the same `Name`, but is a new object, so
+  it lands in `Deleted` and the keys are reset. If that is not wanted, only list a name in `Deleted` when no remaining
+  group has that name.
+- Imported `Overwrite` keeps the local name (see `ApplyImportDecisions`), so it needs nothing.
+- Test: rename "Nav" -> "Arrows" with two keys in it -> both keys read "Arrows"; delete "Nav" -> keys read standard;
+  swap two names -> keys follow.
+
+## Fix 10: duplicate group names inside one import file (ImportDialog and ApplyImportDecisions)
+
+Both places: treat a name already seen in the file as a conflict, and make `Add` safe by itself.
+
+```csharp
+// ImportDialog constructor, before the loop:
+var seenInFile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+// in the loop:
+bool dupInFile = !std && !seenInFile.Add(g.Name);
+bool conflict  = !std && (existing.Contains(g.Name) || dupInFile);
+// anyConflict at the top must use the same rule.
+
+// GroupEditorForm.ApplyImportDecisions, case Add:
+var clone = group.Clone();
+clone.Name = GetUniqueName(group.Name, usedNames);      // safe even if the dialog did not flag it
+_groups.Add(clone);
+usedNames.Add(clone.Name);
+```
+
+- With the dialog change a duplicate shows "Conflict" with Overwrite / Add as new / Skip, default Skip. Overwrite of a
+  group added earlier in the same batch overwrites that one; if that is confusing, offer only "Add as new" and "Skip" for
+  `dupInFile` (`defaultIdx` 0 = Add as new, since both groups probably matter to the user).
+- Test: file with two groups "Fun" and an existing "Fun" -> 3 rows; apply with Add-as-new for both -> "Fun", "Fun 2", "Fun 3".
+
+## Fix 11: TouchStepper skips BeforeChange for paste, undo, drop (TouchControls)
+
+Gate the edit-control messages instead of listing keys. A small subclass of `TextBox` for the value box:
+
+```csharp
+private sealed class GatedTextBox : TextBox
+{
+    public Func<bool> Gate;                       // false: refuse the edit
+    protected override void WndProc(ref Message m)
+    {
+        const int WM_CUT = 0x300, WM_PASTE = 0x302, WM_CLEAR = 0x303, WM_UNDO = 0x304, EM_UNDO = 0xC7;
+        if ((m.Msg == WM_CUT || m.Msg == WM_PASTE || m.Msg == WM_CLEAR || m.Msg == WM_UNDO || m.Msg == EM_UNDO)
+            && Gate != null && !Gate())
+            return;                               // the context menu, Shift+Insert, Ctrl+Z and the like all end up here
+        base.WndProc(ref m);
+    }
+}
+```
+
+- Set `AllowDrop = false` on the box (drag and drop of text then does nothing), and in `KeyDown` add Shift+Insert,
+  Shift+Delete, Ctrl+Z and Ctrl+Y to the `edits` list as a first line of defence (they would otherwise ask twice if both
+  paths ask; the WndProc gate is the one that must hold, so drop the key-list entries for V and X if the gate asks).
+- Ask only once per action: `Allowed()` can open a window. Keep a short `_askedAt` tick count (or a flag cleared on
+  `KeyUp`/`MouseUp`) so a paste that arrives as WM_PASTE after KeyDown asked does not ask again.
+- Second part (typed value below Minimum is not reported): the model keeps the last valid value while the box shows the
+  half-typed one until Leave. Add `internal void Commit() => SyncText();` and call it from `FluentDialogBase` before OK is
+  accepted (`ValidateChildren()` plus `Validating += (s, e) => SyncText()` on the box), so Apply never reads a value the
+  user does not see. Do not clamp while typing: "1" on the way to "15" with Minimum 8 must stay possible.
+- Test (UI guard style): context-menu paste with `BeforeChange` returning false -> value unchanged; same with
+  `SendMessage(WM_PASTE)`.
+
+## Fix 12: recorder reads Ctrl, Alt and Shift from the async key state (KeyEditorForm hook)
+
+`GetAsyncKeyState` and `Control.ModifierKeys` are not reliable inside a low-level hook: the state is updated after the
+hook returns. Track the modifiers from the hook's own events, as is done for Win:
+
+```csharp
+private int _modMask;                              // 1 = Ctrl, 2 = Alt, 4 = Shift, per physical key so left and right release separately
+private readonly HashSet<uint> _heldMods = new HashSet<uint>();
+
+private static int ModBit(uint vk) =>
+    vk is 0x11 or 0xA2 or 0xA3 ? 1 : vk is 0x12 or 0xA4 or 0xA5 ? 2 : vk is 0x10 or 0xA0 or 0xA1 ? 4 : 0;
+
+// in LowLevelHookCallback, before the switch (modifier keys always pass through):
+if (ModBit(kbd.vkCode) != 0)
+{
+    if (isDown) _heldMods.Add(kbd.vkCode); else if (isUp) _heldMods.Remove(kbd.vkCode);
+    return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+}
+bool ctrl  = _heldMods.Any(v => ModBit(v) == 1);
+bool alt   = _heldMods.Any(v => ModBit(v) == 2);
+bool shift = _heldMods.Any(v => ModBit(v) == 4);
+```
+
+- Seed `_heldMods` in `StartRecording` from `GetAsyncKeyState` (outside the hook it is accurate) so keys already held
+  when the user clicks Record count; clear it in `StopRecording`.
+- Windows sends the generic vk (0x11) or the left/right vk (0xA2/0xA3) depending on the source; the sets above handle both.
+  Alt arrives as WM_SYSKEYDOWN: `isDown` already covers it.
+- `ClassifyHookKey` can stay as it is (it is pure and tested); the new block runs before it.
+- Test: feed the extracted `OnHookKey` the sequence Ctrl-down, C-down -> recorded `^c`; Ctrl-up then C -> `c`.
+
+## Fix 13: font redistribution in the installer (installer/setup.iss, .gitignore)
+
+This is a decision, not a code change. The licence of SchoolKX / SchoolKX_New is not something I can see.
+
+- If redistribution is allowed: remove the "private, not ours to publish" wording from `.gitignore` (it contradicts the
+  repo), and add a `LICENSE`/readme line next to `installer/fonts` naming the licence.
+- If it is not allowed: `git rm installer/fonts/SchoolKX_new.ttf installer/fonts/SKXnew.inf`, delete the `[Files]` font
+  line, and let `azertycolor.kbl` fall back (the missing-font warning of Fix 5 then names the font). The file stays in
+  git history; if that matters, a history rewrite is a separate, explicit decision.
+- Check the registered name either way. From PowerShell:
+  `Add-Type -AssemblyName PresentationCore; (New-Object Windows.Media.GlyphTypeface (Resolve-Path installer\fonts\SchoolKX_new.ttf)).Win32FamilyNames.Values`
+  The result must equal the `FontInstall:` value (`SchoolKX_New`) and the `FontName` in `azertycolor.kbl`. The
+  `FontInstall` value is the name shown in the Fonts list, which should match the family name.
+- After an install test on a clean machine, run the app with the layout and confirm `Fluent.IsFontAvailable("SchoolKX_New")`.
+
+## Fix 14: Caps with sticky modifiers (ModifierLatch, KeyboardForm.ToggleModifier)
+
+Correction to finding 14 after reading `ClearModifiers`: with `StickyModifiers = false` Caps does still act as a lock,
+because `ClearModifiers` skips it by label (Off <-> Latched, never cleared by a key). The real defect is with
+`StickyModifiers = true`: Caps goes Off -> Latched -> Locked -> Off, so it takes three taps, and the first tap looks
+the same as the second (a Latched Caps is never cleared).
+
+Make "lock only" part of the rule instead of a label test in two places:
+
+```csharp
+// ModifierLatch
+public static ModifierState Toggle(ModifierState current, bool sticky, bool lockOnly = false)
+{
+    if (lockOnly)                                   // Caps: like the Caps Lock key, one tap on, one tap off
+        return current == ModifierState.Off ? ModifierState.Locked : ModifierState.Off;
+    ...unchanged...
+}
+
+// KeyboardForm.ToggleModifier
+var next = ModifierLatch.Toggle(StateOf(cell), _meta.StickyModifiers, lockOnly: cell.Props.Label == "Caps");
+
+// ClearModifiers: the label test is no longer needed, a Locked key stays through AfterKey
+_latchedMods.RemoveWhere(c => ModifierLatch.AfterKey(StateOf(c)) == ModifierState.Off);
+```
+
+- Update the tooltip text of the Sticky modifiers option if it mentions Caps, and the `ModifierLatch.cs` header comment.
+- Tests in `StickyModifierTests`: Caps with sticky on and off -> Off, Locked, Off; `AfterKey(Locked)` stays Locked;
+  Shift/Ctrl unchanged (the existing cases).
