@@ -38,6 +38,11 @@ namespace OnScreenKeyboard
         public Func<int>    WordCount      = () => WordDatabase.WordCount;
         public Func<string, string> OverlayPath = p => WordDatabase.GetOverlayPath(p);
         public Func<string, bool>   FileExists  = p => File.Exists(p);
+        public Func<bool>           IsLoading   = () => WordDatabase.IsLoading;
+        /// <summary>Adds the learned words of a file to those of the database (base file, its language, the file to import).</summary>
+        public Func<string, string, string, WordDatabase.LearnedImportResult> ImportLearned = (basePath, language, file) => WordDatabase.MergeLearned(basePath, language, file);
+        /// <summary>Loads the database again when it is the one in memory, so the imported words count at once (in the background: it can be large).</summary>
+        public Action<string> ReloadIfLoaded = basePath => { if (WordDatabase.IsLoadedFor(basePath)) System.Threading.Tasks.Task.Run(() => WordDatabase.Load(basePath)); };
     }
 
     /// <summary>
@@ -87,7 +92,7 @@ namespace OnScreenKeyboard
         private TouchCheckBox     _chkWPLearning;
         private TouchChoiceButton _cmbWPDatabase;
         private Label             _lblWPInfo, _lblExportHint, _lblImmediateHint;
-        private FluentButton      _btnWPExport, _btnWPPromote, _btnWPReject;
+        private FluentButton      _btnWPExport, _btnWPImport, _btnWPPromote, _btnWPReject;
         private TouchList         _lstWPCandidates;
         private Panel             _candidateFrame;
 
@@ -385,6 +390,11 @@ namespace OnScreenKeyboard
             SetTip(_btnWPExport, () => Lang.T("wp: tip export"));
             _btnWPExport.Click += (s, e) => ExportLearnedWords();
             AddWideRow(t, _btnWPExport);
+
+            _btnWPImport = MakeTouchButton(() => Lang.T("wp: Import…"));
+            SetTip(_btnWPImport, () => Lang.T("wp: tip import"));
+            _btnWPImport.Click += (s, e) => ImportLearnedWords();
+            AddWideRow(t, _btnWPImport);
             return t;
         }
 
@@ -592,6 +602,7 @@ namespace OnScreenKeyboard
             bool can = basePath != null && _backend.FileExists(_backend.OverlayPath(basePath));
             _btnWPExport.Enabled = can;
             _lblExportHint.Text = can ? "" : Lang.T("wp: nothing to export");
+            if (_btnWPImport != null) _btnWPImport.Enabled = basePath != null && !_backend.IsLoading();      // possible without anything learned yet
         }
 
         private void ExportLearnedWords()
@@ -608,6 +619,66 @@ namespace OnScreenKeyboard
             if (dlg.ShowDialog(this) != DialogResult.OK) return;
             try { File.Copy(overlay, dlg.FileName, overwrite: true); }
             catch (Exception ex) { TouchMessage.Info(this, Lang.T("wp: Word prediction"), $"{Lang.T("wp: Export failed")}\n{ex.Message}"); }
+        }
+
+        // ── Import of learned words ──────────────────────────────────
+
+        /// <summary>For the tests: answers the confirmation / shows the message instead of a window.</summary>
+        internal Func<string, string, bool> ImportConfirm;
+        internal Action<string, string>     ImportNotice;
+
+        private void ImportLearnedWords()
+        {
+            if (SelectedOrAutoBasePath() == null) return;
+            using var dlg = new OpenFileDialog
+            {
+                Title = Lang.T("wp: Import learned words"), Filter = "Word database (*.wfq)|*.wfq|All files (*.*)|*.*",
+                DefaultExt = "wfq", CheckFileExists = true,
+            };
+            if (dlg.ShowDialog(this) != DialogResult.OK) return;
+            ImportLearnedWordsFrom(dlg.FileName);
+        }
+
+        /// <summary>
+        /// Merges the learned words of <paramref name="file"/> into those of the chosen database, after asking: counts are added together and
+        /// nothing learned here is lost (the old file stays as .bak). A file that is not learned words, is unreadable, empty, or of another
+        /// language changes nothing and says why.
+        /// </summary>
+        internal void ImportLearnedWordsFrom(string file)
+        {
+            string basePath = SelectedOrAutoBasePath();
+            if (basePath == null) return;
+            string title = Lang.T("wp: Import learned words");
+            string question = string.Format(Lang.T("wp: import confirm"), Path.GetFileName(file));
+            bool yes = ImportConfirm != null ? ImportConfirm(title, question) : TouchMessage.Confirm(this, title, question);
+            if (!yes) return;
+
+            string language = _backend.Databases().FirstOrDefault(d => string.Equals(d.FilePath, basePath, StringComparison.OrdinalIgnoreCase))?.Language;
+            var result = _backend.ImportLearned(basePath, language, file);
+            if (!result.Ok)
+            {
+                string reason = result.Error switch
+                {
+                    "notOverlay"    => Lang.T("wp: import not valid"),
+                    "empty"         => Lang.T("wp: import empty"),
+                    "corrupt"       => Lang.T("wp: import corrupt"),
+                    "missing"       => Lang.T("wp: import missing"),
+                    "loading"       => Lang.T("wp: import loading"),
+                    "targetCorrupt" => Lang.T("wp: import target corrupt"),
+                    "language"      => string.Format(Lang.T("wp: import wrong language"), result.Detail, language ?? "?"),
+                    _               => result.Detail ?? "",
+                };
+                ShowImportNotice(title, $"{Lang.T("wp: Import failed")}\n\n{reason}");
+                return;
+            }
+            _backend.ReloadIfLoaded(basePath);            // the words count at once; the info line and the candidates follow when the load is done
+            UpdateWPInfo(); PopulateCandidates();
+            ShowImportNotice(title, string.Format(Lang.T("wp: Import done"), result.Words, result.Pairs, result.Candidates));
+        }
+
+        private void ShowImportNotice(string title, string text)
+        {
+            if (ImportNotice != null) ImportNotice(title, text); else TouchMessage.Info(this, title, text);
         }
 
         // ── Candidates ──────────────────────────────────────────────

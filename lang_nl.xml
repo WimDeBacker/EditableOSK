@@ -356,6 +356,19 @@
   <String key="wp: Auto"                 value="(automatisch)" />
   <String key="wp: Export…"              value="Exporteren…" />
   <String key="wp: Export learned words" value="Geleerde woorden exporteren" />
+  <String key="wp: Import…"              value="Importeren…" />
+  <String key="wp: Import learned words" value="Geleerde woorden importeren" />
+  <String key="wp: tip import"           value="Voeg de geleerde woorden uit een bestand dat met Exporteren is gemaakt toe aan de woorden die op deze pc zijn geleerd. Er wordt niets verwijderd; de tellers worden opgeteld." />
+  <String key="wp: import confirm"       value="De geleerde woorden uit &quot;{0}&quot; toevoegen aan de woorden die op deze pc zijn geleerd? De tellers worden opgeteld. Het bestand zoals het nu is, blijft bewaard als back-up (.bak)." />
+  <String key="wp: Import done"          value="Toegevoegd: {0} woorden, {1} woordparen en {2} kandidaten." />
+  <String key="wp: Import failed"        value="Importeren is niet gelukt. Er is niets gewijzigd." />
+  <String key="wp: import not valid"     value="Dit is geen bestand met geleerde woorden (gemaakt met Exporteren)." />
+  <String key="wp: import empty"         value="Dit bestand bevat geen geleerde woorden." />
+  <String key="wp: import corrupt"       value="Het bestand kon niet worden gelezen." />
+  <String key="wp: import missing"       value="Het bestand is niet gevonden." />
+  <String key="wp: import loading"       value="De woordendatabase wordt nog geladen. Probeer het zo meteen opnieuw." />
+  <String key="wp: import wrong language" value="Deze woorden zijn geleerd voor de taal &quot;{0}&quot;, maar deze database is voor &quot;{1}&quot;." />
+  <String key="wp: import target corrupt" value="De geleerde woorden op deze pc konden niet worden gelezen, dus er is niets toegevoegd." />
   <String key="wp: words"                value="woorden" />
   <String key="wp: No database loaded"   value="Geen database geladen" />
   <String key="wp: Export failed"        value="Exporteren mislukt:" />

@@ -1189,7 +1189,7 @@ namespace OnScreenKeyboard
         /// temp-file-then-<see cref="File.Replace(string,string,string)"/>
         /// pattern as <c>SettingsManager</c>.
         /// </summary>
-        private static void WriteSaveData(SaveData data, string path)
+        private static void WriteSaveData(SaveData data, string path, string language = null)
         {
             string tmp = path + ".tmp";
             try
@@ -1200,6 +1200,9 @@ namespace OnScreenKeyboard
                     writer.WriteStartDocument();
                     writer.WriteStartElement("WordDatabaseOverlay");
                     writer.WriteAttributeString("version", "1");
+                    // The language of the database these words were learned on, so an import can refuse a file of another language.
+                    // Older files have none; a reader that does not know the attribute ignores it.
+                    if (!string.IsNullOrEmpty(language)) writer.WriteAttributeString("language", language);
 
                     writer.WriteStartElement("Candidates");
                     foreach (var (word, count) in data.candidates)
@@ -1294,7 +1297,7 @@ namespace OnScreenKeyboard
             try
             {
                 // Waits for a background write that is running (both use the same ".tmp" file), then writes the newer data after it.
-                lock (_writeLock) WriteSaveData(data, snap.OverlayPath);
+                lock (_writeLock) WriteSaveData(data, snap.OverlayPath, snap.Language);
             }
             catch { _dirty = true; throw; }
         }
@@ -1332,12 +1335,204 @@ namespace OnScreenKeyboard
             try   { data = BuildSaveData(snap); }
             catch { _dirty = true; _saving = false; throw; }
 
+            string language = snap.Language;
             System.Threading.Tasks.Task.Run(() =>
             {
-                try   { lock (_writeLock) WriteSaveData(data, path); }
+                try   { lock (_writeLock) WriteSaveData(data, path, language); }
                 catch { _dirty = true; /* best-effort — still unsaved, retried on the next cycle */ }
                 finally { _saving = false; }
             });
+        }
+
+        // ── Importing learned words: merging a file made with Export into this PC's ─────────────────
+
+        /// <summary>The outcome of <see cref="MergeLearned"/>: Ok, or the reason it did nothing, and how much the imported file held.</summary>
+        internal sealed class LearnedImportResult
+        {
+            public bool   Ok;
+            /// <summary>missing, notOverlay, corrupt, empty, language, loading, targetCorrupt or write; null when Ok.</summary>
+            public string Error;
+            /// <summary>The language of the file (for "language"), or the exception message (for "write").</summary>
+            public string Detail;
+            /// <summary>What the imported file held: words, word pairs, candidates.</summary>
+            public int Words, Pairs, Candidates;
+        }
+
+        /// <summary>True when the loaded database is the one <paramref name="basePath"/> names (its learned words are in memory).</summary>
+        internal static bool IsLoadedFor(string basePath) =>
+            _isLoaded && !string.IsNullOrEmpty(basePath) && !string.IsNullOrEmpty(_snapshot.OverlayPath)
+            && string.Equals(_snapshot.OverlayPath, DeriveOverlayPath(basePath), StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Adds the learned words of the file <paramref name="importPath"/> (made with Export, i.e. an overlay file) to the learned words of the
+        /// database <paramref name="basePath"/>: use counts of words and word pairs are added together, new words, new pairs and candidates are
+        /// taken over. Nothing that was learned here is removed. The overlay file of this PC is replaced through a temporary file and
+        /// kept as ".bak". Nothing is changed when the file is not an overlay, is unreadable, holds nothing, or was learned on a database of
+        /// another language (<paramref name="baseLanguage"/>; files from before the language was written have none and are accepted).
+        /// The caller loads the database again when <see cref="IsLoadedFor"/> says its words are in memory.
+        /// </summary>
+        internal static LearnedImportResult MergeLearned(string basePath, string baseLanguage, string importPath)
+        {
+            var r = new LearnedImportResult();
+            if (_isLoading) { r.Error = "loading"; return r; }
+            if (string.IsNullOrEmpty(importPath) || !File.Exists(importPath)) { r.Error = "missing"; return r; }
+
+            var imported = ReadOverlayFile(importPath, out string language, out string error);
+            if (error != null) { r.Error = error; return r; }
+            if (imported.personalUse.Count + imported.newWords.Count + imported.pairUse.Count + imported.newPair.Count + imported.candidates.Count == 0)
+            { r.Error = "empty"; return r; }
+            if (!string.IsNullOrEmpty(language) && !string.IsNullOrEmpty(baseLanguage) && !string.Equals(language, baseLanguage, StringComparison.OrdinalIgnoreCase))
+            { r.Error = "language"; r.Detail = language; return r; }
+
+            string overlay = DeriveOverlayPath(basePath);
+            try
+            {
+                if (IsLoadedFor(basePath)) SaveNow();               // what was learned since the last save goes into the file first
+                lock (_writeLock)
+                {
+                    SaveData current;
+                    if (File.Exists(overlay))
+                    {
+                        current = ReadOverlayFile(overlay, out _, out string e2);
+                        if (e2 != null) { r.Error = "targetCorrupt"; return r; }      // never write over a file that cannot be read
+                    }
+                    else
+                        current = new SaveData(new List<(string, int)>(), new List<(string, int, int, List<(string, int, int)>)>(),
+                                               new List<(string, string, int)>(), new List<(string, string, int, int)>(), new List<(string, int)>());
+                    WriteSaveData(MergeSaveData(current, imported), overlay, string.IsNullOrEmpty(baseLanguage) ? language : baseLanguage);
+                }
+            }
+            catch (Exception ex) { r.Error = "write"; r.Detail = ex.Message; return r; }
+
+            r.Ok = true;
+            r.Words      = imported.personalUse.Count + imported.newWords.Count;
+            r.Pairs      = imported.pairUse.Count + imported.newPair.Count + imported.newWords.Sum(w => w.next.Count);
+            r.Candidates = imported.candidates.Count;
+            return r;
+        }
+
+        /// <summary>Reads an overlay file into plain data. On a problem <paramref name="error"/> is "notOverlay" or "corrupt".</summary>
+        private static SaveData ReadOverlayFile(string path, out string language, out string error)
+        {
+            language = null; error = null;
+            var personalUse = new List<(string, int)>();
+            var newWords    = new List<(string, int, int, List<(string, int, int)>)>();
+            var pairUse     = new List<(string, string, int)>();
+            var newPair     = new List<(string, string, int, int)>();
+            var candidates  = new List<(string, int)>();
+            int Num(XmlReader rd, string name) { int.TryParse(rd.GetAttribute(name), out int n); return n; }
+            try
+            {
+                var settings = new XmlReaderSettings
+                {
+                    DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null,
+                    IgnoreWhitespace = true, IgnoreComments = true, IgnoreProcessingInstructions = true,
+                };
+                using var reader = XmlReader.Create(path, settings);
+                bool root = false;
+                List<(string, int, int)> currentNext = null;           // the <Next> children of the <NewWord> being read
+                while (reader.Read())
+                {
+                    if (reader.NodeType != XmlNodeType.Element) continue;
+                    if (!root)
+                    {
+                        if (reader.LocalName != "WordDatabaseOverlay") { error = "notOverlay"; return default; }
+                        root = true;
+                        language = reader.GetAttribute("language");
+                        continue;
+                    }
+                    switch (reader.LocalName)
+                    {
+                        case "Candidate":
+                        {
+                            currentNext = null;
+                            string v = reader.GetAttribute("value");
+                            if (!string.IsNullOrEmpty(v)) candidates.Add((v, Num(reader, "count")));
+                            break;
+                        }
+                        case "PersonalUse":
+                        {
+                            currentNext = null;
+                            string v = reader.GetAttribute("value");
+                            int c = Num(reader, "count");
+                            if (!string.IsNullOrEmpty(v) && c > 0) personalUse.Add((v, c));
+                            break;
+                        }
+                        case "NewWord":
+                        {
+                            string v = reader.GetAttribute("value");
+                            if (string.IsNullOrEmpty(v)) { currentNext = null; break; }
+                            currentNext = new List<(string, int, int)>();
+                            newWords.Add((v, Num(reader, "frequency"), Num(reader, "personalUse"), currentNext));
+                            break;
+                        }
+                        case "Next":
+                        {
+                            string v = reader.GetAttribute("value");
+                            if (currentNext != null && !string.IsNullOrEmpty(v)) currentNext.Add((v, Num(reader, "frequency"), Num(reader, "personalUse")));
+                            break;
+                        }
+                        case "PairUse":
+                        {
+                            currentNext = null;
+                            string w = reader.GetAttribute("word"), n = reader.GetAttribute("next");
+                            int c = Num(reader, "count");
+                            if (!string.IsNullOrEmpty(w) && !string.IsNullOrEmpty(n) && c > 0) pairUse.Add((w, n, c));
+                            break;
+                        }
+                        case "NewPair":
+                        {
+                            currentNext = null;
+                            string w = reader.GetAttribute("word"), n = reader.GetAttribute("next");
+                            if (!string.IsNullOrEmpty(w) && !string.IsNullOrEmpty(n)) newPair.Add((w, n, Num(reader, "frequency"), Num(reader, "personalUse")));
+                            break;
+                        }
+                    }
+                }
+                if (!root) { error = "notOverlay"; return default; }
+            }
+            catch (Exception) { error = "corrupt"; return default; }
+            return new SaveData(personalUse, newWords, pairUse, newPair, candidates);
+        }
+
+        /// <summary>
+        /// The learned data of <paramref name="a"/> (this PC) and <paramref name="b"/> (the imported file) together: counts and frequencies are
+        /// added, a word or pair only one of them has is kept, a word has at most <see cref="MaxNextWords"/> pairs (the strongest stay), and a
+        /// candidate that has become a word is no longer a candidate.
+        /// </summary>
+        private static SaveData MergeSaveData(SaveData a, SaveData b)
+        {
+            var use = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var (w, c) in a.personalUse.Concat(b.personalUse)) use[w] = use.TryGetValue(w, out int x) ? x + c : c;
+
+            var pairUse = new Dictionary<(string, string), int>();
+            foreach (var (w, n, c) in a.pairUse.Concat(b.pairUse)) pairUse[(w, n)] = pairUse.TryGetValue((w, n), out int x) ? x + c : c;
+
+            var newPair = new Dictionary<(string, string), (int f, int u)>();
+            foreach (var (w, n, f, u) in a.newPair.Concat(b.newPair))
+                newPair[(w, n)] = newPair.TryGetValue((w, n), out var x) ? (x.f + f, x.u + u) : (f, u);
+
+            var words = new Dictionary<string, (int f, int u, Dictionary<string, (int f, int u)> next)>(StringComparer.Ordinal);
+            foreach (var (w, f, u, next) in a.newWords.Concat(b.newWords))
+            {
+                if (!words.TryGetValue(w, out var cur)) { cur = (0, 0, new Dictionary<string, (int, int)>(StringComparer.Ordinal)); }
+                foreach (var (nw, nf, nu) in next)
+                    cur.next[nw] = cur.next.TryGetValue(nw, out var y) ? (y.f + nf, y.u + nu) : (nf, nu);
+                words[w] = (cur.f + f, cur.u + u, cur.next);
+            }
+
+            var candidates = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var (w, c) in a.candidates.Concat(b.candidates)) candidates[w] = candidates.TryGetValue(w, out int x) ? x + c : c;
+            foreach (var w in words.Keys) candidates.Remove(w);
+
+            return new SaveData(
+                use.Select(kv => (kv.Key, kv.Value)).ToList(),
+                words.Select(kv => (kv.Key, kv.Value.f, kv.Value.u,
+                    kv.Value.next.OrderByDescending(n => n.Value.u).ThenByDescending(n => n.Value.f).ThenBy(n => n.Key, StringComparer.Ordinal)
+                                 .Take(MaxNextWords).Select(n => (n.Key, n.Value.f, n.Value.u)).ToList())).ToList(),
+                pairUse.Select(kv => (kv.Key.Item1, kv.Key.Item2, kv.Value)).ToList(),
+                newPair.Select(kv => (kv.Key.Item1, kv.Key.Item2, kv.Value.f, kv.Value.u)).ToList(),
+                candidates.Select(kv => (kv.Key, kv.Value)).ToList());
         }
 
         // ── Helpers ──────────────────────────────────────────────────

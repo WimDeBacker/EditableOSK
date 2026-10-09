@@ -61,6 +61,8 @@ namespace OnScreenKeyboard
             Step(T_TabReach);
             Step(T_AltReachesStepper);
             Step(T_ErrorLog);
+            Step(T_LearnedImport);
+            Step(T_KeyboardEditorImport);
             Step(T_SvgIconLoader_Cache);
             Step(T_TouchControls);
             Step(T_TouchGroupComponents);

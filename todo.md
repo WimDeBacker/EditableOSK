@@ -2,7 +2,7 @@
 
 ## Pending
 
-Numbering: **P** = priority, then sub-sections, steps and details (**1.1**, **3.4**). The open priorities were numbered from 1 again on 2026-10-06 (Priority 4 was added on 2026-10-07, Priority 5 on 2026-10-09); the items under Completed keep the numbers they had when they were done (so "Priority 7" there is not Priority 7 here). Status marks: ✓ done, ▶ in progress, ☐ not started.
+Numbering: **P** = priority, then sub-sections, steps and details (**1.1**, **3.4**). The open priorities were numbered from 1 again on 2026-10-06 (Priority 4 was added on 2026-10-07 and is completed, Priority 5 was added on 2026-10-09); the items under Completed keep the numbers they had when they were done (so "Priority 7" there is not Priority 7 here). Status marks: ✓ done, ▶ in progress, ☐ not started.
 
 ### Priority 1 — Scanning ☐ *(accessibility)*
 
@@ -25,16 +25,6 @@ Numbering: **P** = priority, then sub-sections, steps and details (**1.1**, **3.
 - 3.3 **Suspect** — an exception during `FormClosing` / disposal that only happens in edit mode (the edit toolbars and their icons): the standard "unhandled exception" dialog is a window of its own, and with an always-on-top main window it can sit hidden behind other windows, keeping the process alive.
 - 3.4 **Done** — `Program.cs`: UI-thread and unhandled exceptions are logged to `OnScreenKeyboard_error.log` next to the exe instead of showing the dialog, and `Environment.Exit(0)` runs when the main window has closed.
 - 3.5 **To do** — close once in edit mode with the new build: if `OnScreenKeyboard_error.log` appears, its stack trace is the real bug (fix it); if the process still lingers with no log, the main thread is stuck inside `FormClosing` (inspect the threads of the lingering process before ending it).
-
-### Priority 4 — Import of learned words ☐ *(word prediction; found by the owner 2026-10-07)*
-
-Keyboard Editor → Word prediction has **Export…** (copies the overlay file, e.g. `worddb_NL.learned.wfq`, to a place of the user's choice: "backup or transfer to another PC", tooltip `wp: tip export`), but **no way back**: nothing reads such a file in again. Until it exists the only way is by hand: close the keyboard, copy the file next to `OnScreenKeyboard.exe` under the same name, start it again (this overwrites what the PC had learned).
-
-- 4.1 **Decide first (owner):** replace what is learned on this PC, or merge (add the use counts of words and word pairs, take over new words and candidates). Proposed first version: **replace, with a confirmation question** (simplest and safest; the old file is kept as `.bak`, as `SettingsManager` does).
-- 4.2 **Button** "Import…" under "Export…" in the Word prediction section of the Keyboard Editor (`KeyboardEditorForm`, next to `_btnWPExport`): an `OpenFileDialog` for `*.wfq`, then the check below, then the confirmation, then the copy; the editor refreshes (`UpdateExportState`, candidates, info label) and the database is reloaded.
-- 4.3 **Checks before anything is replaced:** the file is a valid word database (the same header check `LanguageRegistry` does with its fast `XmlReader` peek: root element, `version`, `language`, `isPersonal`); it is a personal / overlay file (`isPersonal`), not a base database; its language matches the selected database (otherwise say so and do nothing); a corrupt or empty file leaves everything as it was, with a message (like "wp: Export failed" does for export). No import while the database is still loading (`IsLoading`).
-- 4.4 **Strings** in `LanguageManager.cs` and `lang_nl.xml`: button, tooltip (the export tooltip may then say "backup, or transfer and import on another PC"), dialog title, confirmation question, error messages. The new button joins the layout guards of the Keyboard Editor (44 px, no clipping, 480 px).
-- 4.5 **Tests:** import of a valid file replaces the overlay and keeps a `.bak`; wrong language, a base database, a corrupt file and a missing file change nothing; the confirmation "No" changes nothing; export then import gives back the same words (round trip); the backend seam (`_backend`, as used for export) is extended so the tests need no dialog.
 
 ### Priority 5 — Open `.kbl` files with this program ☐ *(installer; requested by the owner 2026-10-09)*
 
@@ -59,6 +49,16 @@ Not planned; decided later, if at all (from the touch-friendly work, 2.4.8):
 ---
 
 ## Completed
+
+### Import of learned words ✓ *(word prediction; was Priority 4, found by the owner 2026-10-07, completed 2026-10-09)*
+
+Keyboard Editor → Word prediction has **Import…** under **Export…**: it **merges** a file made with Export into the words learned on this PC (the owner's decision; "replace" was the first proposal). Counts of words and word pairs are added together, new words, new pairs and candidates are taken over, a candidate that is a word after the merge is dropped, and nothing learned here is removed. Details:
+- 4.1 **Merge, with a confirmation question.** `WordDatabase.MergeLearned(basePath, language, file)` reads both overlay files into plain data (`ReadOverlayFile`), adds them (`MergeSaveData`, at most `MaxNextWords` pairs per word, the strongest stay) and writes the overlay through the existing temp file + `File.Replace`, so the old file stays as `.bak`. It runs under the same lock as the periodic save; when the database is loaded, what was learned since the last save is saved first, and afterwards the database is loaded again in the background (`WordDatabase.IsLoadedFor`, `WordPredictionBackend.ReloadIfLoaded`).
+- 4.2 **Button** `_btnWPImport` in `KeyboardEditorForm`: an `OpenFileDialog`, the question, the merge, a message with what was added; it is possible before anything has been learned and is off while the database loads.
+- 4.3 **Checks:** nothing changes (and the message says why) when the file is missing, is not an overlay (a base database), is unreadable, holds no learned words, was learned on another language, or when this PC's own file cannot be read. **New:** the overlay file now carries the `language` of its database (`language="nl"` on the root element, written by every save and by the merge); files from before that have none and are accepted.
+- 4.4 **Strings** `wp: Import…`, `wp: tip import`, `wp: import confirm`, `wp: Import done`, the error texts, in `LanguageManager.cs` and `lang_nl.xml`.
+- 4.5 **Tests:** `T_LearnedImport` (files: sums, new words and pairs, candidates, `.bak`, every refusal, the merged file loads, the language is written), `T_KeyboardEditorImport` (the button, the question, the call, the reload, every message, Dutch texts), the Keyboard Editor layout and accelerator guards.
+- Not done / known: an overlay from before the language was written cannot be checked against the database's language (the file name `worddb_NL.learned.wfq` says it, but a renamed file does not); the merge adds the frequency of a new word that both PCs learned (it is a count, not a rank); no automatic promotion of candidates whose merged count passes the threshold (they are promoted by the next typing, or with Promote).
 
 ### Touch-friendly controls and sectioned editor windows ✓ *(accessibility / UI; was Priority 2, completed 2026-10-06; its step numbers 2.x are kept because tests and documents refer to them)*
 

@@ -25,7 +25,88 @@ namespace OnScreenKeyboard
                 IsLoaded = () => true, LoadedLanguage = () => "nl", WordCount = () => 1234,
                 OverlayPath = p => p + ".learned", FileExists = p => overlayExists,
                 Promote = w => true, Reject = w => true,
+                // No real database is read or written: an import reports that it worked, and nothing is loaded again.
+                IsLoading = () => false,
+                ImportLearned = (basePath, language, file) => new WordDatabase.LearnedImportResult { Ok = true, Words = 4, Pairs = 3, Candidates = 2 },
+                ReloadIfLoaded = basePath => { },
             };
+
+        private static void T_KeyboardEditorImport()
+        {
+            Section("Keyboard Editor — importing learned words (todo Priority 4)");
+
+            // The button: next to Export, possible without anything learned, not while the database loads.
+            using (var f = KeyboardEditor())
+            {
+                var imp = Priv<FluentButton>(f, "_btnWPImport"); var exp = Priv<FluentButton>(f, "_btnWPExport");
+                Assert(imp != null && imp.Enabled && !exp.Enabled, "Import is available while Export is not (nothing learned yet on this PC)");
+                Assert(imp.Text.Replace("&", "") == Lang.T("wp: Import…"), "the button says Import…");
+            }
+            using (var f = KeyboardEditor(backend: new WordPredictionBackend
+                { Databases = () => new List<DatabaseInfo> { new DatabaseInfo(@"C:\fake\worddb_NL.wfq", "nl") }, IsLoaded = () => false, LoadedLanguage = () => "", WordCount = () => 0,
+                  Candidates = () => new List<(string, int)>(), OverlayPath = p => p + ".learned", FileExists = p => false, IsLoading = () => true }))
+                Assert(!Priv<FluentButton>(f, "_btnWPImport").Enabled, "Import is off while the database is still loading");
+
+            // No confirmation, no import.
+            {
+                int calls = 0;
+                var be = FakeBackend(); be.ImportLearned = (b, l, file) => { calls++; return new WordDatabase.LearnedImportResult { Ok = true }; };
+                using var f = KeyboardEditor(backend: be);
+                f.ImportConfirm = (t, q) => false; f.ImportNotice = (t, m) => { };
+                f.ImportLearnedWordsFrom(@"C:\x\worddb_NL.learned.wfq");
+                Assert(calls == 0, "answering No to the question imports nothing");
+            }
+
+            // Yes: the file, the database and its language go to the import; the database is loaded again; the notice says what was added.
+            {
+                string gotBase = null, gotLang = null, gotFile = null, reloaded = null, notice = null, question = null;
+                var be = FakeBackend();
+                be.ImportLearned = (b, l, file) => { gotBase = b; gotLang = l; gotFile = file; return new WordDatabase.LearnedImportResult { Ok = true, Words = 4, Pairs = 3, Candidates = 2 }; };
+                be.ReloadIfLoaded = b => reloaded = b;
+                using var f = KeyboardEditor(new LayoutMeta { Language = "nl" }, backend: be);       // "(auto)" picks the database of the keyboard's language
+                f.ImportConfirm = (t, q) => { question = q; return true; }; f.ImportNotice = (t, m) => notice = m;
+                f.ImportLearnedWordsFrom(@"C:\x\mine.learned.wfq");
+                Assert(gotBase == @"C:\fake\worddb_NL.wfq" && gotLang == "nl" && gotFile == @"C:\x\mine.learned.wfq", "Yes: the chosen database, its language and the file are imported");
+                Assert(reloaded == @"C:\fake\worddb_NL.wfq", "…and the database is loaded again so the words count at once");
+                Assert(question.Contains("mine.learned.wfq") && question.Contains(".bak"), "the question names the file and says the old file is kept as a backup");
+                Assert(notice == string.Format(Lang.T("wp: Import done"), 4, 3, 2), $"the message says what was added ('{notice}')");
+            }
+
+            // Every reason a file is refused is said in words, and nothing is loaded again.
+            foreach (var (error, detail, expected) in new[]
+            {
+                ("notOverlay", (string)null, Lang.T("wp: import not valid")), ("empty", null, Lang.T("wp: import empty")), ("corrupt", null, Lang.T("wp: import corrupt")),
+                ("missing", null, Lang.T("wp: import missing")), ("loading", null, Lang.T("wp: import loading")), ("targetCorrupt", null, Lang.T("wp: import target corrupt")),
+                ("language", "en", string.Format(Lang.T("wp: import wrong language"), "en", "nl")),
+            })
+            {
+                string notice = null; bool reloaded = false;
+                var be = FakeBackend();
+                be.ImportLearned = (b, l, file) => new WordDatabase.LearnedImportResult { Ok = false, Error = error, Detail = detail };
+                be.ReloadIfLoaded = b => reloaded = true;
+                using var f = KeyboardEditor(new LayoutMeta { Language = "nl" }, backend: be);
+                f.ImportConfirm = (t, q) => true; f.ImportNotice = (t, m) => notice = m;
+                f.ImportLearnedWordsFrom(@"C:\x\f.wfq");
+                Assert(notice != null && notice.Contains(expected) && notice.Contains(Lang.T("wp: Import failed")) && !reloaded, $"refused ({error}): the reason is shown and nothing is loaded again");
+            }
+
+            // Dutch: every text exists and differs from the English one.
+            string was = Lang.CurrentCode;
+            try
+            {
+                Lang.Load("nl");
+                foreach (var key in new[] { "wp: Import…", "wp: Import learned words", "wp: tip import", "wp: import confirm", "wp: Import done", "wp: Import failed", "wp: import not valid",
+                                            "wp: import empty", "wp: import corrupt", "wp: import missing", "wp: import loading", "wp: import wrong language", "wp: import target corrupt" })
+                {
+                    string nl = Lang.T(key);
+                    Lang.Load("en");
+                    string en = Lang.T(key);
+                    Lang.Load("nl");
+                    Assert(nl != key && nl != en, $"Dutch text for \"{key}\"");
+                }
+            }
+            finally { Lang.Load(was); }
+        }
 
         private static KeyboardEditorForm KeyboardEditor(LayoutMeta meta = null, WordPredictionBackend backend = null, VisualTheme theme = null, WindowState window = null,
             Func<bool> onLoad = null, Func<(VisualTheme, WindowState, LayoutMeta)> getSettings = null, Func<List<KeyGroup>> getGroups = null) =>
@@ -364,7 +445,7 @@ namespace OnScreenKeyboard
             Same("Accessibility: the two steppers", Priv<TouchStepper>(f, "_stpSlowKeys"), Priv<TouchStepper>(f, "_stpDwell"));
 
             GoTo(2);
-            Same("Word prediction: Remember typed words, the database chooser and Export", Chk(f, "_chkWPLearning"), Priv<TouchChoiceButton>(f, "_cmbWPDatabase"), Priv<FluentButton>(f, "_btnWPExport"));
+            Same("Word prediction: Remember typed words, the database chooser and Export", Chk(f, "_chkWPLearning"), Priv<TouchChoiceButton>(f, "_cmbWPDatabase"), Priv<FluentButton>(f, "_btnWPExport"), Priv<FluentButton>(f, "_btnWPImport"));
             Same("Word prediction: the candidate list and Reject", Priv<Panel>(f, "_candidateFrame"), Priv<FluentButton>(f, "_btnWPReject"));
             var pro = Priv<FluentButton>(f, "_btnWPPromote"); var rej = Priv<FluentButton>(f, "_btnWPReject");
             Assert(Math.Abs(pro.Width - rej.Width) <= 1, $"Word prediction: Promote and Reject have one width ({pro.Width}, {rej.Width})");
