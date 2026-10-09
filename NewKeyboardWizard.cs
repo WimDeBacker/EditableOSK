@@ -977,8 +977,9 @@ namespace OnScreenKeyboard
         }
         private static string DefaultFolder()
         {
-            string last=SettingsManager.DefaultPath;
-            return File.Exists(last) ? Path.GetDirectoryName(last) : AppDomain.CurrentDomain.BaseDirectory;
+            // A new layout is offered the Documents folder: the program's own folder is not writable for a standard user,
+            // and the user folder holding the automatic settings is not a place to look for files.
+            return UserData.DocumentsFolder;
         }
 
         // ── Language-change refresh ───────────────────────────────────────

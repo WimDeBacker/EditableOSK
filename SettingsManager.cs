@@ -362,11 +362,10 @@ namespace OnScreenKeyboard
         public const string StandardGroupName = "standard";
 
         /// <summary>
-        /// The default path where <c>settings.xml</c> is read from and
-        /// written to: the same folder as the running executable.
+        /// The default path where <c>settings.xml</c> is read from and written to: the user's own folder
+        /// (<c>%AppData%\EditableOSK</c>), because the program folder (Program Files) is not writable for a standard user.
         /// </summary>
-        public static string DefaultPath =>
-            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.xml");
+        public static string DefaultPath => UserData.FileFor("settings.xml");
 
         // ── Save ─────────────────────────────────────────────────────
 

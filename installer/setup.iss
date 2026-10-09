@@ -161,7 +161,7 @@ Name: "{autodesktop}\{#AppName}";   Filename: "{app}\{#AppExeName}"; \
     Tasks: desktopicon
 
 ; Startup folder (optional task)
-Name: "{userstartup}\{#AppName}";   Filename: "{app}\{#AppExeName}"; \
+Name: "{commonstartup}\{#AppName}"; Filename: "{app}\{#AppExeName}"; \
     Tasks: startup
 
 ; ── [Run] ────────────────────────────────────────────────────────────────────
@@ -175,7 +175,8 @@ Filename: "{app}\{#AppExeName}"; \
 ; ── [UninstallDelete] ────────────────────────────────────────────────────────
 
 [UninstallDelete]
-; Remove user settings file created at runtime (if present)
+; Settings, learned words and the error log are kept per user in %AppData%\EditableOSK (a folder of each user, not removed here:
+; learned words survive a reinstall). These two are only left behind by versions before that change.
 Type: files; Name: "{app}\settings.xml"
 Type: files; Name: "{app}\settings.xml.bak"
 ; Remove any personal word databases the user created

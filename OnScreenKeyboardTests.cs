@@ -27,6 +27,11 @@ namespace OnScreenKeyboard
         {
             SendKeysHelper.TestMode = true;
 
+            // A test run never touches the real user data (settings, learned words, error log): it gets a folder of its own.
+            string testUserData = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "osk_userdata_" + Guid.NewGuid().ToString("N"));
+            UserData.DirectoryOverride = testUserData;
+            AppDomain.CurrentDomain.ProcessExit += (s, e) => { try { System.IO.Directory.Delete(testUserData, true); } catch { } };
+
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine("═══════════════════════════════════════════");
             Console.WriteLine("  On-Screen Keyboard — Test Suite");
@@ -63,6 +68,7 @@ namespace OnScreenKeyboard
             Step(T_ErrorLog);
             Step(T_LearnedImport);
             Step(T_LayoutLaunch);
+            Step(T_UserData);
             Step(T_KeyboardEditorImport);
             Step(T_SvgIconLoader_Cache);
             Step(T_TouchControls);

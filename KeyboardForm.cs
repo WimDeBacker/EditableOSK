@@ -3592,11 +3592,13 @@ namespace OnScreenKeyboard
             }
 
             string path = _currentFilePath ?? SettingsManager.DefaultPath;
-            if (saveAs || _currentFilePath == null)
+            // Not writable (a layout installed with the program) or no file yet: ask where to save, in the Documents folder.
+            bool readOnlyHere = _currentFilePath != null && !UserData.CanWrite(_currentFilePath);
+            if (saveAs || _currentFilePath == null || readOnlyHere)
             {
                 using var dlg = new SaveFileDialog
                 { Title="Save",Filter="Keyboard layouts (*.kbl)|*.kbl|All files (*.*)|*.*",
-                  DefaultExt="kbl",FileName=path };
+                  DefaultExt="kbl",FileName=readOnlyHere || _currentFilePath == null ? Path.Combine(UserData.DocumentsFolder, Path.GetFileName(_currentFilePath ?? "keyboard.kbl")) : path };
                 if (dlg.ShowDialog() != DialogResult.OK) return;
                 path = dlg.FileName;
             }
@@ -3856,6 +3858,9 @@ namespace OnScreenKeyboard
         private void AutoSave()
         {
             string path = _currentFilePath ?? SettingsManager.DefaultPath;
+            // A layout in a folder this user cannot write to (a layout installed with the program, in Program Files): the changes go
+            // to the user's own settings file, which the next start opens, and the original stays as it was.
+            if (!UserData.CanWrite(path)) path = SettingsManager.DefaultPath;
             try
             {
                 _meta.LastFile = path;

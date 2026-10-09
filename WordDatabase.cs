@@ -454,9 +454,11 @@ namespace OnScreenKeyboard
         /// </summary>
         public static string GetOverlayPath(string basePath) => DeriveOverlayPath(basePath);
 
+        // A database installed with the program (in its folder, which a standard user cannot write to) keeps its learned words in the
+        // user's own folder (see UserData); a database anywhere else keeps them next to itself.
         private static string DeriveOverlayPath(string basePath) =>
             Path.Combine(
-                Path.GetDirectoryName(basePath) ?? "",
+                UserData.IsInFolder(basePath) ? UserData.Directory : Path.GetDirectoryName(basePath) ?? "",
                 Path.GetFileNameWithoutExtension(basePath) + ".learned.wfq");
 
         /// <summary>
@@ -1216,6 +1218,9 @@ namespace OnScreenKeyboard
             string tmp = path + ".tmp";
             try
             {
+                // The user's folder does not exist before the first save.
+                string folder = Path.GetDirectoryName(path);
+                if (!string.IsNullOrEmpty(folder)) Directory.CreateDirectory(folder);
                 var xs = new XmlWriterSettings { Indent = true };
                 using (var writer = XmlWriter.Create(tmp, xs))
                 {

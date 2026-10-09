@@ -113,6 +113,9 @@ namespace OnScreenKeyboard
             Application.ThreadException += (s, e) => LogError("UI thread", e.Exception);
             AppDomain.CurrentDomain.UnhandledException += (s, e) => LogError("unhandled", e.ExceptionObject as Exception);
 
+            // Earlier versions wrote settings and learned words next to the exe: take them over into the user's folder (once).
+            UserData.MigrateFrom(UserData.AppFolder);
+
             // A layout file on the command line (double-click on a .kbl): a keyboard that is already running opens it and this
             // process ends; otherwise this keyboard starts with it.
             string layoutArg = LayoutLaunch.FindLayoutArgument(args, Environment.CurrentDirectory);
@@ -127,9 +130,9 @@ namespace OnScreenKeyboard
             return 0;
         }
 
-        /// <summary>Appends an error to <c>OnScreenKeyboard_error.log</c> next to the exe (best effort, never throws; see <see cref="ErrorLog"/>).</summary>
+        /// <summary>Appends an error to <c>OnScreenKeyboard_error.log</c> in the user's folder (best effort, never throws; see <see cref="ErrorLog"/>).</summary>
         internal static void LogError(string where, Exception ex) =>
-            ErrorLog.Write(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "OnScreenKeyboard_error.log"), where, ex, DateTime.Now);
+            ErrorLog.Write(UserData.FileFor("OnScreenKeyboard_error.log"), where, ex, DateTime.Now);
     }
 
     /// <summary>

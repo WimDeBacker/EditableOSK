@@ -4,13 +4,6 @@
 
 Numbering: **P** = priority, then sub-sections, steps and details (**1.1**, **3.4**). The open priorities were numbered from 1 again on 2026-10-06 (Priority 4 was added on 2026-10-07 and is completed, Priority 5 was added on 2026-10-09); the items under Completed keep the numbers they had when they were done (so "Priority 7" there is not Priority 7 here). Status marks: ✓ done, ▶ in progress, ☐ not started.
 
-### Priority 0 — Installed program cannot save its data in `C:\Program Files` ☐ *(installer; found 2026-10-10 while checking `setup.iss`)*
-
-The installer puts the program in `{autopf}\EditableOSK` (Program Files, writable only for administrators), but the program writes next to the exe: `settings.xml` (`SettingsManager.DefaultPath`, also the auto-save of every layout in `{app}`), the learned words `worddb_XX.learned.wfq` (`WordDatabase.DeriveOverlayPath`, same folder as the base file), and `OnScreenKeyboard_error.log`. For a standard user all of these fail silently (`AutoSave` has an empty `catch`; the learned words only reach the error log, which fails too): no layout is remembered, no word is learned. Not seen so far because the program is run from the build folder.
-- 0.1 **Decision for the owner:** (a) store the user's data per user in `%AppData%\EditableOSK` (settings, overlay, log; layouts the user saves go where they choose) — the right fix, a code change in `SettingsManager`, `WordDatabase` and `Program.LogError`, with a one-time move of existing files next to the exe; or (b) `[Dirs] Permissions: users-modify` on `{app}` — one line, but every user can then replace the exe that an administrator may run, and settings are shared by all users of the PC (not recommended).
-- 0.2 The shipped layouts (`azerty.kbl` …) stay in `{app}` (read-only is fine); the first auto-save of a loaded shipped layout must go to the per-user folder, not back into `{app}`.
-- 0.3 Smaller points in `setup.iss`: the "start with Windows" shortcut is in `{userstartup}` (only the installing administrator); `{commonstartup}` covers all users. The uninstaller leaves `*.learned.wfq` and the error log (deliberately: learned words survive a reinstall; say so in the readme).
-
 ### Priority 1 — Scanning ☐ *(accessibility)*
 
 - 1.1 Auto-advance a highlight through keys/rows at a fixed interval.
@@ -48,6 +41,16 @@ Not planned; decided later, if at all (from the touch-friendly work, 2.4.8):
 ---
 
 ## Completed
+
+### User data in `%AppData%\EditableOSK` instead of next to the exe ✓ *(installer; found 2026-10-10 while checking `setup.iss`, done the same day)*
+
+The installer puts the program in Program Files, which a standard user cannot write to, but the program wrote its settings, learned words and error log next to the exe: for a standard user all of it failed silently (no layout remembered, no word learned). Not seen before because the program was run from the build folder. Now (`UserData.cs`):
+- `settings.xml` (`SettingsManager.DefaultPath`), the learned words of a database installed with the program (`worddb_XX.learned.wfq`, `WordDatabase.DeriveOverlayPath`; a database anywhere else keeps them next to itself) and `OnScreenKeyboard_error.log` live in `%AppData%\EditableOSK`; the folder is created on the first write.
+- **One-time move** at start-up (`UserData.MigrateFrom`): `settings.xml` and `*.learned.wfq` of an earlier version next to the exe are copied, never over an existing file; the old files stay.
+- **Shipped layouts** (`azerty.kbl` …) in the program folder are never written: the automatic save of such a layout goes to the user's `settings.xml` (which the next start opens), and Save asks where to save, in the Documents folder (`UserData.CanWrite`). The New Keyboard wizard offers the Documents folder too.
+- The test run uses a temporary user folder (`UserData.DirectoryOverride`), so tests never touch real user data. Tests: `T_UserData`.
+- `setup.iss`: "start with Windows" now uses `{commonstartup}` (all users). The uninstaller leaves `%AppData%\EditableOSK` (deliberate: learned words survive a reinstall; worth a line in the readme).
+- By hand: install, start as a standard user, change something and learn a word, restart; `%AppData%\EditableOSK` must hold `settings.xml` and `worddb_XX.learned.wfq`, and Program Files nothing new.
 
 ### Open `.kbl` files with this program ✓ *(installer + program; was Priority 5, requested by the owner 2026-10-09, done 2026-10-10)*
 
