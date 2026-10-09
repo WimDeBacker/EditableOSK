@@ -94,6 +94,7 @@ namespace OnScreenKeyboard
             Step(T_KeyEditorRoundTrip);
             Step(T_ValidationBlocksApply);
             Step(T_MissingFontHandling);
+            Step(T_KeySequenceLossless);
             Step(T_FluentDialogBase_DisposeWithoutShow);
             Step(T_WizardKeyParser);
             Step(T_WizardKeyClassifier);
@@ -4778,6 +4779,48 @@ namespace OnScreenKeyboard
                 updateMi.Invoke(f, new object[] { cmbFont, "" });
                 Assert(string.IsNullOrEmpty(fontWarn.GetError(cmbFont)),
                     "UpdateFontAvailabilityWarning: an empty name (placeholder selected) is never flagged");
+            }
+        }
+
+        // T_KeySequenceLossless — regression test for review8_10.md finding 1: layer 0 of a
+        // KeySequence key was always rebuilt as FromHuman(ToHuman(send)), and ToHuman drops
+        // grouping parentheses, so opening a key whose Send is "^(ab)" and pressing Apply
+        // without any edit rewrote it to "^ab" (Ctrl applying to one key only). An untouched
+        // layer must keep the stored send exactly, as layers 1 and 2 already did.
+        private static void T_KeySequenceLossless()
+        {
+            Section("Key sequence (layer 0) survives an untouched Apply");
+
+            var applyMi = typeof(KeyEditorForm).GetMethod("Apply", BindingFlags.NonPublic | BindingFlags.Instance);
+            TouchTextBox[] Values(KeyEditorForm form) =>
+                (TouchTextBox[])typeof(KeyEditorForm).GetField("_values", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(form);
+
+            // Untouched: Apply keeps the stored send, parentheses included.
+            {
+                using var f = new KeyEditorForm(new KeyProps("Sel", "^(ab)"), owner: null);
+                applyMi.Invoke(f, null);
+                Assert(f.DialogResult == DialogResult.OK, "KeySequence untouched: Apply succeeds");
+                Assert(f.Result.Send == "^(ab)",
+                    $"KeySequence untouched: Send keeps its grouping — got '{f.Result.Send}'");
+            }
+
+            // Only the label edited: the value stays untouched, so the send is still kept.
+            {
+                using var f = new KeyEditorForm(new KeyProps("Sel", "^(ab)"), owner: null);
+                var labels = (TouchTextBox[])typeof(KeyEditorForm).GetField("_labels", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(f);
+                labels[0].Text = "Select";
+                applyMi.Invoke(f, null);
+                Assert(f.Result.Send == "^(ab)",
+                    $"KeySequence label-only edit: Send keeps its grouping — got '{f.Result.Send}'");
+            }
+
+            // Value edited: the box wins, rebuilt from the readable form as before.
+            {
+                using var f = new KeyEditorForm(new KeyProps("Sel", "^(ab)"), owner: null);
+                Values(f)[0].Text = "{Ctrl}x";
+                applyMi.Invoke(f, null);
+                Assert(f.Result.Send == "^x",
+                    $"KeySequence edited: Send is rebuilt from the box — got '{f.Result.Send}'");
             }
         }
 

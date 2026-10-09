@@ -1298,7 +1298,11 @@ namespace OnScreenKeyboard
                 {
                     case SendMode.Modifier:       return "";                       // the engine recognises a modifier by its label
                     case SendMode.WordPrediction: return "wp:" + _wpSlot;
-                    case SendMode.KeySequence:    return FromHuman(text);          // already in SendKeys syntax: do NOT escape
+                    case SendMode.KeySequence:
+                        // Untouched, keep exactly what was stored: the readable form is lossy (ToHuman drops grouping
+                        // parentheses), so rebuilding from it would rewrite "^(ab)" as "^ab". Same rule as layers 1 and 2.
+                        if (!_layerTouched[0]) return _origSend[0];
+                        return FromHuman(text);                                    // already in SendKeys syntax: do NOT escape
                     case SendMode.Layout:
                         string path = text.Trim();
                         return string.IsNullOrEmpty(path) ? "" : "layout:" + path;
