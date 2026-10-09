@@ -50,6 +50,10 @@ Not planned; decided later, if at all (from the touch-friendly work, 2.4.8):
 
 ## Completed
 
+### English word database: gaps filled, capitalised names lowered ✓ *(word prediction content, 2026-10-10)*
+
+`worddb_EN.xml` (not in git; backup `C:\dev\worddb_backup_2026-10-09\worddb_EN_before_english_additions.xml`) already covered 764 of 890 checked words. Done, with the owner's agreement: **117 new words** (17,987 → 18,104: care, disability, medical, technology, family, household) on the English scale (laagste 1202, mediaan 4032, top 11809; very common 7500, common 4800, regular 3000, occasional 1800); **40 words raised** (`tablets, pharmacy, nausea, diabetes, disability, insulin, electrician, yep` …); **1,022 capitalised words** (film names, places, titles: `God, Lord, Jack, John, Jesus, York, FBI` …) lowered from above 4,000 to 4,000, except `I, Mr, Mrs, Dr, Miss, Sir, OK, TV, ID`, family words, weekdays and months. Not done: contractions with an apostrophe (`don't`, `I'm`) — the source only has apostrophe-free forms (`dont`, `cant`). Proposal: `worddb_EN_aanvullingen_voorstel_1.txt` (not in git).
+
 ### Personalisation against large base frequencies ✓ *(word prediction engine, 2026-10-10)*
 
 Analysis: personal use is a separate tier (`PersonalUseCount`, ranked before the corpus frequency), so the size of the base numbers does not matter for single words (rank-preserving rescaling changes nothing). The real blockers were elsewhere (`WordDatabase.cs`):
