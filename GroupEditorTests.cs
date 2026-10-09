@@ -26,6 +26,90 @@ namespace OnScreenKeyboard
             new KeyGroup { Name = "Cijfers", BorderThickness = -1 },
         };
 
+        /// <summary>The keys name their group, so a renamed or deleted group must reach them (review8_10 finding 9).</summary>
+        private static void T_GroupRenames()
+        {
+            Section("Group Editor — renamed and deleted groups reach the keys that name them");
+
+            List<KeyGroup> Three() => new List<KeyGroup>
+            {
+                new KeyGroup { Name = SettingsManager.StandardGroupName }, new KeyGroup { Name = "A" }, new KeyGroup { Name = "B" },
+            };
+            void Select(GroupEditorForm f, int i) => Priv<TouchList>(f, "_lstGroups").SelectedIndex = i;
+            // Renames the way the user does: by typing the new name in the Name box (it is written to the group when the group is left or OK is pressed).
+            bool Rename(GroupEditorForm f, string name) { Priv<TouchTextBox>(f, "_txtName").Text = name; return true; }
+            string[] Mapped(GroupRenames ch, params string[] names) => names.Select(ch.Map).ToArray();
+
+            // The mapping itself: one pass from the old names, so a swap works.
+            var swap = new GroupRenames(new Dictionary<string, string> { ["A"] = "B", ["B"] = "A" }, new HashSet<string> { "C" });
+            Assert(Mapped(swap, "A", "B", "C", "D", "", null).SequenceEqual(new[] { "B", "A", "", "D", "", null }),
+                "mapping: A and B swap names, C (deleted) means no group, others and empty names stay");
+
+            // Rename: the keys of the group get the new name; nothing else changes.
+            using (var f = new GroupEditorForm(Three(), initialGroupName: "A"))
+            {
+                Assert(Rename(f, "Arrows"), "rename: accepted");
+                f.CommitToResult();
+                var ch = f.Changes;
+                Assert(ch.Renames.Count == 1 && ch.Renames["A"] == "Arrows" && ch.Deleted.Count == 0, "rename: A -> Arrows is the only change");
+                Assert(Mapped(ch, "A", "B", "standard", "").SequenceEqual(new[] { "Arrows", "B", "standard", "" }), "rename: keys of A follow, the others do not");
+            }
+
+            // Nothing changed: no change reported.
+            using (var f = new GroupEditorForm(Three(), initialGroupName: "A"))
+            {
+                f.CommitToResult();
+                Assert(!f.Changes.Any, "no edit: no renames and no deletions");
+            }
+
+            // Delete: the keys fall back to no group.
+            using (var f = new GroupEditorForm(Three(), initialGroupName: "A"))
+            {
+                Assert(f.RemoveSelectedGroup(), "delete: removed");
+                f.CommitToResult();
+                Assert(f.Changes.Deleted.Contains("A") && f.Changes.Renames.Count == 0 && f.Changes.Map("A") == "" && f.Changes.Map("B") == "B",
+                    "delete: keys of A mean no group now, B is untouched");
+            }
+
+            // Delete a group and add one with the same name: the keys stay with the name.
+            using (var f = new GroupEditorForm(Three(), initialGroupName: "A"))
+            {
+                f.RemoveSelectedGroup();
+                Assert(f.TryAddGroup("A"), "delete and add again: accepted");
+                f.CommitToResult();
+                Assert(f.Changes.Map("A") == "A", "delete and add again: the keys keep the name A");
+            }
+
+            // Swap two names through a third (the editor refuses a name that is taken): the keys follow in one pass.
+            using (var f = new GroupEditorForm(Three(), initialGroupName: "A"))
+            {
+                Select(f, 1); Assert(Rename(f, "Tmp"), "swap: A -> Tmp");
+                Select(f, 2); Assert(Rename(f, "A"), "swap: B -> A");
+                Select(f, 1); Assert(Rename(f, "B"), "swap: Tmp -> B");
+                f.CommitToResult();
+                Assert(Mapped(f.Changes, "A", "B").SequenceEqual(new[] { "B", "A" }) && f.Changes.Deleted.Count == 0, "swap: keys of A are now in B and keys of B in A");
+            }
+
+            // A group renamed into the name of a deleted one: the keys of the deleted group do not follow it.
+            using (var f = new GroupEditorForm(Three(), initialGroupName: "A"))
+            {
+                f.RemoveSelectedGroup();                              // A is gone, B is now at index 1
+                Select(f, 1); Assert(Rename(f, "A"), "rename into a deleted name: B -> A");
+                f.CommitToResult();
+                Assert(Mapped(f.Changes, "A", "B").SequenceEqual(new[] { "", "A" }), "rename into a deleted name: old A keys mean no group, B keys follow to A");
+            }
+
+            // Import "overwrite" of a renamed group restyles it; it is still the same group.
+            using (var f = new GroupEditorForm(Three(), initialGroupName: "A"))
+            {
+                Rename(f, "A2");
+                f.CommitToResult();                                    // the Import button commits the open group first
+                f.ApplyImportDecisions(new[] { (new KeyGroup { Name = "A2", KeyColor = Color.Red }, GroupEditorForm.ImportAction.Overwrite) });
+                f.CommitToResult();
+                Assert(f.Changes.Renames.Count == 1 && f.Changes.Renames["A"] == "A2" && f.Changes.Deleted.Count == 0, "import overwrite of a renamed group: still A -> A2, not a deletion");
+            }
+        }
+
         private static void T_GroupEditorGuards()
         {
             Section("Group Editor and its dialogs — strict UI guards (languages and themes)");

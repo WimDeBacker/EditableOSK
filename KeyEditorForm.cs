@@ -565,9 +565,16 @@ namespace OnScreenKeyboard
             _groups.Clear();
             _groups.AddRange(dlg.ResultGroups);
             ResultGroupsChanged = true;
-            RebuildGroupChooser(current ?? "", refresh: true);
+            // The keys name their group, so renamed and deleted groups must reach them: the layout's keys through the event, and the
+            // chooser here follows the group this key has (a renamed group is found under its new name, a deleted one means no group).
+            var changes = dlg.Changes;
+            if (changes != null && changes.Any) GroupsRenamed?.Invoke(changes);
+            RebuildGroupChooser(changes?.Map(current ?? "") ?? current ?? "", refresh: true);
             _cmbGroup.Focus();
         }
+
+        /// <summary>Raised when the Group Editor, opened from here, renamed or deleted groups: the owner updates the group name of every key.</summary>
+        internal event Action<GroupRenames> GroupsRenamed;
 
         /// <summary>Rebuilds the group chooser after the group list changed; restores <paramref name="previous"/> by name, else "(no group)".</summary>
         private void RebuildGroupChooser(string previous, bool refresh)

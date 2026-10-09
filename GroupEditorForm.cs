@@ -66,6 +66,33 @@ namespace OnScreenKeyboard
         /// </summary>
         private readonly List<KeyGroup> _groups;
 
+        // The name every group of the working copy had when the dialog opened, by group object (not by name: a name can change).
+        private readonly Dictionary<KeyGroup, string> _origName = new Dictionary<KeyGroup, string>(ReferenceEqualityComparer.Instance);
+
+        /// <summary>
+        /// What the dialog renamed and deleted, for the keys that point at those groups by name (see <see cref="GroupRenames"/>).
+        /// Set when the dialog closes with OK; null before that.
+        /// </summary>
+        internal GroupRenames Changes { get; private set; }
+
+        /// <summary>Works out which groups were renamed and which were deleted since the dialog opened.</summary>
+        private GroupRenames ComputeChanges()
+        {
+            var renames = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var g in _groups)
+                if (_origName.TryGetValue(g, out string orig) && orig != g.Name) renames[orig] = g.Name;
+            var deleted = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var kv in _origName)
+            {
+                if (_groups.Any(g => ReferenceEquals(g, kv.Key))) continue;
+                // A group deleted and added again under the same name in one session: the keys stay with the name. (A group that was
+                // renamed to that name is not a new one: the keys of the deleted group do not follow it.)
+                bool addedAgain = _groups.Any(g => !_origName.ContainsKey(g) && g.Name == kv.Value);
+                if (!addedAgain) deleted.Add(kv.Value);
+            }
+            return new GroupRenames(renames, deleted);
+        }
+
         // ── Controls ─────────────────────────────────────────────────
         private TouchList         _lstGroups;
         private Panel             _listFrame;                 // draws the list's border and its focus colour
@@ -142,6 +169,7 @@ namespace OnScreenKeyboard
         {
             // Deep-clone so cancelling truly discards all changes.
             _groups = groups.Select(g => g.Clone()).ToList();
+            foreach (var g in _groups) _origName[g] = g.Name;          // to tell afterwards what was renamed and what was deleted
 
             Text = Lang.T("Manage Groups");
             BuildUI();
@@ -412,6 +440,7 @@ namespace OnScreenKeyboard
             if (ShowFirstSectionWithError()) return;
             CommitCurrent();
             ResultGroups = _groups;
+            Changes = ComputeChanges();
             DialogResult = DialogResult.OK;
             Close();
         }
@@ -745,6 +774,7 @@ namespace OnScreenKeyboard
                             // compares StandardGroupName case-sensitively, so adopting an imported file's casing
                             // (e.g. "Standard") would let this entry silently lose its protected status.
                             clone.Name = _groups[idx].Name;
+                            if (_origName.TryGetValue(_groups[idx], out string orig)) { _origName.Remove(_groups[idx]); _origName[clone] = orig; }   // still the same group, restyled
                             _groups[idx] = clone;
                         }
                         break;
@@ -806,6 +836,7 @@ namespace OnScreenKeyboard
         {
             CommitCurrent();
             ResultGroups = _groups;
+            Changes = ComputeChanges();
         }
 
         /// <summary>For testing: adds a group with the given name; false (and nothing changes) when the name is blank, reserved or taken.</summary>

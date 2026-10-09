@@ -2782,6 +2782,13 @@ namespace OnScreenKeyboard
                 groups:       _layout.Groups,
                 layoutDir:    _currentFilePath != null
                               ? System.IO.Path.GetDirectoryName(_currentFilePath) : null);
+            // Groups that the Group Editor (opened from the Key Editor) renames or deletes: every key that names them follows, at once like the
+            // groups themselves (also when the key edit is cancelled afterwards).
+            dlg.GroupsRenamed += changes =>
+            {
+                foreach (var c in _layout.Cells) c.Props.GroupName = changes.Map(c.Props.GroupName);
+                if (_copiedFormatting != null) _copiedFormatting.GroupName = changes.Map(_copiedFormatting.GroupName);
+            };
             if (dlg.ShowDialog(this) != DialogResult.OK)
             {
                 // The user cancelled the key edit, but any group changes made via the

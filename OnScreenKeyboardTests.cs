@@ -80,6 +80,7 @@ namespace OnScreenKeyboard
             Step(T_KeyEditorGuards);
             Step(T_GroupEditorGuards);
             Step(T_GroupEditor);
+            Step(T_GroupRenames);
             Step(T_GroupDialogs);
             Step(T_KeyboardEditorGuards);
             Step(T_KeyboardEditor);

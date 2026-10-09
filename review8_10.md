@@ -373,6 +373,14 @@ LoadError = null;
 
 ## Fix 9: renaming or deleting a group leaves keys pointing at it (GroupEditorForm)
 
+**Status: applied** (2026-10-09), built and tested on Windows (filtered run: `GroupRenames`, the Group Editor groups and `KeyEditorRoundTrip`, 385 checks). Done
+with a new class `GroupRenames` (old name -> new name, deleted names, `Map`): `GroupEditorForm` remembers each group's original name by object
+(`_origName`) and works out `Changes` on OK; a deleted group is only a deletion when no *new* group took its name (delete and add again keeps the keys),
+and an import "Overwrite" keeps the identity of the group it restyles. The only caller of the Group Editor is the Key Editor: it raises
+`GroupsRenamed`, `KeyboardForm.OpenEditor` maps the group name of every key in one pass (a swap works) and of the copied formatting, and
+the group chooser of the Key Editor follows the key's group by its new name (a deleted one: "(no group)"). Like the groups themselves the
+change applies at once, also if the key edit is cancelled afterwards. Not tested: the wiring in `KeyboardForm` and the chooser (by hand).
+
 The dialog edits a copy (`_groups`), so the keys must be fixed by whoever applies the result. Track by group object, not
 by name:
 
