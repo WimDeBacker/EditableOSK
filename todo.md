@@ -50,6 +50,15 @@ Not planned; decided later, if at all (from the touch-friendly work, 2.4.8):
 
 ## Completed
 
+### Dutch word database: gaps for spoken language, disability and care filled ✓ *(word prediction content, 2026-10-09 / 10)*
+
+`worddb_NL.xml` comes from a newspaper corpus (mostly "Wablieft"): the words of a conversation and of care were missing or ranked far too low (`ja=37, nee=26, sorry=16, prima=10, alsjeblieft=3, kunt=3`). Done, with lists the owner reviewed:
+- **Cleanup:** 12 single letters that are no words removed (`B C D g H K M n P r x Z`) with the 39 word links that pointed at them; `u` and `o` stay. The English source (not in git) got the same: 13 letters, 9,631 links; `I` and `a` stay.
+- **2,339 new words** (14,210 → 16,549), all letters only (the database has no hyphen or apostrophe words) and at a value on the database's rank scale (250 very common in speech, 120 common, 50 regular, 20 occasional): greetings and politeness, interjections, spoken adverbs, health and the body, family, house, food, daily routine, technology and messages, Flemish colloquial words, regular verb forms (made by rule: 't kofschip), disability, aids and accessibility, medical and hospital words, care and care professions, rights and administration, mental health.
+- **107 existing words raised** (`ja, nee, dank, bedankt, sorry, prima, alsjeblieft, kunt, wilt, gehad, geweest, gedaan, gegaan, gezegd`, body parts, colours, numbers, …).
+- The words come from my own knowledge; the values are estimates, not counts. The scale is a rank (the top words are consecutive: `de=778, in=777, het=776 …`), so the order of the very top is partly arbitrary; it was left alone. Not done: lowering words that are too high for this use (`Obama`, `Trump`, `Boonen`, `Wablieft`, `Spelen`); raising care words that are already in the database but low (e.g. `rolstoel=34`).
+- Proposals (not in git): `worddb_NL_aanvullingen_voorstel_1.txt`, `_2`, `_3` and `worddb_NL_te_lage_woorden_voorstel.txt` next to the project; backups of the sources in `C:\dev\worddb_backup_2026-10-09\`.
+
 ### Import of learned words ✓ *(word prediction; was Priority 4, found by the owner 2026-10-07, completed 2026-10-09)*
 
 Keyboard Editor → Word prediction has **Import…** under **Export…**: it **merges** a file made with Export into the words learned on this PC (the owner's decision; "replace" was the first proposal). Counts of words and word pairs are added together, new words, new pairs and candidates are taken over, a candidate that is a word after the merge is dropped, and nothing learned here is removed. Details:
