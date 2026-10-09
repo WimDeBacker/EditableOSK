@@ -2,7 +2,7 @@
 
 ## Pending
 
-Numbering: **P** = priority, then sub-sections, steps and details (**1.1**, **3.4**). The open priorities were numbered from 1 again on 2026-10-06 (Priority 4 was added on 2026-10-07); the items under Completed keep the numbers they had when they were done (so "Priority 7" there is not Priority 7 here). Status marks: ✓ done, ▶ in progress, ☐ not started.
+Numbering: **P** = priority, then sub-sections, steps and details (**1.1**, **3.4**). The open priorities were numbered from 1 again on 2026-10-06 (Priority 4 was added on 2026-10-07, Priority 5 on 2026-10-09); the items under Completed keep the numbers they had when they were done (so "Priority 7" there is not Priority 7 here). Status marks: ✓ done, ▶ in progress, ☐ not started.
 
 ### Priority 1 — Scanning ☐ *(accessibility)*
 
@@ -36,7 +36,14 @@ Keyboard Editor → Word prediction has **Export…** (copies the overlay file, 
 - 4.4 **Strings** in `LanguageManager.cs` and `lang_nl.xml`: button, tooltip (the export tooltip may then say "backup, or transfer and import on another PC"), dialog title, confirmation question, error messages. The new button joins the layout guards of the Keyboard Editor (44 px, no clipping, 480 px).
 - 4.5 **Tests:** import of a valid file replaces the overlay and keeps a `.bak`; wrong language, a base database, a corrupt file and a missing file change nothing; the confirmation "No" changes nothing; export then import gives back the same words (round trip); the backend seam (`_backend`, as used for export) is extended so the tests need no dialog.
 
-## Ideas
+### Priority 5 — Open `.kbl` files with this program ☐ *(installer; requested by the owner 2026-10-09)*
+
+The installer should link `.kbl` layout files to the keyboard, so that a double-click on a layout opens it in the keyboard. Today the program does not even read a file name from the command line (`Program.Main` only knows `--test` and `--gallery`), so both halves are needed:
+
+- 5.1 **Installer** (`installer/setup.iss`): `ChangesAssociations = yes` in `[Setup]`, an optional task "Open `.kbl` layout files with Editable On-Screen Keyboard" in `[Tasks]` (decision: checked by default?), and `[Registry]` entries for the file type: `.kbl` → a program id (e.g. `EditableOSK.Layout`), its description ("Keyboard layout"), `DefaultIcon` (the program's icon, or a file icon of its own) and `shell\open\command` = `"{app}\OnScreenKeyboard.exe" "%1"`, with `uninsdeletekey` so the uninstaller removes them. The installer runs as administrator (`PrivilegesRequired = admin`), so the keys go under the machine (HKLM) classes. Windows 10/11 may keep an earlier choice of the user for `.kbl`; there is nothing to fix there.
+- 5.2 **Program:** `Program.Main` hands the first argument that is a file to `KeyboardForm`, which loads it at start-up instead of the last used layout (the same path as `ApplyLoadedSettings`, including the checks for an invalid or unreadable file and the missing-font warning). Quoted paths with spaces, a relative path, a file that does not exist, and more than one argument must behave sensibly. `--test` and `--gallery` stay as they are.
+- 5.3 **Decision for the owner:** what happens when the keyboard is already running and the user double-clicks another `.kbl`: a second keyboard window (simplest, but two always-on-top keyboards), or the file is handed to the running keyboard (one instance, via a mutex and a message to the existing window; recommended).
+- 5.4 **Tests:** the argument parsing (extracted so it can be tested without a window); by hand: double-click a `.kbl` with the keyboard closed and with it running, a file in a folder with spaces, and the uninstaller removing the link.
 
 Not planned; decided later, if at all (from the touch-friendly work, 2.4.8):
 

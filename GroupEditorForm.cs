@@ -790,8 +790,12 @@ namespace OnScreenKeyboard
                     }
                     case ImportAction.Add:
                     {
-                        _groups.Add(group.Clone());    // a clone: no shared references with the imported data
-                        usedNames.Add(group.Name);
+                        // A clone: no shared references with the imported data. The name is made unique here as well, so a group is never
+                        // added under a name that is taken, even if the dialog did not flag it.
+                        var clone = group.Clone();
+                        clone.Name = GetUniqueName(group.Name, usedNames);
+                        _groups.Add(clone);
+                        usedNames.Add(clone.Name);
                         break;
                     }
                     // ImportAction.Skip: the group is intentionally omitted.

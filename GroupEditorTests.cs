@@ -348,6 +348,33 @@ namespace OnScreenKeyboard
             using (var d = new ImportDialog(imported, existing))
                 Assert(d.Decisions == null, "cancelling gives no decisions");
 
+            // A name twice in the file (review8_10 finding 10): the second one is a conflict, and nothing is added under a taken name.
+            {
+                var twice = new List<KeyGroup> { new KeyGroup { Name = "Fun" }, new KeyGroup { Name = "fun" }, new KeyGroup { Name = "Other" } };
+                using (var d = new ImportDialog(twice, new HashSet<string>(new[] { "standard" }, StringComparer.OrdinalIgnoreCase)))
+                {
+                    var rows = Priv<System.Collections.IList>(d, "_rows");
+                    TouchChoiceButton Chooser(int i) => (TouchChoiceButton)rows[i].GetType().GetField("Item4").GetValue(rows[i]);
+                    Assert(Chooser(0).Items.Count == 1 && Chooser(1).Items.Count == 3 && Chooser(2).Items.Count == 1,
+                        "a name that came earlier in the same file (any case) is a conflict: the first is new, the second has three choices, an unrelated one is new");
+                    Assert(Chooser(1).SelectedItem.Text == Lang.T("Skip"), "…and the default for it is Skip");
+                    Chooser(1).SelectedIndex = Chooser(1).Items.FindIndex(i => i.Text == actAddNew);
+                    accepts.Invoke(d, new object[] { actUpdate, actOverwrite, actAddNew });
+                    using var ed = new GroupEditorForm(new List<KeyGroup> { new KeyGroup { Name = SettingsManager.StandardGroupName } });
+                    ed.ApplyImportDecisions(d.Decisions);
+                    ed.CommitToResult();
+                    var names = ed.ResultGroups.Select(g => g.Name).ToList();
+                    Assert(names.SequenceEqual(new[] { "standard", "Fun", "fun 2", "Other" }), $"applied: Add, Add as new, Add give unique names ({string.Join(", ", names)})");
+                }
+                // Even a plain Add of a taken name (the dialog did not flag it) is made unique.
+                using (var ed = new GroupEditorForm(new List<KeyGroup> { new KeyGroup { Name = SettingsManager.StandardGroupName } }))
+                {
+                    ed.ApplyImportDecisions(new[] { (new KeyGroup { Name = "Fun" }, GroupEditorForm.ImportAction.Add), (new KeyGroup { Name = "Fun" }, GroupEditorForm.ImportAction.Add) });
+                    ed.CommitToResult();
+                    Assert(ed.ResultGroups.Select(g => g.Name).SequenceEqual(new[] { "standard", "Fun", "Fun 2" }), "two plain Adds of the same name: the second gets a number");
+                }
+            }
+
             // ── TouchMessage: the safe answer is the default ──
             using (var d = new TouchMessage("t", "Delete it?", question: true))
             {

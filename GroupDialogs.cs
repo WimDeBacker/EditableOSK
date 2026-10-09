@@ -139,7 +139,11 @@ namespace OnScreenKeyboard
             var import = MakeTouchButton(() => Lang.T("Import"), FluentButton.Variant.Success);
             BuildFrame(MakeFooter(null, cancel, import), withSections: false);
 
-            bool anyConflict = imported.Any(g => !IsStandard(g) && existing.Contains(g.Name));
+            // A group is in conflict when the local list has that name, or when an earlier group in this same file already has it (a file
+            // written by hand or merged from two): both would be added under one name otherwise. Names compare without regard to case.
+            var seenInFile = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var conflicts = imported.Select(g => !IsStandard(g) && (existing.Contains(g.Name) | !seenInFile.Add(g.Name))).ToList();
+            bool anyConflict = conflicts.Any(c => c);
             string info = anyConflict
                 ? string.Format(Lang.T("{0} groups found — choose action for each conflict:"), imported.Count)
                 : string.Format(Lang.T("{0} groups found — all new, no conflicts."), imported.Count);
@@ -165,10 +169,11 @@ namespace OnScreenKeyboard
                    actSkip = Lang.T("Skip"), actUpdateStd = Lang.T("Update standard group style");
 
             int tab = 0;
-            foreach (var g in imported)
+            for (int gi = 0; gi < imported.Count; gi++)
             {
+                var g = imported[gi];
                 bool std = IsStandard(g);
-                bool conflict = !std && existing.Contains(g.Name);
+                bool conflict = conflicts[gi];
                 string status; string[] actions; int defaultIdx;
                 if (std)           { status = Lang.T("Protected"); actions = new[] { actUpdateStd, actSkip };            defaultIdx = 1; }   // default Skip: no accidental overwrite
                 else if (conflict) { status = Lang.T("Conflict");  actions = new[] { actOverwrite, actAddNew, actSkip }; defaultIdx = 2; }

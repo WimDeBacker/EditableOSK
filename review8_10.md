@@ -420,6 +420,12 @@ foreach (var c in _layout.Cells)
 
 ## Fix 10: duplicate group names inside one import file (ImportDialog and ApplyImportDecisions)
 
+**Status: applied** (2026-10-09), built and tested on Windows (filtered run: the Group Editor and dialog groups, 218 checks). As proposed: in `ImportDialog` a name that
+came earlier in the same file (any case) is a "Conflict" (Overwrite / Add as new / Skip, default Skip) and counts for the "conflicts" text;
+`ApplyImportDecisions` makes the name of a plain `Add` unique as well (`GetUniqueName`). Nothing in `LoadGroupsFromFile` removes duplicates, so a
+hand-edited or merged file can have them. Of two groups with the same name the first one stays "New" (it is added as it is), the later ones
+can be overwritten into it, added with a number or skipped.
+
 Both places: treat a name already seen in the file as a conflict, and make `Add` safe by itself.
 
 ```csharp
