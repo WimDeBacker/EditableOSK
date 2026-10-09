@@ -89,16 +89,17 @@ namespace OnScreenKeyboard
             ["break"]       = ("{BREAK}",  "Pause", "Pause"),
 
             // Modifier keys. The labels must be exactly the ones in KeyLayout.ModifierLabels: the keyboard recognises a modifier
-            // by its label, and the send text is the one the stock layouts use (Shift and AltGr send nothing themselves).
+            // by its label, and a modifier key sends nothing itself (the Key Editor shows a key like that as a modifier). Caps used
+            // to carry {CAPSLOCK} (the stock layouts still do), but it is never sent: Caps Lock is a latch of the keyboard.
             ["shift"]    = ("",         "Shift", "Shift"),
-            ["ctrl"]     = ("^",        "Ctrl",  "Ctrl"),
-            ["control"]  = ("^",        "Ctrl",  "Ctrl"),
-            ["alt"]      = ("%",        "Alt",   "Alt"),
+            ["ctrl"]     = ("",         "Ctrl",  "Ctrl"),
+            ["control"]  = ("",         "Ctrl",  "Ctrl"),
+            ["alt"]      = ("",         "Alt",   "Alt"),
             ["altgr"]    = ("",         "AltGr", "AltGr"),
-            ["win"]      = ("win:",     "Win",   "Win"),
-            ["windows"]  = ("win:",     "Win",   "Win"),
-            ["caps"]     = ("{CAPSLOCK}", "Caps", "Caps"),
-            ["capslock"] = ("{CAPSLOCK}", "Caps", "Caps"),
+            ["win"]      = ("",         "Win",   "Win"),
+            ["windows"]  = ("",         "Win",   "Win"),
+            ["caps"]     = ("",         "Caps",  "Caps"),
+            ["capslock"] = ("",         "Caps",  "Caps"),
         };
 
         /// <summary>The function keys F1 to F16 ([f1] … [f16], any case); null when <paramref name="token"/> is none of them.</summary>

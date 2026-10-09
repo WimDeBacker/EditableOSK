@@ -917,6 +917,8 @@ namespace OnScreenKeyboard
         private SendMode DetectSendMode(string send, string label)
         {
             if (string.IsNullOrEmpty(send) && _modifiers.Any(m => m.Label == label)) return SendMode.Modifier;
+            // The stock layouts give Caps the send text {CAPSLOCK}, which is never sent (Caps Lock is a latch of the keyboard, decided by the label).
+            if (label == "Caps" && send == "{CAPSLOCK}") return SendMode.Modifier;
             if (!string.IsNullOrEmpty(send) && send.StartsWith("wp:", StringComparison.Ordinal)) return SendMode.WordPrediction;
             if (!string.IsNullOrEmpty(send) && send.StartsWith("layout:", StringComparison.Ordinal)) return SendMode.Layout;
             if (!string.IsNullOrEmpty(send) && !SendKeysHelper.IsPlainText(send)) return SendMode.KeySequence;

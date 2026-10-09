@@ -59,14 +59,22 @@ namespace OnScreenKeyboard
 
             // Modifier keys: the label must be one the keyboard recognises as a modifier, the send text the one the stock layouts use.
             foreach (var (token, label, send) in new[] {
-                ("shift", "Shift", ""), ("ctrl", "Ctrl", "^"), ("alt", "Alt", "%"), ("altgr", "AltGr", ""),
-                ("win", "Win", "win:"), ("caps", "Caps", "{CAPSLOCK}") })
+                ("shift", "Shift", ""), ("ctrl", "Ctrl", ""), ("alt", "Alt", ""), ("altgr", "AltGr", ""),
+                ("win", "Win", ""), ("caps", "Caps", "") })
             {
                 var k = One("[" + token + "]");
                 Assert(k.Label == label && k.Send == send && !k.IsBlank, $"[{token}] is the {label} key (send '{send}')");
+                // The Key Editor must open such a key as a modifier (review8_10 finding 4), as it does for the stock layouts.
+                using (var ke = new KeyEditorForm(new KeyProps(k.Label, k.Send), null))
+                    Assert(Priv<TouchChoiceButton[]>(ke, "_types")[0].SelectedItem?.Text == Lang.T("Modifier").Replace("&", ""),
+                        $"[{token}]: the Key Editor opens the key as a Modifier");
                 Assert(KeyLayout.ModifierLabels.Contains(k.Label), $"[{token}]: the keyboard treats the key as a modifier");
                 Assert(NewKeyboardWizard.ClassifyKey(k.Label, k.Send) == "Besturing", $"[{token}] is put in the Besturing group");
             }
+            // The stock layouts still give Caps the send text {CAPSLOCK} (never sent): the Key Editor shows that key as a Modifier too.
+            using (var stockCaps = new KeyEditorForm(new KeyProps("Caps", "{CAPSLOCK}"), null))
+                Assert(Priv<TouchChoiceButton[]>(stockCaps, "_types")[0].SelectedItem?.Text == Lang.T("Modifier").Replace("&", ""),
+                    "a Caps key with the stock send text {CAPSLOCK} opens as a Modifier");
             Assert(One("[SHIFT]").Label == "Shift" && One("[AltGr]").Label == "AltGr" && One("[Windows]").Label == "Win" && One("[Control]").Label == "Ctrl",
                 "key names are not case sensitive and have common aliases");
 
@@ -137,7 +145,7 @@ namespace OnScreenKeyboard
             string LabelAtCell(int r, int c) => layout.Cells.First(x => x.Row == r && x.Col == c).Props.Label;
             Assert(LabelAtCell(0, 0) == "Shift" && LabelAtCell(0, 2) == "AltGr" && LabelAtCell(1, 1) == "Win" && LabelAtCell(1, 3) == "Home" && LabelAtCell(1, 4) == "F5",
                 "the created layout has the special keys in their cells");
-            Assert(layout.Cells.First(x => x.Row == 1 && x.Col == 2).Props.Send == "%" && layout.Cells.First(x => x.Row == 1 && x.Col == 3).Props.GroupName == "Besturing",
+            Assert(layout.Cells.First(x => x.Row == 1 && x.Col == 2).Props.Send == "" && layout.Cells.First(x => x.Row == 1 && x.Col == 2).Props.Label == "Alt" && layout.Cells.First(x => x.Row == 1 && x.Col == 3).Props.GroupName == "Besturing",
                 "the created keys carry the send text and group of the stock layouts");
         }
 

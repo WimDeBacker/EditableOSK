@@ -197,6 +197,15 @@ _ => 0,
 
 ## Fix 4: wizard modifier keys have a non-empty Send (WizardKeyParser)
 
+**Status: applied** (2026-10-09), built and tested on Windows (filtered run: all Wizard groups, 712 checks). Ctrl, Alt, Win (and Shift, AltGr)
+have `Send = ""`; the comment is corrected. Caps too, a step further than proposed (found by the owner: Caps was the only key that still opened
+as Key/Shortcut): `{CAPSLOCK}` is never sent, Caps Lock is a latch decided by the label (`ToggleModifier`), so the wizard writes `""`, and
+`KeyEditorForm.DetectSendMode` shows a Caps key with the stock send text `{CAPSLOCK}` (qwerty.kbl and the other stock layouts) as a Modifier. `WizardTests` now expect `""` and open each such key in a
+`KeyEditorForm`, which must show it as a Modifier. Checked first: `qwerty.kbl` indeed has `Send=""` for Ctrl, Alt and Win, and the
+keyboard decides "modifier" by label only (`KeyLayout.ModifierLabels`), so the old send text did nothing at run time; only the Key Editor was
+affected. Layouts that an earlier wizard already saved keep their `^` / `%` / `win:` until the key is opened and set to Modifier in the Key Editor
+(no migration).
+
 The stock layouts use `Send=""` for Ctrl, Alt, Win and AltGr (the engine recognises them by label). Only Caps keeps
 `{CAPSLOCK}`.
 
