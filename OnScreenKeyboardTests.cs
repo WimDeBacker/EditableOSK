@@ -4740,6 +4740,16 @@ namespace OnScreenKeyboard
                 var missing = KeyboardForm.GetMissingFonts(theme, layout);
                 Assert(missing.Contains(FakeFont), "GetMissingFonts: finds a font used only by a key");
                 Assert(!missing.Contains("Arial"), "GetMissingFonts: installed fonts are not reported");
+
+                // The warning is shown once per file, not for a layout: key, and not when nothing is missing (review8_10 finding 5).
+                var warned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                Assert(!KeyboardForm.ShouldWarnAboutFonts(warned, "a.kbl", false, 0), "font warning: nothing missing, no warning");
+                Assert(!KeyboardForm.ShouldWarnAboutFonts(warned, "a.kbl", true, 2), "font warning: not for a file loaded by a layout: key");
+                Assert(KeyboardForm.ShouldWarnAboutFonts(warned, "a.kbl", false, 2), "font warning: the first time a file with missing fonts is opened");
+                Assert(!KeyboardForm.ShouldWarnAboutFonts(warned, "A.KBL", false, 2), "font warning: not again for the same file (any case)");
+                Assert(KeyboardForm.ShouldWarnAboutFonts(warned, "b.kbl", false, 1), "font warning: another file warns again");
+                Assert(KeyboardForm.ShouldWarnAboutFonts(new HashSet<string>(), "c.kbl", false, 1) && !KeyboardForm.ShouldWarnAboutFonts(warned, "d.kbl", true, 1) && KeyboardForm.ShouldWarnAboutFonts(warned, "d.kbl", false, 1),
+                    "font warning: a layout: key does not use up the warning; opening the same file from the Load dialog still warns");
             }
 
             // ── FluentDialogBase.SelectOrInsertFont ─────────────────────────

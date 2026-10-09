@@ -2388,7 +2388,7 @@ namespace OnScreenKeyboard
                 SetMode(Mode.Normal);
                 _history.Clear();
                 RefreshUndoRedoState();
-                ApplyLoadedSettings(filePath);
+                ApplyLoadedSettings(filePath, fromLayoutKey: true);
                 return;
             }
 
@@ -3859,7 +3859,7 @@ namespace OnScreenKeyboard
         /// Shows an error dialog if the file cannot be read or is not a valid layout.
         /// On success, rebuilds all buttons and resizes the window to match saved dimensions.
         /// </summary>
-        private void ApplyLoadedSettings(string path)
+        private void ApplyLoadedSettings(string path, bool fromLayoutKey = false)
         {
             GridLayout loaded = null; Exception loadEx = null;
             try { loaded = SettingsManager.LoadSettings(_theme, _window, _meta, path); }
@@ -3880,7 +3880,7 @@ namespace OnScreenKeyboard
             RebuildAllButtons();
             Size = new Size(_window.WindowWidth, _window.WindowHeight);
             AutoSave();
-            WarnIfFontsMissing(_theme, _layout);
+            WarnIfFontsMissing(_theme, _layout, fromLayoutKey);
         }
 
         /// <summary>
@@ -3912,14 +3912,36 @@ namespace OnScreenKeyboard
         /// fallback) with no indication anything's different from what the file's author
         /// intended.
         /// </summary>
-        private void WarnIfFontsMissing(VisualTheme theme, GridLayout layout)
+        private void WarnIfFontsMissing(VisualTheme theme, GridLayout layout, bool fromLayoutKey = false)
         {
             var missing = GetMissingFonts(theme, layout);
-            if (missing.Count == 0) return;
-            MessageBox.Show(
-                string.Format(Lang.T("font missing msg"), string.Join(", ", missing)),
-                Lang.T("font missing title"),
-                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            if (!ShouldWarnAboutFonts(_fontWarnedFiles, _currentFilePath, fromLayoutKey, missing.Count)) return;
+
+            string msg   = string.Format(Lang.T("font missing msg"), string.Join(", ", missing));
+            string title = Lang.T("font missing title");
+            // The keyboard is an always-on-top window that never takes the focus: a box without an owner can open behind it. With the
+            // keyboard as its owner it stays in front.
+            void Show() { if (!IsDisposed) MessageBox.Show(this, msg, title, MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+
+            if (IsHandleCreated && Visible) { Show(); return; }
+            // At start-up the layout is loaded before the window is on screen: wait until it is (and until its first layout pass is done).
+            EventHandler shown = null;
+            shown = (s, e) => { Shown -= shown; BeginInvoke((Action)Show); };
+            Shown += shown;
+        }
+
+        /// <summary>The files for which the missing-font warning has been shown (one warning per file).</summary>
+        private readonly HashSet<string> _fontWarnedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Whether to warn about missing fonts: only when some are missing, only once for each file, and never for a file that was
+        /// loaded by pressing a <c>layout:</c> key (a box that appears while the user is typing would be in the way; the font is
+        /// substituted as before, and opening the file from the Load dialog still warns). Marks the file as warned when it says yes.
+        /// </summary>
+        internal static bool ShouldWarnAboutFonts(HashSet<string> warnedFiles, string file, bool fromLayoutKey, int missingCount)
+        {
+            if (missingCount == 0 || fromLayoutKey) return false;
+            return warnedFiles.Add(file ?? "");
         }
 
         /// <summary>
@@ -3930,7 +3952,7 @@ namespace OnScreenKeyboard
         {
             string msg = Lang.T("Invalid file msg");
             if (!string.IsNullOrEmpty(detail)) msg += $"\n\n{detail}";
-            MessageBox.Show(msg, $"{Lang.T("Invalid file title")} — {fileName}",
+            MessageBox.Show(this, msg, $"{Lang.T("Invalid file title")} — {fileName}",
                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }

@@ -225,6 +225,12 @@ The stock layouts use `Send=""` for Ctrl, Alt, Win and AltGr (the engine recogni
 
 ## Fix 5: font warning dialog (KeyboardForm.WarnIfFontsMissing)
 
+**Status: applied** (2026-10-09), built and tested on Windows (filtered run: the font tests, 69 checks). As proposed: the box has `this` as owner (so has the
+invalid-file box, `ShowFileError`), it waits for `Shown` at start-up (`TryAutoLoad` runs inside the constructor), and it is shown once per file;
+`ApplyLoadedSettings(path, fromLayoutKey)` is called with `true` from the `layout:` key, which never warns (and does not use up the one warning of
+that file). `KeyboardForm` cannot be built in the suite, so the rule was extracted as `KeyboardForm.ShouldWarnAboutFonts` and is tested
+directly; the owner, the start-up wait and the key path are tested by hand only.
+
 Give the box an owner, never show it before the form is visible, and show it once per file.
 
 ```csharp
