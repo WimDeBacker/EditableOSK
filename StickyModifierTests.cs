@@ -37,6 +37,21 @@ namespace OnScreenKeyboard
             Assert(Taps(ModifierState.Off, true, 3) == ModifierState.Off, "on: tap 3 clears it");
             Assert(Taps(ModifierState.Off, true, 4) == ModifierState.Latched, "on: the cycle starts again");
 
+            // Caps is a lock only (review8_10 finding 14): one tap on, the next tap off, with the option on or off; a key does not clear it.
+            foreach (bool sticky in new[] { false, true })
+            {
+                var caps = ModifierState.Off;
+                var seq = new ModifierState[4];
+                for (int i = 0; i < 4; i++) { caps = ModifierLatch.Toggle(caps, sticky, lockOnly: true); seq[i] = caps; }
+                Assert(seq[0] == ModifierState.Locked && seq[1] == ModifierState.Off && seq[2] == ModifierState.Locked && seq[3] == ModifierState.Off,
+                    $"Caps (option {(sticky ? "on" : "off")}): one tap on, the next tap off, and again");
+                Assert(ModifierLatch.AfterKey(ModifierLatch.Toggle(ModifierState.Off, sticky, lockOnly: true)) == ModifierState.Locked,
+                    $"Caps (option {(sticky ? "on" : "off")}): an ordinary key leaves it on");
+                Assert(ModifierLatch.Toggle(ModifierState.Latched, sticky, lockOnly: true) == ModifierState.Off, $"Caps (option {(sticky ? "on" : "off")}): a leftover latched state is switched off by a tap");
+            }
+            Assert(ModifierLatch.Toggle(ModifierState.Off, true) == ModifierState.Latched && ModifierLatch.Toggle(ModifierState.Latched, true) == ModifierState.Locked,
+                "Shift, Ctrl and Alt are unchanged: with the option on, tap 1 latches and tap 2 locks");
+
             // After an ordinary key: a latched modifier has done its job, a locked one stays, an off one stays off.
             Assert(ModifierLatch.AfterKey(ModifierState.Latched) == ModifierState.Off, "after a key: a latched modifier switches off");
             Assert(ModifierLatch.AfterKey(ModifierState.Locked) == ModifierState.Locked, "after a key: a locked modifier stays on");

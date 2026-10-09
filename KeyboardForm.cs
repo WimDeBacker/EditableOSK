@@ -2718,7 +2718,8 @@ namespace OnScreenKeyboard
             }
 
             // The rule (Off → Latched → Off, or with sticky modifiers Off → Latched → Locked → Off) lives in ModifierLatch so it can be tested.
-            var next = ModifierLatch.Toggle(StateOf(cell), _meta.StickyModifiers);
+            // Caps is a lock only: one tap on, the next tap off (with sticky modifiers it used to need three taps to switch off).
+            var next = ModifierLatch.Toggle(StateOf(cell), _meta.StickyModifiers, lockOnly: cell.Props.Label == "Caps");
             foreach (var c in _layout.Cells)
                 if (c.Props.Label == cell.Props.Label)
                     SetState(c, next);
@@ -2742,13 +2743,12 @@ namespace OnScreenKeyboard
 
         /// <summary>
         /// Clears all one-shot latched modifiers after a regular key is pressed.
-        /// Locked modifiers (click-2 state) and Caps Lock are intentionally preserved.
+        /// Locked modifiers (click-2 state, and Caps Lock, which is a lock from its first tap) are intentionally preserved.
         /// </summary>
         private void ClearModifiers()
         {
-            // Remove one-shot latched mods; keep locked mods and Caps
-            _latchedMods.RemoveWhere(c =>
-                c.Props.Label != "Caps" && ModifierLatch.AfterKey(StateOf(c)) == ModifierState.Off);
+            // Remove one-shot latched mods; a locked mod (Caps included) stays
+            _latchedMods.RemoveWhere(c => ModifierLatch.AfterKey(StateOf(c)) == ModifierState.Off);
             RefreshAllButtons();
         }
 

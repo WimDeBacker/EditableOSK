@@ -509,6 +509,10 @@ This is a decision, not a code change. The licence of SchoolKX / SchoolKX_New is
 
 ## Fix 14: Caps with sticky modifiers (ModifierLatch, KeyboardForm.ToggleModifier)
 
+**Status: applied** (2026-10-09) as proposed below (`lockOnly`), tested in `T_StickyModifiers` (27 checks, filtered run). `KeyboardForm` cannot be built in the
+suite, so the wiring in `ToggleModifier` / `ClearModifiers` is tested by hand only. Visible change: Caps is now drawn in the "locked" colour (amber)
+when on, also with the option off (before it was drawn as a one-shot latch although it behaved as a lock). The Sticky modifiers tooltip does not mention Caps and is unchanged.
+
 Correction to finding 14 after reading `ClearModifiers`: with `StickyModifiers = false` Caps does still act as a lock,
 because `ClearModifiers` skips it by label (Off <-> Latched, never cleared by a key). The real defect is with
 `StickyModifiers = true`: Caps goes Off -> Latched -> Locked -> Off, so it takes three taps, and the first tap looks
