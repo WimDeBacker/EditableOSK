@@ -316,7 +316,10 @@ namespace OnScreenKeyboard
         /// </list>
         /// </para>
         /// </summary>
-        public KeyboardForm()
+        public KeyboardForm() : this(null) { }
+
+        /// <param name="startupLayout">A layout file to open instead of the last used one (a double-click on a .kbl), or null.</param>
+        public KeyboardForm(string startupLayout)
         {
             Text            = "On-Screen Keyboard";
             string _icoPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "icons", "onscreenkeyboard.ico");
@@ -366,6 +369,17 @@ namespace OnScreenKeyboard
             _wpSaveTimer.Start();
 
             TryAutoLoad();
+            if (startupLayout != null)
+            {
+                // A valid file is loaded now (no flash of the previous layout); an invalid one reports its error once the window is up.
+                if (CanLoadLayout(startupLayout)) ApplyLoadedSettings(startupLayout);
+                else Shown += (s, e) => BeginInvoke((Action)(() => ApplyLoadedSettings(startupLayout)));
+            }
+            // Layout files handed over by a double-click while this keyboard is running (see LayoutLaunch).
+            Shown += (s, e) => LayoutLaunch.Listen(path =>
+            {
+                try { if (IsHandleCreated && !IsDisposed) BeginInvoke((Action)(() => OpenLayoutFromOutside(path))); } catch { }
+            });
 
             ResizeEnd   += (s, e) =>
             {
@@ -3630,6 +3644,29 @@ namespace OnScreenKeyboard
             if (dlg.ShowDialog() != DialogResult.OK) return false;      // cancelled: nothing was loaded
             ApplyLoadedSettings(dlg.FileName);
             return true;
+        }
+
+        /// <summary>True when <paramref name="path"/> loads as a valid layout (nothing is applied).</summary>
+        private static bool CanLoadLayout(string path)
+        {
+            try
+            {
+                var g = SettingsManager.LoadSettings(new VisualTheme(), new WindowState(), new LayoutMeta(), path);
+                return g != null && g.IsValid();
+            }
+            catch { return false; }
+        }
+
+        /// <summary>
+        /// Opens a layout another process handed over (double-click on a .kbl while the keyboard runs): brings the keyboard
+        /// back from the taskbar and loads the file. Ignored while a dialog of this keyboard is open.
+        /// </summary>
+        private void OpenLayoutFromOutside(string path)
+        {
+            if (IsDisposed || !Enabled) return;
+            if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Normal;
+            ApplyLoadedSettings(path);
+            ForceTopMost();
         }
 
         /// <summary>

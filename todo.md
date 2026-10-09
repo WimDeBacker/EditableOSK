@@ -4,6 +4,13 @@
 
 Numbering: **P** = priority, then sub-sections, steps and details (**1.1**, **3.4**). The open priorities were numbered from 1 again on 2026-10-06 (Priority 4 was added on 2026-10-07 and is completed, Priority 5 was added on 2026-10-09); the items under Completed keep the numbers they had when they were done (so "Priority 7" there is not Priority 7 here). Status marks: ✓ done, ▶ in progress, ☐ not started.
 
+### Priority 0 — Installed program cannot save its data in `C:\Program Files` ☐ *(installer; found 2026-10-10 while checking `setup.iss`)*
+
+The installer puts the program in `{autopf}\EditableOSK` (Program Files, writable only for administrators), but the program writes next to the exe: `settings.xml` (`SettingsManager.DefaultPath`, also the auto-save of every layout in `{app}`), the learned words `worddb_XX.learned.wfq` (`WordDatabase.DeriveOverlayPath`, same folder as the base file), and `OnScreenKeyboard_error.log`. For a standard user all of these fail silently (`AutoSave` has an empty `catch`; the learned words only reach the error log, which fails too): no layout is remembered, no word is learned. Not seen so far because the program is run from the build folder.
+- 0.1 **Decision for the owner:** (a) store the user's data per user in `%AppData%\EditableOSK` (settings, overlay, log; layouts the user saves go where they choose) — the right fix, a code change in `SettingsManager`, `WordDatabase` and `Program.LogError`, with a one-time move of existing files next to the exe; or (b) `[Dirs] Permissions: users-modify` on `{app}` — one line, but every user can then replace the exe that an administrator may run, and settings are shared by all users of the PC (not recommended).
+- 0.2 The shipped layouts (`azerty.kbl` …) stay in `{app}` (read-only is fine); the first auto-save of a loaded shipped layout must go to the per-user folder, not back into `{app}`.
+- 0.3 Smaller points in `setup.iss`: the "start with Windows" shortcut is in `{userstartup}` (only the installing administrator); `{commonstartup}` covers all users. The uninstaller leaves `*.learned.wfq` and the error log (deliberately: learned words survive a reinstall; say so in the readme).
+
 ### Priority 1 — Scanning ☐ *(accessibility)*
 
 - 1.1 Auto-advance a highlight through keys/rows at a fixed interval.
@@ -26,14 +33,6 @@ Numbering: **P** = priority, then sub-sections, steps and details (**1.1**, **3.
 - 3.4 **Done** — `Program.cs`: UI-thread and unhandled exceptions are logged to `OnScreenKeyboard_error.log` next to the exe instead of showing the dialog, and `Environment.Exit(0)` runs when the main window has closed.
 - 3.5 **To do** — close once in edit mode with the new build: if `OnScreenKeyboard_error.log` appears, its stack trace is the real bug (fix it); if the process still lingers with no log, the main thread is stuck inside `FormClosing` (inspect the threads of the lingering process before ending it).
 
-### Priority 5 — Open `.kbl` files with this program ☐ *(installer; requested by the owner 2026-10-09)*
-
-The installer should link `.kbl` layout files to the keyboard, so that a double-click on a layout opens it in the keyboard. Today the program does not even read a file name from the command line (`Program.Main` only knows `--test` and `--gallery`), so both halves are needed:
-
-- 5.1 **Installer** (`installer/setup.iss`): `ChangesAssociations = yes` in `[Setup]`, an optional task "Open `.kbl` layout files with Editable On-Screen Keyboard" in `[Tasks]` (decision: checked by default?), and `[Registry]` entries for the file type: `.kbl` → a program id (e.g. `EditableOSK.Layout`), its description ("Keyboard layout"), `DefaultIcon` (the program's icon, or a file icon of its own) and `shell\open\command` = `"{app}\OnScreenKeyboard.exe" "%1"`, with `uninsdeletekey` so the uninstaller removes them. The installer runs as administrator (`PrivilegesRequired = admin`), so the keys go under the machine (HKLM) classes. Windows 10/11 may keep an earlier choice of the user for `.kbl`; there is nothing to fix there.
-- 5.2 **Program:** `Program.Main` hands the first argument that is a file to `KeyboardForm`, which loads it at start-up instead of the last used layout (the same path as `ApplyLoadedSettings`, including the checks for an invalid or unreadable file and the missing-font warning). Quoted paths with spaces, a relative path, a file that does not exist, and more than one argument must behave sensibly. `--test` and `--gallery` stay as they are.
-- 5.3 **Decision for the owner:** what happens when the keyboard is already running and the user double-clicks another `.kbl`: a second keyboard window (simplest, but two always-on-top keyboards), or the file is handed to the running keyboard (one instance, via a mutex and a message to the existing window; recommended).
-- 5.4 **Tests:** the argument parsing (extracted so it can be tested without a window); by hand: double-click a `.kbl` with the keyboard closed and with it running, a file in a folder with spaces, and the uninstaller removing the link.
 
 Not planned; decided later, if at all (from the touch-friendly work, 2.4.8):
 
@@ -49,6 +48,13 @@ Not planned; decided later, if at all (from the touch-friendly work, 2.4.8):
 ---
 
 ## Completed
+
+### Open `.kbl` files with this program ✓ *(installer + program; was Priority 5, requested by the owner 2026-10-09, done 2026-10-10)*
+
+- **Program:** `Program.Main` takes the first argument that is not an option (`LayoutLaunch.FindLayoutArgument`: quotes, relative paths and spaces handled; a missing or invalid file is ignored) and starts `KeyboardForm(layout)`, which loads it instead of the last used layout (a valid file before the window shows; an invalid one reports its error once the window is up; the missing-font warning works as usual).
+- **One keyboard (decision 5.3, the recommended option):** a double-click while a keyboard runs hands the path to it through a named pipe (`LayoutLaunch.TrySendToRunning` / `Listen`, one pipe per Windows user, current user only, only existing absolute `.kbl` paths accepted); the running keyboard restores itself from the taskbar and loads the file, and the new process ends. Launching without a file still starts a keyboard as before. Not handed over while a dialog of the keyboard is open.
+- **Installer** (`installer/setup.iss`): `ChangesAssociations = yes`; task `kblassoc` ("Open keyboard layout files (.kbl) with …", checked by default); `[Registry]` under `HKA\Software\Classes`: `.kbl` → `EditableOSK.Layout` ("Keyboard layout", the program icon, `"{app}\OnScreenKeyboard.exe" "%1"`), removed again by the uninstaller. Not compiled here (no Inno Setup compiler on this PC).
+- Tests: `T_LayoutLaunch` (argument parsing, acceptance rules, hand-over over a pipe of its own). **By hand, still to do:** build the installer; double-click a `.kbl` with the keyboard closed and with it running (also minimized), a file in a folder with spaces, and check that the uninstaller removes the link. Windows 10/11 may keep an earlier choice of the user for `.kbl`; there is nothing to fix there.
 
 ### English word database: gaps filled, capitalised names lowered ✓ *(word prediction content, 2026-10-10)*
 

@@ -113,7 +113,12 @@ namespace OnScreenKeyboard
             Application.ThreadException += (s, e) => LogError("UI thread", e.Exception);
             AppDomain.CurrentDomain.UnhandledException += (s, e) => LogError("unhandled", e.ExceptionObject as Exception);
 
-            Application.Run(new KeyboardForm());                  // Create the main window and start the event loop
+            // A layout file on the command line (double-click on a .kbl): a keyboard that is already running opens it and this
+            // process ends; otherwise this keyboard starts with it.
+            string layoutArg = LayoutLaunch.FindLayoutArgument(args, Environment.CurrentDirectory);
+            if (layoutArg != null && LayoutLaunch.TrySendToRunning(layoutArg)) return 0;
+
+            Application.Run(new KeyboardForm(layoutArg));         // Create the main window and start the event loop
 
             // Reaching here means the user closed the keyboard window normally. End the process now, whatever else is still
             // alive (a stray foreground thread, a hook): a closed keyboard must never leave OnScreenKeyboard.exe running,

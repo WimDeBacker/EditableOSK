@@ -44,6 +44,9 @@ DefaultGroupName         = {#AppName}
 ; One installer per machine, not per user (requires elevation)
 PrivilegesRequired       = admin
 
+; The .kbl file type is registered (task "kblassoc"): tell Explorer to refresh its associations afterwards
+ChangesAssociations      = yes
+
 ; Output
 OutputDir                = Output
 OutputBaseFilename       = {#AppShortName}-{#AppVersion}-Setup
@@ -80,6 +83,24 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; \
 ; Run at Windows startup — unchecked by default
 Name: "startup"; Description: "Start automatically with Windows"; \
     GroupDescription: "Startup:"; Flags: unchecked
+
+; Open .kbl layout files with this program (double-click) — checked by default
+Name: "kblassoc"; Description: "Open keyboard layout files (.kbl) with {#AppName}"; \
+    GroupDescription: "File type:"
+
+; ── [Registry] ──────────────────────────────────────────────────────────────
+; The file type .kbl → program id EditableOSK.Layout → "OnScreenKeyboard.exe" "<file>". HKA is the machine (HKLM) classes here, since
+; the installer runs as administrator. uninsdeletekey removes the keys again when the program is uninstalled.
+
+[Registry]
+Root: HKA; Subkey: "Software\Classes\.kbl"; ValueType: string; ValueName: ""; ValueData: "EditableOSK.Layout"; \
+    Flags: uninsdeletevalue; Tasks: kblassoc
+Root: HKA; Subkey: "Software\Classes\EditableOSK.Layout"; ValueType: string; ValueName: ""; ValueData: "Keyboard layout"; \
+    Flags: uninsdeletekey; Tasks: kblassoc
+Root: HKA; Subkey: "Software\Classes\EditableOSK.Layout\DefaultIcon"; ValueType: string; ValueName: ""; \
+    ValueData: "{app}\icons\onscreenkeyboard.ico"; Tasks: kblassoc
+Root: HKA; Subkey: "Software\Classes\EditableOSK.Layout\shell\open\command"; ValueType: string; ValueName: ""; \
+    ValueData: """{app}\{#AppExeName}"" ""%1"""; Tasks: kblassoc
 
 ; ── [Files] ─────────────────────────────────────────────────────────────────
 
