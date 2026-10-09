@@ -320,14 +320,14 @@ namespace OnScreenKeyboard
                 // is guaranteed to see the fully-constructed snapshot contents —
                 // including its Candidates and OverlayPath, which belong to this file
                 // and so can never be observed paired with another file's database.
+                // Nothing loaded from the previous file is unsaved any more. Cleared BEFORE publishing: a word recorded on the UI thread
+                // right after the publish sets the flag again, and clearing afterwards would have marked it as saved.
+                _dirty = false;
                 _snapshot = snap;   // volatile write (release fence)
                 LoadError = null;
                 // _isLoaded is set AFTER the finally block so the IsLoading flag
                 // is already false when IsLoaded becomes true — no window where
                 // both flags are true simultaneously (fixes finding #8).
-
-                // Nothing loaded from the previous file is unsaved any more.
-                _dirty = false;
             }
             finally
             {
@@ -1262,6 +1262,7 @@ namespace OnScreenKeyboard
                     writer.WriteEndDocument();
                 }
 
+                if (WriteDelayMsForTest > 0) System.Threading.Thread.Sleep(WriteDelayMsForTest);      // tests: the window between the temp file and the replace
                 if (File.Exists(path))
                     File.Replace(tmp, path, path + ".bak");
                 else
@@ -1286,9 +1287,23 @@ namespace OnScreenKeyboard
         {
             var snap = _snapshot;
             if (!_isLoaded || snap.OverlayPath == null) return;
-            WriteSaveData(BuildSaveData(snap), snap.OverlayPath);
-            _dirty = false;
+            _dirty = false;                                   // before the copy, as SaveIfDirty does: a change made after it stays dirty
+            SaveData data;
+            try   { data = BuildSaveData(snap); }
+            catch { _dirty = true; throw; }
+            try
+            {
+                // Waits for a background write that is running (both use the same ".tmp" file), then writes the newer data after it.
+                lock (_writeLock) WriteSaveData(data, snap.OverlayPath);
+            }
+            catch { _dirty = true; throw; }
         }
+
+        /// <summary>One writer of the overlay file at a time: the periodic background save and the save when the keyboard closes.</summary>
+        private static readonly object _writeLock = new object();
+
+        /// <summary>For the tests: makes every write take this long (milliseconds), so a save that overlaps another can be provoked.</summary>
+        internal static int WriteDelayMsForTest;
 
         /// <summary>
         /// Saves to the overlay file on a background thread, but only if
@@ -1319,7 +1334,7 @@ namespace OnScreenKeyboard
 
             System.Threading.Tasks.Task.Run(() =>
             {
-                try   { WriteSaveData(data, path); }
+                try   { lock (_writeLock) WriteSaveData(data, path); }
                 catch { _dirty = true; /* best-effort — still unsaved, retried on the next cycle */ }
                 finally { _saving = false; }
             });

@@ -3017,6 +3017,26 @@ namespace OnScreenKeyboard
                 WordDatabase.SaveNow();                   // flush it
                 assert(!WordDatabase.IsDirty, "dirty: SaveNow clears it again");
 
+                // Closing the keyboard while the periodic save is still writing (review8_10 finding 8): both write the same ".tmp" file.
+                // SaveNow must wait for the running write and then write the newer data, without an exception.
+                WordDatabase.WriteDelayMsForTest = 500;
+                try
+                {
+                    WordDatabase.RecordWord(null, "gggg");
+                    WordDatabase.SaveIfDirty();                       // the background write starts and takes 500 ms
+                    System.Threading.Thread.Sleep(100);
+                    WordDatabase.RecordWord(null, "hhhh");            // learned after the background copy was taken
+                    bool closeFailed = false;
+                    try { WordDatabase.SaveNow(); } catch { closeFailed = true; }
+                    assert(!closeFailed, "close while saving: SaveNow does not fail on the file the background save is writing");
+                    LsWaitSaved();
+                    string ovLate = System.IO.File.ReadAllText(lsBOv);
+                    assert(ovLate.Contains("gggg") && ovLate.Contains("hhhh"),
+                        "close while saving: the file ends up with the later data too, not only the background copy");
+                    assert(!WordDatabase.IsDirty, "close while saving: nothing is left unsaved");
+                }
+                finally { WordDatabase.WriteDelayMsForTest = 0; }
+
                 // A failed background write must leave the database dirty so it is retried.
                 System.IO.File.Delete(lsBOv);
                 System.IO.Directory.CreateDirectory(lsBOv);   // a directory where the file should go: the write throws

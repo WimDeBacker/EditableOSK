@@ -101,7 +101,8 @@ decision for the owner).
 
 ## Fix 1: layer 0 key sequence is rewritten lossy (KeyEditorForm.BuildSend)
 
-**Status: applied** (commit 4761280, test `T_KeySequenceLossless`). Not yet built or run on Windows.
+**Status: applied** (commit 4761280, test `T_KeySequenceLossless`). Built and tested on Windows (2026-10-09, full suite green). Not covered by a
+test: switching the action type away and back without typing (see the second bullet below).
 
 Treat layer 0 like layers 1 and 2: while the value box is untouched, return what was stored.
 
@@ -121,8 +122,8 @@ case SendMode.KeySequence:
 ## Fix 2: AutoSave overwrites good files with an invalid layout (KeyboardForm.AutoSave)
 
 **Status: applied**, as `SettingsManager.AutoSave(..., path, defaultPath)` (testable; `KeyboardForm.AutoSave` calls it)
-with assertions added to `T_SettingsManager_RoundTrip`. The startup offer to open a recovery file is not done. Not yet
-built or run on Windows.
+with assertions added to `T_SettingsManager_RoundTrip`. The startup offer to open a recovery file is not done. Built and tested
+on Windows (2026-10-09, full suite green; the test's clashing variable name `dir` was renamed to `autoDir` to make it compile).
 
 Keep `allowInvalid: true` (so the work is not lost), but never onto the named file or the default file. Write an invalid
 layout to a recovery file next to it.
@@ -290,6 +291,13 @@ private static void LogError(string where, Exception ex)
 - Make `LogError` `internal` so `FormClosing`'s `catch { }` around `SaveNow` can log through it instead of hiding the error.
 
 ## Fix 8: SaveNow races with the background save; Load clears the dirty flag too late (WordDatabase)
+
+**Status: applied** (2026-10-09), built and tested on Windows (full suite green). The race was reproduced first: with the lock taken out of
+`SaveNow` the new test `close while saving` fails (`SaveNow` throws, because the background save has already moved the shared
+".tmp" file; the exception was swallowed by the `catch { }` in `FormClosing`). Done as proposed below: `_writeLock` around every
+`WriteSaveData`, `SaveNow` clears the dirty flag before the copy and sets it again on failure, `Load` clears the flag before it publishes
+the snapshot. `WriteSaveData` already wrote through a ".tmp" file and `File.Replace`. The test hook is `WordDatabase.WriteDelayMsForTest`
+(a sleep between the temp file and the replace). Not tested separately: the order change in `Load`.
 
 One lock for every write of the overlay file:
 
