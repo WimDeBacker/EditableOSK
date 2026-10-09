@@ -455,6 +455,15 @@ private sealed class GatedTextBox : TextBox
 
 ## Fix 12: recorder reads Ctrl, Alt and Shift from the async key state (KeyEditorForm hook)
 
+**Status: applied** (2026-10-09), built and tested on Windows (filtered run: `KeyEditorRoundTrip`). The lag itself was not reproduced (it needs a real hook
+and fast typing); the change is the defensive one proposed below: `_heldMods` follows the hook's own key-down / key-up events (left and
+right keys separately, a generic code releases both), is seeded with `GetAsyncKeyState` when recording starts and cleared when it stops, and the
+callback reads Ctrl / Alt / Shift from it instead of `Control.ModifierKeys`. The tests drive `TrackModifierKey` / `HeldModifiers` (extracted as
+internal) instead of an `OnHookKey`; `ClassifyHookKey` is unchanged. The owner tested it by hand (Ctrl+C fast, Alt+Shift+F4: fine).
+Added after that test: Ctrl+Alt+Delete is not recorded (`IsSecureAttentionSequence`; the keys pass to Windows, the recording goes on).
+Windows does not let a program send it (it is the Secure Attention Sequence), so a key with it could never work; `SendSAS` would need a
+policy setting and a signed UI-Access install, and was left out.
+
 `GetAsyncKeyState` and `Control.ModifierKeys` are not reliable inside a low-level hook: the state is updated after the
 hook returns. Track the modifiers from the hook's own events, as is done for Win:
 

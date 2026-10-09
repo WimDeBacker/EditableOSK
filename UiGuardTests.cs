@@ -1066,6 +1066,45 @@ namespace OnScreenKeyboard
                 Assert(SendKeysHelper.WinKeyPayloadToVk(" ") == 0x20 && SendKeysHelper.WinKeyPayloadToVk("{BE}") == 0xBE && SendKeysHelper.WinKeyPayloadToVk("+") == 0xBB
                     && SendKeysHelper.WinKeyPayloadToVk("{BACKSPACE}") == 0x08 && SendKeysHelper.WinKeyPayloadToVk("{PRTSC}") == 0x2C && SendKeysHelper.WinKeyPayloadToVk("{INSERT}") == 0x2D,
                     "Win shortcuts: Space, Win+. ({BE}), Win++, Backspace, PrtSc and Insert are known keys");
+                // The recorder knows which of Ctrl, Alt and Shift are held from the hook's own events (review8_10 finding 12).
+                using (var mf = new KeyEditorForm(new KeyProps("", ""), null) { HookDisabledForTest = true })
+                {
+                    typeof(KeyEditorForm).GetMethod("StartRecording", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(mf, new object[] { 0 });
+                    (bool C, bool A, bool S) Held() { var h = mf.HeldModifiers(); return (h.Ctrl, h.Alt, h.Shift); }
+                    Assert(Held() == (false, false, false), "modifiers: none held when recording starts");
+                    mf.TrackModifierKey(0xA2, true, false);                                             // left Ctrl down
+                    Assert(Held() == (true, false, false) && KeyEditorForm.BuildSendFromHook(0x43, Held().C, Held().A, Held().S, false) == "^c",
+                        "modifiers: Ctrl down, then C, is recorded as ^c");
+                    mf.TrackModifierKey(0xA2, false, true);                                             // left Ctrl up
+                    Assert(Held() == (false, false, false) && KeyEditorForm.BuildSendFromHook(0x43, Held().C, Held().A, Held().S, false) == "c", "modifiers: Ctrl up, then C, is a plain c");
+                    mf.TrackModifierKey(0xA2, true, false); mf.TrackModifierKey(0xA3, true, false);     // both Ctrl keys
+                    mf.TrackModifierKey(0xA2, false, true);
+                    Assert(Held().C, "modifiers: Ctrl stays held while the other Ctrl key is still down");
+                    mf.TrackModifierKey(0xA3, false, true);
+                    mf.TrackModifierKey(0xA4, true, false); mf.TrackModifierKey(0xA0, true, false);     // Alt + Shift
+                    Assert(Held() == (false, true, true), "modifiers: Alt and Shift together");
+                    mf.TrackModifierKey(0x41, true, false); mf.TrackModifierKey(0x5B, true, false);    // a letter and the Win key are not tracked here
+                    Assert(Held() == (false, true, true), "modifiers: other keys do not change them");
+                    mf.TrackModifierKey(0x12, true, false); mf.TrackModifierKey(0x12, false, true);     // the generic Alt code releases both sides
+                    Assert(Held() == (false, false, true), "modifiers: a generic key-up releases the side keys of that modifier");
+                    typeof(KeyEditorForm).GetMethod("StopRecording", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(mf, new object[] { true });
+                    Assert(Held() == (false, false, false), "modifiers: stopping the recording forgets them");
+                }
+
+                // Ctrl+Alt+Delete is Windows' own and cannot be sent: it is never recorded, and the recording waits for another combination.
+                Assert(KeyEditorForm.IsSecureAttentionSequence(0x2E, true, true) && !KeyEditorForm.IsSecureAttentionSequence(0x2E, true, false)
+                    && !KeyEditorForm.IsSecureAttentionSequence(0x2E, false, false) && !KeyEditorForm.IsSecureAttentionSequence(0x43, true, true),
+                    "Ctrl+Alt+Delete: only Delete with both Ctrl and Alt is the secure attention sequence");
+                using (var sas = new KeyEditorForm(new KeyProps("", ""), null) { HookDisabledForTest = true })
+                {
+                    DevGallery.Show(sas);
+                    typeof(KeyEditorForm).GetMethod("StartRecording", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(sas, new object[] { 0 });
+                    Assert(!sas.QueueRecording(0x2E, true, true, false, false), "Ctrl+Alt+Delete is not taken by the recorder");
+                    Application.DoEvents();
+                    Assert(Field<bool>(sas, "_recording") && Field<TouchTextBox[]>(sas, "_values")[0].Text == "", "…the recording goes on, and nothing is shown in the editor");
+                    Assert(sas.QueueRecording(0x2E, true, false, false, false), "…and the next combination (Ctrl+Delete) is recorded as usual");
+                }
+
                 // Space is written, shown and typed as {Space}: a space at the end of a value cannot be seen (and is easily lost).
                 Assert(KeyEditorForm.BuildSendFromHook(0x20, false, false, false, true) == "win:{SPACE}" && KeyEditorForm.BuildSendFromHook(0x20, true, false, false, false) == "^ ",
                     "Space: Win+Space is stored as win:{SPACE}, Ctrl+Space stays '^ ' for SendKeys");

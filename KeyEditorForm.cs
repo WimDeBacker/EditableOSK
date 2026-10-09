@@ -124,6 +124,8 @@ namespace OnScreenKeyboard
         private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
         [System.Runtime.InteropServices.DllImport("kernel32.dll")]
         private static extern IntPtr GetModuleHandle(string lpModuleName);
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern short GetAsyncKeyState(int vKey);
 
         [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
         private struct KBDLLHOOKSTRUCT { public uint vkCode, scanCode, flags, time; public IntPtr dwExtraInfo; }
@@ -137,6 +139,10 @@ namespace OnScreenKeyboard
         private readonly string[] _recordedLabel = new string[Layers];   // the label a recording put in a layer (so a re-recording may replace it)
         private readonly string[] _autoLabelBefore = new string[Layers]; // the label the shortcut that a recording replaces would have got
         private bool   _winHeld;              // tracked separately because the hook suppresses the Win key-up
+        // The Ctrl / Alt / Shift keys that are held, from the hook's own events. Control.ModifierKeys is not reliable inside a low-level hook:
+        // the system updates the key state of the thread only after the hook has returned, so a Ctrl that was pressed an instant before the
+        // key could be missing from the recording.
+        private readonly HashSet<uint> _heldMods = new HashSet<uint>();
         private bool   _recordPending;        // a key was taken and its recording is queued for the UI thread: further keys are swallowed until it ran
         private IntPtr _hookHandle = IntPtr.Zero;
         private LowLevelKeyboardProc _hookProc;   // kept in a field so the GC cannot free it while the hook is active
@@ -948,6 +954,7 @@ namespace OnScreenKeyboard
             _recordLayer = layer;
             _winHeld     = false;
             _recordPending = false;
+            _heldMods.Clear();
             UpdatePickerTexts();                // the stop symbol; clicking the button again cancels
             SetHint(Lang.T("Perform the key combination you want on the keyboard."));
             // The label that the shortcut being replaced would have got: a label like that (also one saved in an earlier session)
@@ -956,6 +963,10 @@ namespace OnScreenKeyboard
             _values[layer].Text = "";
 
             if (HookDisabledForTest) return;    // tests drive CompleteRecording directly: a real hook would catch the keys of the whole machine
+
+            // Modifiers already held when recording starts count too (outside the hook the physical state is accurate).
+            foreach (uint vk in new uint[] { 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5 })
+                if ((GetAsyncKeyState((int)vk) & 0x8000) != 0) _heldMods.Add(vk);
 
             _hookProc   = LowLevelHookCallback;
             _hookHandle = SetWindowsHookEx(WH_KEYBOARD_LL, _hookProc, GetModuleHandle(null), 0);
@@ -971,6 +982,7 @@ namespace OnScreenKeyboard
             _recording = false;
             _winHeld   = false;
             _recordPending = false;
+            _heldMods.Clear();
             if (_hookHandle != IntPtr.Zero)
             {
                 UnhookWindowsHookEx(_hookHandle);
@@ -988,6 +1000,8 @@ namespace OnScreenKeyboard
             bool isDown = wParam == (IntPtr)WM_KEYDOWN || wParam == (IntPtr)WM_SYSKEYDOWN;
             bool isUp   = wParam == (IntPtr)WM_KEYUP   || wParam == (IntPtr)WM_SYSKEYUP;
 
+            TrackModifierKey(kbd.vkCode, isDown, isUp);        // Ctrl / Alt / Shift: remember which are held (the keys themselves pass, see ClassifyHookKey)
+
             switch (ClassifyHookKey(kbd.vkCode, isDown, isUp))
             {
                 case HookKeyAction.WinUp:
@@ -1000,14 +1014,39 @@ namespace OnScreenKeyboard
                     return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
             }
 
-            bool ctrl  = (Control.ModifierKeys & Keys.Control) != 0;
-            bool alt   = (Control.ModifierKeys & Keys.Alt)     != 0;
-            bool shift = (Control.ModifierKeys & Keys.Shift)   != 0;
+            var (ctrl, alt, shift) = HeldModifiers();
+            // Ctrl+Alt+Delete is Windows' own: it cannot be sent by a program, so a key with it would never work. It is not recorded;
+            // the keys pass to Windows (which handles them anyway) and the recording waits for another combination.
+            if (IsSecureAttentionSequence(kbd.vkCode, ctrl, alt)) return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
             bool win   = _winHeld;                      // read now: the key-up of the Win key may arrive before the UI thread runs the line below
             QueueRecording(kbd.vkCode, ctrl, alt, shift, win);
 
             return (IntPtr)1;   // suppress: the key must not type into the app behind the editor
         }
+
+        /// <summary>Ctrl+Alt+Delete (the Secure Attention Sequence): Windows does not let a program send it, so it is never recorded.</summary>
+        internal static bool IsSecureAttentionSequence(uint vk, bool ctrl, bool alt) => vk == 0x2E && ctrl && alt;
+
+        /// <summary>1 for a Ctrl key, 2 for Alt, 4 for Shift (the generic and the left / right codes), else 0.</summary>
+        internal static int ModifierBit(uint vk) =>
+            vk == 0x11 || vk == 0xA2 || vk == 0xA3 ? 1 : vk == 0x12 || vk == 0xA4 || vk == 0xA5 ? 2 : vk == 0x10 || vk == 0xA0 || vk == 0xA1 ? 4 : 0;
+
+        /// <summary>Notes a Ctrl / Alt / Shift key going down or up (any other key is ignored). Left and right keys are separate: Ctrl stays held until both are up.</summary>
+        internal void TrackModifierKey(uint vk, bool isDown, bool isUp)
+        {
+            int bit = ModifierBit(vk);
+            if (bit == 0) return;
+            if (isDown) _heldMods.Add(vk);
+            else if (isUp)
+            {
+                _heldMods.Remove(vk);
+                if (vk == 0x10 || vk == 0x11 || vk == 0x12) _heldMods.RemoveWhere(v => ModifierBit(v) == bit);       // the generic code stands for both sides
+            }
+        }
+
+        /// <summary>Which of Ctrl, Alt and Shift are held according to the keys the hook has seen.</summary>
+        internal (bool Ctrl, bool Alt, bool Shift) HeldModifiers() =>
+            (_heldMods.Any(v => ModifierBit(v) == 1), _heldMods.Any(v => ModifierBit(v) == 2), _heldMods.Any(v => ModifierBit(v) == 4));
 
         /// <summary>
         /// Takes the first complete key of a recording and queues it for the UI thread. A second key, or the auto-repeat of the first, that
@@ -1016,7 +1055,7 @@ namespace OnScreenKeyboard
         /// </summary>
         internal bool QueueRecording(uint vk, bool ctrl, bool alt, bool shift, bool win)
         {
-            if (!_recording || _recordPending) return false;
+            if (!_recording || _recordPending || IsSecureAttentionSequence(vk, ctrl, alt)) return false;
             _recordPending = true;
             int layer = _recordLayer;
             BeginInvoke((Action)(() =>
