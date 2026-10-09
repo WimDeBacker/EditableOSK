@@ -42,6 +42,12 @@ Not planned; decided later, if at all (from the touch-friendly work, 2.4.8):
 
 - I.1 The same flyout for every other list (Language, Toolbar theme, word-database choice).
 - I.2 A shortcut builder (`Ctrl`/`Alt`/`Shift`/`Win` toggles + key) instead of "Record", for people who cannot type combinations.
+- I.3 **Hold a key down for Windows (found by the owner 2026-10-09):** the keyboard cannot hold a key. A shortcut key sends Win, Space, release in one quick sequence, and a latched sticky Win exists only inside the keyboard (it is added to the *next* key, Windows never sees it held). So "hold Win and press Space several times" (the input-language switcher, Win+Space with three or more languages) does not work, with a shortcut key or with the sticky keys. It needs a real hold: a latched Win is sent to Windows as key-down (`SendInput`, `SendKeysHelper`) and as key-up when it is switched off. Decisions for the owner first:
+  - **Which keys:** only Win (the safest, solves the language switcher), or every sticky modifier (Ctrl, Alt, Shift too).
+  - **Start menu:** releasing Win without another key in between opens the Start menu; suppress it with an invisible dummy key before the key-up.
+  - **Safety:** Win must always be released when the keyboard closes, crashes, loses focus (`Deactivate`) or after a time-out; otherwise Win stays pressed in Windows.
+  - **How the user chooses it:** a separate "hold Win" key, or the existing Win sticky key that from then on really holds (this changes the behaviour for people who use sticky keys now).
+  - Until then: if Windows has Alt+Shift or Ctrl+Shift switched on for the input language (Settings → Time & language → Typing → Advanced keyboard settings), a Key/Shortcut key `{Alt}{Shift}` or `{Ctrl}{Shift}` already switches it.
 
 ---
 

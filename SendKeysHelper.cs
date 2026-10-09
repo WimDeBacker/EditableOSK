@@ -707,9 +707,13 @@ namespace OnScreenKeyboard
         /// Single letter, single digit, or brace-enclosed token (case-insensitive).
         /// </param>
         /// <returns>The virtual-key code, or 0 if unrecognised.</returns>
-        private static ushort WinKeyPayloadToVk(string key)
+        internal static ushort WinKeyPayloadToVk(string key)
         {
             if (string.IsNullOrEmpty(key)) return 0;
+
+            // Space is a literal space in what the key editor records ("win: "); "win:+" is Win and the plus key (Magnifier).
+            if (key == " ") return 0x20;                  // VK_SPACE
+            if (key == "+") return 0xBB;                  // VK_OEM_PLUS
 
             // Single letter a-z: virtual-key codes for letters equal their
             // ASCII upper-case value (VK_A = 0x41, VK_B = 0x42, … VK_Z = 0x5A).
@@ -742,6 +746,16 @@ namespace OnScreenKeyboard
                 "ESC"       => 0x1B,  // VK_ESCAPE
                 "DELETE"    => 0x2E,  // VK_DELETE
                 "SPACE"     => 0x20,  // VK_SPACE
+                // The other keys the key editor's recorder writes as a token (KeyEditorForm.VkCodeToSendKeys).
+                "BACKSPACE" => 0x08,  // VK_BACK
+                "INSERT"    => 0x2D,  // VK_INSERT
+                "PRTSC"     => 0x2C,  // VK_SNAPSHOT
+                "BREAK"     => 0x13,  // VK_PAUSE
+                "CAPSLOCK"  => 0x14,  // VK_CAPITAL
+                "NUMLOCK"   => 0x90,  // VK_NUMLOCK
+                "SCROLLLOCK"=> 0x91,  // VK_SCROLL
+                "NUMPAD0" => 0x60, "NUMPAD1" => 0x61, "NUMPAD2" => 0x62, "NUMPAD3" => 0x63, "NUMPAD4" => 0x64,
+                "NUMPAD5" => 0x65, "NUMPAD6" => 0x66, "NUMPAD7" => 0x67, "NUMPAD8" => 0x68, "NUMPAD9" => 0x69,
                 "F1"        => 0x70,  // VK_F1
                 "F2"        => 0x71,  // VK_F2
                 "F3"        => 0x72,  // VK_F3
@@ -761,6 +775,10 @@ namespace OnScreenKeyboard
                 "M"         => (ushort)'M',
                 "R"         => (ushort)'R',
                 "S"         => (ushort)'S',
+                // Any other key the recorder wrote as {hex}, e.g. {BE} = Win+. and {BC} = Win+, (a name above wins over this, so {F1} is never 0xF1).
+                // Only in braces: a bare "be" is not a token.
+                _ when key.StartsWith("{") && k.Length == 2
+                       && byte.TryParse(k, System.Globalization.NumberStyles.AllowHexSpecifier, System.Globalization.CultureInfo.InvariantCulture, out byte hex) => hex,
                 _           => 0,     // unrecognised — caller will skip silently
             };
         }

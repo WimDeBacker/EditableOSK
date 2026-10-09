@@ -1048,6 +1048,39 @@ namespace OnScreenKeyboard
                 Assert(Hook(win, Up) == KeyEditorForm.HookKeyAction.WinUp, $"hook: the Win key (0x{win:X}) up is forgotten and passes");
             }
 
+            // ── Every Win shortcut the recorder can write can also be sent (review8_10 finding 3) ──
+            // The recorder (KeyEditorForm.BuildSendFromHook) and the sender (SendKeysHelper.WinKeyPayloadToVk) are two tables; a key the
+            // recorder writes and the sender does not know was silently dropped when the key was pressed.
+            {
+                var lost = new List<string>();
+                for (uint vk = 1; vk < 255; vk++)
+                {
+                    if (vk == 0x10 || vk == 0x11 || vk == 0x12 || (vk >= 0xA0 && vk <= 0xA5) || vk == 0x5B || vk == 0x5C) continue;   // modifiers and the Win key itself
+                    if (vk >= 0xF1 && vk <= 0xFA) continue;     // rare keys the recorder writes as "{F1}".."{FA}", which is also the name of F1..F10 (a name wins)
+                    string send = KeyEditorForm.BuildSendFromHook(vk, false, false, false, true);
+                    string payload = send.Substring(4);        // after "win:"
+                    ushort back = SendKeysHelper.WinKeyPayloadToVk(payload);
+                    if (back != vk) lost.Add($"0x{vk:X2} ('{payload}' -> 0x{back:X2})");
+                }
+                Assert(lost.Count == 0, "Win shortcuts: every recordable key is sent as the same key" + (lost.Count == 0 ? "" : " — differs: " + string.Join("; ", lost.Take(10))));
+                Assert(SendKeysHelper.WinKeyPayloadToVk(" ") == 0x20 && SendKeysHelper.WinKeyPayloadToVk("{BE}") == 0xBE && SendKeysHelper.WinKeyPayloadToVk("+") == 0xBB
+                    && SendKeysHelper.WinKeyPayloadToVk("{BACKSPACE}") == 0x08 && SendKeysHelper.WinKeyPayloadToVk("{PRTSC}") == 0x2C && SendKeysHelper.WinKeyPayloadToVk("{INSERT}") == 0x2D,
+                    "Win shortcuts: Space, Win+. ({BE}), Win++, Backspace, PrtSc and Insert are known keys");
+                // Space is written, shown and typed as {Space}: a space at the end of a value cannot be seen (and is easily lost).
+                Assert(KeyEditorForm.BuildSendFromHook(0x20, false, false, false, true) == "win:{SPACE}" && KeyEditorForm.BuildSendFromHook(0x20, true, false, false, false) == "^ ",
+                    "Space: Win+Space is stored as win:{SPACE}, Ctrl+Space stays '^ ' for SendKeys");
+                Assert(KeyEditorForm.ToHuman("win:{SPACE}") == "{Win}{Space}" && KeyEditorForm.ToHuman("win: ") == "{Win}{Space}" && KeyEditorForm.ToHuman("^ ") == "{Ctrl}{Space}" && KeyEditorForm.ToHuman("a b") == "a b",
+                    "Space: shown as {Space} after the modifiers (a stored 'win: ' too), text with a space is left alone");
+                Assert(KeyEditorForm.FromHuman("{Win}{Space}") == "win:{SPACE}" && KeyEditorForm.FromHuman("{win}{space}") == "win:{SPACE}" && KeyEditorForm.FromHuman("{Ctrl}{Space}") == "^ "
+                    && KeyEditorForm.FromHuman("{Win}{Shift}{Space}") == "win:+{SPACE}" && KeyEditorForm.FromHuman("a{Space}b") == "a b",
+                    "Space: {Space} (any case) goes back to win:{SPACE} after {Win} and to a literal space otherwise");
+                Assert(KeyEditorForm.BuildHumanLabel(0x20, false, false, false, true) == "Win+Space" && string.Equals(KeyEditorForm.LabelOfSend("win:{SPACE}"), "Win+Space", StringComparison.OrdinalIgnoreCase)
+                    && KeyEditorForm.LabelOfSend("^ ") == "Ctrl+Space", "Space: the label says Space, not an invisible blank");
+                Assert(SendKeysHelper.WinKeyPayloadToVk("{SPACE}") == 0x20 && SendKeysHelper.WinKeyPayloadToVk("+{SPACE}".Substring(1)) == 0x20, "Win shortcuts: the {SPACE} token is the Space key");
+                Assert(SendKeysHelper.WinKeyPayloadToVk("{F1}") == 0x70 && SendKeysHelper.WinKeyPayloadToVk("{F10}") == 0x79 && SendKeysHelper.WinKeyPayloadToVk("be") == 0 && SendKeysHelper.WinKeyPayloadToVk("{XX}") == 0,
+                    "Win shortcuts: {F1} is the F1 key (not 0xF1); a bare 'be' or a bad token is still unknown");
+            }
+
             // ── A recording fills the layer: type, value, label; then recording stops ──
             {
                 void Recorded(string name, KeyProps props, int layer, uint vk, bool ctrl, bool alt, bool shift, bool win, Action<KeyEditorForm> check)

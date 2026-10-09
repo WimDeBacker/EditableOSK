@@ -1112,7 +1112,8 @@ namespace OnScreenKeyboard
                 else break;
             }
             string key = send.Substring(i);
-            if (key.Length > 2 && key[0] == '{' && key[key.Length - 1] == '}') key = key.Substring(1, key.Length - 2);
+            if (key == " ") key = "Space";
+            else if (key.Length > 2 && key[0] == '{' && key[key.Length - 1] == '}') key = key.Substring(1, key.Length - 2);
             else if (key.Length == 1) key = key.ToUpperInvariant();
             else return null;                         // typed text, a group in parentheses: not a single shortcut
             if (parts.Count == 0) return null;        // a bare key is not a shortcut: its label is the user's
@@ -1127,6 +1128,9 @@ namespace OnScreenKeyboard
             string keyPart = VkCodeToSendKeys(vk, shift);
             // Shift alone on a letter is just the capital letter ("A"): SendKeys types that without a modifier.
             if (shift && !asPrefix) keyPart = keyPart.ToUpperInvariant();
+
+            // With the Win key Space is written as a token: a lone space at the end of a stored value is easy to lose and cannot be seen.
+            if (win && keyPart == " ") keyPart = "{SPACE}";
 
             string prefix = "";
             if (ctrl)     prefix += "^";
@@ -1145,6 +1149,7 @@ namespace OnScreenKeyboard
             if (alt)   parts.Add("Alt");
             if (ShiftIsPrefix(vk, ctrl, alt, shift, win)) parts.Add("Shift");
             string key = VkCodeToSendKeys(vk, shift).TrimStart('{').TrimEnd('}');
+            if (key == " ") key = "Space";                       // a space cannot be seen in a label
             if (vk >= 0x41 && vk <= 0x5A) key = key.ToUpper();
             parts.Add(key);
             return string.Join("+", parts);
@@ -1191,13 +1196,24 @@ namespace OnScreenKeyboard
             while (i < send.Length)
             {
                 char ch = send[i];
-                if (ch == '{')
+                if (ch == ' ' && i == send.Length - 1 && i > 0 && IsModifierPrefix(send.Substring(0, i)))
+                {
+                    sb.Append("{Space}");                       // Ctrl+Space and the like: a space after the modifiers is the Space key (and can be seen)
+                    i++;
+                }
+                else if (ch == ' ' && send.Length == 1)
+                {
+                    sb.Append("{Space}");                       // the Space key of a "win:" combination without modifiers
+                    i++;
+                }
+                else if (ch == '{')
                 {
                     // A {TOKEN} is copied as a whole: what is inside is a key name or an escaped character
                     // ("{(}", "{+}", "{^}"), not a modifier or a group. "{}}" is the escaped closing brace.
                     int end = i + 1 < send.Length && send[i + 1] == '}' ? i + 2 : send.IndexOf('}', i + 1);
                     if (end < 0) end = send.Length - 1;
-                    sb.Append(send, i, end - i + 1);
+                    string token = send.Substring(i, end - i + 1);
+                    sb.Append(string.Equals(token, "{SPACE}", StringComparison.OrdinalIgnoreCase) ? "{Space}" : token);
                     i = end + 1;
                 }
                 else if (ch == '^') { sb.Append("{Ctrl}");  i++; }
@@ -1214,12 +1230,29 @@ namespace OnScreenKeyboard
             return sb.ToString();
         }
 
-        /// <summary>Converts the readable form back to the internal send string.</summary>
+        private static bool IsModifierPrefix(string s) => s.Length > 0 && s.All(c => c == '^' || c == '%' || c == '+');
+
+        /// <summary>
+        /// Converts the readable form back to the internal send string. The words in braces are not case sensitive ("{win}{space}" works).
+        /// "{Space}" after the modifiers is the Space key: a literal space, or the token "{SPACE}" after "{Win}" (see <see cref="BuildSendFromHook"/>).
+        /// </summary>
         internal static string FromHuman(string human)
         {
             if (string.IsNullOrEmpty(human)) return human;
-            if (human.StartsWith("{Win}")) return "win:" + FromHuman(human.Substring(5));
-            return human.Replace("{Ctrl}", "^").Replace("{Alt}", "%").Replace("{Shift}", "+");
+            const System.Text.RegularExpressions.RegexOptions ci = System.Text.RegularExpressions.RegexOptions.IgnoreCase;
+            if (System.Text.RegularExpressions.Regex.IsMatch(human, @"^\{win\}", ci))
+            {
+                string rest = FromHuman(human.Substring(5));
+                // The Space key of a Win combination stays a token: Space is no modifier, and a space at the end of a value is easily lost.
+                if (rest.Length > 0 && rest[rest.Length - 1] == ' ' && (rest.Length == 1 || IsModifierPrefix(rest.Substring(0, rest.Length - 1))))
+                    rest = rest.Substring(0, rest.Length - 1) + "{SPACE}";
+                return "win:" + rest;
+            }
+            human = System.Text.RegularExpressions.Regex.Replace(human, @"\{ctrl\}", "^", ci);
+            human = System.Text.RegularExpressions.Regex.Replace(human, @"\{alt\}", "%", ci);
+            human = System.Text.RegularExpressions.Regex.Replace(human, @"\{shift\}", "+", ci);
+            // SendKeys has no {SPACE} token: the Space key is a literal space.
+            return System.Text.RegularExpressions.Regex.Replace(human, @"\{space\}", " ", ci);
         }
 
         // ══════════════════════════════════════════════════════════════

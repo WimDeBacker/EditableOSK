@@ -159,6 +159,14 @@ private void AutoSave()
 
 ## Fix 3: recorded Win shortcuts that cannot be sent (SendKeysHelper.WinKeyPayloadToVk)
 
+**Status: applied** (2026-10-09), built and tested on Windows (filtered run: `KeyEditorRoundTrip`, SendKeys groups). The table follows the proposal
+below (Space, `+`, BACKSPACE, INSERT, PRTSC, BREAK, CAPSLOCK, NUMLOCK, SCROLLLOCK, NUMPAD0-9, and `{hex}` only inside braces); a test walks
+every key 1-254 through the recorder and the sender and checks they agree (0xF1-0xFA excepted: the recorder writes them as `{F1}`..`{FA}`,
+the name of F1..F10). The "cannot be combined with Win" hint was not added: nothing the recorder writes is unknown any more.
+Added after testing by the owner: Space is written as `win:{SPACE}` and shown as `{Win}{Space}` (a lone trailing space was invisible);
+`{Space}` and the modifier words are case-insensitive in the editor; the recorded label says "Space". The owner confirmed Win+M and
+Ctrl+Space work; Win+Space (input-language switcher) needs Win *held* and could not be tested: see todo Ideas I.3.
+
 Teach the sender every payload the recorder can produce. The recorder writes `" "` for Space, `{BACKSPACE}`, `{INSERT}`,
 `{PRTSC}`, `{BREAK}`, `{CAPSLOCK}`, `{NUMLOCK}`, `{SCROLLLOCK}`, `{NUMPAD0..9}`, and `{XX}` (two hex digits) for any other key.
 
