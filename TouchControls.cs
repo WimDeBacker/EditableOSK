@@ -599,8 +599,49 @@ namespace OnScreenKeyboard
     {
         private readonly FluentButton  _dec = new FluentButton();
         private readonly FluentButton  _inc = new FluentButton();
-        private readonly TouchTextBox  _txt = new TouchTextBox();
+        private readonly StepperBox    _txt = new StepperBox();
         private readonly Timer         _repeat = new Timer();
+
+        /// <summary>
+        /// The value box. Besides the keys it watches, an edit can reach the box as a message from elsewhere (Paste, Cut, Delete and Undo of the
+        /// context menu, Shift+Insert, Ctrl+Z); those messages are held back here until <see cref="BeforeChange"/> agrees.
+        /// </summary>
+        private sealed class StepperBox : TouchTextBox
+        {
+            private const int WM_CUT = 0x0300, WM_PASTE = 0x0302, WM_CLEAR = 0x0303, WM_UNDO = 0x0304, EM_UNDO = 0x00C7;
+            internal Func<bool> EditGate;           // false: the edit is refused
+
+            protected override void WndProc(ref Message m)
+            {
+                if ((m.Msg == WM_CUT || m.Msg == WM_PASTE || m.Msg == WM_CLEAR || m.Msg == WM_UNDO || m.Msg == EM_UNDO) && EditGate != null && !EditGate())
+                    return;
+                base.WndProc(ref m);
+            }
+        }
+
+        // One user action (Ctrl+V) reaches the box twice: as the key, and as the paste message that follows from it. The question may be a
+        // window, so it must be asked once for the action, whatever the answer was:
+        //   - a question asked a moment ago (AnswerMemoryMs) is not asked again; its answer, yes or no, counts for the second part as well;
+        //   - an edit that arrives while the question is open (the paste of the key being asked about, or the next digit) is refused,
+        //     it is never a second question on top of the first.
+        private long _askedAt = long.MinValue / 2;
+        private bool _lastAnswer, _asking;
+        internal int AnswerMemoryMs = 400;           // internal: the tests switch it off to ask on every edit
+
+        private bool AllowedOnce()
+        {
+            if (Environment.TickCount64 - _askedAt < AnswerMemoryMs) return _lastAnswer;
+            if (_asking) return false;
+            _asking = true;
+            bool ok;
+            try { ok = Allowed(); }
+            finally { _asking = false; }
+            _lastAnswer = ok;
+            _askedAt = Environment.TickCount64;
+            return ok;
+        }
+
+        private bool EditMessageAllowed() => AllowedOnce();
 
         private decimal _min, _max = 100, _step = 1, _value;
         private bool    _syncing, _mouseStep;
@@ -650,6 +691,8 @@ namespace OnScreenKeyboard
                 if (_txt.IsHandleCreated)
                     _txt.BeginInvoke((Action)(() => { if (_txt.Focused && MouseButtons == MouseButtons.None) { _txt.SelectAll(); _txt.Invalidate(); } }));
             };
+            _txt.EditGate    = EditMessageAllowed;
+            _txt.AllowDrop   = false;               // dropped text would change the value without asking
             _txt.TextChanged += (s, e) => OnTyped();
             _txt.Leave       += (s, e) => SyncText();
             _txt.KeyDown     += (s, e) =>
@@ -660,8 +703,9 @@ namespace OnScreenKeyboard
                     // Only a key that would change the number is asked about; Tab, arrows left / right and the like are not.
                     bool edits = e.KeyCode == Keys.Back || e.KeyCode == Keys.Delete || e.KeyCode == Keys.OemMinus || e.KeyCode == Keys.Subtract
                               || (e.KeyCode >= Keys.D0 && e.KeyCode <= Keys.D9 && !e.Control && !e.Alt) || (e.KeyCode >= Keys.NumPad0 && e.KeyCode <= Keys.NumPad9)
-                              || (e.Control && (e.KeyCode == Keys.V || e.KeyCode == Keys.X));
-                    if (edits && !Allowed()) e.Handled = e.SuppressKeyPress = true;
+                              || (e.Control && (e.KeyCode == Keys.V || e.KeyCode == Keys.X || e.KeyCode == Keys.Z || e.KeyCode == Keys.Y))
+                              || (e.Shift && (e.KeyCode == Keys.Insert || e.KeyCode == Keys.Delete));
+                    if (edits && !AllowedOnce()) e.Handled = e.SuppressKeyPress = true;
                     return;
                 }
                 if (Allowed()) Step(e.KeyCode == Keys.Up ? +1 : -1);
@@ -718,6 +762,17 @@ namespace OnScreenKeyboard
         internal Func<bool> BeforeChange;
 
         private bool Allowed() => BeforeChange == null || BeforeChange();
+
+        /// <summary>
+        /// Enter in the value box accepts the dialog before the box is left, so the box would still show a number the stepper does not hold
+        /// (one typed outside the range is not taken over while typing). The box is brought back to the value that is held first, so what
+        /// the user sees is what the dialog reads. (Not clamped while typing: "1" on the way to "15" with a minimum of 8 must stay possible.)
+        /// </summary>
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if (keyData == Keys.Enter) SyncText();
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
 
         // ── Accessibility ───────────────────────────────────────────────
 

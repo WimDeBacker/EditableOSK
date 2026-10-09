@@ -271,6 +271,59 @@ namespace OnScreenKeyboard
                 Invoke<object>(st.ValueBox, "OnLeave", EventArgs.Empty);
                 Assert(st.ValueBox.Text == "4", "stepper: leaving the box restores the last valid value");
 
+                // Enter accepts the dialog before the box is left: the box must then show the value the stepper holds (review8_10 finding 11).
+                st.ValueBox.Text = "50";
+                typeof(Control).GetMethod("ProcessCmdKey", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(st, new object[] { new Message(), Keys.Enter });
+                Assert(st.ValueBox.Text == "4" && st.Value == 4, "stepper: Enter brings a half-typed number back to the held value before the dialog reads it");
+
+                // Edits that arrive as messages (context menu: Cut, Paste, Delete, Undo; Shift+Insert) are asked about like typed keys.
+                {
+                    int asked = 0; bool answer = false;
+                    st.BeforeChange = () => { asked++; return answer; };
+                    var box = st.ValueBox;
+                    void Msg(int msg) => typeof(Control).GetMethod("WndProc", BindingFlags.NonPublic | BindingFlags.Instance)
+                        .Invoke(box, new object[] { Message.Create(box.Handle, msg, IntPtr.Zero, IntPtr.Zero) });
+                    const int WM_CLEAR = 0x0303, WM_CUT = 0x0300;
+
+                    st.AnswerMemoryMs = 0;                      // first: every edit asks
+                    box.Text = "4"; box.SelectAll();
+                    Msg(WM_CLEAR);
+                    Assert(box.Text == "4" && asked == 1, "stepper: Delete from the context menu is refused when BeforeChange says no");
+                    box.SelectAll(); Msg(WM_CUT);
+                    Assert(box.Text == "4" && asked == 2, "stepper: Cut is refused too");
+
+                    answer = true;
+                    box.SelectAll(); Msg(WM_CLEAR);
+                    Assert(box.Text == "" && asked == 3, "stepper: when BeforeChange says yes the edit goes through");
+
+                    // One action reaches the box as a key and as a message: the question is asked once, whatever the answer (the pasted
+                    // number of the owner appeared with the question twice in a row).
+                    st.AnswerMemoryMs = 400;
+                    System.Threading.Thread.Sleep(450);                          // outside the memory of the answer above
+                    box.Text = "4"; box.SelectAll(); answer = true;
+                    Msg(WM_CLEAR);
+                    box.Text = "4"; box.SelectAll();
+                    Msg(WM_CLEAR);
+                    Assert(box.Text == "" && asked == 4, "stepper: after a yes, the message that follows is not asked about again");
+                    System.Threading.Thread.Sleep(450);
+                    answer = false; box.Text = "4"; box.SelectAll();
+                    Msg(WM_CLEAR);
+                    Msg(WM_CUT);
+                    Assert(box.Text == "4" && asked == 5, "stepper: after a no, the message that follows is refused without a second question");
+
+                    // An edit that arrives while the question is still open (the paste of the key being asked about) is refused, not a second question.
+                    System.Threading.Thread.Sleep(450);
+                    st.AnswerMemoryMs = 0;
+                    string textWhileAsking = null; int askedBefore = asked;
+                    st.BeforeChange = () => { asked++; box.SelectAll(); Msg(WM_CLEAR); textWhileAsking = box.Text; return true; };
+                    box.Text = "4"; box.SelectAll();
+                    Msg(WM_CUT);
+                    Assert(textWhileAsking == "4" && asked == askedBefore + 1 && box.Text == "",
+                        "stepper: an edit that arrives while the question is open is refused, and does not open a second question");
+                    st.BeforeChange = null;
+                    Assert(!box.AllowDrop, "stepper: dropped text is not accepted");
+                }
+
                 // One mouse press / release / click must step exactly once (Click follows MouseUp)
                 st.Value = 2; events = 0;
                 RaiseMouse(st.IncreaseButton, "OnMouseDown");

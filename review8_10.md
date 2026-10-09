@@ -450,6 +450,20 @@ usedNames.Add(clone.Name);
 
 ## Fix 11: TouchStepper skips BeforeChange for paste, undo, drop (TouchControls)
 
+**Status: applied** (2026-10-09), built and tested on Windows (filtered run: touch controls, key editor, Tab reach, keyboard editor, 543 checks). As proposed: the value box is a
+`StepperBox : TouchTextBox` that holds back WM_CUT, WM_PASTE, WM_CLEAR, WM_UNDO and EM_UNDO until `BeforeChange` agrees (context menu, and
+whatever else sends them), Shift+Insert, Shift+Delete, Ctrl+Z and Ctrl+Y were added to the keys that ask, and a "yes" is remembered for 400 ms so the
+message that follows the key is not asked about again. `AllowDrop = false`. Second part, in a simpler form than proposed: `TouchStepper.ProcessCmdKey`
+brings the box back to the held value on Enter (Enter reaches the dialog's accept button before the box is left), instead of
+`ValidateChildren` in `FluentDialogBase`; typing is still not clamped. Not tested: a real paste with the clipboard and a real drag (the
+tests send WM_CLEAR / WM_CUT to the box); whether Ctrl+V reaches the box as WM_PASTE or is handled inside the edit control is not known, which is why the key path
+and the message path both ask.
+Found by the owner on a first manual test: pasting a number in Thickness of a key in a group showed the question twice in a row. Not reproduced
+(a real paste cannot be driven from the suite); the likely cause is the key and the paste message that follows it each asking, one on top
+of the other or one after the other. Now there is one question per action: `AllowedOnce` remembers the last answer (yes or no) for
+`AnswerMemoryMs` (400 ms) and gives it again to the second part, and an edit that arrives while the question is open is refused instead of
+asking again. Tested with messages (including one sent from inside the question), by hand with a real Ctrl+V.
+
 Gate the edit-control messages instead of listing keys. A small subclass of `TextBox` for the value box:
 
 ```csharp
