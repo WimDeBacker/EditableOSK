@@ -11,7 +11,7 @@ namespace OnScreenKeyboard
     internal sealed class SpecialKeysDialog : FluentDialogBase
     {
         private static readonly Font MonoFont = new Font("Courier New", 10.5f);
-        protected override int ContentMaxWidth => 1040;
+        protected override int ContentMaxWidth => 1080;      // the three-column arrangement with +80 % text needs about 950 of the 1040 it had; text measures slightly differently from one display to the next
 
         public SpecialKeysDialog(bool dutch)
         {

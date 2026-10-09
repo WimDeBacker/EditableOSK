@@ -650,10 +650,10 @@ namespace OnScreenKeyboard
             // ── AutoSave: an invalid layout never replaces a good file (review8_10.md finding 2) ──
             // AutoSave used to write an invalid layout over both the named file and the default file; on the next start
             // LoadSettings rejected it and the keyboard silently fell back to the default layout.
-            string dir      = Path.Combine(Path.GetTempPath(), $"osk_autosave_{Guid.NewGuid():N}");
-            Directory.CreateDirectory(dir);
-            string named    = Path.Combine(dir, "mine.kbl");
-            string deflt    = Path.Combine(dir, "settings.xml");
+            string autoDir  = Path.Combine(Path.GetTempPath(), $"osk_autosave_{Guid.NewGuid():N}");
+            Directory.CreateDirectory(autoDir);
+            string named    = Path.Combine(autoDir, "mine.kbl");
+            string deflt    = Path.Combine(autoDir, "settings.xml");
             string recovery = SettingsManager.RecoveryPath(named);
             try
             {
@@ -689,7 +689,7 @@ namespace OnScreenKeyboard
             }
             finally
             {
-                try { Directory.Delete(dir, recursive: true); } catch { }
+                try { Directory.Delete(autoDir, recursive: true); } catch { }
             }
         }
 
