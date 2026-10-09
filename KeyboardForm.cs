@@ -3815,14 +3815,9 @@ namespace OnScreenKeyboard
             try
             {
                 _meta.LastFile = path;
-                // allowInvalid: true — AutoSave must bypass the structural-validity guard so a
-                // transiently invalid in-memory layout (mid resize/merge) is never silently
-                // dropped. Without this, SettingsManager.SaveSettings throws on an invalid
-                // layout, the catch below swallows it, and every autosave becomes a no-op until
-                // the user happens to fix the layout — losing everything in between on a crash.
-                SettingsManager.SaveSettings(_layout, _theme, _window, _meta, path, allowInvalid: true);
-                if (path != SettingsManager.DefaultPath)
-                    SettingsManager.SaveSettings(_layout, _theme, _window, _meta, SettingsManager.DefaultPath, allowInvalid: true);
+                // A valid layout goes to the file and to the default file; a transiently invalid one (mid resize / merge)
+                // goes to a recovery file next to it, never over a good file the next start would reject.
+                SettingsManager.AutoSave(_layout, _theme, _window, _meta, path, SettingsManager.DefaultPath);
             }
             catch { }
         }

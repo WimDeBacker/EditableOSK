@@ -437,6 +437,39 @@ namespace OnScreenKeyboard
             }
         }
 
+        /// <summary>The file an invalid in-memory layout is auto-saved to, next to <paramref name="path"/>.</summary>
+        public static string RecoveryPath(string path) => path + ".recovery";
+
+        /// <summary>
+        /// The automatic save after every change: writes the layout to <paramref name="path"/> and to
+        /// <paramref name="defaultPath"/> (the file the next start opens). A structurally invalid layout (mid resize or
+        /// merge) never replaces either of them: LoadSettings would reject such a file and the keyboard would fall back
+        /// to the default layout on the next start. It goes to <see cref="RecoveryPath"/> instead, so the work is not
+        /// lost. A valid save removes a recovery file left over from earlier, so it never goes stale.
+        /// </summary>
+        /// <returns><c>true</c> when the real files were written; <c>false</c> when only the recovery file was.</returns>
+        public static bool AutoSave(GridLayout layout, VisualTheme theme, WindowState window, LayoutMeta meta,
+                                    string path, string defaultPath)
+        {
+            string recovery = RecoveryPath(path);
+            if (!layout.IsValid())
+            {
+                SaveSettings(layout, theme, window, meta, recovery, allowInvalid: true);
+                return false;
+            }
+
+            SaveSettings(layout, theme, window, meta, path);
+            if (!string.Equals(Path.GetFullPath(path), Path.GetFullPath(defaultPath), StringComparison.OrdinalIgnoreCase))
+                SaveSettings(layout, theme, window, meta, defaultPath);
+            try
+            {
+                if (File.Exists(recovery))          File.Delete(recovery);
+                if (File.Exists(recovery + ".bak")) File.Delete(recovery + ".bak");
+            }
+            catch { }   // a recovery file that cannot be removed is harmless: the next valid save tries again
+            return true;
+        }
+
         /// <summary>
         /// Writes the <c>&lt;Theme&gt;</c> element which holds all visual
         /// settings as XML attributes, followed by child <c>&lt;Group&gt;</c>

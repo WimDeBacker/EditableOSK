@@ -94,6 +94,7 @@ namespace OnScreenKeyboard
             Step(T_KeyEditorRoundTrip);
             Step(T_ValidationBlocksApply);
             Step(T_MissingFontHandling);
+            Step(T_KeySequenceLossless);
             Step(T_FluentDialogBase_DisposeWithoutShow);
             Step(T_WizardKeyParser);
             Step(T_WizardKeyClassifier);
@@ -644,6 +645,51 @@ namespace OnScreenKeyboard
             {
                 if (File.Exists(bypassPath)) File.Delete(bypassPath);
                 if (File.Exists(bypassTmp))  File.Delete(bypassTmp);
+            }
+
+            // ── AutoSave: an invalid layout never replaces a good file (review8_10.md finding 2) ──
+            // AutoSave used to write an invalid layout over both the named file and the default file; on the next start
+            // LoadSettings rejected it and the keyboard silently fell back to the default layout.
+            string autoDir  = Path.Combine(Path.GetTempPath(), $"osk_autosave_{Guid.NewGuid():N}");
+            Directory.CreateDirectory(autoDir);
+            string named    = Path.Combine(autoDir, "mine.kbl");
+            string deflt    = Path.Combine(autoDir, "settings.xml");
+            string recovery = SettingsManager.RecoveryPath(named);
+            try
+            {
+                var good = new GridLayout(1, 2);
+                good.Cells.Add(new GridCell(0, 0, new KeyProps("A", "A")));
+                good.Cells.Add(new GridCell(0, 1, new KeyProps("B", "B")));
+                Assert(good.IsValid(), "AutoSave: the test's good layout is valid");
+
+                bool saved = SettingsManager.AutoSave(good, new VisualTheme(), new WindowState(), new LayoutMeta(), named, deflt);
+                Assert(saved && File.Exists(named) && File.Exists(deflt), "AutoSave valid: writes the named file and the default file");
+                Assert(!File.Exists(recovery), "AutoSave valid: no recovery file");
+                string namedBefore = File.ReadAllText(named), defaultBefore = File.ReadAllText(deflt);
+
+                var broken = new GridLayout(1, 2);
+                broken.Cells.Add(new GridCell(0, 0, new KeyProps("A", "A")));
+                broken.Cells.Add(new GridCell(0, 0, new KeyProps("X", "X")));  // duplicate → invalid
+                saved = SettingsManager.AutoSave(broken, new VisualTheme(), new WindowState(), new LayoutMeta(), named, deflt);
+                Assert(!saved, "AutoSave invalid: reports that the real files were not written");
+                Assert(File.ReadAllText(named) == namedBefore, "AutoSave invalid: the named file is unchanged");
+                Assert(File.ReadAllText(deflt) == defaultBefore, "AutoSave invalid: the default file is unchanged");
+                Assert(File.Exists(recovery), "AutoSave invalid: the work is kept in the recovery file");
+                var fromRecovery = SettingsManager.LoadSettings(new VisualTheme(), new WindowState(), new LayoutMeta(), recovery);
+                Assert(fromRecovery != null && fromRecovery.Cells.Count == 2, "AutoSave invalid: the recovery file holds the layout as it was");
+                var reloaded = SettingsManager.LoadSettings(new VisualTheme(), new WindowState(), new LayoutMeta(), named);
+                Assert(reloaded != null && reloaded.IsValid(), "AutoSave invalid: the named file still loads as a valid layout");
+
+                saved = SettingsManager.AutoSave(good, new VisualTheme(), new WindowState(), new LayoutMeta(), named, deflt);
+                Assert(saved && !File.Exists(recovery), "AutoSave valid again: the stale recovery file is removed");
+
+                // The named file is the default file: written once, no error.
+                saved = SettingsManager.AutoSave(good, new VisualTheme(), new WindowState(), new LayoutMeta(), deflt, deflt);
+                Assert(saved && File.Exists(deflt), "AutoSave on the default file itself: saved");
+            }
+            finally
+            {
+                try { Directory.Delete(autoDir, recursive: true); } catch { }
             }
         }
 
@@ -4778,6 +4824,48 @@ namespace OnScreenKeyboard
                 updateMi.Invoke(f, new object[] { cmbFont, "" });
                 Assert(string.IsNullOrEmpty(fontWarn.GetError(cmbFont)),
                     "UpdateFontAvailabilityWarning: an empty name (placeholder selected) is never flagged");
+            }
+        }
+
+        // T_KeySequenceLossless — regression test for review8_10.md finding 1: layer 0 of a
+        // KeySequence key was always rebuilt as FromHuman(ToHuman(send)), and ToHuman drops
+        // grouping parentheses, so opening a key whose Send is "^(ab)" and pressing Apply
+        // without any edit rewrote it to "^ab" (Ctrl applying to one key only). An untouched
+        // layer must keep the stored send exactly, as layers 1 and 2 already did.
+        private static void T_KeySequenceLossless()
+        {
+            Section("Key sequence (layer 0) survives an untouched Apply");
+
+            var applyMi = typeof(KeyEditorForm).GetMethod("Apply", BindingFlags.NonPublic | BindingFlags.Instance);
+            TouchTextBox[] Values(KeyEditorForm form) =>
+                (TouchTextBox[])typeof(KeyEditorForm).GetField("_values", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(form);
+
+            // Untouched: Apply keeps the stored send, parentheses included.
+            {
+                using var f = new KeyEditorForm(new KeyProps("Sel", "^(ab)"), owner: null);
+                applyMi.Invoke(f, null);
+                Assert(f.DialogResult == DialogResult.OK, "KeySequence untouched: Apply succeeds");
+                Assert(f.Result.Send == "^(ab)",
+                    $"KeySequence untouched: Send keeps its grouping — got '{f.Result.Send}'");
+            }
+
+            // Only the label edited: the value stays untouched, so the send is still kept.
+            {
+                using var f = new KeyEditorForm(new KeyProps("Sel", "^(ab)"), owner: null);
+                var labels = (TouchTextBox[])typeof(KeyEditorForm).GetField("_labels", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(f);
+                labels[0].Text = "Select";
+                applyMi.Invoke(f, null);
+                Assert(f.Result.Send == "^(ab)",
+                    $"KeySequence label-only edit: Send keeps its grouping — got '{f.Result.Send}'");
+            }
+
+            // Value edited: the box wins, rebuilt from the readable form as before.
+            {
+                using var f = new KeyEditorForm(new KeyProps("Sel", "^(ab)"), owner: null);
+                Values(f)[0].Text = "{Ctrl}x";
+                applyMi.Invoke(f, null);
+                Assert(f.Result.Send == "^x",
+                    $"KeySequence edited: Send is rebuilt from the box — got '{f.Result.Send}'");
             }
         }
 

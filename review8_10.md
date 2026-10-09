@@ -101,6 +101,8 @@ decision for the owner).
 
 ## Fix 1: layer 0 key sequence is rewritten lossy (KeyEditorForm.BuildSend)
 
+**Status: applied** (commit 4761280, test `T_KeySequenceLossless`). Not yet built or run on Windows.
+
 Treat layer 0 like layers 1 and 2: while the value box is untouched, return what was stored.
 
 ```csharp
@@ -117,6 +119,10 @@ case SendMode.KeySequence:
 - Test: a key with Send `^(ab)` -> open editor, Apply with no edit -> `Send == "^(ab)"`. Same after editing the label only.
 
 ## Fix 2: AutoSave overwrites good files with an invalid layout (KeyboardForm.AutoSave)
+
+**Status: applied**, as `SettingsManager.AutoSave(..., path, defaultPath)` (testable; `KeyboardForm.AutoSave` calls it)
+with assertions added to `T_SettingsManager_RoundTrip`. The startup offer to open a recovery file is not done. Not yet
+built or run on Windows.
 
 Keep `allowInvalid: true` (so the work is not lost), but never onto the named file or the default file. Write an invalid
 layout to a recovery file next to it.
