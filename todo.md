@@ -50,6 +50,14 @@ Not planned; decided later, if at all (from the touch-friendly work, 2.4.8):
 
 ## Completed
 
+### Personalisation against large base frequencies ✓ *(word prediction engine, 2026-10-10)*
+
+Analysis: personal use is a separate tier (`PersonalUseCount`, ranked before the corpus frequency), so the size of the base numbers does not matter for single words (rank-preserving rescaling changes nothing). The real blockers were elsewhere (`WordDatabase.cs`):
+- **Full pair lists were closed:** a new word pair only entered a list of 10 if the weakest pair had frequency ≤ 1. English: 17,974 of 17,987 words had such a locked list (Dutch: 2,038 of 6,001), so almost no new pair could be learned. Now a new personal pair replaces the weakest pair the user has not used; only the first few pairs are shown anyway.
+- **Reserved slot:** the second-word step no longer takes every slot; one stays for the user's own words and goes to the next pair when no personal word matches.
+- **Minimum use:** a known word joins the personal tier after 2 uses (`MinPersonalUse`), so one slip of a rare word does not outrank "the".
+- Tests: "WordDatabase — personalisation against large base frequencies" in `OnScreenKeyboardTests.cs`. Base frequencies were left as they are.
+
 ### Dutch word database: gaps for spoken language, disability and care filled ✓ *(word prediction content, 2026-10-09 / 10)*
 
 `worddb_NL.xml` comes from a newspaper corpus (mostly "Wablieft"): the words of a conversation and of care were missing or ranked far too low (`ja=37, nee=26, sorry=16, prima=10, alsjeblieft=3, kunt=3`). Done, with lists the owner reviewed:

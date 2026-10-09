@@ -2662,6 +2662,67 @@ namespace OnScreenKeyboard
                 if (System.IO.File.Exists(concEN)) System.IO.File.Delete(concEN);
             }
 
+            // ── Personalisation vs. large base frequencies ──
+            section("WordDatabase — personalisation against large base frequencies");
+            string persPath = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(), $"osk_pers_{Guid.NewGuid():N}.wfq");
+            try
+            {
+                WordDatabase.LearningEnabled = true;
+                var persXml = new System.Text.StringBuilder();
+                persXml.Append("<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n<WordDatabase version=\"1\" language=\"en\">\r\n");
+                // "the" has a full list of ten strong pairs (none at frequency 1).
+                persXml.Append("  <Word value=\"the\" frequency=\"11809\">");
+                for (int i = 0; i < 10; i++)
+                    persXml.Append($"<Next value=\"w{i}\" frequency=\"{900 - i * 10}\" />");
+                persXml.Append("</Word>\r\n");
+                for (int i = 0; i < 10; i++)
+                    persXml.Append($"  <Word value=\"w{i}\" frequency=\"{5000 - 9 + i}\" />\r\n");   // opposite order to the pairs
+                persXml.Append("  <Word value=\"zebra\" frequency=\"1500\" />\r\n");
+                persXml.Append("  <Word value=\"zoom\" frequency=\"9000\" />\r\n");
+                persXml.Append("  <Word value=\"zone\" frequency=\"9500\" />\r\n");
+                persXml.Append("</WordDatabase>");
+                System.IO.File.WriteAllText(persPath, persXml.ToString(), System.Text.Encoding.UTF8);
+                WordDatabase.Load(persPath);
+
+                // 1. A full list of strong base pairs still learns a new pair.
+                WordDatabase.RecordWord("the", "zebra");
+                var pairs = WordDatabase.GetPredictions("the", "", false, 5);
+                assert(pairs.Count > 0 && pairs[0] == "zebra",
+                    "pers: new personal pair enters a full list of strong base pairs and ranks first");
+                assert(pairs.Contains("w0") && pairs.Contains("w1"),
+                    "pers: the strongest base pairs are still shown after it");
+
+                // 2. A word used once does not outrank the common words; twice does.
+                WordDatabase.RecordWord(null, "zebra");   // second use overall (the pair above counted as the first)
+                var onceUsed = WordDatabase.GetPredictions("", "z", false, 3);
+                assert(onceUsed.Count > 0 && onceUsed[0] == "zebra",
+                    "pers: a word used twice outranks higher-frequency words with the same prefix");
+                WordDatabase.RecordWord(null, "zoom");     // once only
+                var afterOnce = WordDatabase.GetPredictions("", "z", false, 3);
+                assert(afterOnce.IndexOf("zone") < afterOnce.IndexOf("zoom"),
+                    "pers: a word used only once stays at its base rank");
+
+                // 3. One slot stays reserved for the personal word, also when
+                //    the pair list could fill every slot; without a matching
+                //    personal word it goes to the next pair, not to the most
+                //    frequent word.
+                var noPersonal = WordDatabase.GetPredictions("the", "w", false, 5);
+                assert(noPersonal.SequenceEqual(new[] { "w0", "w1", "w2", "w3", "w4" }),
+                    "pers: the reserved slot goes to the next pair when no personal word matches");
+                WordDatabase.RecordWord(null, "w9"); WordDatabase.RecordWord(null, "w9");
+                WordDatabase.RecordWord(null, "w9");
+                var reserved = WordDatabase.GetPredictions("the", "", false, 5);
+                assert(reserved.Count == 5 && reserved.Contains("w9") && reserved.Contains("zebra"),
+                    "pers: a personal word keeps a slot although the pair list could fill them all");
+            }
+            finally
+            {
+                if (System.IO.File.Exists(persPath)) System.IO.File.Delete(persPath);
+                string persOverlay = WordDatabase.GetOverlayPath(persPath);
+                if (System.IO.File.Exists(persOverlay)) System.IO.File.Delete(persOverlay);
+            }
+
             // ── Learning engine — RecordWord, candidates, save/load round-trip ──
             section("WordDatabase — learning engine (RecordWord)");
 

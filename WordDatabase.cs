@@ -207,6 +207,10 @@ namespace OnScreenKeyboard
         // the candidate buffer into the real word list (spec: "count > 2").
         private const int CandidatePromotionThreshold = 2;
 
+        // A known word joins the personal-use tier only after being used this
+        // many times, so a single slip of a rare word does not outrank "the".
+        private const int MinPersonalUse = 2;
+
         // Matches the load-time cap on <Next> children per word (see ParseFile).
         private const int MaxNextWords = 10;
 
@@ -750,17 +754,24 @@ namespace OnScreenKeyboard
             //
             // Look up which words commonly follow lastCompletedWord in the
             // training data. These are pre-stored in WordEntry.NextWords.
+            WordEntry lastEntry = null;
             if (!string.IsNullOrEmpty(lastCompletedWord))
             {
                 // Try exact match first; also try lowercased key.
                 // The database stores words in lowercase, but lastCompletedWord
                 // might be "De" (capitalised at sentence start), so we also try
                 // the lowercase version to find the entry.
-                WordEntry lastEntry = null;
                 snap.ByExact.TryGetValue(lastCompletedWord, out lastEntry);
                 if (lastEntry == null)
                     snap.ByExact.TryGetValue(lastCompletedWord.ToLower(), out lastEntry);
+            }
 
+            // Adds matching second words until result holds `limit` entries.
+            // Called twice: first with one slot held back for the personal tier,
+            // then (after it) with the full count, so the held-back slot goes to
+            // the next pair when the user has no matching personal word.
+            void AddPairs(int limit)
+            {
                 if (lastEntry != null)
                 {
                     // NextWords is kept sorted descending by frequency (both at load
@@ -769,7 +780,7 @@ namespace OnScreenKeyboard
                     foreach (NextEntry ne in lastEntry.NextWords)
                     {
                         string w = ne.Word;
-                        if (result.Count >= count) break;
+                        if (result.Count >= limit) break;
 
                         // If the user has started typing, skip any next-word that
                         // doesn't begin with the typed prefix.
@@ -799,7 +810,7 @@ namespace OnScreenKeyboard
             // (personal-use tier, capped) and Step 2 (frequency fallback,
             // uncapped) below — identical matching logic, different source list
             // and cap.
-            void AddMatching(List<WordEntry> source, int maxAdd)
+            void AddMatching(IEnumerable<WordEntry> source, int maxAdd)
             {
                 int added = 0;
                 if (preferUpperCase && hasPrefix)
@@ -853,6 +864,10 @@ namespace OnScreenKeyboard
                 }
             }
 
+            // Step 1 (second words), leaving one slot for Step 1.5 when there
+            // is more than one slot.
+            AddPairs(count > 1 ? count - 1 : count);
+
             // ── Step 1.5: Personally-used words ───────────────────────
             //
             // Words the user has typed before (snap.ByPersonalUse, already
@@ -861,7 +876,11 @@ namespace OnScreenKeyboard
             // larger a competing base word's frequency is. Capped so normal
             // frequency-based suggestions are never fully crowded out.
             if (result.Count < count)
-                AddMatching(snap.ByPersonalUse, PersonalCap(count));
+                AddMatching(snap.ByPersonalUse.TakeWhile(e => e.PersonalUseCount >= MinPersonalUse), PersonalCap(count));
+
+            // The slot held back for the personal tier goes to the next pair
+            // when no personal word matched.
+            AddPairs(count);
 
             // ── Step 2: First words ───────────────────────────────────
             //
@@ -979,15 +998,18 @@ namespace OnScreenKeyboard
                     }
                     else
                     {
-                        // List is full — replace the weakest existing pair only if
-                        // it is no stronger than a brand-new (frequency 1) entry,
-                        // so well-established pairs are never displaced by noise.
-                        // "Weakest" uses the same (PersonalUseCount, Frequency)
-                        // ordering as the ranking sort below.
+                        // List is full — replace the weakest existing pair unless
+                        // the user has used it: personal pairs rank first, so the
+                        // new one outranks any base pair whatever its corpus
+                        // frequency (with large base frequencies a limit on
+                        // frequency would leave a full list closed for ever), and
+                        // only the first few pairs are ever shown. "Weakest" uses
+                        // the same (PersonalUseCount, Frequency) ordering as the
+                        // ranking sort below.
                         NextEntry weakest = prevEntry.NextWords[0];
                         foreach (var n in prevEntry.NextWords)
                             if (IsWeakerPair(n, weakest)) weakest = n;
-                        if (weakest.PersonalUseCount == 0 && weakest.Frequency <= 1)
+                        if (weakest.PersonalUseCount == 0)
                         {
                             prevEntry.NextWords.Remove(weakest);
                             prevEntry.NextWords.Add(new NextEntry(word, 1) { PersonalUseCount = 1 });
