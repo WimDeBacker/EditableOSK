@@ -183,6 +183,11 @@ namespace OnScreenKeyboard
                         Show(m);
                         Save(m, Path.Combine(outDir, $"groupeditor_confirm_{theme}_{tag}.png"));
                     }
+                    using (var f = new FirstRunDialog(new[] { ("nl", "Nederlands"), ("en", "English") }, "qwerty", "nl"))
+                    {
+                        Show(f);
+                        Save(f, Path.Combine(outDir, $"firstrun_{theme}_{tag}.png"));
+                    }
                 }
             }
             finally { ToolbarButton.IsLightTheme = wasLight; }

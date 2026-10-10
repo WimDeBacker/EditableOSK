@@ -86,6 +86,7 @@ namespace OnScreenKeyboard
             ("KeyboardEditorForm", () => KeyboardEditor(),                                   480, 520, 540),
             ("NewKeyboardWizard",  () => new NewKeyboardWizard(),                            480, 520, 0),
             ("SpecialKeysDialog",  () => new SpecialKeysDialog(false),                       480, 520, 0),
+            ("FirstRunDialog",     () => new FirstRunDialog(new[] { ("nl", "Nederlands"), ("en", "English") }, "qwerty", "nl"), 480, 520, 580),
         };
 
         private static void T_NarrowDialogs()

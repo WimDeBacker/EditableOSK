@@ -208,6 +208,12 @@
   <String key="tip: Save settings as"            value="De wijzigingen toepassen en het lay-outbestand onder een nieuwe naam opslaan." />
   <String key="kbd: Load title"                  value="Een lay-out laden" />
   <String key="kbd: Load msg"                    value="Laden vervangt het huidige toetsenbord meteen. Wijzigingen die in dit venster zijn gemaakt gaan verloren en Annuleren maakt het laden niet ongedaan.&#10;&#10;Doorgaan?" />
+  <String key="first run: title"                 value="Welkom" />
+  <String key="first run: intro"                 value="Kies hoe het toetsenbord start. U kunt dit later allemaal aanpassen in de bewerkmodus." />
+  <String key="first run: arrangement"           value="Toetsenbordindeling" />
+  <String key="first run: language"              value="Taal van de voorspelling" />
+  <String key="first run: hint"                  value="Dit is ook de taal van de menu's en vensters van het toetsenbord." />
+  <String key="first run: start"                 value="Starten" />
   <String key="wp: nothing to export"            value="Exporteren kan zodra er woorden zijn geleerd." />
   <String key="wp: no candidates"                value="Nog geen kandidaten." />
   <String key="wp: learning off hint"            value="Kandidaten worden verzameld zolang &quot;Getypte woorden onthouden&quot; aan staat." />

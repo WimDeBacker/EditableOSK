@@ -114,7 +114,7 @@ namespace OnScreenKeyboard
             AppDomain.CurrentDomain.UnhandledException += (s, e) => LogError("unhandled", e.ExceptionObject as Exception);
 
             // Earlier versions wrote settings and learned words next to the exe: take them over into the user's folder (once).
-            UserData.MigrateFrom(UserData.AppFolder);
+            if (UserData.UsesStandardFolder) UserData.MigrateFrom(UserData.AppFolder);
 
             // A layout file on the command line (double-click on a .kbl): a keyboard that is already running opens it and this
             // process ends; otherwise this keyboard starts with it.

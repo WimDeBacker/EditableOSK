@@ -47,8 +47,16 @@ namespace OnScreenKeyboard
             catch { return false; }
         }
 
-        // One pipe per Windows user: the keyboard of another user on the same machine is not ours to steer.
-        internal static string PipeName(string suffix = "") => "EditableOSK.OpenLayout." + Environment.UserName + suffix;
+        // One pipe per Windows user and per data folder: the keyboard of another user on the same machine is not ours to steer, and a test
+        // version (its own data folder, see UserData) does not take files meant for the installed program, nor the other way round.
+        internal static string PipeName(string suffix = "") =>
+            "EditableOSK.OpenLayout." + Environment.UserName + "." + DataTag() + suffix;
+
+        private static string DataTag()
+        {
+            byte[] h = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(UserData.Directory.ToLowerInvariant()));
+            return Convert.ToHexString(h, 0, 4);
+        }
 
         /// <summary>Asks a running keyboard to open <paramref name="path"/>. False when none answers within <paramref name="timeoutMs"/>.</summary>
         internal static bool TrySendToRunning(string path, int timeoutMs = 600, string pipeSuffix = "")

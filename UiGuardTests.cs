@@ -555,6 +555,9 @@ namespace OnScreenKeyboard
             // The question asked before a change takes the key out of its group (a window of its own, with the real text).
             CheckDialogGuards("TouchMessage (take the key out of its group?)", () =>
                 new TouchMessage(Lang.T("title: leave group"), string.Format(Lang.T("ask: leave group"), "Klinkers"), question: true));
+            // The question asked at the very first start.
+            CheckDialogGuards("FirstRunDialog", () =>
+                new FirstRunDialog(new[] { ("nl", "Nederlands"), ("en", "English") }, "qwerty", "nl"));
         }
 
         // ════════════════════════════════════════════════════════════════

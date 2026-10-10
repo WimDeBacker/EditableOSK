@@ -69,6 +69,7 @@ namespace OnScreenKeyboard
             Step(T_LearnedImport);
             Step(T_LayoutLaunch);
             Step(T_UserData);
+            Step(T_FirstRun);
             Step(T_KeyboardEditorImport);
             Step(T_SvgIconLoader_Cache);
             Step(T_TouchControls);

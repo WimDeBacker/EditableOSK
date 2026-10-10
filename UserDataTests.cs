@@ -37,6 +37,15 @@ namespace OnScreenKeyboard
                 Assert(!Directory.EnumerateFileSystemEntries(app).GetEnumerator().MoveNext(), "the write test leaves nothing behind");
                 Assert(!UserData.CanWrite(Path.Combine(root, "missing folder", "x.kbl")), "a folder that does not exist: cannot write");
 
+                // Which folder: installed program, test version, environment variable
+                string ad = @"C:\Users\x\AppData\Roaming";
+                var pfs = new[] { @"C:\Program Files", @"C:\Program Files (x86)" };
+                Assert(UserData.ResolveDirectory(null, @"C:\Program Files\EditableOSK\", ad, pfs) == ad + @"\EditableOSK", "installed in Program Files: the folder of the installed program");
+                Assert(UserData.ResolveDirectory("", @"C:\Program Files (x86)\EditableOSK\", ad, pfs) == ad + @"\EditableOSK", "Program Files (x86) counts as installed too");
+                Assert(UserData.ResolveDirectory(null, @"C:\dev\EditableOSK\bin\Debug\net10.0-windows\", ad, pfs) == ad + @"\EditableOSK-Dev", "a build folder: a folder of its own");
+                Assert(UserData.ResolveDirectory(null, @"C:\Program Files Extra\EditableOSK\", ad, pfs) == ad + @"\EditableOSK-Dev", "a folder that only starts like Program Files is not installed");
+                Assert(UserData.ResolveDirectory(@" ""D:\data\osk"" ", @"C:\Program Files\EditableOSK\", ad, pfs) == @"D:\data\osk", "the environment variable wins, quotes and spaces removed");
+
                 // Learned words of a database in the program folder go to the user folder; of one elsewhere they stay next to it.
                 Assert(WordDatabase.GetOverlayPath(Path.Combine(UserData.AppFolder, "worddb_NL.wfq")) == Path.Combine(user, "worddb_NL.learned.wfq"),
                        "learned words of an installed database are kept in the user folder");

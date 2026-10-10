@@ -5,6 +5,8 @@
 //   settings.xml                the automatic save (the layout the next start opens)
 //   worddb_XX.learned.wfq       the words learned on a word database that is installed with the program
 //   OnScreenKeyboard_error.log  the error log
+// A copy that does not run from Program Files (a build folder) uses %AppData%\EditableOSK-Dev instead, or the folder in the
+// environment variable EDITABLEOSK_DATA; see Directory.
 // Layouts the user saves go where the user chooses (the Documents folder by default). A word database somewhere else than in the
 // program's folder keeps its learned words next to itself, as before.
 
@@ -18,9 +20,42 @@ namespace OnScreenKeyboard
         /// <summary>For the tests: use this folder instead of %AppData%\EditableOSK, so a test run never touches real user data.</summary>
         internal static string DirectoryOverride;
 
-        /// <summary>The folder for the settings, learned words and error log of this user.</summary>
+        /// <summary>Name of the environment variable that names the data folder directly (for developers, portable use and tests).</summary>
+        internal const string EnvVariable = "EDITABLEOSK_DATA";
+
+        /// <summary>
+        /// The folder for the settings, learned words and error log of this user: <c>%AppData%\EditableOSK</c> for the program installed in
+        /// Program Files; <c>%AppData%\EditableOSK-Dev</c> for a copy that runs from anywhere else (a build folder, a copy on a stick), so a
+        /// test version never touches the data of the installed program; or the folder named by the environment variable
+        /// <see cref="EnvVariable"/>, which wins over both.
+        /// </summary>
         internal static string Directory =>
-            DirectoryOverride ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "EditableOSK");
+            DirectoryOverride ?? ResolveDirectory(Environment.GetEnvironmentVariable(EnvVariable), AppFolder,
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                new[] { Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                        Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86) });
+
+        /// <summary>The rule behind <see cref="Directory"/>, without reading the environment (for the tests).</summary>
+        internal static string ResolveDirectory(string envValue, string appFolder, string appData, string[] programFolders)
+        {
+            if (!string.IsNullOrWhiteSpace(envValue)) return Path.GetFullPath(envValue.Trim().Trim('"'));
+            bool installed = false;
+            foreach (string pf in programFolders)
+            {
+                if (string.IsNullOrEmpty(pf)) continue;
+                string root = Path.GetFullPath(pf).TrimEnd('\\') + "\\";
+                if (Path.GetFullPath(appFolder).StartsWith(root, StringComparison.OrdinalIgnoreCase)) { installed = true; break; }
+            }
+            return Path.Combine(appData, installed ? "EditableOSK" : "EditableOSK-Dev");
+        }
+
+        /// <summary>
+        /// True for the program installed in Program Files (the standard data folder, no override): only then are the files of an earlier
+        /// version next to the exe taken over. A test version starts with an empty data folder, so the first start can be tried.
+        /// </summary>
+        internal static bool UsesStandardFolder =>
+            DirectoryOverride == null && string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(EnvVariable))
+            && string.Equals(Path.GetFileName(Directory.TrimEnd('\\')), "EditableOSK", StringComparison.OrdinalIgnoreCase);
 
         /// <summary>The folder the program is installed in.</summary>
         internal static string AppFolder => AppDomain.CurrentDomain.BaseDirectory;

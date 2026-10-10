@@ -368,7 +368,11 @@ namespace OnScreenKeyboard
             _wpSaveTimer.Tick += (s, e) => WordDatabase.SaveIfDirty();
             _wpSaveTimer.Start();
 
+            // The very first start of this user (no settings yet, and no file to open): the window asks for the key arrangement and the
+            // language of the suggestions once it is on screen.
+            bool firstRun = startupLayout == null && !File.Exists(SettingsManager.DefaultPath);
             TryAutoLoad();
+            if (firstRun) Shown += (s, e) => BeginInvoke((Action)RunFirstRunSetup);
             if (startupLayout != null)
             {
                 // A valid file is loaded now (no flash of the previous layout); an invalid one reports its error once the window is up.
@@ -3646,6 +3650,41 @@ namespace OnScreenKeyboard
             if (dlg.ShowDialog() != DialogResult.OK) return false;      // cancelled: nothing was loaded
             ApplyLoadedSettings(dlg.FileName);
             return true;
+        }
+
+        /// <summary>
+        /// The first start: asks for QWERTY or AZERTY and for the language of the suggestions (<see cref="FirstRunDialog"/>), then opens the
+        /// ready-made layout of that arrangement with the database of that language. Closing the window without choosing keeps the built-in
+        /// keyboard. Nothing is asked when no ready-made layout or no word database is installed.
+        /// </summary>
+        private void RunFirstRunSetup()
+        {
+            if (IsDisposed) return;
+            string appDir = AppDomain.CurrentDomain.BaseDirectory;
+            var databases = new LanguageRegistry(appDir).All
+                .Where(d => !string.IsNullOrEmpty(d.Language))
+                .GroupBy(d => d.Language.ToLowerInvariant())
+                .Select(g => (Code: g.Key, File: g.First().FilePath))
+                .ToList();
+            if (databases.Count == 0) return;
+
+            var languages = databases.Select(d => (d.Code, FirstRunDialog.LanguageName(d.Code))).ToList();
+            var culture   = System.Globalization.CultureInfo.CurrentUICulture;
+            using var dlg = new FirstRunDialog(languages, FirstRunDialog.GuessArrangement(culture), FirstRunDialog.GuessLanguage(culture, languages));
+            if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+            string layoutFile = Path.Combine(appDir, dlg.Arrangement + ".kbl");
+            if (!File.Exists(layoutFile)) return;
+            string db = databases.First(d => d.Code == dlg.Language).File;
+
+            ApplyLoadedSettings(layoutFile);
+            // The ready-made layouts name a language and database of their own; the choice made here replaces them.
+            _meta.Language     = dlg.Language;
+            _meta.WordDatabase = Path.GetFileName(db);
+            Lang.Load(dlg.Language);
+            LoadWordDatabase();
+            RebuildAllButtons();
+            AutoSave();
         }
 
         /// <summary>True when <paramref name="path"/> loads as a valid layout (nothing is applied).</summary>
