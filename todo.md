@@ -14,6 +14,21 @@ Numbering: **P** = priority, then sub-sections, steps and details (**1.1**, **3.
 - 2.1 Ship 8 ready-made `.kbl` files: 4 wizard themes × 2 key arrangements (AZERTY Dutch, QWERTY English).
 - 2.2 Users can load one immediately without running the wizard.
 
+### Priority 0 — Dialogs open behind the keyboard again ☐ *(next priority; reported by the owner 2026-10-11)*
+
+**Symptom.** The dialog windows (Edit Keyboard, Key Editor, Group Editor, the wizard, message boxes, probably also the file dialogs) often open **behind the always-on-top keyboard** and cannot be used. The keyboard answers a click with `MA_NOACTIVATE`, so a dialog opened from it is opened by a process that is not the foreground process, and Windows puts it behind the keyboard or another program.
+
+**Earlier fix (do not repeat blindly: find what broke it).** Commit `8ab5cbb` (2026-10-06, "Dialogs come to the front", the text is only in the commit and in comments): `FluentDialogBase` raises itself and takes the foreground once shown (`ForceForeground`, sharing the input queue of the current foreground window; skipped for the invisible windows of the tests and the gallery); `KeyboardForm.Activated` no longer calls `ForceTopMost` while a dialog is open over it (the owner is disabled then). Commit `79f9685` / review8_10 fix 5: the missing-font message box got the keyboard as owner ("`this` as owner keeps the box in front of the always-on-top window"). So the rule is: every window the keyboard opens has the keyboard as owner and takes the foreground.
+
+**Where to look first (suspects, to check one by one):**
+- 0.1 **Windows without an owner:** `OpenFileDialog` / `SaveFileDialog` calls in `KeyboardForm` (`LoadSettings`, `SaveSettings`, the wizard, the group import, the key editor's browse) and any `MessageBox.Show(text, title, …)` without `this`: a common dialog without an owner opens behind a top-most window. Search `ShowDialog()` and `MessageBox.Show(` without an owner.
+- 0.2 **Dialogs added or changed since 2026-10-06:** `FirstRunDialog` (opened from `Shown` through `BeginInvoke`), `StylePreview` / the Style section, `TouchMessage` / `NameDialog` / `ImportDialog` (opened with `ShowDialog(this)` from a dialog: is the owner the dialog, not the keyboard?), the hand-over of a double-clicked `.kbl` (`OpenLayoutFromOutside`: a window shown while another program has the foreground).
+- 0.3 **`ForceForeground` conditions:** does it still run for every dialog (the test / gallery guard must not switch it off at run time), does it fail when the keyboard is not the foreground process and no window of the process has input (`AttachThreadInput` with the foreground thread, `SetForegroundWindow`, the foreground lock timeout `SPI_SETFOREGROUNDLOCKTIMEOUT`), and what happens when the dialog is shown through `Show` instead of `ShowDialog`.
+- 0.4 **`TopMost` of the dialog itself:** an owned dialog of a top-most owner is normally above it; check `TopMost` / `WS_EX_TOPMOST` on the dialogs and on the keyboard after `ForceTopMost`, `ApplyTitlebarState`, `Activated`, and after a layout is loaded (`AlwaysOnTop` is applied again then).
+- 0.5 **Test it in the real situation:** a test cannot show this (the guards use invisible windows). By hand, from the installed program and from the build folder, with another program in front: Edit mode → the Keyboard button, a key's Edit, Load, New, Manage stylegroups…, the first start, and a double-click on a `.kbl` while the keyboard runs; also with the keyboard minimised and after the PC was locked and unlocked.
+
+**Done when:** every dialog opens in front of the keyboard and has the focus, from every entry point above; a short list of those manual checks in `todo.md`; a test that at least checks that every window the keyboard can open is created with the keyboard as owner (a search of the code is not enough once new dialogs appear).
+
 ### Priority 4 — Language-neutral style groups, and the language as a property of the keyboard ▶ *(design agreed with the owner 2026-10-11; A and B built the same day, C partly)*
 
 **Status 2026-10-11.**
