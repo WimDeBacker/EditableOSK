@@ -37,7 +37,7 @@
       <Name lang="en">Word prediction</Name>
     </Group>
   </Theme>
-  <Layout Language="en" GridRows="7" GridCols="14" GearRow="1" GearCol="13" WindowWidth="1072" WindowHeight="244" HideTitlebar="0" StickyModifiers="1" HoldToEdit="0" AlwaysOnTop="1" SlowKeysMs="0" DwellMs="0" ShowTimingAnimation="1" LastFile="C:\dev\EditableOSK\qwerty.kbl" ToolbarTheme="Dark" WordLearningEnabled="1">
+  <Layout Language="en" GridRows="7" GridCols="14" GearRow="1" GearCol="13" WindowWidth="1072" WindowHeight="352" HideTitlebar="0" StickyModifiers="1" HoldToEdit="0" AlwaysOnTop="1" SlowKeysMs="0" DwellMs="0" ShowTimingAnimation="1" LastFile="C:\dev\EditableOSK\qwerty.kbl" ToolbarTheme="Dark" WordLearningEnabled="1">
     <Key Row="1" Col="0" RowSpan="1" ColSpan="1" GroupId="function-keys" Label="Esc" Send="{ESC}" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="1" Col="1" RowSpan="1" ColSpan="1" GroupId="function-keys" Label="F1" Send="{F1}" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="1" Col="2" RowSpan="1" ColSpan="1" GroupId="function-keys" Label="F2" Send="{F2}" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
