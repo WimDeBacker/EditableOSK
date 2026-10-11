@@ -242,6 +242,8 @@ namespace OnScreenKeyboard
                 _values[i].AccessibleName = ValueName(i);
             }
             _cmbGroup.Items[0].Text = Lang.T("(no group)");
+            for (int i = 0; i < _groups.Count && i + 1 < _cmbGroup.Items.Count; i++)      // the names follow the language of the screens
+                _cmbGroup.Items[i + 1].Text = GroupNames.Display(_groups[i]);
             _cmbGroup.ShowSelection();
             UpdatePickerTexts();
             if (_valueShowsWp) ShowWpValue();
@@ -559,7 +561,7 @@ namespace OnScreenKeyboard
         private void OpenGroupEditor()
         {
             // Index 0 is "(no group)" — pass null so GroupEditorForm shows the first real group.
-            string current = _cmbGroup.SelectedIndex == 0 ? null : _cmbGroup.SelectedItem?.Text;
+            string current = SelectedGroupId();
             using var dlg = new GroupEditorForm(_groups, initialGroupName: current);
             if (dlg.ShowDialog(this) != DialogResult.OK) return;
             _groups.Clear();
@@ -576,15 +578,27 @@ namespace OnScreenKeyboard
         /// <summary>Raised when the Group Editor, opened from here, renamed or deleted groups: the owner updates the group name of every key.</summary>
         internal event Action<GroupRenames> GroupsRenamed;
 
-        /// <summary>Rebuilds the group chooser after the group list changed; restores <paramref name="previous"/> by name, else "(no group)".</summary>
+        /// <summary>
+        /// The id of the group chosen in the chooser, or null for "(no group)". The chooser shows the names of the groups; row i (from 1)
+        /// is <c>_groups[i - 1]</c>, so the id is found by position, never by the text.
+        /// </summary>
+        private string SelectedGroupId()
+        {
+            int i = _cmbGroup?.SelectedIndex ?? 0;
+            return i > 0 && i <= _groups.Count ? _groups[i - 1].Name : null;
+        }
+
+        /// <summary>Rebuilds the group chooser after the group list changed; restores the group with the id <paramref name="previous"/>, else "(no group)".</summary>
         private void RebuildGroupChooser(string previous, bool refresh)
         {
             var items = new List<TouchChoice> { new TouchChoice { Text = Lang.T("(no group)") } };   // index 0 always
-            items.AddRange(_groups.Select(g => new TouchChoice { Text = g.Name }));
+            items.AddRange(_groups.Select(g => new TouchChoice { Text = GroupNames.Display(g) }));
             int idx = 0;
             if (!string.IsNullOrEmpty(previous))
-                for (int i = 1; i < items.Count; i++)
-                    if (items[i].Text == previous) { idx = i; break; }
+            {
+                int found = _groups.FindIndex(g => g.Name == previous);
+                if (found >= 0) idx = found + 1;
+            }
             _cmbGroup.SetItems(items, idx);
             if (refresh) { RefreshAppearanceFromGroup(); Refresh2(); }
         }
@@ -625,8 +639,8 @@ namespace OnScreenKeyboard
             KeyGroup grp = null;
             if (_cmbGroup != null && _cmbGroup.SelectedIndex > 0)
             {
-                string gName = _cmbGroup.SelectedItem?.Text;
-                grp = _groups.FirstOrDefault(g => g.Name == gName);
+                string gId = SelectedGroupId();
+                grp = _groups.FirstOrDefault(g => g.Name == gId);
             }
 
             static Color Rc(Color pk, Color grpC, Color global) => !pk.IsEmpty ? pk : !grpC.IsEmpty ? grpC : global;
@@ -1321,8 +1335,8 @@ namespace OnScreenKeyboard
                 _stpRowSpan.Value = Math.Max(1, Math.Min(_maxRows, _initRowSpan));
 
                 // The group first: RefreshAppearanceFromGroup resolves the per-key → group → global chain.
-                int gi = string.IsNullOrEmpty(p.GroupName) ? 0 : _cmbGroup.Items.FindIndex(i => i.Text == p.GroupName);
-                _cmbGroup.SelectSilently(gi >= 0 ? gi : 0);
+                int gi = string.IsNullOrEmpty(p.GroupName) ? -1 : _groups.FindIndex(g => g.Name == p.GroupName) + 1;   // row 0 is "(no group)"
+                _cmbGroup.SelectSilently(gi > 0 ? gi : 0);
                 RefreshAppearanceFromGroup();
 
                 // Layer 0 (Normal): the full set of types.
@@ -1434,7 +1448,7 @@ namespace OnScreenKeyboard
             string label = LayersDisabled ? WpLabel() : _labels[0].Text.Trim();
 
             bool isNoGroup = _cmbGroup.SelectedIndex == 0;
-            string groupName = isNoGroup ? "" : (_cmbGroup.SelectedItem?.Text ?? "");
+            string groupName = isNoGroup ? "" : (SelectedGroupId() ?? "");
 
             Color parsedFc = _chipFont.Value, parsedKc = _chipKey.Value, parsedBc = _chipBorder.Value;            string curFont = _cmbFont.SelectedItem?.Text ?? "";
             int rawFs = (_chkAutoSize.Checked || _stpFontSize.Value == 0) ? 0 : (int)_stpFontSize.Value;

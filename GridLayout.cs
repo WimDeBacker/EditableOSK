@@ -18,8 +18,19 @@ namespace OnScreenKeyboard
     /// </summary>
     public class KeyGroup
     {
-        /// <summary>Unique identifier used to link keys to this group in the XML layout file.</summary>
+        /// <summary>
+        /// The id of the group: unique within a layout, language-neutral and never changed once the group exists. Keys point at their group
+        /// with it (<see cref="KeyProps.GroupName"/> holds an id, in the file as <c>GroupId</c>). Not meant to be shown: what the user sees
+        /// is <see cref="GroupNames.Display(KeyGroup)"/>, made from <see cref="Names"/>. (The property keeps the name it had when the id
+        /// was the only name of a group.)
+        /// </summary>
         public string Name            { get; set; } = "";
+
+        /// <summary>
+        /// The names of this group by language tag (<c>nl</c>, <c>en</c>, <c>nl-BE</c> …); keys compare without regard to case. May be empty
+        /// (then the id is shown). See <see cref="GroupNames.Display(KeyGroup)"/> for which one is shown.
+        /// </summary>
+        public Dictionary<string, string> Names { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>Background fill colour for keys in this group.
         /// <c>Color.Empty</c> means "not set — inherit from global theme".</summary>
@@ -52,6 +63,7 @@ namespace OnScreenKeyboard
         public KeyGroup Clone() => new KeyGroup
         {
             Name            = Name,
+            Names           = new Dictionary<string, string>(Names, StringComparer.OrdinalIgnoreCase),
             KeyColor        = KeyColor,
             FontColor       = FontColor,
             BorderColor     = BorderColor,

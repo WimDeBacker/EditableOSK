@@ -181,9 +181,10 @@ namespace OnScreenKeyboard
 
                 int r = grid.RowCount++;
                 grid.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                string shown = GroupNames.Display(g);            // the name; conflicts are decided by the id (g.Name)
                 var name = new Label
                 {
-                    Text = g.Name, AutoSize = true, Anchor = AnchorStyles.Left, UseMnemonic = false, Font = Fluent.FontBtnLg,
+                    Text = shown, AutoSize = true, Anchor = AnchorStyles.Left, UseMnemonic = false, Font = Fluent.FontBtnLg,
                     ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent, Margin = new Padding(0, 4, Fluent.Pad, 4),
                     MaximumSize = new Size(Touch.LabelMaxWidth, 0),
                 };
@@ -195,11 +196,11 @@ namespace OnScreenKeyboard
                 var choices = actions.Select(a => new TouchChoice { Text = a }).ToArray();
                 var chooser = new TouchChoiceButton { RowHeight = 44, Dock = DockStyle.Fill, Margin = new Padding(0, 4, 0, 4), TabIndex = tab++ };
                 chooser.SetItems(choices, defaultIdx);
-                chooser.AccessibleName = $"{Lang.T("Action")} {g.Name}";
+                chooser.AccessibleName = $"{Lang.T("Action")} {shown}";
                 chooser.AccessibleDescription = string.Format(Lang.T(
                     std      ? "import row: {0}: Protected — choose Update or Skip" :
                     conflict ? "import row: {0}: Conflict — choose Overwrite, Add as new, or Skip" :
-                               "import row: {0}: New — will be added"), g.Name);
+                               "import row: {0}: New — will be added"), shown);
                 grid.Controls.Add(name, 0, r);
                 grid.Controls.Add(st, 1, r);
                 grid.Controls.Add(chooser, 2, r);

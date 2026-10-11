@@ -113,13 +113,20 @@ namespace OnScreenKeyboard
 
         /// <summary>
         /// Returns all databases whose <c>language</c> attribute matches
-        /// <paramref name="code"/> (case-insensitive).  Returns an empty list
+        /// <paramref name="code"/> (case-insensitive).  <paramref name="code"/> may be a
+        /// language tag with a region (<c>nl-BE</c>): databases of exactly that tag come first,
+        /// then those of the language alone (<c>nl</c>).  Returns an empty list
         /// if no match is found.
         /// </summary>
-        public IReadOnlyList<DatabaseInfo> GetForLanguage(string code) =>
-            _all.Where(d => string.Equals(d.Language, code, StringComparison.OrdinalIgnoreCase))
-                .ToList()
-                .AsReadOnly();
+        public IReadOnlyList<DatabaseInfo> GetForLanguage(string code)
+        {
+            string lang = (code ?? "").Split('-', '_')[0];
+            return _all.Where(d => string.Equals(d.Language, code, StringComparison.OrdinalIgnoreCase))
+                       .Concat(_all.Where(d => !string.Equals(lang, code, StringComparison.OrdinalIgnoreCase)
+                                             && string.Equals(d.Language, lang, StringComparison.OrdinalIgnoreCase)))
+                       .ToList()
+                       .AsReadOnly();
+        }
 
         // ── Private helpers ──────────────────────────────────────────────
 

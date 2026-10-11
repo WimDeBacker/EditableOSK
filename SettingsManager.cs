@@ -361,6 +361,9 @@ namespace OnScreenKeyboard
         /// </summary>
         public const string StandardGroupName = "standard";
 
+        /// <summary>The version of the file format this program writes (2: groups with an id and names per language).</summary>
+        public const int FormatVersion = 2;
+
         /// <summary>
         /// The default path where <c>settings.xml</c> is read from and written to: the user's own folder
         /// (<c>%AppData%\EditableOSK</c>), because the program folder (Program Files) is not writable for a standard user.
@@ -412,6 +415,8 @@ namespace OnScreenKeyboard
                 {
                     writer.WriteStartDocument();
                     writer.WriteStartElement("OnScreenKeyboard");
+                    // 2: style groups have an id and names per language (see GroupNames). A file without the attribute is the older format.
+                    writer.WriteAttributeString("FormatVersion", FormatVersion.ToString());
                     WriteTheme(writer, theme, layout);
                     WriteLayout(writer, window, meta, layout);
                     writer.WriteEndElement();
@@ -597,7 +602,7 @@ namespace OnScreenKeyboard
                 // so there is no point saving them.
                 if (string.IsNullOrEmpty(g.Name)) continue;
                 w.WriteStartElement("Group");
-                w.WriteAttributeString("Name",            g.Name);
+                w.WriteAttributeString("Id",              g.Name);
                 w.WriteAttributeString("FontName",        g.FontName ?? "");
                 w.WriteAttributeString("FontSize",        g.FontSize.ToString());
                 // Empty string for colour means "no group-level override — use the theme default".
@@ -605,6 +610,15 @@ namespace OnScreenKeyboard
                 w.WriteAttributeString("KeyColor",        g.KeyColor.IsEmpty    ? "" : Hex(g.KeyColor));
                 w.WriteAttributeString("BorderColor",     g.BorderColor.IsEmpty ? "" : Hex(g.BorderColor));
                 w.WriteAttributeString("BorderThickness", g.BorderThickness.ToString());
+                // The names of the group, one per language: <Name lang="nl">Klinkers</Name>
+                foreach (var kv in g.Names)
+                {
+                    if (string.IsNullOrWhiteSpace(kv.Key) || string.IsNullOrWhiteSpace(kv.Value)) continue;
+                    w.WriteStartElement("Name");
+                    w.WriteAttributeString("lang", kv.Key);
+                    w.WriteString(kv.Value);
+                    w.WriteEndElement();
+                }
                 w.WriteEndElement();
             }
         }
@@ -628,8 +642,8 @@ namespace OnScreenKeyboard
                 // RowSpan/ColSpan allow a key to span multiple grid cells (like a wide Space bar).
                 w.WriteAttributeString("RowSpan",         cell.RowSpan.ToString());
                 w.WriteAttributeString("ColSpan",         cell.ColSpan.ToString());
-                // GroupName links this key to a KeyGroup for shared visual defaults.
-                w.WriteAttributeString("GroupName",       p.GroupName ?? "");
+                // GroupId links this key to a KeyGroup (by its id) for shared visual defaults.
+                w.WriteAttributeString("GroupId",         p.GroupName ?? "");
                 // Label is what the user sees; Send is the character/sequence actually typed.
                 // They can differ, e.g. Label="Enter" Send="\r\n".
                 w.WriteAttributeString("Label",           p.Label   ?? "");
@@ -751,28 +765,22 @@ namespace OnScreenKeyboard
             var groupNodes = themeNode != null
                 ? doc.SelectNodes("/OnScreenKeyboard/Theme/Group")
                 : doc.SelectNodes("/OnScreenKeyboard/Group");
+            // An older file names its groups and the keys point at them by that name; a newer one has ids. legacyIds maps an old name to the id the
+            // group gets now, so the keys below find their group in either format.
+            var legacyIds = new Dictionary<string, string>(StringComparer.Ordinal);
             if (groupNodes != null)
             {
+                var usedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (XmlNode gn in groupNodes)
                 {
-                    string gname = Attr(gn, "Name", "");
-                    if (string.IsNullOrEmpty(gname)) continue;
-                    // Duplicate group names would cause ambiguity when keys try to look
-                    // up their group, so we skip the second definition and log a warning.
-                    if (layout.Groups.Exists(g => g.Name == gname))
+                    var grp = ReadGroup(gn, meta.Language, usedIds, legacyIds);
+                    if (grp == null) continue;
+                    // Duplicate ids would cause ambiguity when keys try to look up their group, so the second definition is skipped.
+                    if (layout.Groups.Exists(g => g.Name == grp.Name))
                     {
-                        System.Diagnostics.Debug.WriteLine($"OSK XML: duplicate group name '{gname}', skipping.");
+                        System.Diagnostics.Debug.WriteLine($"OSK XML: duplicate group id '{grp.Name}', skipping.");
                         continue;
                     }
-                    var grp = new KeyGroup { Name = gname };
-                    grp.FontName    = Attr(gn, "FontName", "");
-                    // Color.Empty as fallback means "no override at group level".
-                    grp.FontColor   = ParseColor(Attr(gn, "FontColor",   ""), Color.Empty);
-                    grp.KeyColor    = ParseColor(Attr(gn, "KeyColor",    ""), Color.Empty);
-                    grp.BorderColor = ParseColor(Attr(gn, "BorderColor", ""), Color.Empty);
-                    // Clamp FontSize 0–200; -1 BorderThickness means "inherit from theme".
-                    if (int.TryParse(Attr(gn, "FontSize",        "0"),  out int grpFs)) grp.FontSize        = Math.Clamp(grpFs, 0, 200);
-                    if (int.TryParse(Attr(gn, "BorderThickness", "-1"), out int grpBt)) grp.BorderThickness = Math.Clamp(grpBt, -1, 10);
                     layout.Groups.Add(grp);
                 }
             }
@@ -814,7 +822,10 @@ namespace OnScreenKeyboard
                         continue;
                     }
 
-                    string groupName = Attr(node,"GroupName","");
+                    // GroupId in the current format; GroupName (the old name of the group) in an older file.
+                    string groupName = node.Attributes?["GroupId"] != null
+                        ? Attr(node, "GroupId", "")
+                        : legacyIds.TryGetValue(Attr(node, "GroupName", ""), out string mapped) ? mapped : Attr(node, "GroupName", "");
                     // Unesc converts "&&" to "&" — older builds incorrectly applied
                     // WinForms ampersand-escaping to labels before writing XML.
                     string label  = Unesc(Attr(node,"Label",""));
@@ -915,25 +926,58 @@ namespace OnScreenKeyboard
                     ? doc.SelectNodes("/OnScreenKeyboard/Theme/Group")
                     : doc.SelectNodes("/OnScreenKeyboard/Group");
                 if (nodes == null) return result;
+                var layoutNode = doc.SelectSingleNode("/OnScreenKeyboard/Layout") ?? doc.SelectSingleNode("/OnScreenKeyboard/Global");
+                string kbLanguage = layoutNode != null ? Attr(layoutNode, "Language", "en") : "en";
+                var usedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var legacyIds = new Dictionary<string, string>(StringComparer.Ordinal);
                 foreach (XmlNode n in nodes)
                 {
-                    string name = Attr(n, "Name", "");
-                    if (string.IsNullOrWhiteSpace(name)) continue;
-                    var g = new KeyGroup
-                    {
-                        Name        = name,
-                        FontName    = Attr(n, "FontName", ""),
-                        FontColor   = ParseColor(Attr(n, "FontColor",   ""), Color.Empty),
-                        KeyColor    = ParseColor(Attr(n, "KeyColor",    ""), Color.Empty),
-                        BorderColor = ParseColor(Attr(n, "BorderColor", ""), Color.Empty),
-                    };
-                    if (int.TryParse(Attr(n, "BorderThickness", "-1"), out int bt)) g.BorderThickness = bt;
-                    if (int.TryParse(Attr(n, "FontSize",         "0"), out int fs)) g.FontSize        = fs;
-                    result.Add(g);
+                    var g = ReadGroup(n, kbLanguage, usedIds, legacyIds);
+                    if (g != null) result.Add(g);
                 }
             }
             catch { }   // Return empty list on any error (file not found, bad XML, etc.)
             return result;
+        }
+
+        /// <summary>
+        /// Reads one <c>&lt;Group&gt;</c> element. Current format: <c>Id</c> plus <c>&lt;Name lang="…"&gt;</c> children. Older format: only a
+        /// <c>Name</c> attribute, which becomes an id and names through <see cref="GroupNames.FromLegacyName"/> (and is recorded in
+        /// <paramref name="legacyIds"/> so keys that name the group find it). Null for a group without a name or id.
+        /// </summary>
+        private static KeyGroup ReadGroup(XmlNode gn, string keyboardLanguage, HashSet<string> usedIds, Dictionary<string, string> legacyIds)
+        {
+            string id = Attr(gn, "Id", "");
+            Dictionary<string, string> names;
+            if (!string.IsNullOrWhiteSpace(id))
+            {
+                names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (XmlNode nn in gn.SelectNodes("Name"))
+                {
+                    string lang = Attr(nn, "lang", "");
+                    string text = nn.InnerText?.Trim() ?? "";
+                    if (lang.Length > 0 && text.Length > 0) names[lang] = text;
+                }
+                usedIds.Add(id);
+            }
+            else
+            {
+                string old = Attr(gn, "Name", "");
+                if (string.IsNullOrWhiteSpace(old)) return null;
+                if (legacyIds.ContainsKey(old)) return null;          // the same name twice: the first one is kept
+                (id, names) = GroupNames.FromLegacyName(old, keyboardLanguage, usedIds);
+                legacyIds[old] = id;
+            }
+            var g = new KeyGroup { Name = id, Names = names };
+            g.FontName    = Attr(gn, "FontName", "");
+            // Color.Empty as fallback means "no override at group level".
+            g.FontColor   = ParseColor(Attr(gn, "FontColor",   ""), Color.Empty);
+            g.KeyColor    = ParseColor(Attr(gn, "KeyColor",    ""), Color.Empty);
+            g.BorderColor = ParseColor(Attr(gn, "BorderColor", ""), Color.Empty);
+            // Clamp FontSize 0–200; -1 BorderThickness means "inherit from theme".
+            if (int.TryParse(Attr(gn, "FontSize",        "0"),  out int fs)) g.FontSize        = Math.Clamp(fs, 0, 200);
+            if (int.TryParse(Attr(gn, "BorderThickness", "-1"), out int bt)) g.BorderThickness = Math.Clamp(bt, -1, 10);
+            return g;
         }
 
         // ── Helpers ──────────────────────────────────────────────────

@@ -46,12 +46,6 @@ namespace OnScreenKeyboard
             _cmbLanguage = Chooser(languages.Select(l => l.Name), Math.Max(0, li), 1);
             AddRow(t, () => Lang.T("first run: language"), _cmbLanguage);
 
-            AddWideRow(t, Wrap(new Label
-            {
-                Text = Lang.T("first run: hint"), AutoSize = true, MaximumSize = new Size(Touch.LabelMaxWidth * 3, 0), UseMnemonic = false,
-                Font = Fluent.FontHint, ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent,
-            }), fill: false);
-
             start.Click += (s, e) => { DialogResult = DialogResult.OK; Close(); };
             AcceptButton = start;
             ActiveControl = _cmbArrangement;
@@ -78,10 +72,17 @@ namespace OnScreenKeyboard
             return languages.Any(l => string.Equals(l.Code, own, StringComparison.OrdinalIgnoreCase)) ? own : languages[0].Code;
         }
 
-        /// <summary>The name a language is shown with: in its own language.</summary>
-        internal static string LanguageName(string code) => code.ToLowerInvariant() switch
+        /// <summary>The name a language (or language and region: <c>nl-BE</c>) is shown with: in its own language; an unknown tag as upper-case code.</summary>
+        internal static string LanguageName(string code)
         {
-            "nl" => "Nederlands", "en" => "English", "fr" => "Français", "de" => "Deutsch", _ => code.ToUpperInvariant(),
-        };
+            try
+            {
+                string n = CultureInfo.GetCultureInfo(code).NativeName;
+                if (!string.IsNullOrWhiteSpace(n) && !string.Equals(n, code, StringComparison.OrdinalIgnoreCase))
+                    return char.ToUpper(n[0], CultureInfo.CurrentCulture) + n.Substring(1);
+            }
+            catch (CultureNotFoundException) { }
+            return code.ToUpperInvariant();
+        }
     }
 }

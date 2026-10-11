@@ -209,10 +209,16 @@
   <String key="kbd: Load title"                  value="Een lay-out laden" />
   <String key="kbd: Load msg"                    value="Laden vervangt het huidige toetsenbord meteen. Wijzigingen die in dit venster zijn gemaakt gaan verloren en Annuleren maakt het laden niet ongedaan.&#10;&#10;Doorgaan?" />
   <String key="first run: title"                 value="Welkom" />
-  <String key="first run: intro"                 value="Kies hoe het toetsenbord start. U kunt dit later allemaal aanpassen in de bewerkmodus." />
+  <String key="first run: intro"                 value="Kies hoe het toetsenbord start. De taal bepaalt ook de woordvoorspelling. U kunt dit later allemaal aanpassen in de bewerkmodus." />
   <String key="first run: arrangement"           value="Toetsenbordindeling" />
-  <String key="first run: language"              value="Taal van de voorspelling" />
-  <String key="first run: hint"                  value="Dit is ook de taal van de menu's en vensters van het toetsenbord." />
+  <String key="first run: language"              value="Toetsenbordtaal" />
+  <String key="group name: standard"             value="Standaard" />
+  <String key="Name language"                    value="Naamtaal" />
+  <String key="tip: Name language"               value="Een stijlgroep heeft een naam in elke taal. Kies de taal waarvoor de naam hierboven is." />
+  <String key="Interface language"               value="Schermtaal" />
+  <String key="tip: Interface language"          value="De taal van de menu's en vensters van het toetsenbord. Ze is van jou: een toetsenbordbestand bevat ze niet." />
+  <String key="Keyboard language"                value="Toetsenbordtaal" />
+  <String key="tip: Keyboard language"           value="De taal waarvoor dit toetsenbord bedoeld is. Ze bepaalt de woordvoorspelling en de getoonde namen van de stijlgroepen." />
   <String key="first run: start"                 value="Starten" />
   <String key="wp: nothing to export"            value="Exporteren kan zodra er woorden zijn geleerd." />
   <String key="wp: no candidates"                value="Nog geen kandidaten." />

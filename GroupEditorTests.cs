@@ -26,10 +26,13 @@ namespace OnScreenKeyboard
             new KeyGroup { Name = "Cijfers", BorderThickness = -1 },
         };
 
-        /// <summary>The keys name their group, so a renamed or deleted group must reach them (review8_10 finding 9).</summary>
+        /// <summary>
+        /// The keys point at their group by its id. A rename changes only a name (the id never changes, so no key has to follow); a deleted
+        /// group must reach the keys that name it (review8_10 finding 9).
+        /// </summary>
         private static void T_GroupRenames()
         {
-            Section("Group Editor — renamed and deleted groups reach the keys that name them");
+            Section("Group Editor — a rename changes a name, not the id; deleted groups reach the keys that name them");
 
             List<KeyGroup> Three() => new List<KeyGroup>
             {
@@ -45,14 +48,38 @@ namespace OnScreenKeyboard
             Assert(Mapped(swap, "A", "B", "C", "D", "", null).SequenceEqual(new[] { "B", "A", "", "D", "", null }),
                 "mapping: A and B swap names, C (deleted) means no group, others and empty names stay");
 
-            // Rename: the keys of the group get the new name; nothing else changes.
+            // Rename: the name of the group changes, its id stays, so no key has to follow.
             using (var f = new GroupEditorForm(Three(), initialGroupName: "A"))
             {
                 Assert(Rename(f, "Arrows"), "rename: accepted");
                 f.CommitToResult();
                 var ch = f.Changes;
-                Assert(ch.Renames.Count == 1 && ch.Renames["A"] == "Arrows" && ch.Deleted.Count == 0, "rename: A -> Arrows is the only change");
-                Assert(Mapped(ch, "A", "B", "standard", "").SequenceEqual(new[] { "Arrows", "B", "standard", "" }), "rename: keys of A follow, the others do not");
+                Assert(ch.Renames.Count == 0 && ch.Deleted.Count == 0, "rename: the id did not change, so nothing is reported");
+                var renamed = f.ResultGroups.Find(g => g.Name == "A");
+                Assert(renamed != null && renamed.Names[Lang.CurrentCode] == "Arrows", "rename: the group A now has the name Arrows (in the language of the Name field)");
+                Assert(Mapped(ch, "A", "B", "standard", "").SequenceEqual(new[] { "A", "B", "standard", "" }), "rename: the keys keep pointing at A");
+            }
+
+            // A name in another language: the id and the other name stay.
+            using (var f = new GroupEditorForm(new List<KeyGroup> { new KeyGroup { Name = SettingsManager.StandardGroupName },
+                       new KeyGroup { Name = "vowels", Names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["nl"] = "Klinkers", ["en"] = "Vowels" } } }, "vowels"))
+            {
+                var cmb = Priv<TouchChoiceButton>(f, "_cmbNameLang");
+                var langs = Priv<List<string>>(f, "_nameLangs");
+                int en = langs.FindIndex(c => c == "en"), nl = langs.FindIndex(c => c == "nl");
+                Assert(en >= 0 && nl >= 0, "the name languages include English and Dutch");
+                cmb.SelectedIndex = nl;
+                Assert(Priv<TouchTextBox>(f, "_txtName").Text == "Klinkers", "name language Dutch: the field shows the Dutch name");
+                Priv<TouchTextBox>(f, "_txtName").Text = "Klinkletters";
+                cmb.SelectedIndex = en;
+                Assert(Priv<TouchTextBox>(f, "_txtName").Text == "Vowels", "name language English: the field shows the English name, the Dutch one was kept");
+                f.CommitToResult();
+                var g = f.ResultGroups.Find(x => x.Name == "vowels");
+                Assert(g.Names["nl"] == "Klinkletters" && g.Names["en"] == "Vowels", "both names are stored under the same id");
+                Priv<TouchTextBox>(f, "_txtName").Text = "";
+                f.CommitToResult();
+                Assert(!f.ResultGroups.Find(x => x.Name == "vowels").Names.ContainsKey("en") && f.ResultGroups.Find(x => x.Name == "vowels").Names.ContainsKey("nl"),
+                    "emptying the name in one language removes only that name");
             }
 
             // Nothing changed: no change reported.
@@ -71,42 +98,35 @@ namespace OnScreenKeyboard
                     "delete: keys of A mean no group now, B is untouched");
             }
 
-            // Delete a group and add one with the same name: the keys stay with the name.
+            // Delete a group and add one with the same name: the new group has a new id, the keys of the deleted one mean no group.
             using (var f = new GroupEditorForm(Three(), initialGroupName: "A"))
             {
                 f.RemoveSelectedGroup();
                 Assert(f.TryAddGroup("A"), "delete and add again: accepted");
                 f.CommitToResult();
-                Assert(f.Changes.Map("A") == "A", "delete and add again: the keys keep the name A");
+                Assert(f.Changes.Map("A") == "" && f.ResultGroups.Any(g => g.Name == "a"), "delete and add again: the new group is a new group (id 'a'), the keys of the old A mean no group");
             }
 
-            // Swap two names through a third (the editor refuses a name that is taken): the keys follow in one pass.
+            // Two groups swap names: the ids stay where they are, so the keys stay where they are.
             using (var f = new GroupEditorForm(Three(), initialGroupName: "A"))
             {
                 Select(f, 1); Assert(Rename(f, "Tmp"), "swap: A -> Tmp");
                 Select(f, 2); Assert(Rename(f, "A"), "swap: B -> A");
                 Select(f, 1); Assert(Rename(f, "B"), "swap: Tmp -> B");
                 f.CommitToResult();
-                Assert(Mapped(f.Changes, "A", "B").SequenceEqual(new[] { "B", "A" }) && f.Changes.Deleted.Count == 0, "swap: keys of A are now in B and keys of B in A");
+                Assert(Mapped(f.Changes, "A", "B").SequenceEqual(new[] { "A", "B" }) && f.Changes.Deleted.Count == 0, "swap: only names moved; keys of A are still in A and keys of B in B");
+                Assert(f.ResultGroups.Find(g => g.Name == "A").Names[Lang.CurrentCode] == "B" && f.ResultGroups.Find(g => g.Name == "B").Names[Lang.CurrentCode] == "A", "swap: the names changed places");
             }
 
-            // A group renamed into the name of a deleted one: the keys of the deleted group do not follow it.
-            using (var f = new GroupEditorForm(Three(), initialGroupName: "A"))
-            {
-                f.RemoveSelectedGroup();                              // A is gone, B is now at index 1
-                Select(f, 1); Assert(Rename(f, "A"), "rename into a deleted name: B -> A");
-                f.CommitToResult();
-                Assert(Mapped(f.Changes, "A", "B").SequenceEqual(new[] { "", "A" }), "rename into a deleted name: old A keys mean no group, B keys follow to A");
-            }
-
-            // Import "overwrite" of a renamed group restyles it; it is still the same group.
+            // Import "overwrite" of a group restyles it; it is the same group (same id).
             using (var f = new GroupEditorForm(Three(), initialGroupName: "A"))
             {
                 Rename(f, "A2");
                 f.CommitToResult();                                    // the Import button commits the open group first
-                f.ApplyImportDecisions(new[] { (new KeyGroup { Name = "A2", KeyColor = Color.Red }, GroupEditorForm.ImportAction.Overwrite) });
+                f.ApplyImportDecisions(new[] { (new KeyGroup { Name = "A", KeyColor = Color.Red }, GroupEditorForm.ImportAction.Overwrite) });
                 f.CommitToResult();
-                Assert(f.Changes.Renames.Count == 1 && f.Changes.Renames["A"] == "A2" && f.Changes.Deleted.Count == 0, "import overwrite of a renamed group: still A -> A2, not a deletion");
+                Assert(f.Changes.Renames.Count == 0 && f.Changes.Deleted.Count == 0, "import overwrite: still the same group, not a deletion");
+                Assert(f.ResultGroups.Find(g => g.Name == "A").Names[Lang.CurrentCode] == "A2", "import overwrite: the local name is kept");
             }
         }
 
@@ -251,8 +271,9 @@ namespace OnScreenKeyboard
             // ── Add and delete ──
             using (var f = new GroupEditorForm(SampleGroups(), "Cijfers"))
             {
-                Assert(f.TryAddGroup("Pijlen") && f.SelectedGroupName == "Pijlen", "a new group is added and selected");
-                var added = Result(f, "Pijlen");
+                Assert(f.TryAddGroup("Pijlen") && f.SelectedGroupName == "pijlen", "a new group is added and selected (its id is made from the name)");
+                var added = Result(f, "pijlen");
+                Assert(added.Names.TryGetValue(Lang.CurrentCode, out string addedName) && addedName == "Pijlen", "…and its name is kept for the language it was typed in");
                 var std = f.ResultGroups.Find(g => g.Name == SettingsManager.StandardGroupName);
                 Assert(Eq(added.KeyColor, std.KeyColor) && added.FontName == std.FontName, "a new group starts as a copy of the standard group (concrete values, not a row of 'inherit')");
                 Assert((bool)f.GetType().GetMethod("RemoveSelectedGroup", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(f, null), "the selected group is removed");
@@ -364,14 +385,14 @@ namespace OnScreenKeyboard
                     ed.ApplyImportDecisions(d.Decisions);
                     ed.CommitToResult();
                     var names = ed.ResultGroups.Select(g => g.Name).ToList();
-                    Assert(names.SequenceEqual(new[] { "standard", "Fun", "fun 2", "Other" }), $"applied: Add, Add as new, Add give unique names ({string.Join(", ", names)})");
+                    Assert(names.SequenceEqual(new[] { "standard", "Fun", "fun-2", "Other" }), $"applied: Add, Add as new, Add give unique ids ({string.Join(", ", names)})");
                 }
                 // Even a plain Add of a taken name (the dialog did not flag it) is made unique.
                 using (var ed = new GroupEditorForm(new List<KeyGroup> { new KeyGroup { Name = SettingsManager.StandardGroupName } }))
                 {
                     ed.ApplyImportDecisions(new[] { (new KeyGroup { Name = "Fun" }, GroupEditorForm.ImportAction.Add), (new KeyGroup { Name = "Fun" }, GroupEditorForm.ImportAction.Add) });
                     ed.CommitToResult();
-                    Assert(ed.ResultGroups.Select(g => g.Name).SequenceEqual(new[] { "standard", "Fun", "Fun 2" }), "two plain Adds of the same name: the second gets a number");
+                    Assert(ed.ResultGroups.Select(g => g.Name).SequenceEqual(new[] { "standard", "Fun", "Fun-2" }), "two plain Adds of the same id: the second gets a number");
                 }
             }
 

@@ -78,6 +78,8 @@ namespace OnScreenKeyboard
 
         // ── Controls: General ────────────────────────────────────────
         private TouchChoiceButton _cmbLanguage, _cmbToolbarTheme;
+        private TouchChoiceButton _cmbKeyboardLanguage;                        // the language of the keyboard (LayoutMeta.Language), not of the screens
+        private readonly List<string> _keyboardLanguages = new List<string>();  // language tags of its rows
         private TouchStepper      _stpOpacity;
         private ColorChip         _chipBackground;
         private TouchCheckBox     _chkAlwaysOnTop, _chkHideTitlebar;
@@ -197,11 +199,20 @@ namespace OnScreenKeyboard
                 int i = _cmbLanguage.SelectedIndex;
                 if (i >= 0 && i < _languageCodes.Count) Lang.Load(_languageCodes[i]);
             };
-            SetTip(_cmbLanguage, () => Lang.T("tip: Language"));
-            AddRow(t, () => Lang.T("Language"), _cmbLanguage, fill: false);
+            SetTip(_cmbLanguage, () => Lang.T("tip: Interface language"));
+            AddRow(t, () => Lang.T("Interface language"), _cmbLanguage, fill: false);
             _cmbLanguage.Anchor = AnchorStyles.Left | AnchorStyles.Right;       // takes the column's width, up to its maximum
 
-            AddWideRow(t, Heading(() => Lang.T("Window")), fill: false);
+            // The language of the keyboard itself (not of the screens): it belongs to the layout and chooses the word prediction.
+            _cmbKeyboardLanguage = new TouchChoiceButton { RowHeight = 44, AutoSize = false, Size = new Size(280, Touch.Target), MinimumSize = new Size(Touch.InputMinWidth * 2 / 3, Touch.Target), MaximumSize = new Size(280, Touch.Target) };
+            _cmbKeyboardLanguage.SelectedIndexChanged += (s, e) =>
+            {
+                if (_loading) return;
+                UpdateDatabaseWarning(); UpdateWPInfo(); UpdateExportState();      // the automatic word database follows the language
+            };
+            SetTip(_cmbKeyboardLanguage, () => Lang.T("tip: Keyboard language"));
+            AddRow(t, () => Lang.T("Keyboard language"), _cmbKeyboardLanguage, fill: false);
+            _cmbKeyboardLanguage.Anchor = AnchorStyles.Left | AnchorStyles.Right;
 
             _cmbToolbarTheme = new TouchChoiceButton { RowHeight = 44, AutoSize = false, Size = new Size(280, Touch.Target), MinimumSize = new Size(Touch.InputMinWidth * 2 / 3, Touch.Target), MaximumSize = new Size(280, Touch.Target) };
             _cmbToolbarTheme.SetItems(ToolbarThemeItems(), 0);
@@ -470,6 +481,7 @@ namespace OnScreenKeyboard
             try
             {
                 SyncLanguageChooser();
+                FillKeyboardLanguages(m.Language);
                 _cmbToolbarTheme.SetItems(ToolbarThemeItems(), Math.Max(0, Array.IndexOf(ToolbarThemeOrder, m.ToolbarTheme)));
 
                 _stpOpacity.Value = OpacityToStep(t.Opacity);
@@ -507,6 +519,28 @@ namespace OnScreenKeyboard
             st.Minimum = loaded > 0 ? Math.Min(min, loaded) : min;
             st.Maximum = Math.Max(max, loaded);
         }
+
+        /// <summary>
+        /// Fills the chooser of the keyboard's language: the languages of the installed word databases, those the program is translated
+        /// into, and <paramref name="current"/> (a tag the layout has that is in neither list stays selectable and is never dropped).
+        /// </summary>
+        private void FillKeyboardLanguages(string current)
+        {
+            var codes = new List<string>();
+            void Add(string c) { if (!string.IsNullOrWhiteSpace(c) && !codes.Contains(c, StringComparer.OrdinalIgnoreCase)) codes.Add(c); }
+            foreach (var d in _backend.Databases()) Add(d.Language);
+            foreach (var (code, _) in Lang.GetAvailable()) Add(code);
+            Add(current);
+            _keyboardLanguages.Clear();
+            _keyboardLanguages.AddRange(codes);
+            int sel = Math.Max(0, _keyboardLanguages.FindIndex(c => string.Equals(c, current, StringComparison.OrdinalIgnoreCase)));
+            _cmbKeyboardLanguage.SetItems(_keyboardLanguages.Select(c => new TouchChoice { Text = c.Contains('-') ? c : FirstRunDialog.LanguageName(c) }), sel);
+        }
+
+        /// <summary>The language tag chosen for the keyboard; the one the layout had when nothing can be chosen.</summary>
+        private string SelectedKeyboardLanguage =>
+            _cmbKeyboardLanguage != null && _cmbKeyboardLanguage.SelectedIndex >= 0 && _cmbKeyboardLanguage.SelectedIndex < _keyboardLanguages.Count
+                ? _keyboardLanguages[_cmbKeyboardLanguage.SelectedIndex] : _sourceMeta.Language;
 
         private void SyncLanguageChooser()
         {
@@ -589,8 +623,11 @@ namespace OnScreenKeyboard
             string file = SelectedDatabaseFile;
             if (!string.IsNullOrEmpty(file))
                 return all.FirstOrDefault(d => string.Equals(Path.GetFileName(d.FilePath), file, StringComparison.OrdinalIgnoreCase))?.FilePath;
-            var match = !string.IsNullOrEmpty(_sourceMeta.Language)
-                ? all.FirstOrDefault(d => string.Equals(d.Language, _sourceMeta.Language, StringComparison.OrdinalIgnoreCase)) : null;
+            string tag = SelectedKeyboardLanguage;
+            string lang = (tag ?? "").Split('-', '_')[0];
+            var match = !string.IsNullOrEmpty(tag)
+                ? all.FirstOrDefault(d => string.Equals(d.Language, tag, StringComparison.OrdinalIgnoreCase))
+                  ?? all.FirstOrDefault(d => string.Equals(d.Language, lang, StringComparison.OrdinalIgnoreCase)) : null;
             return (match ?? all.FirstOrDefault())?.FilePath;
         }
 
@@ -785,6 +822,7 @@ namespace OnScreenKeyboard
             ResultMeta.DwellMs             = CurrentTimingMode == TimingMode.Dwell ? (int)_stpDwell.Value : 0;
             ResultMeta.ShowTimingAnimation = _chkTimingAnimation.Checked;     // kept while its check box is disabled
             ResultMeta.ShowCornerLabels    = _chkCornerLabels.Checked;
+            ResultMeta.Language            = SelectedKeyboardLanguage;
             ResultMeta.WordDatabase        = SelectedDatabaseFile;
             ResultMeta.WordLearningEnabled = _chkWPLearning.Checked;
 

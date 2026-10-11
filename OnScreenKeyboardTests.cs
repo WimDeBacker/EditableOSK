@@ -70,6 +70,8 @@ namespace OnScreenKeyboard
             Step(T_LayoutLaunch);
             Step(T_UserData);
             Step(T_FirstRun);
+            Step(T_GroupNames);
+            Step(T_KeyboardLanguage);
             Step(T_KeyboardEditorImport);
             Step(T_SvgIconLoader_Cache);
             Step(T_TouchControls);
@@ -1654,8 +1656,8 @@ namespace OnScreenKeyboard
                     SettingsManager.SaveSettings(saveLayout, new VisualTheme(), new WindowState(), new LayoutMeta(), f);
 
                     string xml = File.ReadAllText(f);
-                    Assert(xml.Contains("Name=\"standard\""),
-                        "Standard written: <Group Name=\"standard\"> present in XML");
+                    Assert(xml.Contains("Id=\"standard\""),
+                        "Standard written: <Group Id=\"standard\"> present in XML");
                     Assert(xml.Contains("Verdana"),
                         "Standard written: custom FontName present in XML");
                 }
@@ -1933,7 +1935,8 @@ namespace OnScreenKeyboard
                 // Renaming to a non-reserved name must be accepted.
                 bool renamedOK = form7.TryRenameCurrentGroup("Delta");
                 Assert(renamedOK, "Step 6 rename: legitimate rename to 'Delta' is accepted");
-                Assert(form7.SelectedGroupName == "Delta", "Step 6 rename: group is now named 'Delta'");
+                form7.CommitToResult();
+                Assert(form7.ResultGroups.Any(g => g.Names.Values.Contains("Delta")), "Step 6 rename: group is now named 'Delta' (its id did not change)");
             }
 
             Section("StyleGroups — Step 6 import: UpdateStandard replaces standard group");
@@ -2234,7 +2237,7 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                     File.WriteAllText(tmp, xml);
                     var layout = SettingsManager.LoadSettings(new VisualTheme(), new WindowState(), new LayoutMeta(), tmp);
                     Assert(layout != null, "Group FontSize 999: loads without crash");
-                    var grp = layout?.Groups.Find(g => g.Name == "Test");
+                    var grp = layout?.Groups.Find(g => g.Name == "test");      // an older file's name "Test" becomes the id "test"
                     Assert(grp != null, "Group FontSize 999: group present");
                     Assert(grp?.FontSize <= 200, "Group FontSize 999: clamped to ≤200");
                 }
@@ -2297,7 +2300,8 @@ $@"<?xml version=""1.0"" encoding=""utf-8""?>
                     var layout = SettingsManager.LoadSettings(new VisualTheme(), new WindowState(), new LayoutMeta(), tmp);
                     Assert(layout != null, "Duplicate group names: loads without crash");
                     // Second entry with the same name is silently skipped
-                    int dupeCount = layout?.Groups.FindAll(g => g.Name == "Klinkers").Count ?? 0;
+                    int dupeCount = layout?.Groups.FindAll(g => g.Name == "vowels").Count ?? 0;      // an older file's "Klinkers" is the group "vowels"
+                    Assert(layout?.Groups.Count(g => g.Names.ContainsValue("Klinkers")) == 1, "Duplicate group names: no second group for the same name");
                     Assert(dupeCount == 1, "Duplicate group names: only first entry kept");
                 }
                 finally { if (File.Exists(tmp)) File.Delete(tmp); }
@@ -5203,7 +5207,7 @@ namespace OnScreenKeyboard
                     using (var kb = KeyboardEditor())
                     {
                         var all = kb.RefreshAccelerators();
-                        foreach (string key in new[] { "Language", "Toolbar theme", "Opacity", "Background", "Always on top", "Hide title bar", "Save", "Load…",
+                        foreach (string key in new[] { "Interface language", "Keyboard language", "Toolbar theme", "Opacity", "Background", "Always on top", "Hide title bar", "Save", "Load…",
                                                        "Sticky modifiers", "Hold to edit", "kbd: Off", "Slow keys", "Dwell click", "Show timing animation",
                                                        "kbd: Timing aid", "wp: Remember typed words", "wp: Database", "wp: Export…", "wp: Candidates",
                                                        "wp: Promote", "wp: Reject", "General", "Accessibility", "wp: Word prediction", "Apply", "Cancel" })
@@ -5507,49 +5511,49 @@ namespace OnScreenKeyboard
             Section("WizardKeyParser — key classification (ClassifyKey)");
 
             // ── Besturing (control / navigation) ─────────────────────────
-            Assert(NewKeyboardWizard.ClassifyKey("↑",   "{UP}")    == "Besturing", "classify: ↑ → Besturing");
-            Assert(NewKeyboardWizard.ClassifyKey("↓",   "{DOWN}")  == "Besturing", "classify: ↓ → Besturing");
-            Assert(NewKeyboardWizard.ClassifyKey("←",   "{LEFT}")  == "Besturing", "classify: ← → Besturing");
-            Assert(NewKeyboardWizard.ClassifyKey("→",   "{RIGHT}") == "Besturing", "classify: → → Besturing");
-            Assert(NewKeyboardWizard.ClassifyKey("↵",   "{ENTER}") == "Besturing", "classify: ↵ → Besturing");
-            Assert(NewKeyboardWizard.ClassifyKey("⌫",   "{BACKSPACE}") == "Besturing", "classify: ⌫ → Besturing");
-            Assert(NewKeyboardWizard.ClassifyKey("⇥",   "{TAB}")   == "Besturing", "classify: ⇥ → Besturing");
-            Assert(NewKeyboardWizard.ClassifyKey("Esc", "{ESC}")   == "Besturing", "classify: Esc → Besturing");
-            Assert(NewKeyboardWizard.ClassifyKey("Del", "{DELETE}")== "Besturing", "classify: Del → Besturing");
+            Assert(NewKeyboardWizard.ClassifyKey("↑",   "{UP}")    == "controls", "classify: ↑ → Besturing");
+            Assert(NewKeyboardWizard.ClassifyKey("↓",   "{DOWN}")  == "controls", "classify: ↓ → Besturing");
+            Assert(NewKeyboardWizard.ClassifyKey("←",   "{LEFT}")  == "controls", "classify: ← → Besturing");
+            Assert(NewKeyboardWizard.ClassifyKey("→",   "{RIGHT}") == "controls", "classify: → → Besturing");
+            Assert(NewKeyboardWizard.ClassifyKey("↵",   "{ENTER}") == "controls", "classify: ↵ → Besturing");
+            Assert(NewKeyboardWizard.ClassifyKey("⌫",   "{BACKSPACE}") == "controls", "classify: ⌫ → Besturing");
+            Assert(NewKeyboardWizard.ClassifyKey("⇥",   "{TAB}")   == "controls", "classify: ⇥ → Besturing");
+            Assert(NewKeyboardWizard.ClassifyKey("Esc", "{ESC}")   == "controls", "classify: Esc → Besturing");
+            Assert(NewKeyboardWizard.ClassifyKey("Del", "{DELETE}")== "controls", "classify: Del → Besturing");
             // Space — send is a single space, not a { } code
-            Assert(NewKeyboardWizard.ClassifyKey("Space", " ")     == "Besturing", "classify: Space label → Besturing");
-            Assert(NewKeyboardWizard.ClassifyKey("Spatie"," ")     == "Besturing", "classify: Spatie label → Besturing");
-            Assert(NewKeyboardWizard.ClassifyKey("",     " ")      == "Besturing", "classify: send=space → Besturing");
+            Assert(NewKeyboardWizard.ClassifyKey("Space", " ")     == "controls", "classify: Space label → Besturing");
+            Assert(NewKeyboardWizard.ClassifyKey("Spatie"," ")     == "controls", "classify: Spatie label → Besturing");
+            Assert(NewKeyboardWizard.ClassifyKey("",     " ")      == "controls", "classify: send=space → Besturing");
             // Generic SendKeys { } format
-            Assert(NewKeyboardWizard.ClassifyKey("F1",  "{F1}")    == "Besturing", "classify: F1 → Besturing");
-            Assert(NewKeyboardWizard.ClassifyKey("Shift","{SHIFT}")== "Besturing", "classify: Shift → Besturing");
-            Assert(NewKeyboardWizard.ClassifyKey("Ctrl", "{CTRL}") == "Besturing", "classify: Ctrl → Besturing");
+            Assert(NewKeyboardWizard.ClassifyKey("F1",  "{F1}")    == "controls", "classify: F1 → Besturing");
+            Assert(NewKeyboardWizard.ClassifyKey("Shift","{SHIFT}")== "controls", "classify: Shift → Besturing");
+            Assert(NewKeyboardWizard.ClassifyKey("Ctrl", "{CTRL}") == "controls", "classify: Ctrl → Besturing");
 
             // ── Klinkers (vowels) ─────────────────────────────────────────
             foreach (var v in new[]{"a","e","i","o","u","A","E","I","O","U"})
-                Assert(NewKeyboardWizard.ClassifyKey(v, v) == "Klinkers", $"classify: {v} → Klinkers");
-            Assert(NewKeyboardWizard.ClassifyKey("é","é") == "Klinkers", "classify: é → Klinkers");
-            Assert(NewKeyboardWizard.ClassifyKey("ë","ë") == "Klinkers", "classify: ë → Klinkers");
-            Assert(NewKeyboardWizard.ClassifyKey("ü","ü") == "Klinkers", "classify: ü → Klinkers");
+                Assert(NewKeyboardWizard.ClassifyKey(v, v) == "vowels", $"classify: {v} → Klinkers");
+            Assert(NewKeyboardWizard.ClassifyKey("é","é") == "vowels", "classify: é → Klinkers");
+            Assert(NewKeyboardWizard.ClassifyKey("ë","ë") == "vowels", "classify: ë → Klinkers");
+            Assert(NewKeyboardWizard.ClassifyKey("ü","ü") == "vowels", "classify: ü → Klinkers");
 
             // ── Medeklinkers (consonants) ────────────────────────────────
             foreach (var c in new[]{"b","d","f","g","h","j","k","l","m","n",
                                     "p","q","r","s","t","v","w","x","y","z"})
-                Assert(NewKeyboardWizard.ClassifyKey(c, c) == "Medeklinkers", $"classify: {c} → Medeklinkers");
+                Assert(NewKeyboardWizard.ClassifyKey(c, c) == "consonants", $"classify: {c} → Medeklinkers");
 
             // ── Cijfers (digits) ─────────────────────────────────────────
             foreach (var d in new[]{"0","1","2","3","4","5","6","7","8","9"})
-                Assert(NewKeyboardWizard.ClassifyKey(d, d) == "Cijfers", $"classify: {d} → Cijfers");
+                Assert(NewKeyboardWizard.ClassifyKey(d, d) == "numbers", $"classify: {d} → Cijfers");
 
             // ── Leestekens (punctuation / symbols) ───────────────────────
-            Assert(NewKeyboardWizard.ClassifyKey(".",".") == "Leestekens", "classify: . → Leestekens");
-            Assert(NewKeyboardWizard.ClassifyKey(",",",") == "Leestekens", "classify: , → Leestekens");
-            Assert(NewKeyboardWizard.ClassifyKey("!","!") == "Leestekens", "classify: ! → Leestekens");
-            Assert(NewKeyboardWizard.ClassifyKey("?","?") == "Leestekens", "classify: ? → Leestekens");
+            Assert(NewKeyboardWizard.ClassifyKey(".",".") == "punctuation", "classify: . → Leestekens");
+            Assert(NewKeyboardWizard.ClassifyKey(",",",") == "punctuation", "classify: , → Leestekens");
+            Assert(NewKeyboardWizard.ClassifyKey("!","!") == "punctuation", "classify: ! → Leestekens");
+            Assert(NewKeyboardWizard.ClassifyKey("?","?") == "punctuation", "classify: ? → Leestekens");
 
             // ── Woord (word-prediction slots) ────────────────────────────
-            Assert(NewKeyboardWizard.ClassifyKey("Woord 1","wp:0") == "Woord", "classify: wp:0 → Woord");
-            Assert(NewKeyboardWizard.ClassifyKey("Woord 9","wp:9") == "Woord", "classify: wp:9 → Woord");
+            Assert(NewKeyboardWizard.ClassifyKey("Woord 1","wp:0") == "prediction", "classify: wp:0 → Woord");
+            Assert(NewKeyboardWizard.ClassifyKey("Woord 9","wp:9") == "prediction", "classify: wp:9 → Woord");
 
             // ── Multi-word labels → null (no auto-classification) ─────────
             Assert(NewKeyboardWizard.ClassifyKey("ja",  "ja")    == null, "classify: 'ja' (2 chars) → null");
@@ -5579,7 +5583,7 @@ namespace OnScreenKeyboard
                 // preset colours are improved.
                 ["colorful"] = ( 4.5,  3.0,  3.0),
             };
-            string[] groupNames = { "Klinkers", "Medeklinkers", "Cijfers", "Besturing", "Leestekens", "Woord" };
+            string[] groupNames = { "vowels", "consonants", "numbers", "controls", "punctuation", "prediction" };
 
             // A hex string is valid when parsing it does not depend on the fallback colour.
             bool ValidHex(string hex) =>
@@ -5674,7 +5678,7 @@ namespace OnScreenKeyboard
                 Tb(w, "_txtThemeFile").Text = azertyColor;
 
                 var (layout, _, _, _) = Build(w);
-                var medeklinkers = layout.Groups.Find(g => g.Name == "Medeklinkers");
+                var medeklinkers = layout.Groups.Find(g => g.Name == "consonants");
                 Assert(medeklinkers != null, "merge: copied layout still has a Medeklinkers group");
                 // azertycolor.kbl's Medeklinkers KeyColor is #1A4E8A — azerty.kbl's own is #3E6C60.
                 var expected = SettingsManager.ParseColor("1A4E8A", Color.Empty);
@@ -5694,9 +5698,9 @@ namespace OnScreenKeyboard
                 var (layout, _, _, _) = Build(w);
                 var cellA = layout.Cells.Find(c => c.Props.Label == "a");
                 var cellB = layout.Cells.Find(c => c.Props.Label == "b");
-                Assert(cellA != null && cellA.Props.GroupName == "Klinkers",
+                Assert(cellA != null && cellA.Props.GroupName == "vowels",
                     $"classify: pasted 'a' assigned to Klinkers even with a from-file theme — got '{cellA?.Props.GroupName}'");
-                Assert(cellB != null && cellB.Props.GroupName == "Medeklinkers",
+                Assert(cellB != null && cellB.Props.GroupName == "consonants",
                     $"classify: pasted 'b' assigned to Medeklinkers even with a from-file theme — got '{cellB?.Props.GroupName}'");
             }
 
@@ -5712,7 +5716,7 @@ namespace OnScreenKeyboard
                 SetPreset(w, 2); // Presets[2] = High Contrast
 
                 var (layout, _, _, _) = Build(w);
-                var medeklinkers = layout.Groups.Find(g => g.Name == "Medeklinkers");
+                var medeklinkers = layout.Groups.Find(g => g.Name == "consonants");
                 Assert(medeklinkers != null, "preset: copied layout still has a Medeklinkers group");
                 // High Contrast's Medeklinkers KeyColor is #FFE535 — azerty.kbl's own is #3E6C60.
                 var expected = SettingsManager.ParseColor("FFE535", Color.Empty);
@@ -5747,9 +5751,9 @@ namespace OnScreenKeyboard
             SetPreset(w2, -1);
             Tb(w2, "_txtThemeFile").Text = azertyColor;
 
-            Color klinkers     = GroupKeyColor(w2, "Klinkers");
-            Color medeklinkers = GroupKeyColor(w2, "Medeklinkers");
-            Color cijfers      = GroupKeyColor(w2, "Cijfers");
+            Color klinkers     = GroupKeyColor(w2, "vowels");
+            Color medeklinkers = GroupKeyColor(w2, "consonants");
+            Color cijfers      = GroupKeyColor(w2, "numbers");
 
             // azertycolor.kbl: Klinkers KeyColor=4A8FD4, Medeklinkers=1A4E8A, Cijfers=B52535 — all distinct.
             Assert(klinkers.ToArgb() != medeklinkers.ToArgb(),

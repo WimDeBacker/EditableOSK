@@ -99,6 +99,9 @@ namespace OnScreenKeyboard
         private FluentButton      _btnAdd, _btnDelete, _btnImport, _btnApply, _btnCancel;
         private TouchTextBox      _txtName;
         private Label             _lblNameError;              // reserved / duplicate name, shown under the Name field
+        private TouchChoiceButton _cmbNameLang;               // the language the Name field is the name in
+        private readonly List<string> _nameLangs = new List<string>();   // language tags of the chooser rows
+        private string            _nameLang = Lang.CurrentCode;          // the language of the text in the Name field (names are kept per language)
         private TouchChoiceButton _cmbFont;                   // index 0 is the "(inherit standard)" placeholder
         private TouchStepper      _stpFontSize, _stpBorder;
         private TouchCheckBox     _chkAutoSize, _chkBorderInherit;
@@ -131,16 +134,22 @@ namespace OnScreenKeyboard
             string.Equals(name?.Trim(), SettingsManager.StandardGroupName, StringComparison.OrdinalIgnoreCase);
 
         /// <summary>
-        /// <c>true</c> when <paramref name="name"/> case-insensitively matches another existing group (any group but
-        /// the one at <paramref name="excludeIdx"/>). Without this, "klinkers" next to "Klinkers" would let two groups
-        /// coexist that every case-sensitive lookup elsewhere in the app treats as unrelated.
+        /// <c>true</c> when <paramref name="name"/> (compared without regard to case) is already the name, in the language
+        /// <paramref name="lang"/>, of another group (any group but the one at <paramref name="excludeIdx"/>), or the name the standard group
+        /// shows. Two groups with one name in one language could not be told apart in the lists.
         /// </summary>
-        private bool NameCollides(string name, int excludeIdx = -1)
+        private bool NameCollides(string name, int excludeIdx = -1, string lang = null)
         {
+            lang ??= _nameLang;
             for (int i = 0; i < _groups.Count; i++)
             {
                 if (i == excludeIdx) continue;
-                if (string.Equals(_groups[i].Name, name, StringComparison.OrdinalIgnoreCase))
+                var g = _groups[i];
+                // The name the other group shows in this language: its own, or (a group without any names) its id, or the standard group's.
+                string other = g.Names.TryGetValue(lang, out string v) ? v
+                             : GroupNames.IsStandard(g) ? GroupNames.Display(g, lang, lang)
+                             : g.Names.Count == 0 ? g.Name : null;
+                if (other != null && string.Equals(other, name, StringComparison.OrdinalIgnoreCase))
                     return true;
             }
             return false;
@@ -152,6 +161,38 @@ namespace OnScreenKeyboard
             if (IsReservedGroupName(name))        return Lang.T("Name 'standard' is reserved.");
             if (NameCollides(name, excludeIdx))   return Lang.T("A group with this name already exists.");
             return null;
+        }
+
+        /// <summary>The name of <paramref name="g"/> in exactly the language <paramref name="lang"/>; empty when it has none in that language.</summary>
+        private static string NameIn(KeyGroup g, string lang) => g.Names.TryGetValue(lang, out string v) ? v : "";
+
+        /// <summary>The text of the list row of a group: its name as shown, and the standard group with a lock to show that it is protected.</summary>
+        private static string GroupDisplayName(KeyGroup g) =>
+            GroupNames.IsStandard(g) ? "🔒 " + GroupNames.Display(g) : GroupNames.Display(g);
+
+        /// <summary>The languages the Name field can be a name in: those of the screens, the keyboard's own, and any language a group already has a name in.</summary>
+        private List<string> NameLanguages()
+        {
+            var result = new List<string>();
+            void Add(string code)
+            {
+                if (!string.IsNullOrWhiteSpace(code) && !result.Contains(code, StringComparer.OrdinalIgnoreCase)) result.Add(code);
+            }
+            Add(Lang.CurrentCode);
+            Add(GroupNames.KeyboardLanguage());
+            foreach (var (code, _) in Lang.GetAvailable()) Add(code);
+            foreach (var g in _groups) foreach (string k in g.Names.Keys) Add(k);
+            return result;
+        }
+
+        /// <summary>Fills the language chooser of the Name field and selects the current <see cref="_nameLang"/>.</summary>
+        private void FillNameLanguages()
+        {
+            _nameLangs.Clear();
+            _nameLangs.AddRange(NameLanguages());
+            int sel = Math.Max(0, _nameLangs.FindIndex(c => string.Equals(c, _nameLang, StringComparison.OrdinalIgnoreCase)));
+            _nameLang = _nameLangs[sel];
+            _cmbNameLang.SetItems(_nameLangs.Select(c => new TouchChoice { Text = c.Contains('-') ? c : FirstRunDialog.LanguageName(c) }), sel);   // "Nederlands", "nl-BE": short enough for a narrow window
         }
 
         // ── Constructor ───────────────────────────────────────────────
@@ -173,6 +214,7 @@ namespace OnScreenKeyboard
 
             Text = Lang.T("Manage Groups");
             BuildUI();
+            FillNameLanguages();
 
             int initialIdx = 0;
             if (initialGroupName != null)
@@ -203,6 +245,9 @@ namespace OnScreenKeyboard
             _btnAdd.AccessibleName = Lang.StripMnemonic(_btnAdd.Text);
             _chkBorderInherit.AccessibleName = Lang.T("Inherit from standard");
             ApplyStandardProtections();                       // placeholder text of the font chooser and the inherit texts
+            _loading = true;                                  // the names in the list follow the language of the screens
+            for (int i = 0; i < _groups.Count && i < _lstGroups.Items.Count; i++) _lstGroups.Items[i] = GroupDisplayName(_groups[i]);
+            _loading = false;
         }
 
         // ── UI construction ───────────────────────────────────────────
@@ -332,6 +377,10 @@ namespace OnScreenKeyboard
             _txtName = new TouchTextBox();
             _txtName.TextChanged += (s, e) => SaveCurrentName();
             AddRow(t, () => Lang.T("Name"), _txtName);
+            // The names of a group are kept per language: this chooser says which language the text above is the name in.
+            _cmbNameLang = new TouchChoiceButton { RowHeight = 44 };
+            _cmbNameLang.SelectedIndexChanged += (s, e) => OnNameLanguageChanged();
+            SetTip(_cmbNameLang, () => Lang.T("tip: Name language"));
             // Always present (empty when there is nothing to say), so a message appearing later never moves the rows below it.
             _lblNameError = Wrap(new Label
             {
@@ -343,6 +392,7 @@ namespace OnScreenKeyboard
             int r = t.RowCount++;
             t.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             t.Controls.Add(_lblNameError, 1, r);
+            AddRow(t, () => Lang.T("Name language"), _cmbNameLang);
 
             // Font: index 0 is the "(inherit standard)" placeholder ("(none / auto)" for the standard group).
             _cmbFont = new TouchChoiceButton { RowHeight = 44, Searchable = true };
@@ -447,10 +497,6 @@ namespace OnScreenKeyboard
 
         // ── List management ───────────────────────────────────────────
 
-        /// <summary>The display name of a group in the list: the standard group gets a lock prefix to show it is protected.</summary>
-        private static string GroupDisplayName(KeyGroup g) =>
-            g.Name == SettingsManager.StandardGroupName ? "🔒 " + g.Name : g.Name;
-
         /// <summary>
         /// Repopulates the list from <see cref="_groups"/> and selects the entry at <paramref name="selectIndex"/>
         /// (clamped, so deleting the last item is safe). With no groups left the detail panel is cleared.
@@ -487,7 +533,7 @@ namespace OnScreenKeyboard
             _loading = true;                      // the change handlers must not write half-loaded values back
             try
             {
-                _txtName.Text = g.Name;
+                _txtName.Text = _isStandard ? GroupNames.Display(g) : NameIn(g, _nameLang);
                 ApplyStandardProtections();
 
                 ShowColor(_chipKey,    g.KeyColor);
@@ -561,13 +607,18 @@ namespace OnScreenKeyboard
         {
             if (idx < 0 || idx >= _groups.Count) return;
             var g = _groups[idx];
-            // The standard group's name is protected. Any other rename to a reserved or already used name is
-            // refused here too (safety net behind SaveCurrentName).
+            // The standard group's names are protected. Any other name that is reserved or already used is refused here too
+            // (safety net behind SaveCurrentName). The id of a group never changes: only its name in the language of the Name field does.
             if (g.Name != SettingsManager.StandardGroupName)
             {
                 string proposed = _txtName.Text.Trim();
-                if (!IsReservedGroupName(proposed) && !NameCollides(proposed, idx))
-                    g.Name = proposed;
+                if (proposed.Length == 0)
+                {
+                    // Emptied: the name in this language is dropped, unless it is the only one the group has.
+                    if (g.Names.Count > 1 || !g.Names.ContainsKey(_nameLang)) g.Names.Remove(_nameLang);
+                }
+                else if (!IsReservedGroupName(proposed) && !NameCollides(proposed, idx))
+                    g.Names[_nameLang] = proposed;
             }
             bool std = g.Name == SettingsManager.StandardGroupName;
             // An inherited chip stores "no colour" (empty), an own colour is stored as it is.
@@ -600,8 +651,26 @@ namespace OnScreenKeyboard
             string problem = NameProblem(newName, idx);
             if (problem != null) { _lblNameError.Text = problem; return; }
             _lblNameError.Text = "";
+            if (newName.Length == 0) return;                      // cleared: dropped when the group is committed
+            _groups[idx].Names[_nameLang] = newName;
             _loading = true;
-            _lstGroups.Items[idx] = newName;
+            _lstGroups.Items[idx] = GroupDisplayName(_groups[idx]);
+            _loading = false;
+        }
+
+        /// <summary>The language of the Name field was changed: the text typed so far is kept for the old language, the field shows the name in the new one.</summary>
+        private void OnNameLanguageChanged()
+        {
+            if (_loading) return;
+            int i = _cmbNameLang.SelectedIndex;
+            if (i < 0 || i >= _nameLangs.Count || string.Equals(_nameLangs[i], _nameLang, StringComparison.OrdinalIgnoreCase)) return;
+            CommitTo(_prevIdx);                                   // the text belongs to the language it was typed in
+            _nameLang = _nameLangs[i];
+            _lblNameError.Text = "";
+            int idx = _lstGroups.SelectedIndex;
+            if (idx < 0 || idx >= _groups.Count || _isStandard) return;
+            _loading = true;
+            _txtName.Text = NameIn(_groups[idx], _nameLang);
             _loading = false;
         }
 
@@ -622,7 +691,9 @@ namespace OnScreenKeyboard
         {
             var std      = _groups.Find(g => g.Name == SettingsManager.StandardGroupName);
             var newGroup = std?.Clone() ?? new KeyGroup { BorderThickness = -1 };
-            newGroup.Name = name;
+            // The id is made once from the name and never changes; the name itself is stored for the language it was typed in.
+            newGroup.Name  = GroupNames.UniqueId(name, _groups.Select(g => g.Name));
+            newGroup.Names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { [_nameLang] = name };
             _groups.Add(newGroup);
             RebuildList(_groups.Count - 1);
         }
@@ -632,7 +703,7 @@ namespace OnScreenKeyboard
         {
             int idx = _lstGroups.SelectedIndex;
             if (idx < 0 || idx >= _groups.Count) return;
-            string name = _groups[idx].Name;
+            string name = GroupNames.Display(_groups[idx]);
             if (!TouchMessage.Confirm(this, Lang.T("Delete Group"), string.Format(Lang.T("Delete group msg"), name))) return;
             RemoveSelectedGroup();
         }
@@ -667,6 +738,7 @@ namespace OnScreenKeyboard
         private void SetDetailEnabled(bool en)
         {
             _txtName.Enabled = en && !_isStandard;          // the standard group's name is always read-only
+            _cmbNameLang.Enabled = en && !_isStandard;
             _cmbFont.Enabled = _chipFont.Enabled = _chipKey.Enabled = _chipBorder.Enabled = en;
             _chkAutoSize.Enabled = en;
             _stpFontSize.Enabled = en && !_chkAutoSize.Checked;
@@ -687,6 +759,7 @@ namespace OnScreenKeyboard
             _cmbFont.Items[0].Text = Lang.T(_isStandard ? "(none / auto)" : "(inherit standard)");
             _cmbFont.ShowSelection();
             _txtName.Enabled   = !_isStandard && _groups.Count > 0;
+            _cmbNameLang.Enabled = !_isStandard && _groups.Count > 0;
             _btnDelete.Enabled = !_isStandard && _groups.Count > 0;
         }
 
@@ -744,7 +817,7 @@ namespace OnScreenKeyboard
                 return;
             }
 
-            var existing = new HashSet<string>(_groups.Select(g => g.Name), StringComparer.OrdinalIgnoreCase);
+            var existing = new HashSet<string>(_groups.Select(g => g.Name), StringComparer.OrdinalIgnoreCase);   // ids: a group is the same group when its id is
             using var dlg = new ImportDialog(imported, existing);
             if (dlg.ShowDialog(this) != DialogResult.OK) return;      // cancelled
             ApplyImportDecisions(dlg.Decisions);
@@ -770,10 +843,13 @@ namespace OnScreenKeyboard
                         {
                             var clone = group.Clone();
                             // Overwrite means "restyle this existing group", not "rename it" — keep the local entry's own
-                            // casing. This matters most for the protected standard group: every other lookup in the app
-                            // compares StandardGroupName case-sensitively, so adopting an imported file's casing
-                            // (e.g. "Standard") would let this entry silently lose its protected status.
-                            clone.Name = _groups[idx].Name;
+                            // id (and so its casing). This matters most for the protected standard group: every other lookup in
+                            // the app compares StandardGroupName case-sensitively, so adopting an imported file's casing
+                            // (e.g. "Standard") would let this entry silently lose its protected status. The names stay the local
+                            // ones; a language the local group has no name in takes the imported name.
+                            clone.Name  = _groups[idx].Name;
+                            clone.Names = new Dictionary<string, string>(_groups[idx].Names, StringComparer.OrdinalIgnoreCase);
+                            foreach (var kv in group.Names) if (!clone.Names.ContainsKey(kv.Key)) clone.Names[kv.Key] = kv.Value;
                             if (_origName.TryGetValue(_groups[idx], out string orig)) { _origName.Remove(_groups[idx]); _origName[clone] = orig; }   // still the same group, restyled
                             _groups[idx] = clone;
                         }
@@ -784,16 +860,18 @@ namespace OnScreenKeyboard
                         string newName = GetUniqueName(group.Name, usedNames);
                         var clone = group.Clone();
                         clone.Name = newName;
+                        SuffixNames(clone, group.Name, newName);
                         _groups.Add(clone);
                         usedNames.Add(newName);        // so later groups in the batch don't get the same number
                         break;
                     }
                     case ImportAction.Add:
                     {
-                        // A clone: no shared references with the imported data. The name is made unique here as well, so a group is never
-                        // added under a name that is taken, even if the dialog did not flag it.
+                        // A clone: no shared references with the imported data. The id is made unique here as well, so a group is never
+                        // added under an id that is taken, even if the dialog did not flag it.
                         var clone = group.Clone();
                         clone.Name = GetUniqueName(group.Name, usedNames);
+                        SuffixNames(clone, group.Name, clone.Name);
                         _groups.Add(clone);
                         usedNames.Add(clone.Name);
                         break;
@@ -808,13 +886,21 @@ namespace OnScreenKeyboard
             RebuildList(Math.Max(0, _lstGroups.SelectedIndex));
         }
 
-        /// <summary>A name not in <paramref name="usedNames"/>: <paramref name="baseName"/> if free, else "MyGroup 2", "MyGroup 3", …</summary>
+        /// <summary>An id not in <paramref name="usedNames"/>: <paramref name="baseName"/> if free, else "vowels-2", "vowels-3", …</summary>
         private static string GetUniqueName(string baseName, HashSet<string> usedNames)
         {
             if (!usedNames.Contains(baseName)) return baseName;
-            int n = 2;                            // the first alternative reads "MyGroup 2", not "MyGroup 1"
-            while (usedNames.Contains($"{baseName} {n}")) n++;
-            return $"{baseName} {n}";
+            int n = 2;                            // the first alternative is number 2, not 1
+            while (usedNames.Contains($"{baseName}-{n}")) n++;
+            return $"{baseName}-{n}";
+        }
+
+        /// <summary>A group added under another id than it came with (<paramref name="oldId"/> was taken): its names get the same number, so they stay apart in the lists.</summary>
+        private static void SuffixNames(KeyGroup g, string oldId, string newId)
+        {
+            if (newId == oldId || !newId.StartsWith(oldId + "-", StringComparison.Ordinal)) return;
+            string number = newId.Substring(oldId.Length + 1);
+            foreach (string lang in g.Names.Keys.ToList()) g.Names[lang] = $"{g.Names[lang]} {number}";
         }
 
         /// <summary>Layout numbers of every container, for diagnosing spacing problems (written by the gallery).</summary>
@@ -866,9 +952,9 @@ namespace OnScreenKeyboard
             if (_groups[idx].Name == SettingsManager.StandardGroupName) return false;
             if (string.IsNullOrWhiteSpace(name)) return false;
             if (NameProblem(name, idx) != null) return false;
-            _groups[idx].Name = name;
+            _groups[idx].Names[_nameLang] = name;               // the id stays; the name in the language of the Name field changes
             _loading = true;
-            _lstGroups.Items[idx] = name;
+            _lstGroups.Items[idx] = GroupDisplayName(_groups[idx]);
             _loading = false;
             return true;
         }

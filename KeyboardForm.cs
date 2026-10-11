@@ -338,7 +338,10 @@ namespace OnScreenKeyboard
             Font            = new Font("Arial", 9f, FontStyle.Bold);
             KeyPreview      = true;
 
-            Lang.Load("en");
+            // The language of the screens is the user's own (UserSettings), not the keyboard's: the keyboard's language (_meta.Language) is
+            // that of the layout and of its word prediction.
+            Lang.Load(UserSettings.InterfaceLanguage);
+            GroupNames.KeyboardLanguage = () => _meta.Language;
             // Word database is loaded after TryAutoLoad() sets _meta.Language.
             // See LoadWordDatabase() below.
             _predictor.PredictionsChanged += () => { if (IsHandleCreated) BeginInvoke((Action)ApplyWPTags); };
@@ -356,7 +359,7 @@ namespace OnScreenKeyboard
             // Timer for deferred single-click in Edit mode
             RebuildAllButtons();
 
-            void onLangChanged() { _meta.Language = Lang.CurrentCode; RefreshToolbarButtonLabels(); }
+            void onLangChanged() { UserSettings.InterfaceLanguage = Lang.CurrentCode; RefreshToolbarButtonLabels(); }
             Lang.LanguageChanged += onLangChanged;
 
             // Batches learned word/word-pair frequencies to disk every 30 s
@@ -3681,7 +3684,6 @@ namespace OnScreenKeyboard
             // The ready-made layouts name a language and database of their own; the choice made here replaces them.
             _meta.Language     = dlg.Language;
             _meta.WordDatabase = Path.GetFileName(db);
-            Lang.Load(dlg.Language);
             LoadWordDatabase();
             RebuildAllButtons();
             AutoSave();
@@ -3747,7 +3749,6 @@ namespace OnScreenKeyboard
                 BackColor = _theme.BackgroundColor; Opacity = _theme.Opacity;
                 ApplyTitlebarState();
                 ApplyToolbarTheme();
-                if (!string.IsNullOrEmpty(_meta.Language)) Lang.Load(_meta.Language);
                 LoadWordDatabase();
                 RebuildAllButtons();
                 Size = new Size(_window.WindowWidth, _window.WindowHeight);
@@ -3963,7 +3964,6 @@ namespace OnScreenKeyboard
             UpdateFilenameLabel();
             BackColor = _theme.BackgroundColor; Opacity = _theme.Opacity;
             ApplyTitlebarState();
-            if (!string.IsNullOrEmpty(_meta.Language)) Lang.Load(_meta.Language);
             LoadWordDatabase();
             RebuildAllButtons();
             Size = new Size(_window.WindowWidth, _window.WindowHeight);

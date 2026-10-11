@@ -82,8 +82,8 @@ namespace OnScreenKeyboard
         private static (string Name, Func<FluentDialogBase> Make, int Normal, int Plus40, int Plus80)[] NarrowDialogs() => new (string, Func<FluentDialogBase>, int, int, int)[]
         {
             ("KeyEditorForm",      NarrowKeyEditor,                                          480, 520, 580),
-            ("GroupEditorForm",    () => new GroupEditorForm(SampleGroups(), "Klinkers"),    480, 520, 620),
-            ("KeyboardEditorForm", () => KeyboardEditor(),                                   480, 520, 540),
+            ("GroupEditorForm",    () => new GroupEditorForm(SampleGroups(), "Klinkers"),    480, 530, 620),     // 530, was 520: the Name language row (2026-10-11)
+            ("KeyboardEditorForm", () => KeyboardEditor(),                                   480, 520, 560),     // 560, was 540: the Keyboard language row (2026-10-11)
             ("NewKeyboardWizard",  () => new NewKeyboardWizard(),                            480, 520, 0),
             ("SpecialKeysDialog",  () => new SpecialKeysDialog(false),                       480, 520, 0),
             ("FirstRunDialog",     () => new FirstRunDialog(new[] { ("nl", "Nederlands"), ("en", "English") }, "qwerty", "nl"), 480, 520, 580),

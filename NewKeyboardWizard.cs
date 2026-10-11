@@ -32,12 +32,12 @@ namespace OnScreenKeyboard
                 Background="1C1C28", KeyColor="2C2C42", FontColor="EFEFFF",
                 BorderColor="3C3C56", BorderThickness=1,
                 ExtraGroups=new[]{
-                    ("Klinkers",     "3A3A5A","EFEFFF","4A4A6A",1),   // slightly lighter navy
-                    ("Medeklinkers", "2C2C42","EFEFFF","3C3C56",1),   // same as standard
-                    ("Cijfers",      "243050","C0D0FF","344060",1),   // cool blue tint
-                    ("Besturing",    "1C1C2E","B0B0C8","2A2A3E",1),   // darkest, muted font (~8:1)
-                    ("Leestekens",   "38283C","D8C0F0","483848",1),   // slight purple tint
-                    ("Woord",        "263826","B0D0B0","364836",1),   // slight green tint
+                    ("vowels",       "3A3A5A","EFEFFF","4A4A6A",1),   // slightly lighter navy
+                    ("consonants",   "2C2C42","EFEFFF","3C3C56",1),   // same as standard
+                    ("numbers",      "243050","C0D0FF","344060",1),   // cool blue tint
+                    ("controls",     "1C1C2E","B0B0C8","2A2A3E",1),   // darkest, muted font (~8:1)
+                    ("punctuation",  "38283C","D8C0F0","483848",1),   // slight purple tint
+                    ("prediction",   "263826","B0D0B0","364836",1),   // slight green tint
                 } },
 
             // ── Light ────────────────────────────────────────────────────
@@ -48,12 +48,12 @@ namespace OnScreenKeyboard
                 Background="EBEBEB", KeyColor="FFFFFF", FontColor="1A1A1A",
                 BorderColor="C0C0C0", BorderThickness=1,
                 ExtraGroups=new[]{
-                    ("Klinkers",     "DFF0FF","1A1A1A","A8C8E0",1),   // very light blue
-                    ("Medeklinkers", "FFFFFF","1A1A1A","C0C0C0",1),   // same as standard
-                    ("Cijfers",      "FFF3DC","1A1A1A","D8C898",1),   // very light amber
-                    ("Besturing",    "EAEAEA","3C3C3C","B0B0B0",1),   // light gray, darker font (~9:1)
-                    ("Leestekens",   "F4F0FF","1A1A1A","C4B8D8",1),   // very light lavender
-                    ("Woord",        "EAFAEA","1A1A1A","A8C8B0",1),   // very light green
+                    ("vowels",       "DFF0FF","1A1A1A","A8C8E0",1),   // very light blue
+                    ("consonants",   "FFFFFF","1A1A1A","C0C0C0",1),   // same as standard
+                    ("numbers",      "FFF3DC","1A1A1A","D8C898",1),   // very light amber
+                    ("controls",     "EAEAEA","3C3C3C","B0B0B0",1),   // light gray, darker font (~9:1)
+                    ("punctuation",  "F4F0FF","1A1A1A","C4B8D8",1),   // very light lavender
+                    ("prediction",   "EAFAEA","1A1A1A","A8C8B0",1),   // very light green
                 } },
 
             // ── High Contrast ────────────────────────────────────────────
@@ -63,12 +63,12 @@ namespace OnScreenKeyboard
                 Background="000000", KeyColor="FFFF00", FontColor="000000",
                 BorderColor="000000", BorderThickness=2,
                 ExtraGroups=new[]{
-                    ("Klinkers",     "FFFF00","000000","000000",2),   // pure yellow (same as std)
-                    ("Medeklinkers", "FFE535","000000","000000",2),   // slightly deeper yellow
-                    ("Cijfers",      "FFD700","000000","000000",2),   // gold
-                    ("Besturing",    "FFA500","000000","000000",2),   // amber
-                    ("Leestekens",   "FF8C00","000000","000000",2),   // dark amber
-                    ("Woord",        "F0E68C","000000","000000",2),   // khaki / pale yellow
+                    ("vowels",       "FFFF00","000000","000000",2),   // pure yellow (same as std)
+                    ("consonants",   "FFE535","000000","000000",2),   // slightly deeper yellow
+                    ("numbers",      "FFD700","000000","000000",2),   // gold
+                    ("controls",     "FFA500","000000","000000",2),   // amber
+                    ("punctuation",  "FF8C00","000000","000000",2),   // dark amber
+                    ("prediction",   "F0E68C","000000","000000",2),   // khaki / pale yellow
                 } },
 
             // ── Colorful ─────────────────────────────────────────────────
@@ -77,12 +77,12 @@ namespace OnScreenKeyboard
                 Background="808080", KeyColor="C0C0C0", FontColor="000000",
                 BorderColor="808000", BorderThickness=1,
                 ExtraGroups=new[]{
-                    ("Klinkers",     "4A8FD4","FFFFFF","0080FF",2),
-                    ("Medeklinkers", "1A4E8A","FFFFFF","0080FF",2),
-                    ("Cijfers",      "B52535","FFFFFF","91201A",2),
-                    ("Besturing",    "2A6B35","FFFFFF","003700",2),
-                    ("Leestekens",   "C86A00","FFFFFF","804000",2),
-                    ("Woord",        "5B3080","E8D4FF","8000FF",0),
+                    ("vowels",       "4A8FD4","FFFFFF","0080FF",2),
+                    ("consonants",   "1A4E8A","FFFFFF","0080FF",2),
+                    ("numbers",      "B52535","FFFFFF","91201A",2),
+                    ("controls",     "2A6B35","FFFFFF","003700",2),
+                    ("punctuation",  "C86A00","FFFFFF","804000",2),
+                    ("prediction",   "5B3080","E8D4FF","8000FF",0),
                 } },
         };
 
@@ -471,8 +471,8 @@ namespace OnScreenKeyboard
 
         private static readonly (string Label, string Group)[] SampleKeys =
         {
-            ("a", "Klinkers"), ("e", "Klinkers"), ("b", "Medeklinkers"), ("n", "Medeklinkers"), ("1", "Cijfers"),
-            ("↵", "Besturing"), ("⌫", "Besturing"), (".", "Leestekens"), ("abc", "Woord"), ("⚙", null),
+            ("a", "vowels"), ("e", "vowels"), ("b", "consonants"), ("n", "consonants"), ("1", "numbers"),
+            ("↵", "controls"), ("⌫", "controls"), (".", "punctuation"), ("abc", "prediction"), ("⚙", null),
         };
 
         private void PaintSampleKey(Graphics g, Size size, string label, string group)
@@ -701,7 +701,8 @@ namespace OnScreenKeyboard
                     var groups=doc.SelectNodes("/OnScreenKeyboard/Theme/Group");
                     if (groups!=null)
                         foreach (System.Xml.XmlNode g in groups)
-                            if (string.Equals(g.Attributes?["Name"]?.Value, groupName, StringComparison.Ordinal))
+                            // The id of the group: its Id attribute, or the id an older file's name stands for.
+                            if (string.Equals(g.Attributes?["Id"]?.Value ?? GroupNames.IdForOldName(g.Attributes?["Name"]?.Value), groupName, StringComparison.Ordinal))
                             {
                                 var val=g.Attributes?[attr]?.Value;
                                 if (!string.IsNullOrEmpty(val))
@@ -884,6 +885,7 @@ namespace OnScreenKeyboard
                 {
                     layout.Groups.Add(new KeyGroup
                     { Name=name,
+                      Names=GroupNames.DefaultNames(name),         // a new keyboard has the names in Dutch and English from the start
                       KeyColor    =SettingsManager.ParseColor(key,   Color.Empty),
                       FontColor   =SettingsManager.ParseColor(font,  Color.Empty),
                       BorderColor =SettingsManager.ParseColor(border,Color.Empty),
@@ -908,25 +910,25 @@ namespace OnScreenKeyboard
             }
         }
 
-        // Returns one of: "Klinkers", "Medeklinkers", "Cijfers",
-        //                 "Besturing", "Leestekens", "Woord", or null.
+        // Returns the id of one of: "vowels", "consonants", "numbers",
+        //                           "controls", "punctuation", "prediction", or null.
         internal static string ClassifyKey(string label, string send)
         {
             label = label ?? "";
             send  = send  ?? "";
 
             // ── Word-prediction slots ─────────────────────────────────
-            if (send.StartsWith("wp:")) return "Woord";
+            if (send.StartsWith("wp:")) return "prediction";
 
             // ── Control / navigation — SendKeys { } format ────────────
             // Covers: {ENTER}, {BACKSPACE}, {TAB}, {ESC}, {DELETE},
             //         {UP}, {DOWN}, {LEFT}, {RIGHT}, {F1}-{F12},
             //         {SHIFT}, {CTRL}, {ALT}, {WIN}, {CAPSLOCK}, etc.
-            if (send.Length > 2 && send[0] == '{') return "Besturing";
+            if (send.Length > 2 && send[0] == '{') return "controls";
 
             // ── Space (send is a single literal space) ────────────────
             if (send == " " || label == "Space" || label == "Spatie")
-                return "Besturing";
+                return "controls";
 
             // ── Symbol labels emitted by the wizard parser ────────────
             //   ↑↓←→  (arrow keys)
@@ -934,13 +936,13 @@ namespace OnScreenKeyboard
             //   ⌫      (Backspace)
             //   ⇥      (Tab)
             const string ctrlSymbols = "↑↓←→↵⌫⇥";
-            if (label.Length == 1 && ctrlSymbols.Contains(label)) return "Besturing";
+            if (label.Length == 1 && ctrlSymbols.Contains(label)) return "controls";
 
             // Text labels for control-class keys
             if (label == "Esc" || label == "Del" || label == "Tab" ||
                 label == "Shift" || label == "Ctrl" || label == "Alt" ||
                 label == "AltGr" || label == "CapsLock" || label == "Caps" || label == "Win")
-                return "Besturing";
+                return "controls";
 
             // ── Classify by first significant character ────────────────
             // Only single-character keys get a category; multi-word
@@ -949,18 +951,18 @@ namespace OnScreenKeyboard
             if (text.Length != 1) return null;
             char c = text[0];
 
-            if (char.IsDigit(c)) return "Cijfers";
+            if (char.IsDigit(c)) return "numbers";
 
             // Vowels — Latin base + common Western European accented forms
             const string vowels =
                 "aeiouAEIOU" +
                 "áàäâãåæéèëêíìïîóòöôõøúùüûÿý" +
                 "ÁÀÄÂÃÅÆÉÈËÊÍÌÏÎÓÒÖÔÕØÚÙÜÛÝ";
-            if (vowels.IndexOf(c) >= 0) return "Klinkers";
+            if (vowels.IndexOf(c) >= 0) return "vowels";
 
-            if (char.IsLetter(c)) return "Medeklinkers";
+            if (char.IsLetter(c)) return "consonants";
 
-            if (char.IsPunctuation(c) || char.IsSymbol(c)) return "Leestekens";
+            if (char.IsPunctuation(c) || char.IsSymbol(c)) return "punctuation";
 
             return null;
         }

@@ -69,7 +69,7 @@ namespace OnScreenKeyboard
                     Assert(Priv<TouchChoiceButton[]>(ke, "_types")[0].SelectedItem?.Text == Lang.T("Modifier").Replace("&", ""),
                         $"[{token}]: the Key Editor opens the key as a Modifier");
                 Assert(KeyLayout.ModifierLabels.Contains(k.Label), $"[{token}]: the keyboard treats the key as a modifier");
-                Assert(NewKeyboardWizard.ClassifyKey(k.Label, k.Send) == "Besturing", $"[{token}] is put in the Besturing group");
+                Assert(NewKeyboardWizard.ClassifyKey(k.Label, k.Send) == "controls", $"[{token}] is put in the Besturing group");
             }
             // The stock layouts still give Caps the send text {CAPSLOCK} (never sent): the Key Editor shows that key as a Modifier too.
             using (var stockCaps = new KeyEditorForm(new KeyProps("Caps", "{CAPSLOCK}"), null))
@@ -86,7 +86,7 @@ namespace OnScreenKeyboard
             {
                 var k = One("[" + token + "]");
                 Assert(k.Label == label && k.Send == send, $"[{token}] is {label} (send {send})");
-                Assert(NewKeyboardWizard.ClassifyKey(k.Label, k.Send) == "Besturing", $"[{token}] is put in the Besturing group");
+                Assert(NewKeyboardWizard.ClassifyKey(k.Label, k.Send) == "controls", $"[{token}] is put in the Besturing group");
             }
             Assert(One("[einde]", dutch: true).Send == "{END}" && One("[invoegen]", dutch: true).Send == "{INSERT}", "Dutch aliases for End and Insert");
 
@@ -101,7 +101,7 @@ namespace OnScreenKeyboard
             {
                 var k = One("[dead:" + ch + "]");
                 Assert(k.Label == ch.ToString() && k.Send == "dead:" + ch, $"[dead:{ch}] is a dead key ('{ch}')");
-                Assert(NewKeyboardWizard.ClassifyKey(k.Label, k.Send) == "Leestekens", $"[dead:{ch}] is put in the Leestekens group");
+                Assert(NewKeyboardWizard.ClassifyKey(k.Label, k.Send) == "punctuation", $"[dead:{ch}] is put in the Leestekens group");
             }
             Assert(One("[tilde]").Send == "dead:~" && One("[Grave]").Send == "dead:`" && One("[acute]").Send == "dead:´" &&
                    One("[circumflex]").Send == "dead:^" && One("[umlaut]").Send == "dead:¨" && One("[trema]").Send == "dead:¨" && One("[DEAD:~]").Send == "dead:~",
@@ -145,7 +145,7 @@ namespace OnScreenKeyboard
             string LabelAtCell(int r, int c) => layout.Cells.First(x => x.Row == r && x.Col == c).Props.Label;
             Assert(LabelAtCell(0, 0) == "Shift" && LabelAtCell(0, 2) == "AltGr" && LabelAtCell(1, 1) == "Win" && LabelAtCell(1, 3) == "Home" && LabelAtCell(1, 4) == "F5",
                 "the created layout has the special keys in their cells");
-            Assert(layout.Cells.First(x => x.Row == 1 && x.Col == 2).Props.Send == "" && layout.Cells.First(x => x.Row == 1 && x.Col == 2).Props.Label == "Alt" && layout.Cells.First(x => x.Row == 1 && x.Col == 3).Props.GroupName == "Besturing",
+            Assert(layout.Cells.First(x => x.Row == 1 && x.Col == 2).Props.Send == "" && layout.Cells.First(x => x.Row == 1 && x.Col == 2).Props.Label == "Alt" && layout.Cells.First(x => x.Row == 1 && x.Col == 3).Props.GroupName == "controls",
                 "the created keys carry the send text and group of the stock layouts");
         }
 
