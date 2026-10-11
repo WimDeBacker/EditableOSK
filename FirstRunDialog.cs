@@ -84,6 +84,37 @@ namespace OnScreenKeyboard
             return c;
         }
 
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern uint MapVirtualKeyEx(uint code, uint mapType, IntPtr hkl);
+
+        /// <summary>
+        /// The arrangement of the keyboard layout Windows is using for typing now, found by asking what the key where Q sits on a QWERTY keyboard
+        /// (scan code 0x10) types: an "a" means AZERTY, a "q" QWERTY. Null when Windows cannot say. This is what the person types on, which the
+        /// language and region settings of Windows do not tell (a Belgian keyboard in an English Windows).
+        /// </summary>
+        internal static string DetectKeyboardArrangement()
+        {
+            try
+            {
+                IntPtr hkl = InputLanguage.CurrentInputLanguage.Handle;
+                uint vk = MapVirtualKeyEx(0x10, 1 /* MAPVK_VSC_TO_VK */, hkl);
+                if (vk == 0) return null;
+                uint ch = MapVirtualKeyEx(vk, 2 /* MAPVK_VK_TO_CHAR */, hkl) & 0x7FFF;      // the top bit marks a dead key
+                return ArrangementFromKey((char)ch);
+            }
+            catch { return null; }
+        }
+
+        /// <summary>The arrangement for the character the first letter key of the top letter row types: "a" is AZERTY, "q" QWERTY, anything else unknown (null).</summary>
+        internal static string ArrangementFromKey(char c) =>
+            char.ToLowerInvariant(c) == 'a' ? "azerty" : char.ToLowerInvariant(c) == 'q' ? "qwerty" : null;
+
+        /// <summary>The culture of the language typed in now (the input language of Windows), else that of the screens of Windows.</summary>
+        internal static CultureInfo TypingCulture()
+        {
+            try { return InputLanguage.CurrentInputLanguage.Culture; }
+            catch { return CultureInfo.CurrentUICulture; }
+        }
+
         /// <summary>AZERTY for a Belgian or French system, QWERTY otherwise: what the person at this PC most likely has.</summary>
         internal static string GuessArrangement(CultureInfo culture)
         {

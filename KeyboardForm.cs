@@ -3600,7 +3600,7 @@ namespace OnScreenKeyboard
 
             string path = _currentFilePath ?? SettingsManager.DefaultPath;
             // Not writable (a layout installed with the program) or no file yet: ask where to save, in the Documents folder.
-            bool readOnlyHere = _currentFilePath != null && !UserData.CanWrite(_currentFilePath);
+            bool readOnlyHere = _currentFilePath != null && !UserData.MayWriteLayout(_currentFilePath);
             if (saveAs || _currentFilePath == null || readOnlyHere)
             {
                 using var dlg = new SaveFileDialog
@@ -3675,21 +3675,23 @@ namespace OnScreenKeyboard
             var languages = databases.Count > 0
                 ? databases.Select(d => (d.Code, FirstRunDialog.LanguageName(d.Code))).ToList()
                 : screens.Select(l => (l.Code, l.Name)).ToList();          // no word database installed: the languages of the screens
-            var culture   = System.Globalization.CultureInfo.CurrentUICulture;
-            using var dlg = new FirstRunDialog(languages, FirstRunDialog.GuessArrangement(culture), FirstRunDialog.GuessLanguage(culture, languages),
+            // What the person types on and in, not what the screens of Windows say: the keyboard layout in use decides the arrangement, the input
+            // language the language of the keyboard (the region of Windows is the fallback).
+            var culture   = FirstRunDialog.TypingCulture();
+            string arrangement = FirstRunDialog.DetectKeyboardArrangement() ?? FirstRunDialog.GuessArrangement(culture);
+            using var dlg = new FirstRunDialog(languages, arrangement, FirstRunDialog.GuessLanguage(culture, languages),
                                                screens, UserSettings.InterfaceLanguage, defaultStyle: "dark");
             if (dlg.ShowDialog(this) != DialogResult.OK) return;
 
             string layoutFile = Path.Combine(appDir, dlg.Arrangement + ".kbl");
             if (!File.Exists(layoutFile)) return;
-            string db = databases.FirstOrDefault(d => d.Code == dlg.Language).File;
-
             if (!string.Equals(dlg.ScreenLanguage, Lang.CurrentCode, StringComparison.OrdinalIgnoreCase))
                 Lang.Load(dlg.ScreenLanguage);                              // remembered by the language-changed handler (UserSettings)
             ApplyLoadedSettings(layoutFile);
-            // The ready-made layouts name a language and database of their own; the choices made here replace them.
+            // The choices made here replace those of the ready-made layout. The word database stays on "(auto)": it then follows the language
+            // of the keyboard, also when that is changed later (a database named here would make the language of the keyboard do nothing).
             _meta.Language     = dlg.Language;
-            _meta.WordDatabase = db != null ? Path.GetFileName(db) : "";
+            _meta.WordDatabase = "";
             var preset = NewKeyboardWizard.Presets.FirstOrDefault(p => p.Id == dlg.StyleId);
             if (preset != null)
             {
@@ -3913,7 +3915,7 @@ namespace OnScreenKeyboard
             string path = _currentFilePath ?? SettingsManager.DefaultPath;
             // A layout in a folder this user cannot write to (a layout installed with the program, in Program Files): the changes go
             // to the user's own settings file, which the next start opens, and the original stays as it was.
-            if (!UserData.CanWrite(path)) path = SettingsManager.DefaultPath;
+            if (!UserData.MayWriteLayout(path)) path = SettingsManager.DefaultPath;
             try
             {
                 _meta.LastFile = path;

@@ -2,15 +2,36 @@
 <OnScreenKeyboard FormatVersion="2">
   <Theme BackgroundColor="1A2E2C" Opacity="1.00" FontName="Arial" FontSize="0" FontColor="E0FAF8" KeyColor="2C4845" BorderColor="3E5E5A" BorderThickness="1">
     <Group Id="standard" FontName="Arial" FontSize="0" FontColor="E0FAF8" KeyColor="2C4845" BorderColor="3E5E5A" BorderThickness="1" />
-    <Group Id="prediction" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="34657C" BorderColor="2E5460" BorderThickness="-1"><Name lang="nl">Woordvoorspelling</Name><Name lang="en">Word prediction</Name></Group>
-    <Group Id="function-keys" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="1C3832" BorderColor="2C5048" BorderThickness="-1"><Name lang="nl">Functietoetsen</Name><Name lang="en">Function keys</Name></Group>
-    <Group Id="numbers" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="005B70" BorderColor="304060" BorderThickness="-1"><Name lang="nl">Cijfers</Name><Name lang="en">Numbers</Name></Group>
-    <Group Id="vowels" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="1A4840" BorderColor="2A6058" BorderThickness="-1"><Name lang="nl">Klinkers</Name><Name lang="en">Vowels</Name></Group>
-    <Group Id="consonants" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="3E6C60" BorderColor="345850" BorderThickness="-1"><Name lang="nl">Medeklinkers</Name><Name lang="en">Consonants</Name></Group>
-    <Group Id="punctuation" FontName="" FontSize="0" FontColor="CCE8DC" KeyColor="2E4035" BorderColor="3E5848" BorderThickness="-1"><Name lang="nl">Leestekens</Name><Name lang="en">Punctuation</Name></Group>
-    <Group Id="controls" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="162820" BorderColor="243C30" BorderThickness="-1"><Name lang="nl">Besturing</Name><Name lang="en">Controls</Name></Group>
+    <Group Id="prediction" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="34657C" BorderColor="2E5460" BorderThickness="-1">
+      <Name lang="nl">Woordvoorspelling</Name>
+      <Name lang="en">Word prediction</Name>
+    </Group>
+    <Group Id="function-keys" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="1C3832" BorderColor="2C5048" BorderThickness="-1">
+      <Name lang="nl">Functietoetsen</Name>
+      <Name lang="en">Function keys</Name>
+    </Group>
+    <Group Id="numbers" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="005B70" BorderColor="304060" BorderThickness="-1">
+      <Name lang="nl">Cijfers</Name>
+      <Name lang="en">Numbers</Name>
+    </Group>
+    <Group Id="vowels" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="1A4840" BorderColor="2A6058" BorderThickness="-1">
+      <Name lang="nl">Klinkers</Name>
+      <Name lang="en">Vowels</Name>
+    </Group>
+    <Group Id="consonants" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="3E6C60" BorderColor="345850" BorderThickness="-1">
+      <Name lang="nl">Medeklinkers</Name>
+      <Name lang="en">Consonants</Name>
+    </Group>
+    <Group Id="punctuation" FontName="" FontSize="0" FontColor="CCE8DC" KeyColor="2E4035" BorderColor="3E5848" BorderThickness="-1">
+      <Name lang="nl">Leestekens</Name>
+      <Name lang="en">Punctuation</Name>
+    </Group>
+    <Group Id="controls" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="162820" BorderColor="243C30" BorderThickness="-1">
+      <Name lang="nl">Besturing</Name>
+      <Name lang="en">Controls</Name>
+    </Group>
   </Theme>
-  <Layout Language="nl" GridRows="7" GridCols="14" GearRow="6" GearCol="13" WindowWidth="1036" WindowHeight="368" HideTitlebar="0" StickyModifiers="0" HoldToEdit="0" AlwaysOnTop="1" SlowKeysMs="0" DwellMs="0" ShowTimingAnimation="1" LastFile="" ToolbarTheme="Dark" WordLearningEnabled="1">
+  <Layout Language="nl" GridRows="7" GridCols="14" GearRow="6" GearCol="13" WindowWidth="1036" WindowHeight="368" HideTitlebar="0" StickyModifiers="0" HoldToEdit="0" AlwaysOnTop="1" SlowKeysMs="0" DwellMs="0" ShowTimingAnimation="1" LastFile="C:\dev\EditableOSK\azerty.kbl" ToolbarTheme="Dark" WordLearningEnabled="1">
     <Key Row="0" Col="0" RowSpan="1" ColSpan="2" GroupId="prediction" Label="Woord 1" Send="wp:0" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="0" Col="2" RowSpan="1" ColSpan="2" GroupId="prediction" Label="Woord 2" Send="wp:1" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="0" Col="4" RowSpan="1" ColSpan="2" GroupId="prediction" Label="Woord 3" Send="wp:2" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />

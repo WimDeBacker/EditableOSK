@@ -36,6 +36,9 @@ namespace OnScreenKeyboard
                 Assert(UserData.CanWrite(Path.Combine(app, "new.kbl")), "a writable folder: the file can be written");
                 Assert(!Directory.EnumerateFileSystemEntries(app).GetEnumerator().MoveNext(), "the write test leaves nothing behind");
                 Assert(!UserData.CanWrite(Path.Combine(root, "missing folder", "x.kbl")), "a folder that does not exist: cannot write");
+                Assert(UserData.MayWriteLayout(Path.Combine(app, "mine.kbl")), "a layout of the user in a writable folder is saved in place");
+                Assert(!UserData.MayWriteLayout(Path.Combine(UserData.AppFolder, "azerty.kbl")),
+                       "a ready-made layout in the program's folder is never saved in place, even where that folder is writable (a build folder)");
 
                 // Which folder: installed program, test version, environment variable
                 string ad = @"C:\Users\x\AppData\Roaming";

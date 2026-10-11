@@ -100,6 +100,13 @@ namespace OnScreenKeyboard
         }
 
         /// <summary>
+        /// True when a layout may be saved in place at <paramref name="path"/>: it is writable and it is not one of the ready-made layouts in the
+        /// program's own folder. Those are never written, also where the folder is writable (a build folder): a change to a loaded ready-made
+        /// layout goes to the user's own settings file, so the original stays what it was and can be loaded again.
+        /// </summary>
+        internal static bool MayWriteLayout(string path) => !IsInFolder(path) && CanWrite(path);
+
+        /// <summary>
         /// One-time move from earlier versions, which wrote next to the exe: copies <c>settings.xml</c> and the <c>*.learned.wfq</c> files of
         /// <paramref name="appFolder"/> into the user folder, but never over a file that is already there. The old files stay (they may not be
         /// removable without administrator rights). Returns the names that were copied.

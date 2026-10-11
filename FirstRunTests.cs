@@ -19,6 +19,12 @@ namespace OnScreenKeyboard
             Assert(FirstRunDialog.GuessArrangement(new CultureInfo("en-US")) == "qwerty", "an American system: QWERTY");
             Assert(FirstRunDialog.GuessArrangement(CultureInfo.InvariantCulture) == "qwerty", "no region: QWERTY");
 
+            Assert(FirstRunDialog.ArrangementFromKey('a') == "azerty" && FirstRunDialog.ArrangementFromKey('A') == "azerty" && FirstRunDialog.ArrangementFromKey('q') == "qwerty" &&
+                   FirstRunDialog.ArrangementFromKey('w') == null && FirstRunDialog.ArrangementFromKey('\0') == null,
+                "the key where Q sits on QWERTY types 'a' on an AZERTY keyboard, 'q' on a QWERTY one; anything else is unknown");
+            string detected = FirstRunDialog.DetectKeyboardArrangement();
+            Assert(detected == null || detected == "azerty" || detected == "qwerty", $"the keyboard layout in use is detected without an error ({detected ?? "unknown"})");
+            Assert(FirstRunDialog.TypingCulture() != null, "the culture of the language typed in is found");
             Assert(FirstRunDialog.GuessLanguage(new CultureInfo("nl-BE"), langs) == "nl", "a Dutch system: the Dutch database");
             Assert(FirstRunDialog.GuessLanguage(new CultureInfo("en-GB"), langs) == "en", "an English system: the English database");
             Assert(FirstRunDialog.GuessLanguage(new CultureInfo("de-DE"), langs) == "en", "a language without database: English when there is a database for it");
