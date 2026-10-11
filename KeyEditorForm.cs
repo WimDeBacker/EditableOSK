@@ -932,7 +932,7 @@ namespace OnScreenKeyboard
             {
                 Title = Lang.T("Layout file"), Filter = "Keyboard layouts (*.kbl)|*.kbl|All files (*.*)|*.*", InitialDirectory = initDir,
             };
-            if (dlg.ShowDialog() != DialogResult.OK) return;
+            if (dlg.ShowDialog(this) != DialogResult.OK) return;        // owned by this dialog: a file dialog without an owner opens behind the keyboard
             string selected = dlg.FileName;
             // Prefer a relative path when the file is inside the layout directory: the layout stays portable.
             if (_layoutDir != null && selected.StartsWith(_layoutDir, StringComparison.OrdinalIgnoreCase))

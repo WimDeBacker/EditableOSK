@@ -81,9 +81,29 @@ namespace OnScreenKeyboard
         private void ForceTopMost()
         {
             if (!IsHandleCreated) return;
+            // Not while a window of the keyboard is open over it (a dialog, a file dialog started from it): raising the keyboard then puts
+            // it above that window, which is left behind it and cannot be used. It is raised again when the window has closed.
+            if (OwnedForms.Any(f => f.Visible)) return;
             var target = _window.AlwaysOnTop ? HWND_TOPMOST : HWND_NOTOPMOST;
             SetWindowPos(Handle, target, 0, 0, 0, 0,
                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        }
+
+        /// <summary>
+        /// The window that must own whatever is opened now (a file dialog, a message box): the keyboard, or the innermost dialog of the keyboard that
+        /// is open (a dialog opened from a dialog has to be owned by that dialog, as the keyboard under it is disabled). A window without an owner
+        /// opens behind this always-on-top, never-active window and cannot be used (Priority 0 in todo.md): every window the keyboard opens takes
+        /// this as its owner.
+        /// </summary>
+        internal IWin32Window DialogOwner()
+        {
+            Form f = this;
+            while (true)
+            {
+                var next = f.OwnedForms.LastOrDefault(o => o.Visible && !o.IsDisposed);
+                if (next == null) return f;
+                f = next;
+            }
         }
 
         protected override CreateParams CreateParams
@@ -1211,6 +1231,7 @@ namespace OnScreenKeyboard
                                 if (wpCount >= 10)
                                 {
                                     MessageBox.Show(
+                                        DialogOwner(),
                                         Lang.T("WP paste full msg"),
                                         Lang.T("WP paste full title"),
                                         MessageBoxButtons.OK,
@@ -3592,7 +3613,7 @@ namespace OnScreenKeyboard
             // it preserves the in-memory state even when invalid so data is never lost.
             if (!_layout.IsValid())
             {
-                MessageBox.Show(Lang.T("Save invalid msg"),
+                MessageBox.Show(DialogOwner(), Lang.T("Save invalid msg"),
                     Lang.T("Save invalid title"),
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
@@ -3606,7 +3627,7 @@ namespace OnScreenKeyboard
                 using var dlg = new SaveFileDialog
                 { Title="Save",Filter="Keyboard layouts (*.kbl)|*.kbl|All files (*.*)|*.*",
                   DefaultExt="kbl",FileName=readOnlyHere || _currentFilePath == null ? Path.Combine(UserData.DocumentsFolder, Path.GetFileName(_currentFilePath ?? "keyboard.kbl")) : path };
-                if (dlg.ShowDialog() != DialogResult.OK) return;
+                if (dlg.ShowDialog(DialogOwner()) != DialogResult.OK) return;
                 path = dlg.FileName;
             }
             try
@@ -3620,7 +3641,7 @@ namespace OnScreenKeyboard
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"{Lang.T("Save failed")}\n{ex.Message}",
+                MessageBox.Show(DialogOwner(), $"{Lang.T("Save failed")}\n{ex.Message}",
                     "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -3650,7 +3671,7 @@ namespace OnScreenKeyboard
             using var dlg = new OpenFileDialog
             { Title="Load",Filter="Keyboard layouts (*.kbl)|*.kbl|All files (*.*)|*.*",
               FileName=_currentFilePath ?? SettingsManager.DefaultPath };
-            if (dlg.ShowDialog() != DialogResult.OK) return false;      // cancelled: nothing was loaded
+            if (dlg.ShowDialog(DialogOwner()) != DialogResult.OK) return false;      // cancelled: nothing was loaded
             ApplyLoadedSettings(dlg.FileName);
             return true;
         }
@@ -4024,7 +4045,7 @@ namespace OnScreenKeyboard
             string title = Lang.T("font missing title");
             // The keyboard is an always-on-top window that never takes the focus: a box without an owner can open behind it. With the
             // keyboard as its owner it stays in front.
-            void Show() { if (!IsDisposed) MessageBox.Show(this, msg, title, MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+            void Show() { if (!IsDisposed) MessageBox.Show(DialogOwner(), msg, title, MessageBoxButtons.OK, MessageBoxIcon.Warning); }
 
             if (IsHandleCreated && Visible) { Show(); return; }
             // At start-up the layout is loaded before the window is on screen: wait until it is (and until its first layout pass is done).
@@ -4055,7 +4076,7 @@ namespace OnScreenKeyboard
         {
             string msg = Lang.T("Invalid file msg");
             if (!string.IsNullOrEmpty(detail)) msg += $"\n\n{detail}";
-            MessageBox.Show(this, msg, $"{Lang.T("Invalid file title")} — {fileName}",
+            MessageBox.Show(DialogOwner(), msg, $"{Lang.T("Invalid file title")} — {fileName}",
                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }

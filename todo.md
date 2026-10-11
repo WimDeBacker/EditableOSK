@@ -14,7 +14,13 @@ Numbering: **P** = priority, then sub-sections, steps and details (**1.1**, **3.
 - 2.1 Ship 8 ready-made `.kbl` files: 4 wizard themes × 2 key arrangements (AZERTY Dutch, QWERTY English).
 - 2.2 Users can load one immediately without running the wizard.
 
-### Priority 0 — Dialogs open behind the keyboard again ☐ *(next priority; reported by the owner 2026-10-11)*
+### Priority 0 — Dialogs open behind the keyboard again ▶ *(next priority; reported by the owner 2026-10-11; causes found and fixed the same day, the manual checks of 0.5 are still to do)*
+
+**Status 2026-10-11.** Found (0.1, 0.4) and fixed:
+- **Windows without an owner:** the file dialogs of Load, Save As and the layout Browse button of the Key Editor (`OpenFileDialog` / `SaveFileDialog` `.ShowDialog()` with no owner), and four message boxes of `KeyboardForm` (a full word-prediction paste, a layout that cannot be saved, a failed save, an invalid layout file; the missing-font warning had `this` but `this` is disabled while a dialog is open). A window without an owner opens behind a top-most window that is never active. Now every one is owned by `KeyboardForm.DialogOwner()` (the keyboard, or the innermost dialog of the keyboard that is open: a dialog opened from a dialog must be owned by that dialog) or by the dialog itself (Key Editor).
+- **The keyboard lifting itself over its own dialog:** `ForceTopMost()` (called by `ApplyLoadedSettings` → `ApplyTitlebarState`, so also when Load is pressed inside Edit Keyboard) put the keyboard above the dialog that was open over it, which was then left behind it. `ForceTopMost` now does nothing while a window of the keyboard is open (`OwnedForms`); it runs again when that window has closed.
+- **A test that keeps it so:** `T_DialogOwners` reads the source and fails when a file dialog, a message box or a `TouchMessage` is opened without an owner (it fails on the old code).
+- **Not found / not changed:** `ForceForeground` (the foreground lock timeout, a foreground program of a higher integrity level, a window opened by a `.kbl` hand-over while another program is in front) is as it was; the first-start dialog and the other dialogs already had the keyboard or a dialog as owner.
 
 **Symptom.** The dialog windows (Edit Keyboard, Key Editor, Group Editor, the wizard, message boxes, probably also the file dialogs) often open **behind the always-on-top keyboard** and cannot be used. The keyboard answers a click with `MA_NOACTIVATE`, so a dialog opened from it is opened by a process that is not the foreground process, and Windows puts it behind the keyboard or another program.
 
