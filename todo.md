@@ -14,54 +14,6 @@ Numbering: **P** = priority, then sub-sections, steps and details (**1.1**, **3.
 - 2.1 Ship 8 ready-made `.kbl` files: 4 wizard themes × 2 key arrangements (AZERTY Dutch, QWERTY English).
 - 2.2 Users can load one immediately without running the wizard.
 
-### Priority 4 — Language-neutral style groups, and the language as a property of the keyboard ▶ *(design agreed with the owner 2026-10-11; A and B built the same day, C partly)*
-
-**Status 2026-10-11.**
-- **A done:** `KeyGroup.Name` is the id (never changes), `KeyGroup.Names` the names per language; `GroupNames` (display rule, ids, `FromLegacyName` with the table of the ready-made groups); format version 2 (`FormatVersion`, `<Group Id>` with `<Name lang>` children, `GroupId` on keys) with a tolerant reader of the old format (ids and Dutch/English names made from the old names; keys follow); the four shipped `.kbl` files converted by hand (`prediction` replaces `Woord` and `Voorspelling`, `test2` is gone; `LastFile` emptied); Group Editor: the Name field is the name in the language chosen under it ("Name language"), a rename changes only a name, new groups get an id made from the name, import matches by id; Key Editor chooser by position; wizard presets, classification and sample keys by id (and new groups get Dutch and English names).
-- **B done:** the language of the screens is `UserSettings.InterfaceLanguage` (`%AppData%\EditableOSK\user.xml`; default: Windows language when translated, else English); loading a layout no longer changes it; Edit Keyboard has "Screen language" and "Keyboard language" (`LayoutMeta.Language`); the first-start dialog asks the arrangement and the keyboard language only.
-- **C partly:** the language of a keyboard is a tag with region (`nl-BE`); the word database is found by tag, then by its language (`LanguageRegistry.GetForLanguage`, Edit Keyboard). Not done: a title and description per language (for a list of ready-made layouts). Sentence and spacing rules, quotation marks and the decimal separator per language moved to Priority 5 (step 5.7); right-to-left was dropped (owner, 2026-10-11).
-- **Done 2026-10-11: the names of the standard groups are in the language files.** Keys `group default: <id>` (for the 19 ids of the ready-made groups) in `LanguageManager.cs` and `lang_nl.xml`; `GroupNames.DefaultNames(id)` gives a group its name in every installed language (`Lang.TryGetIn`: the text of a key in a language that is not the active one), and the wizard uses it for the groups of a new keyboard. A new language (Priority 5) therefore brings its group names in its own file; the table in the code (`GroupNames.Known`) stays only to convert older files. The shipped `.kbl` files keep their own names (self-contained). A test checks that every installed language has a name for every ready-made group.
-- **Open from the owner's list:** `math.kbl` still has the `azerty` layout key in `navigation` (to be regrouped); the heading "Window" was removed from Edit Keyboard to make room for the second language row; the supported minimum width of the Group Editor at +40 % text is 530 px (was 520) and of Edit Keyboard at +80 % text 560 px (was 540).
-
-**Why now.** The `.kbl` files are used only by the owner, so the file format can still change without breaking anyone; later every user would be a migration problem. Layouts are meant to be used in many countries and languages. Today a style group has one name, fixed in the file (`Klinkers`, `Besturing`, `standard` …), keys refer to the group by that name (`GroupName`), and one value (`LayoutMeta.Language`) is at the same time the language of the dialogs and the language of the word prediction.
-
-**Agreed design (owner, 2026-10-11).**
-- **A. Style groups get an id.** Every group has a language-neutral, unchangeable id (`vowels`, `function-keys` …); keys refer to it (`GroupId`); the names are a table per layout: `<Group Id="vowels"><Name lang="nl">Klinkers</Name><Name lang="en">Vowels</Name></Group>`. The name shown: dialog language → keyboard language → English → the id itself. Renaming a group changes only a name (the key references are no longer rewritten, so `GroupRenames` becomes much simpler). Import and merge match groups by id; a clash of names with different ids is a separate case. `standard` stays the reserved id (shown "Standaard" / "Standard"). The format gets a `FormatVersion`.
-- **B. The language of the dialogs is a per-user setting,** stored with the user's own settings in `%AppData%\EditableOSK`, not in the layout. First value: the language of Windows. The first-start dialog (`FirstRunDialog`) then asks only for the key arrangement and the language of the word prediction; the hint "this is also the language of the menus" goes.
-- **C. The language is a property of the keyboard:** a language tag with region (`nl-BE`, `fr-BE`, `pt-BR`) in the layout. It chooses the default word prediction (`nl-BE` falls back to `nl`) and the language of the group names. The word prediction stays a choice of its own (an explicit database file wins over the tag). Later properties of the same kind, not now: sentence and spacing rules (French: a space before `? ! : ;`), quotation marks, decimal separator, right-to-left, a title and description per language.
-- **Migration.** One clean conversion of the owner's own files (the id is derived from the name, the old name goes in the table under the keyboard's language), and a tolerant reader of the old format for a while (the owner has old files and backups).
-
-**The groups of the four ready-made keyboards** (checked 2026-10-11) and the proposed ids and English names (the owner confirms; Dutch name stays as it is):
-
-| id | nl | en | used in |
-|---|---|---|---|
-| `standard` | Standaard | Standard | all |
-| `prediction` | Woordvoorspelling | Word prediction | qwerty (`Voorspelling`), azerty, azertycolor, math (`Woord`: the same word-suggestion keys, merged; the Dutch name `Voorspelling` goes, owner 2026-10-11) |
-| `function-keys` | Functietoetsen | Function keys | azerty, qwerty |
-| `numbers` | Cijfers | Numbers | all |
-| `vowels` | Klinkers | Vowels | all |
-| `consonants` | Medeklinkers | Consonants | all |
-| `punctuation` | Leestekens | Punctuation | all |
-| `controls` | Besturing | Controls | all |
-| `arithmetic` | Rekenkunde | Arithmetic | math |
-| `comparisons` | Vergelijkingen | Comparisons | math |
-| `brackets` | Haakjes | Brackets | math |
-| `constants` | Constanten | Constants | math |
-| `calculus` | Analyse | Calculus | math |
-| `sets` | Verzamelingen | Sets | math |
-| `logic` | Logica | Logic | math |
-| `trigonometry` | Goniometrie | Trigonometry | math |
-| `greek` | Grieks | Greek letters | math |
-| `editing` | Bewerken | Editing | math (Cut, Copy, Paste, Undo) |
-| `modifiers` | Modifier | Modifier keys | math (Shift, Ctrl) |
-| `navigation` | Navigatie | Navigation | math (arrows; also holds the `.` key and the `azerty` layout key: to be regrouped) |
-
-Notes: `azertycolor.kbl` has an unused group `test2` (no key uses it; the owner removes it, still present in the file on 2026-10-11): to be removed at the conversion if it is still there. The two prediction groups `Woord` and `Voorspelling` are the same idea and become one id, `prediction`, named "Woordvoorspelling" / "Word prediction". In `math.kbl` the owner moved the `.` key out of `Navigatie` (2026-10-11); the `azerty` layout key was still in `Navigatie` and is to be regrouped (for instance `controls`).
-
-**Order of work.** (A) ids, the names table, one display function for every list that shows a group (key editor chooser, group editor, import dialog, messages), the group editor with a name per language, import by id, wizard, migration, tests (round trip, old format, fallback order, uniqueness per language, import by id; guards in English, Dutch and +80 % text). (B) the dialog language as a user setting, the first-start dialog adjusted. A and B together, because both touch `LayoutMeta.Language`. (C) the language tag per keyboard and the choice of the database from it.
-
-**Not proposed.** Translating names automatically.
-
 ### Priority 5 — Translations of the whole program: French, Italian and Spanish ☐ *(requested by the owner 2026-10-11; nothing is built yet)*
 
 Today the screens exist in English (built in, `LanguageManager.cs`) and Dutch (`lang_nl.xml`). To add (each a file of its own, `lang_fr.xml`, `lang_it.xml`, `lang_es.xml`, found automatically by `Lang.GetAvailable`):
@@ -70,6 +22,7 @@ Today the screens exist in English (built in, `LanguageManager.cs`) and Dutch (`
 - 5.3 **Word prediction:** a word database per language is a separate piece of work (`worddb_FR/IT/ES`), the keyboard works without; until then the language of a keyboard has no database of its own and the "(auto)" choice falls back to another one.
 - 5.4 **Keyboard layouts:** French (AZERTY France), Italian and Spanish (QWERTY with their accents, dead keys, `ñ`, `ç`) as ready-made layouts and as choices in the first-start dialog and the wizard (the wizard's help for the pasted keys has Dutch and English spellings).
 - 5.5 **Installer:** Inno Setup has French, Italian and Spanish message files; the own texts of `setup.iss` (`[CustomMessages]`) get the three languages too.
+- 5.8 **A title and a description of a keyboard per language** (moved here from the language-neutral groups work, owner 2026-10-11): useful for a list of the ready-made layouts the user can choose from, which does not exist yet; stored in the layout like the names of the groups (`<Title lang="…">`, `<Description lang="…">`) and shown in the language of the screens, else the language of the keyboard, else English.
 - 5.7 **Rules of the language of a keyboard (for when the other languages are worked out):** sentence and spacing rules per language (when a sentence starts and the next word is capitalised; French has a space before `? ! : ;` and inside « »), quotation marks (“ ” in English, „ ” in German, « » in French), and the decimal separator (a point or a comma) for the keys and the word prediction; chosen by the language tag of the keyboard (`LayoutMeta.Language`, Priority 4).
 - 5.6 **Quality:** a machine translation is only a first draft: each language needs a review by a native speaker, with the program in front of them (a word that fits a menu is not always the word for a button). Decision for the owner: who reviews, and whether a language is shipped before its review.
 
@@ -101,6 +54,20 @@ Not planned; decided later, if at all (from the touch-friendly work, 2.4.8):
 ---
 
 ## Completed
+
+### Language-neutral style groups, and the language as a property of the keyboard ✓ *(was Priority 4; design agreed with the owner, built and tested 2026-10-11)*
+
+**Why.** The `.kbl` files were used only by the owner, so the file format could still change; layouts are meant for many countries and languages. A style group had one name, fixed in the file, and keys pointed at it by that name; one value (`LayoutMeta.Language`) was at the same time the language of the dialogs and of the word prediction.
+
+**What was built.**
+- **A. Style groups have an id.** `KeyGroup.Name` is the id (language-neutral, never changed), `KeyGroup.Names` the names per language; `GroupNames` (the display rule: language of the screens → language of the keyboard → English → the first name → the id, "Standaard" / "Standard" for the standard group; ids made from names; `FromLegacyName` with a table of the ready-made groups). File format 2: `FormatVersion`, `<Group Id>` with `<Name lang>` children, `GroupId` on keys; a tolerant reader of the old format (an old name becomes an id and names; the keys follow; a name twice keeps the first). The four shipped `.kbl` files were converted by hand (`Woord` and `Voorspelling` became `prediction`, `test2` is gone, `LastFile` emptied). Group Editor: the Name field is the name in the language chosen under it ("Name language"), a rename changes only a name, new groups get an id made from the name, import matches by id. Key Editor chooser by position; wizard presets, classification and sample keys by id.
+- **B. The language of the screens is the user's own** (`UserSettings.InterfaceLanguage`, `%AppData%\EditableOSK\user.xml`; default: Windows language when translated, else English); loading a layout no longer changes it; Edit Keyboard has "Screen language" and "Keyboard language".
+- **C. The language is a property of the keyboard:** a tag with region (`nl-BE`); the word database is found by tag, then by its language (`LanguageRegistry.GetForLanguage`, Edit Keyboard); with the database on "(auto)" it follows the language of the keyboard (the first-start dialog leaves it on auto).
+- **The names of the ready-made groups are in the language files** (`group default: <id>`, `GroupNames.DefaultNames`, `Lang.TryGetIn`): a new keyboard from the wizard gets its group names in every installed language; the table in the code stays only to convert old files.
+- **The ids and names of the ready-made groups:** `standard`; `prediction` (Woordvoorspelling / Word prediction); `function-keys` (Functietoetsen); `numbers` (Cijfers); `vowels` (Klinkers); `consonants` (Medeklinkers); `punctuation` (Leestekens); `controls` (Besturing); math: `arithmetic` (Rekenkunde), `comparisons` (Vergelijkingen), `brackets` (Haakjes), `constants` (Constanten), `calculus` (Analyse), `sets` (Verzamelingen), `logic` (Logica), `trigonometry` (Goniometrie), `greek` (Grieks, "Greek letters"), `editing` (Bewerken), `modifiers` (Modifier, "Modifier keys"), `navigation` (Navigatie). In `math.kbl` the `azerty` layout key stays in `navigation` (owner, 2026-10-11).
+- **Consequences:** the heading "Window" was removed from Edit Keyboard to make room for the second language row (the supported minimum widths are 530 px for the Group Editor at +40 % text, was 520, and 560 px for Edit Keyboard at +80 % text, was 540). The owner found no old `.kbl` files to convert; the old-format reader is tested with a made-up old file (`T_GroupNames`). All manual checks of the owner done.
+
+**Not done, moved:** sentence and spacing rules, quotation marks and the decimal separator per language, and a title and description per keyboard: Priority 5 (5.7 and 5.8). Right-to-left was dropped. Translating names automatically is not planned.
 
 ### Dialogs opened behind the keyboard again ✓ *(was Priority 0; reported by the owner 2026-10-11, fixed and confirmed by the owner the same day)*
 
