@@ -15,3 +15,6 @@ schoolkxnew.zip
 
 # The installer made by Inno Setup (installer/setup.iss): rebuilt on demand, 20 MB, not for the repo.
 installer/Output/
+
+# Backups the program and editors make (File.Replace keeps the previous file as .bak).
+*.bak
