@@ -47,6 +47,18 @@ namespace OnScreenKeyboard
             Assert(GroupNames.UniqueId("Vowels", new[] { "vowels", "vowels-2" }) == "vowels-3", "a taken id gets a number");
             Assert(GroupNames.UniqueId("Standard", new string[0]) != SettingsManager.StandardGroupName, "an id is never the reserved 'standard'");
 
+            // ── The names of the ready-made groups come from the language files, in every language the program has ──
+            var dn = GroupNames.DefaultNames("vowels");
+            Assert(dn["en"] == "Vowels" && dn["nl"] == "Klinkers", "default names: Vowels (English) and Klinkers (Dutch) from the language texts");
+            Assert(GroupNames.DefaultNames("nope").Count == 0, "default names: an id of no ready-made group has none");
+            Assert(Lang.GetAvailable().All(l => GroupNames.DefaultNames("controls").ContainsKey(l.Code)), "default names: every installed language has its name for a group (a new language file must bring them)");
+            Assert(Lang.TryGetIn("nl", "group default: numbers", out string nlNumbers) && nlNumbers == "Cijfers" && Lang.TryGetIn("en", "group default: numbers", out string enNumbers) && enNumbers == "Numbers",
+                "a text in a language that is not the active one");
+            Assert(!Lang.TryGetIn("nl", "no such key", out _) && !Lang.TryGetIn("xx", "group default: numbers", out _), "no text: false (no fallback)");
+            foreach (var id in new[] { "prediction", "function-keys", "numbers", "vowels", "consonants", "punctuation", "controls", "arithmetic", "comparisons", "brackets", "constants",
+                                       "calculus", "sets", "logic", "trigonometry", "greek", "editing", "modifiers", "navigation" })
+                Assert(Lang.TryGetIn("nl", "group default: " + id, out _) && Lang.TryGetIn("en", "group default: " + id, out _), $"default names: '{id}' has a Dutch and an English text");
+
             // ── Round trip ──
             string dir = Path.Combine(Path.GetTempPath(), "osk_gn_" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(dir);

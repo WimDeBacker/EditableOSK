@@ -775,7 +775,7 @@ namespace OnScreenKeyboard
 
             if (_selectedPreset>=0&&_selectedPreset<Presets.Length)
             {
-                ApplyPreset(Presets[_selectedPreset], theme, layout);
+                ApplyPreset(Presets[_selectedPreset], theme, layout.Groups);
             }
             else if (_selectedPreset==-1&&File.Exists(_txtThemeFile.Text))
             {
@@ -852,7 +852,13 @@ namespace OnScreenKeyboard
             return layout;
         }
 
-        private static void ApplyPreset(ThemePreset p, VisualTheme theme, GridLayout layout)
+        /// <summary>
+        /// Gives a theme and a list of groups the style of a standard style (a preset): the colours of the theme and of the standard
+        /// group, and the colours of the groups of the preset (by id: an existing group is restyled, a missing one is added with its names).
+        /// Used by the wizard for a new keyboard and by Edit Keyboard for an open one: the colours keys have of their own, and groups the
+        /// preset does not know, are left as they are.
+        /// </summary>
+        internal static void ApplyPreset(ThemePreset p, VisualTheme theme, List<KeyGroup> groups)
         {
             theme.BackgroundColor = SettingsManager.ParseColor(p.Background, theme.BackgroundColor);
             theme.KeyColor        = SettingsManager.ParseColor(p.KeyColor,   theme.KeyColor);
@@ -860,9 +866,9 @@ namespace OnScreenKeyboard
             theme.BorderColor     = SettingsManager.ParseColor(p.BorderColor,theme.BorderColor);
             theme.BorderThickness = p.BorderThickness;
 
-            var std=layout.Groups.Find(g=>g.Name==SettingsManager.StandardGroupName);
+            var std=groups.Find(g=>g.Name==SettingsManager.StandardGroupName);
             if (std==null)
-            { std=new KeyGroup{Name=SettingsManager.StandardGroupName}; layout.Groups.Insert(0,std); }
+            { std=new KeyGroup{Name=SettingsManager.StandardGroupName}; groups.Insert(0,std); }
             std.KeyColor=theme.KeyColor; std.FontColor=theme.FontColor;
             std.BorderColor=theme.BorderColor; std.BorderThickness=p.BorderThickness;
 
@@ -873,7 +879,7 @@ namespace OnScreenKeyboard
             // where layout.Groups is still empty at this point — existing is always null there.
             foreach (var (name,key,font,border,thick) in p.ExtraGroups)
             {
-                var existing = layout.Groups.Find(g=>string.Equals(g.Name,name,StringComparison.Ordinal));
+                var existing = groups.Find(g=>string.Equals(g.Name,name,StringComparison.Ordinal));
                 if (existing != null)
                 {
                     existing.KeyColor        = SettingsManager.ParseColor(key,   Color.Empty);
@@ -883,7 +889,7 @@ namespace OnScreenKeyboard
                 }
                 else
                 {
-                    layout.Groups.Add(new KeyGroup
+                    groups.Add(new KeyGroup
                     { Name=name,
                       Names=GroupNames.DefaultNames(name),         // a new keyboard has the names in Dutch and English from the start
                       KeyColor    =SettingsManager.ParseColor(key,   Color.Empty),

@@ -212,6 +212,28 @@ namespace OnScreenKeyboard
             using (var f = KeyboardEditor(theme: new VisualTheme { Opacity = 1.0 })) { f.ApplyForTest(); Assert(f.ResultTheme.Opacity == 1.0, "an untouched opaque window stays opaque"); }
             using (var f = KeyboardEditor(theme: new VisualTheme { Opacity = 0.755 })) { f.ApplyForTest(); Assert(f.ResultTheme.Opacity == 0.755, "an untouched 0.755 is not rounded to 0.76 (kept as it is)"); }
 
+            Section("Keyboard Editor (new) — the Style section: a standard style for an open keyboard");
+            using (var f = KeyboardEditor())
+            {
+                var style = Priv<TouchChoiceButton>(f, "_cmbStyle");
+                Assert(style.Items.Count == NewKeyboardWizard.Presets.Length + 1 && style.SelectedIndex == 0, "style chooser: 'keep the current style' and the standard styles of the wizard, keep selected");
+                var groups = new List<KeyGroup> { new KeyGroup { Name = "standard" }, new KeyGroup { Name = "vowels", KeyColor = Color.Red } };
+                using var g = KeyboardEditor(getGroups: () => groups);
+                f.ApplyForTest();
+                Assert(f.ResultTheme.BackgroundColor.ToArgb() == new VisualTheme().BackgroundColor.ToArgb(), "keep: the theme is not touched");
+            }
+            using (var f = KeyboardEditor())
+            {
+                var style = Priv<TouchChoiceButton>(f, "_cmbStyle");
+                int hc = 1 + Array.FindIndex(NewKeyboardWizard.Presets, p => p.Id == "hc");
+                style.SelectedIndex = hc;
+                f.ApplyForTest();
+                var p0 = NewKeyboardWizard.Presets[hc - 1];
+                Assert(f.ResultTheme.BackgroundColor.ToArgb() == SettingsManager.ParseColor(p0.Background, Color.Empty).ToArgb(), "a chosen style is applied with Apply: the background of the theme");
+                Assert(f.ResultGroups.Any(x => x.Name == "controls") && f.ResultGroups.First(x => x.Name == SettingsManager.StandardGroupName).KeyColor.ToArgb() == SettingsManager.ParseColor(p0.KeyColor, Color.Empty).ToArgb(),
+                    "…the standard group and the groups of the style");
+            }
+
             Section("Keyboard Editor (new) — the timing aid radio group");
             using (var f = KeyboardEditor())
             {
@@ -408,7 +430,7 @@ namespace OnScreenKeyboard
                 err.SetError(ctrl, "");
                 Assert(f.ApplyForTest() && !f.SectionBarAccess.HasError(s), $"section {s + 1}: once the error is gone Apply works and the mark clears");
             }
-            using (var f = KeyboardEditor()) Assert(f.Text == "Edit Keyboard" && f.SectionBarAccess.Count == 3, "window title and three sections");
+            using (var f = KeyboardEditor()) Assert(f.Text == "Edit Keyboard" && f.SectionBarAccess.Count == 4, "window title and four sections (General, Accessibility, Word prediction, Style)");
 
             // The static event handler is removed when the form is disposed, even when it was never shown.
             var loadedField = typeof(WordDatabase).GetField("Loaded", BindingFlags.NonPublic | BindingFlags.Static);

@@ -285,7 +285,30 @@ namespace OnScreenKeyboard
             ["first run: intro"]                 = "Choose how the keyboard starts. The language also chooses the word suggestions. You can change all of this later in Edit mode.",
             ["first run: arrangement"]           = "Key arrangement",
             ["first run: language"]              = "Keyboard language",
+            ["style: keep current"]              = "(keep the current style)",
+            ["style: hint"]                      = "Gives the keyboard the colours of a standard style: its background, its keys and its groups. A key with a colour of its own keeps it.",
+            ["tip: Style"]                       = "Choose one of the standard styles of the New Keyboard wizard. It is applied with Apply.",
             ["group name: standard"]             = "Standard",
+            // The names a new keyboard gives the groups of the ready-made layouts (one text per language; see GroupNames.DefaultNames).
+            ["group default: prediction"]        = "Word prediction",
+            ["group default: function-keys"]     = "Function keys",
+            ["group default: numbers"]           = "Numbers",
+            ["group default: vowels"]            = "Vowels",
+            ["group default: consonants"]        = "Consonants",
+            ["group default: punctuation"]       = "Punctuation",
+            ["group default: controls"]          = "Controls",
+            ["group default: arithmetic"]        = "Arithmetic",
+            ["group default: comparisons"]       = "Comparisons",
+            ["group default: brackets"]          = "Brackets",
+            ["group default: constants"]         = "Constants",
+            ["group default: calculus"]          = "Calculus",
+            ["group default: sets"]              = "Sets",
+            ["group default: logic"]             = "Logic",
+            ["group default: trigonometry"]      = "Trigonometry",
+            ["group default: greek"]             = "Greek letters",
+            ["group default: editing"]           = "Editing",
+            ["group default: modifiers"]         = "Modifier keys",
+            ["group default: navigation"]        = "Navigation",
             ["Name language"]                    = "Name language",
             ["tip: Name language"]               = "A stylegroup has a name in each language. Choose the language the name above is for.",
             ["Interface language"]               = "Screen language",
@@ -661,6 +684,44 @@ namespace OnScreenKeyboard
             // Last resort: return the key itself. Because keys equal the English text,
             // this guarantees the UI always shows something human-readable.
             return key;
+        }
+
+        // Strings of the language files read for TryGetIn, by file: re-read only when the file changed.
+        private static readonly Dictionary<string, (DateTime Stamp, Dictionary<string, string> Strings)> _fileStrings =
+            new Dictionary<string, (DateTime, Dictionary<string, string>)>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// The text of <paramref name="key"/> in the language <paramref name="code"/>, whatever language is active: for "en" the built-in
+        /// English, for another language what its file says. False when that language has no text for the key (no fallback to English:
+        /// the caller wants to know). Used to give something that is stored in a layout, such as the names of a style group, its
+        /// text in every language the program knows.
+        /// </summary>
+        internal static bool TryGetIn(string code, string key, out string text)
+        {
+            text = null;
+            if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(key)) return false;
+            if (code == "en") return _en.TryGetValue(key, out text);
+            try
+            {
+                string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"lang_{code}.xml");
+                if (!File.Exists(path)) return false;
+                DateTime stamp = File.GetLastWriteTimeUtc(path);
+                if (!_fileStrings.TryGetValue(path, out var cached) || cached.Stamp != stamp)
+                {
+                    var strings = new Dictionary<string, string>(StringComparer.Ordinal);
+                    var nodes = LoadLangXml(path).SelectNodes("/Language/String");
+                    if (nodes != null)
+                        foreach (XmlNode node in nodes)
+                        {
+                            string k = node.Attributes?["key"]?.Value ?? "";
+                            if (k != "") strings[k] = node.Attributes?["value"]?.Value ?? "";
+                        }
+                    cached = (stamp, strings);
+                    _fileStrings[path] = cached;
+                }
+                return cached.Strings.TryGetValue(key, out text);
+            }
+            catch { return false; }
         }
 
         /// <summary>

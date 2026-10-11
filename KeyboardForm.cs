@@ -3656,9 +3656,10 @@ namespace OnScreenKeyboard
         }
 
         /// <summary>
-        /// The first start: asks for QWERTY or AZERTY and for the language of the suggestions (<see cref="FirstRunDialog"/>), then opens the
-        /// ready-made layout of that arrangement with the database of that language. Closing the window without choosing keeps the built-in
-        /// keyboard. Nothing is asked when no ready-made layout or no word database is installed.
+        /// The first start (<see cref="FirstRunDialog"/>): asks for the language of the screens, the key arrangement (QWERTY or AZERTY), the
+        /// language of the keyboard (the word database and the names of the groups follow it) and the style (one of the standard styles of the
+        /// wizard), then opens the ready-made layout of that arrangement with those choices. A language is offered only when the program has it.
+        /// Closing the window without choosing keeps the built-in keyboard. Nothing is asked when no ready-made layout is installed.
         /// </summary>
         private void RunFirstRunSetup()
         {
@@ -3669,21 +3670,33 @@ namespace OnScreenKeyboard
                 .GroupBy(d => d.Language.ToLowerInvariant())
                 .Select(g => (Code: g.Key, File: g.First().FilePath))
                 .ToList();
-            if (databases.Count == 0) return;
 
-            var languages = databases.Select(d => (d.Code, FirstRunDialog.LanguageName(d.Code))).ToList();
+            var screens   = Lang.GetAvailable();
+            var languages = databases.Count > 0
+                ? databases.Select(d => (d.Code, FirstRunDialog.LanguageName(d.Code))).ToList()
+                : screens.Select(l => (l.Code, l.Name)).ToList();          // no word database installed: the languages of the screens
             var culture   = System.Globalization.CultureInfo.CurrentUICulture;
-            using var dlg = new FirstRunDialog(languages, FirstRunDialog.GuessArrangement(culture), FirstRunDialog.GuessLanguage(culture, languages));
+            using var dlg = new FirstRunDialog(languages, FirstRunDialog.GuessArrangement(culture), FirstRunDialog.GuessLanguage(culture, languages),
+                                               screens, UserSettings.InterfaceLanguage, defaultStyle: "dark");
             if (dlg.ShowDialog(this) != DialogResult.OK) return;
 
             string layoutFile = Path.Combine(appDir, dlg.Arrangement + ".kbl");
             if (!File.Exists(layoutFile)) return;
-            string db = databases.First(d => d.Code == dlg.Language).File;
+            string db = databases.FirstOrDefault(d => d.Code == dlg.Language).File;
 
+            if (!string.Equals(dlg.ScreenLanguage, Lang.CurrentCode, StringComparison.OrdinalIgnoreCase))
+                Lang.Load(dlg.ScreenLanguage);                              // remembered by the language-changed handler (UserSettings)
             ApplyLoadedSettings(layoutFile);
-            // The ready-made layouts name a language and database of their own; the choice made here replaces them.
+            // The ready-made layouts name a language and database of their own; the choices made here replace them.
             _meta.Language     = dlg.Language;
-            _meta.WordDatabase = Path.GetFileName(db);
+            _meta.WordDatabase = db != null ? Path.GetFileName(db) : "";
+            var preset = NewKeyboardWizard.Presets.FirstOrDefault(p => p.Id == dlg.StyleId);
+            if (preset != null)
+            {
+                NewKeyboardWizard.ApplyPreset(preset, _theme, _layout.Groups);
+                RebuildGroupDict();
+                BackColor = _theme.BackgroundColor;
+            }
             LoadWordDatabase();
             RebuildAllButtons();
             AutoSave();

@@ -182,6 +182,50 @@ namespace OnScreenKeyboard
             BuildGeneral(AddSection(() => Lang.T("General")));
             BuildAccessibility(AddSection(() => Lang.T("Accessibility")));
             BuildWordPrediction(AddSection(() => Lang.T("wp: Word prediction")));
+            BuildStyle(AddSection(() => Lang.T("Style")));
+        }
+
+        // ── Section 4: Style ────────────────────────────────────────
+
+        private TouchChoiceButton _cmbStyle;     // row 0: keep the current style; then the standard styles of the wizard
+        private StylePreview      _stylePreview;
+
+        /// <summary>
+        /// Changes the whole look of the keyboard to one of the standard styles (the ones of the New Keyboard wizard): the colours of the
+        /// keyboard, its background and its groups. Applied with Apply; keys with a colour of their own keep it.
+        /// </summary>
+        private void BuildStyle(TableLayoutPanel t)
+        {
+            _cmbStyle = new TouchChoiceButton { RowHeight = 44 };
+            _cmbStyle.SelectedIndexChanged += (s, e) => UpdateStylePreview();
+            SetTip(_cmbStyle, () => Lang.T("tip: Style"));
+            FillStyleChooser(0);
+            AddRow(t, () => Lang.T("Style"), _cmbStyle);
+
+            _stylePreview = new StylePreview { Dock = DockStyle.Fill, Margin = new Padding(0, Touch.Gap, 0, Touch.Gap) };
+            AddWideRow(t, _stylePreview);
+            var hint = HintLabel(3);
+            hint.Text = Lang.T("style: hint");
+            _transTexts.Add((hint, () => Lang.T("style: hint")));
+            AddWideRow(t, hint, fill: false);
+            UpdateStylePreview();
+        }
+
+        /// <summary>Fills the style chooser (the names follow the language of the screens) and selects row <paramref name="selected"/>.</summary>
+        private void FillStyleChooser(int selected)
+        {
+            var items = new List<TouchChoice> { new TouchChoice { Text = Lang.T("style: keep current") } };
+            items.AddRange(NewKeyboardWizard.Presets.Select(p => new TouchChoice { Text = Lang.T("wiz: theme " + p.Id) }));
+            _cmbStyle.SetItems(items, Math.Clamp(selected, 0, items.Count - 1));
+        }
+
+        /// <summary>Shows the chosen style, or the keyboard's own when "keep" is chosen.</summary>
+        private void UpdateStylePreview()
+        {
+            if (_stylePreview == null || _cmbStyle == null) return;
+            int i = _cmbStyle.SelectedIndex;
+            if (i > 0 && i <= NewKeyboardWizard.Presets.Length) _stylePreview.ShowPreset(NewKeyboardWizard.Presets[i - 1], _cmbStyle.SelectedItem?.Text ?? "");
+            else _stylePreview.ShowCurrent(_sourceTheme, _groups, Lang.T("style: keep current"));
         }
 
         // ── Section 1: General ──────────────────────────────────────
@@ -482,6 +526,7 @@ namespace OnScreenKeyboard
             {
                 SyncLanguageChooser();
                 FillKeyboardLanguages(m.Language);
+                if (_cmbStyle != null) { FillStyleChooser(0); UpdateStylePreview(); }   // a loaded file starts at "keep the current style"
                 _cmbToolbarTheme.SetItems(ToolbarThemeItems(), Math.Max(0, Array.IndexOf(ToolbarThemeOrder, m.ToolbarTheme)));
 
                 _stpOpacity.Value = OpacityToStep(t.Opacity);
@@ -781,6 +826,8 @@ namespace OnScreenKeyboard
             }
             finally { _loading = was; }
             SyncLanguageChooser();
+            FillStyleChooser(_cmbStyle.SelectedIndex);                  // the names of the styles follow the language of the screens
+            UpdateStylePreview();
             UpdateDatabaseWarning(); UpdateWPInfo(); UpdateCandidateState(); UpdateImmediateHint();
         }
 
@@ -825,6 +872,12 @@ namespace OnScreenKeyboard
             ResultMeta.Language            = SelectedKeyboardLanguage;
             ResultMeta.WordDatabase        = SelectedDatabaseFile;
             ResultMeta.WordLearningEnabled = _chkWPLearning.Checked;
+
+            // A standard style chosen in the Style section: its colours replace those of the theme and the groups (the background chosen under
+            // General is part of the style then).
+            int style = _cmbStyle?.SelectedIndex ?? 0;
+            if (style > 0 && style <= NewKeyboardWizard.Presets.Length)
+                NewKeyboardWizard.ApplyPreset(NewKeyboardWizard.Presets[style - 1], ResultTheme, _groups);
 
             ResultGroups = _groups;
             FileAction   = action;

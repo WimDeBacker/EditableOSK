@@ -113,12 +113,20 @@ namespace OnScreenKeyboard
             return oldName;
         }
 
-        /// <summary>The Dutch and English name of a group of the ready-made layouts (<c>vowels</c> …), as a table of names; empty for any other id.</summary>
+        /// <summary>
+        /// The names of a group of the ready-made layouts (<c>vowels</c> …) in every language the program has a text for: the keys
+        /// <c>group default: &lt;id&gt;</c> of the language files (<see cref="Lang.TryGetIn"/>), so a new keyboard from the wizard gets its
+        /// group names in all languages and a new language is one file. Empty for any other id. Without any language file the table of older
+        /// files (Dutch and English) is used.
+        /// </summary>
         internal static Dictionary<string, string> DefaultNames(string id)
         {
             var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var k in Known)
-                if (k.Id == id) { names["nl"] = k.Nl; names["en"] = k.En; break; }
+            foreach (var (code, _) in Lang.GetAvailable())
+                if (Lang.TryGetIn(code, "group default: " + id, out string text) && !string.IsNullOrWhiteSpace(text)) names[code] = text;
+            if (names.Count == 0)
+                foreach (var k in Known)
+                    if (k.Id == id) { names["nl"] = k.Nl; names["en"] = k.En; break; }
             return names;
         }
 

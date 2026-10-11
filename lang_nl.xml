@@ -212,7 +212,29 @@
   <String key="first run: intro"                 value="Kies hoe het toetsenbord start. De taal bepaalt ook de woordvoorspelling. U kunt dit later allemaal aanpassen in de bewerkmodus." />
   <String key="first run: arrangement"           value="Toetsenbordindeling" />
   <String key="first run: language"              value="Toetsenbordtaal" />
+  <String key="style: keep current"              value="(huidige stijl behouden)" />
+  <String key="style: hint"                      value="Geeft het toetsenbord de kleuren van een standaardstijl: de achtergrond, de toetsen en de stijlgroepen. Een toets met een eigen kleur behoudt die." />
+  <String key="tip: Style"                       value="Kies een van de standaardstijlen van de wizard Nieuw toetsenbord. Ze wordt toegepast met Toepassen." />
   <String key="group name: standard"             value="Standaard" />
+  <String key="group default: prediction"        value="Woordvoorspelling" />
+  <String key="group default: function-keys"     value="Functietoetsen" />
+  <String key="group default: numbers"           value="Cijfers" />
+  <String key="group default: vowels"            value="Klinkers" />
+  <String key="group default: consonants"        value="Medeklinkers" />
+  <String key="group default: punctuation"       value="Leestekens" />
+  <String key="group default: controls"          value="Besturing" />
+  <String key="group default: arithmetic"        value="Rekenkunde" />
+  <String key="group default: comparisons"       value="Vergelijkingen" />
+  <String key="group default: brackets"          value="Haakjes" />
+  <String key="group default: constants"         value="Constanten" />
+  <String key="group default: calculus"          value="Analyse" />
+  <String key="group default: sets"              value="Verzamelingen" />
+  <String key="group default: logic"             value="Logica" />
+  <String key="group default: trigonometry"      value="Goniometrie" />
+  <String key="group default: greek"             value="Grieks" />
+  <String key="group default: editing"           value="Bewerken" />
+  <String key="group default: modifiers"         value="Modifier" />
+  <String key="group default: navigation"        value="Navigatie" />
   <String key="Name language"                    value="Naamtaal" />
   <String key="tip: Name language"               value="Een stijlgroep heeft een naam in elke taal. Kies de taal waarvoor de naam hierboven is." />
   <String key="Interface language"               value="Schermtaal" />
