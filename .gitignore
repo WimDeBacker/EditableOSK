@@ -12,3 +12,6 @@ worddb_EN.xml
 # The downloaded archive of the SchoolKX_New font family: not needed in the repo. The one font file the program uses is in
 # installer/fonts (see installer/fonts/NOTICE.md for its source and terms).
 schoolkxnew.zip
+
+# The installer made by Inno Setup (installer/setup.iss): rebuilt on demand, 20 MB, not for the repo.
+installer/Output/
