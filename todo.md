@@ -9,11 +9,6 @@ Numbering: **P** = priority, then sub-sections, steps and details (**1.1**, **3.
 - 1.1 Auto-advance a highlight through keys/rows at a fixed interval.
 - 1.2 The user confirms with a single switch input.
 
-### Priority 2 — Bundled keyboard layouts ☐ *(content)*
-
-- 2.1 Ship 8 ready-made `.kbl` files: 4 wizard themes × 2 key arrangements (AZERTY Dutch, QWERTY English).
-- 2.2 Users can load one immediately without running the wizard.
-
 ### Priority 5 — Translations of the whole program: French, Italian and Spanish ☐ *(requested by the owner 2026-10-11; nothing is built yet)*
 
 Today the screens exist in English (built in, `LanguageManager.cs`) and Dutch (`lang_nl.xml`). To add (each a file of its own, `lang_fr.xml`, `lang_it.xml`, `lang_es.xml`, found automatically by `Lang.GetAvailable`):
@@ -54,6 +49,14 @@ Not planned; decided later, if at all (from the touch-friendly work, 2.4.8):
 ---
 
 ## Completed
+
+### Bundled keyboard layouts ✓ *(was Priority 2; closed by the owner 2026-10-11)*
+
+The wish was eight ready-made `.kbl` files (4 wizard styles × 2 key arrangements) and that a user can open one at once without the wizard. Done in another way, which makes the eight files unnecessary:
+- **Four ready-made layouts** ship in the program's folder: `azerty.kbl`, `azertycolor.kbl`, `qwerty.kbl` and `math.kbl`, each with a title and a description in Dutch and English.
+- **Opening one without the wizard:** Load (toolbar and Edit Keyboard) opens "Open a keyboard", a list of the ready-made layouts with their titles and descriptions (`LayoutPickerDialog`, see 5.8 below); "Other file…" opens the ordinary file dialog. The first start opens `qwerty.kbl` or `azerty.kbl` by the arrangement chosen.
+- **The 4 styles × any arrangement:** the Style section of Edit Keyboard (and the style choice at the first start) gives any layout one of the four standard styles of the wizard (Dark, Light, High Contrast, Colorful), so no file is needed per combination.
+- Extra arrangements for French, Italian and Spanish remain under Priority 5 (5.4).
 
 ### Language-neutral style groups, and the language as a property of the keyboard ✓ *(was Priority 4; design agreed with the owner, built and tested 2026-10-11)*
 
