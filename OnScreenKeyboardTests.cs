@@ -71,6 +71,7 @@ namespace OnScreenKeyboard
             Step(T_UserData);
             Step(T_FirstRun);
             Step(T_DialogOwners);
+            Step(T_LayoutPicker);
             Step(T_GroupNames);
             Step(T_KeyboardLanguage);
             Step(T_KeyboardEditorImport);

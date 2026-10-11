@@ -555,6 +555,12 @@ namespace OnScreenKeyboard
             // The question asked before a change takes the key out of its group (a window of its own, with the real text).
             CheckDialogGuards("TouchMessage (take the key out of its group?)", () =>
                 new TouchMessage(Lang.T("title: leave group"), string.Format(Lang.T("ask: leave group"), "Klinkers"), question: true));
+            // "Open a keyboard": the ready-made layouts with a description.
+            CheckDialogGuards("LayoutPickerDialog", () => new LayoutPickerDialog(new List<LayoutInfo>
+            {
+                new LayoutInfo { Path = "a.kbl", Title = "AZERTY", Description = "AZERTY-toetsenbord met functietoetsen, cijfers, leestekens en een rij voor woordvoorspelling." },
+                new LayoutInfo { Path = "b.kbl", Title = "Wiskunde", Description = "Toetsenbord voor wiskunde." },
+            }));
             // The question asked at the very first start.
             CheckDialogGuards("FirstRunDialog", () =>
                 new FirstRunDialog(new[] { ("nl", "Nederlands"), ("en", "English") }, "qwerty", "nl"));

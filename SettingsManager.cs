@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Xml;
 
 namespace OnScreenKeyboard
@@ -275,6 +276,15 @@ namespace OnScreenKeyboard
         public bool WordLearningEnabled { get; set; } = true;
 
         /// <summary>
+        /// A title of the keyboard per language tag (<c>nl</c>, <c>en</c> …), for a list of layouts to choose from. May be empty (the file name is
+        /// shown then). Written as <c>&lt;Info&gt;&lt;Title lang="…"&gt;</c>; see <see cref="SettingsManager.ReadInfo"/>.
+        /// </summary>
+        public Dictionary<string, string> Titles { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>A short description of the keyboard per language tag, shown under its title in a list of layouts. May be empty.</summary>
+        public Dictionary<string, string> Descriptions { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
         /// Creates a new <see cref="LayoutMeta"/> with identical values to
         /// this one.
         /// </summary>
@@ -294,6 +304,8 @@ namespace OnScreenKeyboard
             ShowCornerLabels       = ShowCornerLabels,
             WordDatabase           = WordDatabase,
             WordLearningEnabled    = WordLearningEnabled,
+            Titles                 = new Dictionary<string, string>(Titles, StringComparer.OrdinalIgnoreCase),
+            Descriptions           = new Dictionary<string, string>(Descriptions, StringComparer.OrdinalIgnoreCase),
         };
 
         /// <summary>
@@ -316,6 +328,8 @@ namespace OnScreenKeyboard
             ShowCornerLabels    = src.ShowCornerLabels;
             WordDatabase        = src.WordDatabase;
             WordLearningEnabled = src.WordLearningEnabled;
+            Titles              = new Dictionary<string, string>(src.Titles, StringComparer.OrdinalIgnoreCase);
+            Descriptions        = new Dictionary<string, string>(src.Descriptions, StringComparer.OrdinalIgnoreCase);
         }
     }
 
@@ -417,6 +431,7 @@ namespace OnScreenKeyboard
                     writer.WriteStartElement("OnScreenKeyboard");
                     // 2: style groups have an id and names per language (see GroupNames). A file without the attribute is the older format.
                     writer.WriteAttributeString("FormatVersion", FormatVersion.ToString());
+                    WriteInfo(writer, meta);
                     WriteTheme(writer, theme, layout);
                     WriteLayout(writer, window, meta, layout);
                     writer.WriteEndElement();
@@ -734,6 +749,7 @@ namespace OnScreenKeyboard
             meta.ShowCornerLabels    = Attr(lNode,"ShowCornerLabels","1") == "1";
             meta.WordDatabase       = Attr(lNode,"WordDatabase","");
             meta.WordLearningEnabled = Attr(lNode,"WordLearningEnabled","1") == "1";
+            ReadInfoInto(doc, meta);
 
             // Sanity-clamp window size to reasonable display boundaries
             // (600–7680 wide, 180–4320 tall) to prevent windows that are
@@ -938,6 +954,54 @@ namespace OnScreenKeyboard
             }
             catch { }   // Return empty list on any error (file not found, bad XML, etc.)
             return result;
+        }
+
+        /// <summary>Writes <c>&lt;Info&gt;</c> with the titles and descriptions of the keyboard, only when there are any (files without it stay as they were).</summary>
+        private static void WriteInfo(XmlWriter w, LayoutMeta m)
+        {
+            bool any = m.Titles.Any(kv => !string.IsNullOrWhiteSpace(kv.Value)) || m.Descriptions.Any(kv => !string.IsNullOrWhiteSpace(kv.Value));
+            if (!any) return;
+            w.WriteStartElement("Info");
+            foreach (var kv in m.Titles)
+                if (!string.IsNullOrWhiteSpace(kv.Key) && !string.IsNullOrWhiteSpace(kv.Value))
+                { w.WriteStartElement("Title"); w.WriteAttributeString("lang", kv.Key); w.WriteString(kv.Value); w.WriteEndElement(); }
+            foreach (var kv in m.Descriptions)
+                if (!string.IsNullOrWhiteSpace(kv.Key) && !string.IsNullOrWhiteSpace(kv.Value))
+                { w.WriteStartElement("Description"); w.WriteAttributeString("lang", kv.Key); w.WriteString(kv.Value); w.WriteEndElement(); }
+            w.WriteEndElement();
+        }
+
+        private static void ReadInfoInto(XmlDocument doc, LayoutMeta meta)
+        {
+            meta.Titles.Clear(); meta.Descriptions.Clear();
+            foreach (XmlNode n in doc.SelectNodes("/OnScreenKeyboard/Info/Title"))
+            {
+                string lang = Attr(n, "lang", ""), text = n.InnerText?.Trim() ?? "";
+                if (lang.Length > 0 && text.Length > 0) meta.Titles[lang] = text;
+            }
+            foreach (XmlNode n in doc.SelectNodes("/OnScreenKeyboard/Info/Description"))
+            {
+                string lang = Attr(n, "lang", ""), text = n.InnerText?.Trim() ?? "";
+                if (lang.Length > 0 && text.Length > 0) meta.Descriptions[lang] = text;
+            }
+        }
+
+        /// <summary>
+        /// What a list of layouts needs to show one: the titles and descriptions per language and the language of the keyboard, read without
+        /// loading the whole layout. Null when the file cannot be read.
+        /// </summary>
+        public static (Dictionary<string, string> Titles, Dictionary<string, string> Descriptions, string Language)? ReadInfo(string path)
+        {
+            try
+            {
+                var doc = new XmlDocument();
+                doc.Load(path);
+                var meta = new LayoutMeta();
+                ReadInfoInto(doc, meta);
+                var layoutNode = doc.SelectSingleNode("/OnScreenKeyboard/Layout") ?? doc.SelectSingleNode("/OnScreenKeyboard/Global");
+                return (meta.Titles, meta.Descriptions, layoutNode != null ? Attr(layoutNode, "Language", "") : "");
+            }
+            catch { return null; }
         }
 
         /// <summary>

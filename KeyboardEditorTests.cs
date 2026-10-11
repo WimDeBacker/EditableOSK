@@ -120,7 +120,10 @@ namespace OnScreenKeyboard
             {
                 if (!p.CanRead || !p.CanWrite || p.GetIndexParameters().Length > 0) continue;
                 object a = p.GetValue(expected), b = p.GetValue(actual);
-                bool same = a is Color ca && b is Color cb ? ca.ToArgb() == cb.ToArgb() : Equals(a, b);
+                bool same = a is Color ca && b is Color cb ? ca.ToArgb() == cb.ToArgb()
+                          : a is System.Collections.Generic.Dictionary<string, string> da && b is System.Collections.Generic.Dictionary<string, string> db
+                              ? da.Count == db.Count && da.All(kv => db.TryGetValue(kv.Key, out string v) && v == kv.Value)      // titles and descriptions: by content
+                          : Equals(a, b);
                 if (!same) return $"{p.Name}: {a} became {b}";
             }
             return null;

@@ -1,5 +1,11 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <OnScreenKeyboard FormatVersion="2">
+  <Info>
+    <Title lang="nl">QWERTY</Title>
+    <Title lang="en">QWERTY</Title>
+    <Description lang="nl">QWERTY-toetsenbord met functietoetsen, cijfers en een rij voor woordvoorspelling.</Description>
+    <Description lang="en">QWERTY keyboard with function keys, numbers and a row for word prediction.</Description>
+  </Info>
   <Theme BackgroundColor="1A4E8A" Opacity="1.00" FontName="Arial" FontSize="0" FontColor="E0E0FF" KeyColor="2D2D4A" BorderColor="3C3C5A" BorderThickness="1">
     <Group Id="standard" FontName="Arial" FontSize="0" FontColor="E0E0FF" KeyColor="004040" BorderColor="3C3C5A" BorderThickness="1" />
     <Group Id="function-keys" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="252550" BorderColor="353570" BorderThickness="-1">

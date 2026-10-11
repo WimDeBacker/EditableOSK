@@ -3668,6 +3668,20 @@ namespace OnScreenKeyboard
         /// </summary>
         private bool LoadSettings()
         {
+            // First the ready-made keyboards of the program (in its folder, where nobody looks) with their titles; "Other file…" goes on to the
+            // ordinary file dialog.
+            var ready = LayoutInfo.FromFolder(UserData.AppFolder, Lang.CurrentCode);
+            if (ready.Count > 0)
+            {
+                using var pick = new LayoutPickerDialog(ready);
+                if (pick.ShowDialog(DialogOwner()) != DialogResult.OK) return false;
+                if (!pick.BrowseRequested && pick.ChosenPath != null)
+                {
+                    ApplyLoadedSettings(pick.ChosenPath);
+                    return true;
+                }
+            }
+
             using var dlg = new OpenFileDialog
             { Title="Load",Filter="Keyboard layouts (*.kbl)|*.kbl|All files (*.*)|*.*",
               FileName=_currentFilePath ?? SettingsManager.DefaultPath };

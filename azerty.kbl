@@ -1,5 +1,11 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <OnScreenKeyboard FormatVersion="2">
+  <Info>
+    <Title lang="nl">AZERTY</Title>
+    <Title lang="en">AZERTY</Title>
+    <Description lang="nl">AZERTY-toetsenbord met functietoetsen, cijfers, leestekens en een rij voor woordvoorspelling. De toetsen zijn per groep gekleurd.</Description>
+    <Description lang="en">AZERTY keyboard with function keys, numbers, punctuation and a row for word prediction. The keys are coloured by group.</Description>
+  </Info>
   <Theme BackgroundColor="1A2E2C" Opacity="1.00" FontName="Arial" FontSize="0" FontColor="E0FAF8" KeyColor="2C4845" BorderColor="3E5E5A" BorderThickness="1">
     <Group Id="standard" FontName="Arial" FontSize="0" FontColor="E0FAF8" KeyColor="2C4845" BorderColor="3E5E5A" BorderThickness="1" />
     <Group Id="prediction" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="34657C" BorderColor="2E5460" BorderThickness="-1">

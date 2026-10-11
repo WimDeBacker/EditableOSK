@@ -212,6 +212,11 @@
   <String key="first run: intro"                 value="Kies hoe het toetsenbord start. De taal bepaalt ook de woordvoorspelling. U kunt dit later allemaal aanpassen in de bewerkmodus." />
   <String key="first run: arrangement"           value="Toetsenbordindeling" />
   <String key="first run: language"              value="Toetsenbordtaal" />
+  <String key="layouts: title"                   value="Een toetsenbord openen" />
+  <String key="layouts: hint"                    value="Kies een van de meegeleverde toetsenborden, of open een ander bestand." />
+  <String key="layouts: other"                   value="Ander bestand…" />
+  <String key="layouts: open"                    value="Openen" />
+  <String key="layouts: none"                    value="Er zijn geen meegeleverde toetsenborden gevonden." />
   <String key="style: keep current"              value="(huidige stijl behouden)" />
   <String key="style: hint"                      value="Geeft het toetsenbord de kleuren van een standaardstijl: de achtergrond, de toetsen en de stijlgroepen. Een toets met een eigen kleur behoudt die." />
   <String key="tip: Style"                       value="Kies een van de standaardstijlen van de wizard Nieuw toetsenbord. Ze wordt toegepast met Toepassen." />

@@ -1,5 +1,11 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <OnScreenKeyboard FormatVersion="2">
+  <Info>
+    <Title lang="nl">Wiskunde</Title>
+    <Title lang="en">Mathematics</Title>
+    <Description lang="nl">Toetsenbord voor wiskunde: cijfers, bewerkingen, vergelijkingen, haakjes, Griekse letters en andere symbolen.</Description>
+    <Description lang="en">Keyboard for mathematics: numbers, operations, comparisons, brackets, Greek letters and other symbols.</Description>
+  </Info>
   <Theme BackgroundColor="1A1A2E" Opacity="1.00" FontName="Arial" FontSize="0" FontColor="E0E0FF" KeyColor="2D2D4A" BorderColor="3C3C5A" BorderThickness="1">
     <Group Id="standard" FontName="Arial" FontSize="0" FontColor="FFFFFF" KeyColor="2D2D4A" BorderColor="3C3C5A" BorderThickness="1" />
     <Group Id="arithmetic" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="4A3010" BorderColor="" BorderThickness="-1"><Name lang="nl">Rekenkunde</Name><Name lang="en">Arithmetic</Name></Group>

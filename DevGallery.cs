@@ -183,6 +183,11 @@ namespace OnScreenKeyboard
                         Show(m);
                         Save(m, Path.Combine(outDir, $"groupeditor_confirm_{theme}_{tag}.png"));
                     }
+                    using (var lp = new LayoutPickerDialog(LayoutInfo.FromFolder(AppDomain.CurrentDomain.BaseDirectory, Lang.CurrentCode)))
+                    {
+                        Show(lp);
+                        Save(lp, Path.Combine(outDir, $"layoutpicker_{theme}_{tag}.png"));
+                    }
                     using (var f = new FirstRunDialog(new[] { ("nl", "Nederlands"), ("en", "English") }, "qwerty", "nl"))
                     {
                         Show(f);

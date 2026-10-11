@@ -86,6 +86,7 @@ namespace OnScreenKeyboard
             ("KeyboardEditorForm", () => KeyboardEditor(),                                   480, 520, 560),     // 560, was 540: the Keyboard language row (2026-10-11)
             ("NewKeyboardWizard",  () => new NewKeyboardWizard(),                            480, 520, 0),
             ("SpecialKeysDialog",  () => new SpecialKeysDialog(false),                       480, 520, 0),
+            ("LayoutPickerDialog", () => new LayoutPickerDialog(new List<LayoutInfo> { new LayoutInfo { Path = "a.kbl", Title = "AZERTY", Description = "AZERTY-toetsenbord met functietoetsen, cijfers, leestekens en een rij voor woordvoorspelling." } }), 480, 520, 0),
             ("FirstRunDialog",     () => new FirstRunDialog(new[] { ("nl", "Nederlands"), ("en", "English") }, "qwerty", "nl"), 480, 520, 580),
         };
 
