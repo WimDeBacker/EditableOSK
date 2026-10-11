@@ -1,27 +1,27 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <OnScreenKeyboard>
   <Theme BackgroundColor="1A1A2E" Opacity="1.00" FontName="Arial" FontSize="0" FontColor="E0E0FF" KeyColor="2D2D4A" BorderColor="3C3C5A" BorderThickness="1">
-    <Group Name="standard" FontName="Arial" FontSize="0" FontColor="E0E0FF" KeyColor="2D2D4A" BorderColor="3C3C5A" BorderThickness="1" />
-    <Group Name="Rekenkunde" FontName="" FontSize="0" FontColor="FFB347" KeyColor="4A3010" BorderColor="" BorderThickness="-1" />
-    <Group Name="Vergelijkingen" FontName="" FontSize="0" FontColor="B8E060" KeyColor="2A3A10" BorderColor="" BorderThickness="-1" />
-    <Group Name="Besturing" FontName="" FontSize="0" FontColor="FF6060" KeyColor="3A1010" BorderColor="" BorderThickness="-1" />
-    <Group Name="Haakjes" FontName="" FontSize="0" FontColor="60E0D0" KeyColor="103A3A" BorderColor="" BorderThickness="-1" />
-    <Group Name="Constanten" FontName="" FontSize="0" FontColor="FFD700" KeyColor="3A2A00" BorderColor="" BorderThickness="-1" />
-    <Group Name="Analyse" FontName="" FontSize="0" FontColor="C080FF" KeyColor="2A1040" BorderColor="" BorderThickness="-1" />
-    <Group Name="Verzamelingen" FontName="" FontSize="0" FontColor="FF8060" KeyColor="3A1810" BorderColor="" BorderThickness="-1" />
-    <Group Name="Logica" FontName="" FontSize="0" FontColor="FF80C0" KeyColor="3A1030" BorderColor="" BorderThickness="-1" />
-    <Group Name="Goniometrie" FontName="" FontSize="0" FontColor="80C0FF" KeyColor="103060" BorderColor="" BorderThickness="-1" />
-    <Group Name="Grieks" FontName="" FontSize="0" FontColor="80D0A0" KeyColor="103020" BorderColor="" BorderThickness="-1" />
-    <Group Name="Bewerken" FontName="" FontSize="0" FontColor="80C080" KeyColor="1A2A1A" BorderColor="" BorderThickness="-1" />
-    <Group Name="Modifier" FontName="" FontSize="0" FontColor="B090E0" KeyColor="251A35" BorderColor="" BorderThickness="-1" />
-    <Group Name="Navigatie" FontName="" FontSize="0" FontColor="8090C0" KeyColor="1A1A35" BorderColor="" BorderThickness="-1" />
-    <Group Name="Woord" FontName="" FontSize="0" FontColor="E8D4FF" KeyColor="5B3080" BorderColor="00FF00" BorderThickness="1" />
+    <Group Name="standard" FontName="Arial" FontSize="0" FontColor="FFFFFF" KeyColor="2D2D4A" BorderColor="3C3C5A" BorderThickness="1" />
+    <Group Name="Rekenkunde" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="4A3010" BorderColor="" BorderThickness="-1" />
+    <Group Name="Vergelijkingen" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="2A3A10" BorderColor="" BorderThickness="-1" />
+    <Group Name="Besturing" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="3A1010" BorderColor="" BorderThickness="-1" />
+    <Group Name="Haakjes" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="103A3A" BorderColor="" BorderThickness="-1" />
+    <Group Name="Constanten" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="3A2A00" BorderColor="" BorderThickness="-1" />
+    <Group Name="Analyse" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="2A1040" BorderColor="" BorderThickness="-1" />
+    <Group Name="Verzamelingen" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="3A1810" BorderColor="" BorderThickness="-1" />
+    <Group Name="Logica" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="3A1030" BorderColor="" BorderThickness="-1" />
+    <Group Name="Goniometrie" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="103060" BorderColor="" BorderThickness="-1" />
+    <Group Name="Grieks" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="103020" BorderColor="" BorderThickness="-1" />
+    <Group Name="Bewerken" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="1A2A1A" BorderColor="" BorderThickness="-1" />
+    <Group Name="Modifier" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="251A35" BorderColor="" BorderThickness="-1" />
+    <Group Name="Navigatie" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="1A1A35" BorderColor="" BorderThickness="-1" />
+    <Group Name="Woord" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="5B3080" BorderColor="00FF00" BorderThickness="1" />
     <Group Name="Cijfers" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="008040" BorderColor="00FF00" BorderThickness="1" />
     <Group Name="Klinkers" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="4A8FD4" BorderColor="00FF00" BorderThickness="1" />
     <Group Name="Medeklinkers" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="1A4E8A" BorderColor="00FF00" BorderThickness="1" />
     <Group Name="Leestekens" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="C86A00" BorderColor="00FF00" BorderThickness="1" />
   </Theme>
-  <Layout Language="nl" GridRows="7" GridCols="22" GearRow="0" GearCol="-1" WindowWidth="1400" WindowHeight="354" HideTitlebar="0" StickyModifiers="0" HoldToEdit="0" AlwaysOnTop="1" SlowKeysMs="0" DwellMs="0" ShowTimingAnimation="1" LastFile="C:\dev\EditableOSK\math.kbl" ToolbarTheme="Dark" WordLearningEnabled="1">
+  <Layout Language="nl" GridRows="7" GridCols="22" GearRow="0" GearCol="-1" WindowWidth="1057" WindowHeight="342" HideTitlebar="0" StickyModifiers="0" HoldToEdit="0" AlwaysOnTop="1" SlowKeysMs="0" DwellMs="0" ShowTimingAnimation="1" LastFile="C:\dev\EditableOSK\math.kbl" ToolbarTheme="Dark" WordLearningEnabled="1">
     <Key Row="0" Col="0" RowSpan="1" ColSpan="1" GroupName="Cijfers" Label="1" Send="1" ShiftLabel="¹" ShiftSend="¹" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="0" Col="1" RowSpan="1" ColSpan="1" GroupName="Cijfers" Label="2" Send="2" ShiftLabel="²" ShiftSend="²" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="0" Col="2" RowSpan="1" ColSpan="1" GroupName="Cijfers" Label="3" Send="3" ShiftLabel="³" ShiftSend="³" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
@@ -32,7 +32,7 @@
     <Key Row="0" Col="7" RowSpan="1" ColSpan="1" GroupName="Cijfers" Label="8" Send="8" ShiftLabel="⁸" ShiftSend="⁸" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="0" Col="8" RowSpan="1" ColSpan="1" GroupName="Cijfers" Label="9" Send="9" ShiftLabel="⁹" ShiftSend="⁹" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="0" Col="9" RowSpan="1" ColSpan="1" GroupName="Cijfers" Label="0" Send="0" ShiftLabel="⁰" ShiftSend="⁰" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
-    <Key Row="0" Col="10" RowSpan="1" ColSpan="1" GroupName="Navigatie" Label="." Send="." ShiftLabel="," ShiftSend="," AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="0" Col="10" RowSpan="1" ColSpan="1" GroupName="Rekenkunde" Label="." Send="." ShiftLabel="," ShiftSend="," AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="0" Col="11" RowSpan="1" ColSpan="1" GroupName="Rekenkunde" Label="+" Send="+" ShiftLabel="±" ShiftSend="±" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="0" Col="12" RowSpan="1" ColSpan="1" GroupName="Rekenkunde" Label="−" Send="−" ShiftLabel="∓" ShiftSend="∓" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="0" Col="13" RowSpan="1" ColSpan="1" GroupName="Rekenkunde" Label="×" Send="×" ShiftLabel="·" ShiftSend="·" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
@@ -144,6 +144,6 @@
     <Key Row="6" Col="19" RowSpan="1" ColSpan="1" GroupName="Navigatie" Label="↑" Send="{UP}" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="6" Col="20" RowSpan="1" ColSpan="1" GroupName="Navigatie" Label="↓" Send="{DOWN}" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
     <Key Row="6" Col="21" RowSpan="1" ColSpan="1" GroupName="Navigatie" Label="→" Send="{RIGHT}" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
-    <Key Row="1" Col="21" RowSpan="1" ColSpan="1" GroupName="Navigatie" Label="azerty" Send="layout:azertycolor.xml" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="1" Col="21" RowSpan="1" ColSpan="1" GroupName="Bewerken" Label="azerty" Send="layout:azerty.kbl" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
   </Layout>
 </OnScreenKeyboard>

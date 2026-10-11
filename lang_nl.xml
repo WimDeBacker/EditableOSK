@@ -62,7 +62,7 @@
   <String key="tip: Color swatch"          value="Klik om de kleurenkiezer te openen" />
   <String key="tip: Hex color"             value="Typ een hexkleur (#RRGGBB)" />
   <String key="tip: Font size"             value="0 = automatisch aanpassen aan de toets" />
-  <String key="tip: Border thickness"      value="−1 = gebruik de dikte van de standaardgroep  |  0 = geen rand" />
+  <String key="tip: Border thickness"      value="−1 = gebruik de dikte van de standaardstijlgroep  |  0 = geen rand" />
   <String key="tip: Key width"             value="Relatieve breedte  (bijv. 1 = normaal,  1,5 = 50% breder)" />
   <String key="tip: Row span"              value="1 = normale hoogte  |  2 = dubbele hoogte (alleen laatste toets in kolom)" />
   <String key="tip: Record"                value="Een toets of sneltoets opnemen" />
@@ -73,10 +73,10 @@
   <String key="tip: Mode Word prediction"  value="De toets toont een woordvoorspelling" />
   <String key="tip: Mode Layout"           value="De toets schakelt naar een ander toetsenbordlay-out" />
   <String key="tip: Add group"             value="Een nieuwe stijlgroep aanmaken" />
-  <String key="tip: Delete group"          value="De geselecteerde groep verwijderen" />
-  <String key="tip: Import groups"         value="Groepen importeren uit een ander lay-outbestand" />
+  <String key="tip: Delete group"          value="De geselecteerde stijlgroep verwijderen" />
+  <String key="tip: Import groups"         value="Stijlgroepen importeren uit een ander lay-outbestand" />
   <String key="tip: Opacity"               value="Transparantie van het venster  (0 = volledig zichtbaar,  80 = bijna onzichtbaar)" />
-  <String key="tip: Manage Groups"         value="De groepeditor openen" />
+  <String key="tip: Manage Groups"         value="De stijlgroepeditor openen" />
   <String key="tip: Language"              value="De interfacetaal selecteren" />
   <String key="tip: WP slot"               value="Woordvoorspellingsslot nummer (0–9)" />
 
@@ -228,14 +228,14 @@
   <String key="System default"     value="Systeemstandaard" />
 
   <!-- Group editor -->
-  <String key="Key Groups"             value="Toetsgroepen" />
-  <String key="Manage Groups…"         value="Groepe&amp;n beheren…" />
-  <String key="Group"                  value="Groep" />
-  <String key="(no group)"             value="(geen groep)" />
-  <String key="title: leave group"     value="De toets uit de groep halen?" />
-  <String key="ask: leave group"       value="Deze toets volgt groep ‘{0}’. Een wijziging haalt de toets uit de groep: hij houdt zijn eigen uiterlijk en volgt de groep niet meer." />
-  <String key="Manage Groups"          value="Groepen beheren" />
-  <String key="Groups"                 value="Groepen" />
+  <String key="Key Groups"             value="Toetsstijlgroepen" />
+  <String key="Manage Groups…"         value="&amp;Stijlgroepen…" />
+  <String key="Group"                  value="Stijlgroep" />
+  <String key="(no group)"             value="(geen stijlgroep)" />
+  <String key="title: leave group"     value="De toets uit de stijlgroep halen?" />
+  <String key="ask: leave group"       value="Deze toets volgt stijlgroep ‘{0}’. Een wijziging haalt de toets uit de stijlgroep: hij houdt zijn eigen uiterlijk en volgt de stijlgroep niet meer." />
+  <String key="Manage Groups"          value="Stijlgroepen beheren" />
+  <String key="Groups"                 value="Stijlgroepen" />
   <String key="Style"                  value="Stijl" />
   <String key="+ Add group"            value="+ &amp;Toevoegen" />
   <String key="− Delete group"         value="− &amp;Verwijderen" />
@@ -251,14 +251,14 @@
   <String key="inherited"              value="overgenomen" />
   <String key="(none / auto)"          value="(geen / auto)" />
   <String key="Clear"                  value="Wissen" />
-  <String key="Delete Group"           value="Groep verwijderen" />
-  <String key="Delete group msg"       value="Groep &quot;{0}&quot; verwijderen?&#10;&#10;Toetsen die aan deze groep zijn toegewezen, keren terug naar de globale stijl." />
-  <String key="New Group"              value="Nieuwe groep" />
-  <String key="Import Groups"          value="Groepen importeren" />
-  <String key="Select a layout file to import groups from" value="Selecteer een lay-outbestand om groepen uit te importeren" />
-  <String key="No groups found in the selected file." value="Geen groepen gevonden in het geselecteerde bestand." />
-  <String key="{0} groups found — choose action for each conflict:" value="{0} groepen gevonden — kies een actie voor elk conflict:" />
-  <String key="{0} groups found — all new, no conflicts." value="{0} groepen gevonden — allemaal nieuw, geen conflicten." />
+  <String key="Delete Group"           value="Stijlgroep verwijderen" />
+  <String key="Delete group msg"       value="Stijlgroep &quot;{0}&quot; verwijderen?&#10;&#10;Toetsen die aan deze stijlgroep zijn toegewezen, keren terug naar de globale stijl." />
+  <String key="New Group"              value="Nieuwe stijlgroep" />
+  <String key="Import Groups"          value="Stijlgroepen importeren" />
+  <String key="Select a layout file to import groups from" value="Selecteer een lay-outbestand om stijlgroepen uit te importeren" />
+  <String key="No groups found in the selected file." value="Geen stijlgroepen gevonden in het geselecteerde bestand." />
+  <String key="{0} groups found — choose action for each conflict:" value="{0} stijlgroepen gevonden — kies een actie voor elk conflict:" />
+  <String key="{0} groups found — all new, no conflicts." value="{0} stijlgroepen gevonden — allemaal nieuw, geen conflicten." />
   <String key="Status"                 value="Status" />
   <String key="Action"                 value="Actie" />
   <String key="New"                    value="Nieuw" />
@@ -268,8 +268,8 @@
   <String key="Skip"                   value="Overslaan" />
   <String key="Add"                    value="Toevoegen" />
   <String key="Name 'standard' is reserved." value="De naam 'standard' is gereserveerd." />
-  <String key="A group with this name already exists." value="Er bestaat al een groep met deze naam." />
-  <String key="Update standard group style"  value="Standaardgroepstijl bijwerken" />
+  <String key="A group with this name already exists." value="Er bestaat al een stijlgroep met deze naam." />
+  <String key="Update standard group style"  value="Stijl van de standaardstijlgroep bijwerken" />
   <String key="Protected"              value="Beveiligd" />
 
   <!-- New Keyboard Wizard -->

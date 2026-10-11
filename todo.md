@@ -14,6 +14,47 @@ Numbering: **P** = priority, then sub-sections, steps and details (**1.1**, **3.
 - 2.1 Ship 8 ready-made `.kbl` files: 4 wizard themes × 2 key arrangements (AZERTY Dutch, QWERTY English).
 - 2.2 Users can load one immediately without running the wizard.
 
+### Priority 4 — Language-neutral style groups, and the language as a property of the keyboard ☐ *(design agreed with the owner 2026-10-11; nothing is built yet)*
+
+**Why now.** The `.kbl` files are used only by the owner, so the file format can still change without breaking anyone; later every user would be a migration problem. Layouts are meant to be used in many countries and languages. Today a style group has one name, fixed in the file (`Klinkers`, `Besturing`, `standard` …), keys refer to the group by that name (`GroupName`), and one value (`LayoutMeta.Language`) is at the same time the language of the dialogs and the language of the word prediction.
+
+**Agreed design (owner, 2026-10-11).**
+- **A. Style groups get an id.** Every group has a language-neutral, unchangeable id (`vowels`, `function-keys` …); keys refer to it (`GroupId`); the names are a table per layout: `<Group Id="vowels"><Name lang="nl">Klinkers</Name><Name lang="en">Vowels</Name></Group>`. The name shown: dialog language → keyboard language → English → the id itself. Renaming a group changes only a name (the key references are no longer rewritten, so `GroupRenames` becomes much simpler). Import and merge match groups by id; a clash of names with different ids is a separate case. `standard` stays the reserved id (shown "Standaard" / "Standard"). The format gets a `FormatVersion`.
+- **B. The language of the dialogs is a per-user setting,** stored with the user's own settings in `%AppData%\EditableOSK`, not in the layout. First value: the language of Windows. The first-start dialog (`FirstRunDialog`) then asks only for the key arrangement and the language of the word prediction; the hint "this is also the language of the menus" goes.
+- **C. The language is a property of the keyboard:** a language tag with region (`nl-BE`, `fr-BE`, `pt-BR`) in the layout. It chooses the default word prediction (`nl-BE` falls back to `nl`) and the language of the group names. The word prediction stays a choice of its own (an explicit database file wins over the tag). Later properties of the same kind, not now: sentence and spacing rules (French: a space before `? ! : ;`), quotation marks, decimal separator, right-to-left, a title and description per language.
+- **Migration.** One clean conversion of the owner's own files (the id is derived from the name, the old name goes in the table under the keyboard's language), and a tolerant reader of the old format for a while (the owner has old files and backups).
+
+**The groups of the four ready-made keyboards** (checked 2026-10-11) and the proposed ids and English names (the owner confirms; Dutch name stays as it is):
+
+| id | nl | en | used in |
+|---|---|---|---|
+| `standard` | Standaard | Standard | all |
+| `prediction` | Woordvoorspelling | Word prediction | qwerty (`Voorspelling`), azerty, azertycolor, math (`Woord`: the same word-suggestion keys, merged; the Dutch name `Voorspelling` goes, owner 2026-10-11) |
+| `function-keys` | Functietoetsen | Function keys | azerty, qwerty |
+| `numbers` | Cijfers | Numbers | all |
+| `vowels` | Klinkers | Vowels | all |
+| `consonants` | Medeklinkers | Consonants | all |
+| `punctuation` | Leestekens | Punctuation | all |
+| `controls` | Besturing | Controls | all |
+| `arithmetic` | Rekenkunde | Arithmetic | math |
+| `comparisons` | Vergelijkingen | Comparisons | math |
+| `brackets` | Haakjes | Brackets | math |
+| `constants` | Constanten | Constants | math |
+| `calculus` | Analyse | Calculus | math |
+| `sets` | Verzamelingen | Sets | math |
+| `logic` | Logica | Logic | math |
+| `trigonometry` | Goniometrie | Trigonometry | math |
+| `greek` | Grieks | Greek letters | math |
+| `editing` | Bewerken | Editing | math (Cut, Copy, Paste, Undo) |
+| `modifiers` | Modifier | Modifier keys | math (Shift, Ctrl) |
+| `navigation` | Navigatie | Navigation | math (arrows; also holds the `.` key and the `azerty` layout key: to be regrouped) |
+
+Notes: `azertycolor.kbl` has an unused group `test2` (no key uses it; the owner removes it, still present in the file on 2026-10-11): to be removed at the conversion if it is still there. The two prediction groups `Woord` and `Voorspelling` are the same idea and become one id, `prediction`, named "Woordvoorspelling" / "Word prediction". In `math.kbl` the owner moved the `.` key out of `Navigatie` (2026-10-11); the `azerty` layout key was still in `Navigatie` and is to be regrouped (for instance `controls`).
+
+**Order of work.** (A) ids, the names table, one display function for every list that shows a group (key editor chooser, group editor, import dialog, messages), the group editor with a name per language, import by id, wizard, migration, tests (round trip, old format, fallback order, uniqueness per language, import by id; guards in English, Dutch and +80 % text). (B) the dialog language as a user setting, the first-start dialog adjusted. A and B together, because both touch `LayoutMeta.Language`. (C) the language tag per keyboard and the choice of the database from it.
+
+**Not proposed.** Translating names automatically.
+
 ### Priority 3 — `OnScreenKeyboard.exe` stays in Task Manager after closing the window in edit mode ▶ *(bug; no longer reproducible after the safety net, root cause unknown)*
 
 **Status (owner, 2026-10-07): stays pending.** The behaviour is unpredictable and has not occurred for a long time, so there is nothing to check or fix now. **The error-log mechanism of 3.4 stays** (`Program.cs`: exceptions to `OnScreenKeyboard_error.log`, `Environment.Exit(0)` after the main window closes); it is not to be removed until this item is closed. If a lingering process is seen again, follow 3.5.

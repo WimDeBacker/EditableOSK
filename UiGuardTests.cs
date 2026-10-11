@@ -1428,7 +1428,7 @@ namespace OnScreenKeyboard
                     answer = false;
                     using var f = Grouped();
                     Field<ColorChip>(f, "_chipKey").OpenPicker(keepOpen: true);
-                    Assert(grpTitle == "De toets uit de groep halen?" && grpText.Contains("volgt groep ‘Klinkers’"), $"leave group: the question in Dutch ('{grpTitle}' / '{grpText}')");
+                    Assert(grpTitle == "De toets uit de stijlgroep halen?" && grpText.Contains("volgt stijlgroep ‘Klinkers’"), $"leave group: the question in Dutch ('{grpTitle}' / '{grpText}')");
                 }
                 finally { Lang.Load("en"); }
             }
