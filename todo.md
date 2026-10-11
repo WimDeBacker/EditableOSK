@@ -2,7 +2,7 @@
 
 ## Pending
 
-Numbering: **P** = priority, then sub-sections, steps and details (**1.1**, **3.4**). The open priorities were numbered from 1 again on 2026-10-06 (Priority 4 was added on 2026-10-07 and is completed, Priority 5 was added on 2026-10-09); the items under Completed keep the numbers they had when they were done (so "Priority 7" there is not Priority 7 here). Status marks: ✓ done, ▶ in progress, ☐ not started.
+Numbering: **P** = priority, then sub-sections, steps and details (**1.1**, **3.4**). The open priorities were numbered from 1 again on 2026-10-06 (Priority 4 was added on 2026-10-07 and is completed, Priority 5 was added on 2026-10-09); the items under Completed keep the numbers they had when they were done (so "Priority 7" there is not Priority 7 here). The numbers of the notes under "On hold" (3.0 – 3.5) are those of the old Priority 3. Status marks: ✓ done, ▶ in progress, ☐ not started.
 
 ### Priority 1 — Scanning ☐ *(accessibility)*
 
@@ -22,19 +22,6 @@ Today the screens exist in English (built in, `LanguageManager.cs`) and Dutch (`
 - 5.6 **Quality:** a machine translation is only a first draft: each language needs a review by a native speaker, with the program in front of them (a word that fits a menu is not always the word for a button). Decision for the owner: who reviews, and whether a language is shipped before its review.
 
 
-### Priority 3 — `OnScreenKeyboard.exe` stays in Task Manager after closing the window in edit mode ▶ *(bug; no longer reproducible after the safety net, root cause unknown)*
-
-**Status (owner, 2026-10-07): stays pending.** The behaviour is unpredictable and has not occurred for a long time, so there is nothing to check or fix now. **The error-log mechanism of 3.4 stays** (`Program.cs`: exceptions to `OnScreenKeyboard_error.log`, `Environment.Exit(0)` after the main window closes); it is not to be removed until this item is closed. If a lingering process is seen again, follow 3.5.
-
-- 3.0 **Update (2026-10-02):** the user closed the keyboard in edit mode with the new build: the process ended, and no `OnScreenKeyboard_error.log` was written, so no exception was thrown while closing. Either `Environment.Exit(0)` ends a process that something kept alive after the window closed, or the lingering did not happen this time. Kept open until it either stays away for a while or is explained; if it comes back, a lingering process without a log means the main thread is stuck or a foreground thread is alive — inspect its threads before ending it.
-
-- 3.1 **Symptom (found by the user, 2026-10-02)** — close the keyboard while edit mode is active: the window disappears but the process stays, which locks the exe for the next build and start. Closing from normal mode ends the process cleanly (checked: `WM_CLOSE` on the real window, exit code 0).
-- 3.2 **Not reproduced by script** (edit mode cannot be entered headlessly). Ruled out by reading: no foreground threads (the send worker is a background thread), no extra `Application.Exit` path, the only hooks are the focus hook (removed in `FormClosing`) and the recorder's hook.
-- 3.3 **Suspect** — an exception during `FormClosing` / disposal that only happens in edit mode (the edit toolbars and their icons): the standard "unhandled exception" dialog is a window of its own, and with an always-on-top main window it can sit hidden behind other windows, keeping the process alive.
-- 3.4 **Done** — `Program.cs`: UI-thread and unhandled exceptions are logged to `OnScreenKeyboard_error.log` next to the exe instead of showing the dialog, and `Environment.Exit(0)` runs when the main window has closed.
-- 3.5 **To do** — close once in edit mode with the new build: if `OnScreenKeyboard_error.log` appears, its stack trace is the real bug (fix it); if the process still lingers with no log, the main thread is stuck inside `FormClosing` (inspect the threads of the lingering process before ending it).
-
-
 Not planned; decided later, if at all (from the touch-friendly work, 2.4.8):
 
 - I.1 The same flyout for every other list (Language, Toolbar theme, word-database choice).
@@ -45,6 +32,23 @@ Not planned; decided later, if at all (from the touch-friendly work, 2.4.8):
   - **Safety:** Win must always be released when the keyboard closes, crashes, loses focus (`Deactivate`) or after a time-out; otherwise Win stays pressed in Windows.
   - **How the user chooses it:** a separate "hold Win" key, or the existing Win sticky key that from then on really holds (this changes the behaviour for people who use sticky keys now).
   - Until then: if Windows has Alt+Shift or Ctrl+Shift switched on for the input language (Settings → Time & language → Typing → Advanced keyboard settings), a Key/Shortcut key `{Alt}{Shift}` or `{Ctrl}{Shift}` already switches it.
+
+---
+
+## On hold — pending problems and difficulties that are not current for now
+
+Nothing here is to be worked on until it shows up again. The notes stay so that the work does not have to start from zero when it does.
+
+### `OnScreenKeyboard.exe` stays in Task Manager after closing the window in edit mode ▶ *(was Priority 3; bug; no longer reproducible after the safety net, root cause unknown; on hold since the owner's decision of 2026-10-07, moved here 2026-10-11)*
+
+**Status (owner, 2026-10-07): stays pending.** The behaviour is unpredictable and has not occurred for a long time, so there is nothing to check or fix now. **The error-log mechanism of 3.4 stays** (`Program.cs`: exceptions to the error log in the user's folder, `OnScreenKeyboard_error.log`, `Environment.Exit(0)` after the main window closes); it is not to be removed until this item is closed. If a lingering process is seen again, follow 3.5.
+
+- 3.0 **Update (2026-10-02):** the user closed the keyboard in edit mode with the new build: the process ended, and no `OnScreenKeyboard_error.log` was written, so no exception was thrown while closing. Either `Environment.Exit(0)` ends a process that something kept alive after the window closed, or the lingering did not happen this time. Kept open until it either stays away for a while or is explained; if it comes back, a lingering process without a log means the main thread is stuck or a foreground thread is alive — inspect its threads before ending it.
+- 3.1 **Symptom (found by the user, 2026-10-02)** — close the keyboard while edit mode is active: the window disappears but the process stays, which locks the exe for the next build and start. Closing from normal mode ends the process cleanly (checked: `WM_CLOSE` on the real window, exit code 0).
+- 3.2 **Not reproduced by script** (edit mode cannot be entered headlessly). Ruled out by reading: no foreground threads (the send worker is a background thread), no extra `Application.Exit` path, the only hooks are the focus hook (removed in `FormClosing`) and the recorder's hook.
+- 3.3 **Suspect** — an exception during `FormClosing` / disposal that only happens in edit mode (the edit toolbars and their icons): the standard "unhandled exception" dialog is a window of its own, and with an always-on-top main window it can sit hidden behind other windows, keeping the process alive.
+- 3.4 **Done** — `Program.cs`: UI-thread and unhandled exceptions are logged to `OnScreenKeyboard_error.log` (since 2026-10-10 in the user's folder, `%AppData%\EditableOSK`, not next to the exe) instead of showing the dialog, and `Environment.Exit(0)` runs when the main window has closed.
+- 3.5 **To do, if it comes back** — close once in edit mode: if `OnScreenKeyboard_error.log` appears, its stack trace is the real bug (fix it); if the process still lingers with no log, the main thread is stuck inside `FormClosing` (inspect the threads of the lingering process before ending it). Also check the lingering process for a dialog behind the keyboard (see "Dialogs opened behind the keyboard again" under Completed: that was fixed on 2026-10-11 and could have been the cause of a hidden dialog keeping the process alive).
 
 ---
 
