@@ -260,6 +260,11 @@
   <String key="scan: two switches"               value="2 schakelaars" />
   <String key="tip: scan switches"               value="Eén schakelaar: de markering loopt vanzelf en de schakelaar kiest. Twee schakelaars: de ene stapt, de andere kiest." />
   <String key="scan: keys"                       value="Toetsen" />
+  <String key="scan: pad"                        value="Gamepad" />
+  <String key="scan: pad back"                   value="Terugknop (pad)" />
+  <String key="scan: press a pad button"         value="Druk op een knop…" />
+  <String key="tip: scan pad"                    value="Een knop van een gamepad (een Xbox-controller, een andere spelcontroller of een schakelaarinterface die zich als zodanig aanmeldt) kan een schakelaar zijn, naast de toetsen of in plaats ervan. Klik en druk dan op de knop van de gamepad. Delete wist hem, Esc annuleert." />
+  <String key="button"                           value="knop" />
   <String key="scan: select key"                 value="Kies" />
   <String key="scan: step key"                   value="Stap" />
   <String key="scan: press a key"                value="Druk op een toets…" />

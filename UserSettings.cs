@@ -97,6 +97,7 @@ namespace OnScreenKeyboard
                 s.SoundOnSelect  = B("SoundOnSelect", true);
                 Color C(string n, Color d) =>
                     int.TryParse(e.GetAttribute(n), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out int v) ? Color.FromArgb(255, Color.FromArgb(v)) : d;
+                s.SelectPad = I("SelectPad", 0); s.StepPad = I("StepPad", 0); s.BackPad = I("BackPad", 0);
                 s.BackStep      = B("BackStep", true);
                 s.BackSwitch    = B("BackSwitch", false);
                 s.BackKey       = I("BackKey", s.BackKey);
@@ -153,6 +154,9 @@ namespace OnScreenKeyboard
                     w.WriteAttributeString("SelectOnRelease", F(s.SelectOnRelease));
                     w.WriteAttributeString("SoundOnStep", F(s.SoundOnStep));
                     w.WriteAttributeString("SoundOnSelect", F(s.SoundOnSelect));
+                    w.WriteAttributeString("SelectPad", s.SelectPad.ToString(CultureInfo.InvariantCulture));
+                    w.WriteAttributeString("StepPad", s.StepPad.ToString(CultureInfo.InvariantCulture));
+                    w.WriteAttributeString("BackPad", s.BackPad.ToString(CultureInfo.InvariantCulture));
                     w.WriteAttributeString("BackStep", F(s.BackStep));
                     w.WriteAttributeString("BackSwitch", F(s.BackSwitch));
                     w.WriteAttributeString("BackKey", s.BackKey.ToString(CultureInfo.InvariantCulture));

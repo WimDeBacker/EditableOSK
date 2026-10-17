@@ -354,6 +354,82 @@ namespace OnScreenKeyboard
                 Assert(wav.Skip(44).Any(b => b != 0), "…and it is not silent");
             }
 
+            Section("Scanning — gamepad as a switch");
+            {
+                Lang.Load("en");
+                int A = Gamepad.XInputBase + 0x1000, B = Gamepad.XInputBase + 0x2000, LT = Gamepad.TriggerBase + 1, J3 = Gamepad.JoyBase + 3;
+                Assert(Gamepad.IsButton(A) && Gamepad.IsButton(J3) && !Gamepad.IsButton(0x20) && !Gamepad.IsButton(0x77) && !Gamepad.IsButton(0), "a gamepad code is never a key code");
+                Assert(Gamepad.Name(A) == "Pad A" && Gamepad.Name(LT) == "Pad LT" && Gamepad.Name(J3) == "Pad button 3" && Gamepad.Name(0) == "—" && ScanSettings.KeyName(B) == "Pad B",
+                    "the names of the buttons");
+
+                var events = new List<(int, bool)>();
+                using (var poller = new GamepadPoller((c, d) => events.Add((c, d)), () => new HashSet<int>()))
+                {
+                    poller.Update(new HashSet<int> { A });
+                    poller.Update(new HashSet<int> { A });
+                    Assert(events.Count == 1 && events[0] == (A, true), "a button going down is reported once");
+                    poller.Update(new HashSet<int> { A, B });
+                    Assert(events.Count == 2 && events[1] == (B, true), "…another one too");
+                    poller.Update(new HashSet<int> { B });
+                    Assert(events.Count == 3 && events[2] == (A, false), "a button let go is reported");
+                    poller.Update(new HashSet<int>());
+                    Assert(events.Count == 4 && events[3] == (B, false), "…and the last one");
+                }
+                Assert(new GamepadReader().Read() != null, "asking the system for controllers does not fail (none may be connected)");
+
+                // The same decisions as for the keys.
+                var st = new ScanSettings { Enabled = true, SelectKey = 0x77, StepKey = 0x78, BackKey = 0x79, SelectPad = A, StepPad = B, BackPad = J3 };
+                int press = 0, step = 0, back = 0;
+                var inp = new ScanInput(() => st, () => press++, () => step++, () => { }, null, () => back++);
+                Assert(inp.Handle(A, true, false) && press == 1 && inp.Handle(A, true, false) && press == 1 && inp.Handle(A, false, false), "the select button acts like the select key (a held button is one press)");
+                Assert(inp.Handle(0x77, true, false) && press == 2 && inp.Handle(0x77, false, false), "…and the key still works next to it");
+                Assert(!inp.Handle(B, true, false) && step == 0, "one switch: the step button is not used");
+                st.TwoSwitch = true;
+                Assert(inp.Handle(B, true, false) && step == 1 && inp.Handle(B, false, false), "two switches: the step button steps");
+                Assert(!inp.Handle(J3, true, false) && back == 0, "the back button does nothing while back with switch is off");
+                st.BackSwitch = true;
+                Assert(inp.Handle(J3, true, false) && back == 1 && inp.Handle(J3, false, false), "back with switch on: the back button goes back");
+                Assert(!inp.Handle(Gamepad.XInputBase + 0x4000, true, false), "any other button passes");
+                st.SelectOnRelease = true; press = 0;
+                Assert(inp.Handle(A, true, false) && press == 0 && inp.Handle(A, false, false) && press == 1, "select on release works for the button too");
+                st.SelectPad = 0;
+                Assert(!inp.Handle(A, true, false), "no button chosen: nothing is taken");
+
+                // Settings: saved with the others, and only buttons (never a key code) are kept.
+                var c = new ScanSettings { SelectPad = 0x20, StepPad = A, BackPad = A };
+                c.Clamp();
+                Assert(c.SelectPad == 0 && c.StepPad == A && c.BackPad == 0, "a key code is not a button; the three buttons differ");
+            }
+            {
+                string saved2 = UserData.DirectoryOverride;
+                string dir2 = Path.Combine(Path.GetTempPath(), "osk_pad_" + Guid.NewGuid().ToString("N"));
+                try
+                {
+                    UserData.DirectoryOverride = dir2; UserSettings.Reset();
+                    var s = new ScanSettings { SelectPad = Gamepad.XInputBase + 0x1000, StepPad = Gamepad.XInputBase + 0x2000, BackPad = Gamepad.JoyBase + 2 };
+                    UserSettings.SetScan(s); UserSettings.Reset();
+                    Assert(UserSettings.Scan.SameAs(s) && UserSettings.Scan.BackPad == Gamepad.JoyBase + 2, "the gamepad buttons come back after a restart");
+                }
+                finally { UserData.DirectoryOverride = saved2; UserSettings.Reset(); try { Directory.Delete(dir2, true); } catch { } }
+            }
+            using (var d = new ScanSettingsDialog(new ScanSettings()))
+            {
+                int A = Gamepad.XInputBase + 0x1000, B = Gamepad.XInputBase + 0x2000;
+                Assert(!d.TryCapturePad(A), "a button is not taken while none is being chosen");
+                d.BeginCapture(4);
+                Assert(!d.TryCapturePad(0x20), "a key code is not a button");
+                Assert(d.TryCapturePad(A) && d.Result.SelectPad == A, "the button pressed after choosing becomes the select button");
+                d.BeginCapture(5);
+                Assert(d.TryCapturePad(A) && d.Result.StepPad == 0, "the same button cannot be two switches");
+                Assert(d.TryCapturePad(B) && d.Result.StepPad == B, "…another one can be the step button");
+                d.BeginCapture(6); d.TryCapturePad(Gamepad.JoyBase + 1);
+                Assert(d.Result.BackPad == Gamepad.JoyBase + 1, "…and the back button");
+                d.BeginCapture(4);
+                Assert(d.TryCapture(Keys.Delete) && d.Result.SelectPad == 0, "Delete clears the button being chosen");
+                d.BeginCapture(5);
+                Assert(d.TryCapture(Keys.Escape) && d.Result.StepPad == B && !d.TryCapturePad(A), "Esc cancels the choice");
+            }
+
             Section("Scanning — dialog");
             Lang.Load("en");
             using (var d = new ScanSettingsDialog(new ScanSettings()))

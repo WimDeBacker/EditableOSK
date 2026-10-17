@@ -15,11 +15,12 @@ namespace OnScreenKeyboard
         private readonly TouchChoiceButton _cmbSwitches, _cmbSound;
         private readonly TouchCheckBox _chkOnRelease, _chkBackStep, _chkBackSwitch;
         private readonly TouchChoiceButton _cmbLong;
-        private readonly FluentButton _btnSelect, _btnStep, _btnBack;
+        private readonly FluentButton _btnSelect, _btnStep, _btnBack, _btnPadSelect, _btnPadStep, _btnPadBack;
+        private GamepadPoller _pad;              // looks at the controllers only while a gamepad button is being chosen
         private readonly TouchStepper _stpScan, _stpExtra, _stpRounds, _stpIgnore, _stpHold;
         private readonly ColorChip _chipRow, _chipKey, _chipBack;
         private readonly Label _hint, _backHint;
-        private int _capturing;                  // 0 none, 1 select key, 2 step key, 3 back key
+        private int _capturing;                  // 0 none, 1 select key, 2 step key, 3 back key, 4 select / 5 step / 6 back gamepad button
         private bool _onReleaseValue, _syncing;  // what the person chose for "select on release"; _syncing: the code sets the check box
 
         /// <summary>The settings as the dialog shows them (valid after OK). Whether scanning is on is not decided here.</summary>
@@ -76,6 +77,15 @@ namespace OnScreenKeyboard
             _btnStep.Click   += (s, e) => BeginCapture(2);
             AddRow(t, () => Lang.T("scan: keys"), InlineRow(_btnSelect, _btnStep), fill: false);
 
+            // A gamepad button can be a switch too (next to the keys, or instead of them).
+            _btnPadSelect = MakeTouchButton(() => KeyText(4));
+            _btnPadStep   = MakeTouchButton(() => KeyText(5));
+            _btnPadSelect.Click += (s, e) => BeginCapture(4);
+            _btnPadStep.Click   += (s, e) => BeginCapture(5);
+            SetTip(_btnPadSelect, () => Lang.T("tip: scan pad"));
+            SetTip(_btnPadStep,   () => Lang.T("tip: scan pad"));
+            AddRow(t, () => Lang.T("scan: pad"), InlineRow(_btnPadSelect, _btnPadStep), fill: false);
+
             _chkOnRelease = NewCheck(() => Lang.T("scan: on release"));
             _onReleaseValue = _value.SelectOnRelease;
             _chkOnRelease.Checked = _onReleaseValue;
@@ -114,6 +124,10 @@ namespace OnScreenKeyboard
             _btnBack = MakeTouchButton(() => KeyText(3));
             _btnBack.Click += (s, e) => BeginCapture(3);
             AddRow(t, () => Lang.T("scan: back key"), _btnBack, fill: false);
+            _btnPadBack = MakeTouchButton(() => KeyText(6));
+            _btnPadBack.Click += (s, e) => BeginCapture(6);
+            SetTip(_btnPadBack, () => Lang.T("tip: scan pad"));
+            AddRow(t, () => Lang.T("scan: pad back"), _btnPadBack, fill: false);
             _cmbLong = new TouchChoiceButton { RowHeight = 44 };
             _cmbLong.SetItems(new[] { "scan: long off", "scan: long restarts", "scan: long steps back" }.Select(k => new TouchChoice { Text = Lang.T(k) }),
                               !_value.BackLongPress ? 0 : _value.LongPressStepsBack ? 2 : 1);
@@ -164,9 +178,13 @@ namespace OnScreenKeyboard
 
         private int KeyOf(int which) => which == 1 ? _value.SelectKey : which == 2 ? _value.StepKey : _value.BackKey;
 
+        private int PadOf(int which) => which == 4 ? _value.SelectPad : which == 5 ? _value.StepPad : _value.BackPad;
+
         private string KeyText(int which) =>
-            _capturing == which ? Lang.T("scan: press a key")
+            _capturing == which ? Lang.T(which >= 4 ? "scan: press a pad button" : "scan: press a key")
                 : which == 3 ? ScanSettings.KeyName(_value.BackKey)
+                : which == 6 ? Gamepad.Name(_value.BackPad)
+                : which >= 4 ? Lang.StripMnemonic(Lang.T(which == 4 ? "scan: select key" : "scan: step key")) + ": " + Gamepad.Name(PadOf(which))
                 : Lang.StripMnemonic(Lang.T(which == 1 ? "scan: select key" : "scan: step key")) + ": " + ScanSettings.KeyName(KeyOf(which));
 
         private void UpdateEnabled()
@@ -177,6 +195,8 @@ namespace OnScreenKeyboard
             _stpExtra.Enabled  = !two;
             _stpRounds.Enabled = !two;
             _btnBack.Enabled   = _chkBackSwitch.Checked;
+            _btnPadStep.Enabled = two;
+            _btnPadBack.Enabled = _chkBackSwitch.Checked;
             _stpHold.Enabled   = _cmbLong.SelectedIndex > 0;
             // A long press needs the length of the press: the select switch then acts when it is let go. The check box shows that ("on", and
             // greyed, with the reason in its tip); what the person chose is kept and comes back when the long press is switched off.
@@ -203,7 +223,9 @@ namespace OnScreenKeyboard
         {
             _capturing = which;
             RefreshKeyButtons();
-            ActiveControl = which == 1 ? _btnSelect : which == 2 ? _btnStep : _btnBack;
+            ActiveControl = which == 1 ? _btnSelect : which == 2 ? _btnStep : which == 3 ? _btnBack : which == 4 ? _btnPadSelect : which == 5 ? _btnPadStep : _btnPadBack;
+            if (which >= 4) { _pad ??= new GamepadPoller((code, down) => { if (down) TryCapturePad(code); }); _pad.Start(); }
+            else _pad?.Stop();
         }
 
         private void RefreshKeyButtons()
@@ -211,6 +233,35 @@ namespace OnScreenKeyboard
             _btnSelect.Text = KeyText(1);
             _btnStep.Text   = KeyText(2);
             _btnBack.Text   = KeyText(3);
+            _btnPadSelect.Text = KeyText(4);
+            _btnPadStep.Text   = KeyText(5);
+            _btnPadBack.Text   = KeyText(6);
+        }
+
+        /// <summary>Takes the gamepad button <paramref name="code"/> as the one being chosen. False when no button is being chosen.</summary>
+        internal bool TryCapturePad(int code)
+        {
+            if (_capturing < 4 || !Gamepad.IsButton(code)) return false;
+            var note = _capturing == 6 ? _backHint : _hint;
+            for (int other = 4; other <= 6; other++)
+                if (other != _capturing && PadOf(other) == code) { note.Text = Lang.T("scan: key taken"); return true; }
+            if (_capturing == 4) _value.SelectPad = code; else if (_capturing == 5) _value.StepPad = code; else _value.BackPad = code;
+            EndCapture();
+            return true;
+        }
+
+        private void EndCapture()
+        {
+            _capturing = 0;
+            _pad?.Stop();
+            _hint.Text = HintText(); _backHint.Text = Lang.T("scan: back hint");
+            RefreshKeyButtons();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) { _pad?.Dispose(); _pad = null; }
+            base.Dispose(disposing);
         }
 
         /// <summary>Takes <paramref name="key"/> as the key being chosen. False when no key is being chosen (the key is not ours).</summary>
@@ -218,6 +269,16 @@ namespace OnScreenKeyboard
         {
             if (_capturing == 0) return false;
             int vk = (int)(key & Keys.KeyCode);
+            if (_capturing >= 4)                                      // a gamepad button is being chosen: Esc cancels, Delete or Backspace clears
+            {
+                if (vk == (int)Keys.Delete || vk == (int)Keys.Back)
+                {
+                    if (_capturing == 4) _value.SelectPad = 0; else if (_capturing == 5) _value.StepPad = 0; else _value.BackPad = 0;
+                    EndCapture();
+                }
+                else if (vk == ScanSettings.VkEscape) EndCapture();
+                return true;
+            }
             if (vk == ScanSettings.VkEscape) { _capturing = 0; RefreshKeyButtons(); return true; }      // Esc pauses scanning: it cannot be a switch
             if (vk == 0) return true;
             var note = _capturing == 3 ? _backHint : _hint;

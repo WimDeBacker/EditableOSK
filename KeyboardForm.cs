@@ -430,6 +430,7 @@ namespace OnScreenKeyboard
                 _slowTimer?.Stop();  _slowTimer?.Dispose();
                 _dwellTimer?.Stop(); _dwellTimer?.Dispose();
                 _scanTimer?.Stop();  _scanTimer?.Dispose();  _scanTimer = null;
+                _gamepad?.Dispose(); _gamepad = null;
                 _scanInput?.Uninstall(); _scanInput = null;
                 _wpSaveTimer?.Stop(); _wpSaveTimer?.Dispose();
                 // Final flush so learning from the last (up to) 30 s isn't lost.
@@ -2955,6 +2956,7 @@ namespace OnScreenKeyboard
         // runs in Normal mode only. Esc pauses the scan (the select key starts it again); the mouse and the gear button keep working.
         private Scanner      _scanner;
         private ScanInput    _scanInput;
+        private GamepadPoller _gamepad;                             // only while a gamepad button is used as a switch
         private System.Windows.Forms.Timer _scanTimer;
         private readonly System.Diagnostics.Stopwatch _scanWatch = new();
         private long         _scanLastMs;
@@ -2976,6 +2978,7 @@ namespace OnScreenKeyboard
             if (!arm)
             {
                 _scanTimer?.Stop(); _scanWatch.Reset();
+                _gamepad?.Dispose(); _gamepad = null;
                 _scanInput?.Uninstall(); _scanInput = null;
                 if (_scanner != null) { _scanner.Changed -= OnScanChanged; _scanner.Selected -= OnScanSelected; _scanner = null; }
                 RefreshScanHighlight();
@@ -2983,6 +2986,7 @@ namespace OnScreenKeyboard
             }
 
             if (_scanner != null) { _scanner.Changed -= OnScanChanged; _scanner.Selected -= OnScanSelected; }
+            _gamepad?.Dispose(); _gamepad = null;
             _scanInput?.Uninstall();
             var settings = UserSettings.Scan.Clone();
             _scanner = new Scanner(settings);
@@ -2999,6 +3003,14 @@ namespace OnScreenKeyboard
                 back:   () => BeginInvoke((Action)(() => _scanner?.Back())),
                 hold:   down => BeginInvoke((Action)(() => _scanner?.SetHolding(down))));
             _scanInput.Install();
+            // A controller is looked at only when one of its buttons is a switch. Its buttons go through the same decisions as the keys; the
+            // poller runs on this thread, so the results are handled at once.
+            if (settings.SelectPad != 0 || (settings.TwoSwitch && settings.StepPad != 0) || (settings.BackSwitch && settings.BackPad != 0))
+            {
+                var input = _scanInput;
+                _gamepad = new GamepadPoller((code, down) => input.Handle(code, down, false));
+                _gamepad.Start();
+            }
 
             _scanTimer ??= new System.Windows.Forms.Timer { Interval = 50 };
             _scanTimer.Tick -= OnScanTimer;
