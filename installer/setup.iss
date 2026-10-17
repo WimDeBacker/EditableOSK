@@ -132,6 +132,8 @@ Source: "{#BuildDir}\azerty.kbl";                     DestDir: "{app}"; Flags: i
 Source: "{#BuildDir}\azertycolor.kbl";                DestDir: "{app}"; Flags: ignoreversion
 Source: "{#BuildDir}\qwerty.kbl";                     DestDir: "{app}"; Flags: ignoreversion
 Source: "{#BuildDir}\math.kbl";                       DestDir: "{app}"; Flags: ignoreversion
+Source: "{#BuildDir}\Scanning.kbl";                   DestDir: "{app}"; Flags: ignoreversion
+Source: "{#BuildDir}\ScanningCijfers.kbl";            DestDir: "{app}"; Flags: ignoreversion
 
 ; ── Word prediction databases ────────────────────────────────────────────
 ; Dutch — always included

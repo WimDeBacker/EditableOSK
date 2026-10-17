@@ -58,6 +58,9 @@ namespace OnScreenKeyboard
         public LayoutMeta  ResultMeta   { get; private set; }
         public List<KeyGroup> ResultGroups { get; private set; }
 
+        /// <summary>The scan settings (the user's own, not the layout's): what they were when the dialog opened, or what the scanning dialog changed.</summary>
+        internal ScanSettings ResultScan { get; private set; } = UserSettings.Scan.Clone();
+
         /// <summary>Set when Save or Save As closed the dialog: the caller copies the results and then saves the layout file.</summary>
         public KeyboardFileAction FileAction { get; private set; } = KeyboardFileAction.None;
 
@@ -89,6 +92,8 @@ namespace OnScreenKeyboard
         private TouchCheckBox    _chkStickyMods, _chkHoldToEdit, _chkTimingAnimation, _chkCornerLabels;
         private TouchRadioButton _optTimingOff, _optSlowKeys, _optDwell;
         private TouchStepper     _stpSlowKeys, _stpDwell;
+        private FluentButton     _btnScanning;
+        private TouchRadioButton _optScanning;
 
         // ── Controls: Word prediction ────────────────────────────────
         private TouchCheckBox     _chkWPLearning;
@@ -314,6 +319,14 @@ namespace OnScreenKeyboard
             SetTip(_chkStickyMods, () => Lang.T("tip: Sticky modifiers"));
             SetTip(_chkHoldToEdit, () => Lang.T("tip: Hold to edit"));
 
+            // Scanning: its settings are the user's, in a dialog of their own (applied with Apply, like the rest of this window).
+            _btnScanning = MakeTouchButton(() => Lang.T("scan: settings"));
+            _btnScanning.Anchor = AnchorStyles.Left;
+            SetTip(_btnScanning, () => Lang.T("tip: scan use"));
+            _btnScanning.Click += (s, e) => OpenScanning();
+            _optScanning = NewRadio(() => Lang.T("Scanning"));
+            SetTip(_optScanning, () => Lang.T("tip: scan use"));
+
             // The timing aid: a framed group of three radio buttons (exactly one is on). Column 1 holds the three radio buttons
             // and the animation check box (one width, right edges aligned), column 2 the steppers, column 3 the unit.
             _optTimingOff = NewRadio(() => Lang.T("kbd: Off"));
@@ -335,11 +348,11 @@ namespace OnScreenKeyboard
             var grid = new AdaptiveTable { ColumnCount = 3 };
             for (int i = 0; i < 3; i++) grid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             Control Unit() => new Label { Text = "ms", AutoSize = true, Anchor = AnchorStyles.Left, UseMnemonic = false, Font = Fluent.FontLabel, ForeColor = Fluent.TextPrimary, BackColor = Color.Transparent, Margin = new Padding(Touch.Gap, 0, 0, 0) };
-            foreach (var r in new Control[] { _optTimingOff, _optSlowKeys, _optDwell, _chkTimingAnimation })
+            foreach (var r in new Control[] { _optTimingOff, _optSlowKeys, _optDwell, _optScanning, _chkTimingAnimation })
             { r.Dock = DockStyle.Fill; r.Margin = new Padding(0, 4, Touch.Gap, 4); }
-            _optTimingOff.TabIndex = 0; _optSlowKeys.TabIndex = 1; _optDwell.TabIndex = 2;
+            _optTimingOff.TabIndex = 0; _optSlowKeys.TabIndex = 1; _optDwell.TabIndex = 2; _optScanning.TabIndex = 3;
             var unitSlow = Unit(); var unitDwell = Unit();
-            var sep = new Panel { Height = 1, Dock = DockStyle.Fill, Margin = new Padding(0, 8, 0, 8), Tag = "notheme", BackColor = _dark ? Fluent.DialogDarkBorder : Fluent.BorderCard };
+            var sep = new Panel { Height = 1, Dock = DockStyle.Fill, Margin = new Padding(0, 2, 0, 2), Tag = "notheme", BackColor = _dark ? Fluent.DialogDarkBorder : Fluent.BorderCard };
             grid.AddVariant(() =>
             {
                 _stpSlowKeys.Anchor = AnchorStyles.Right; _stpDwell.Anchor = AnchorStyles.Right;
@@ -348,8 +361,9 @@ namespace OnScreenKeyboard
                     new AdaptiveTable.Cell(_optTimingOff, 0, 0),
                     new AdaptiveTable.Cell(_optSlowKeys, 0, 1), new AdaptiveTable.Cell(_stpSlowKeys, 1, 1), new AdaptiveTable.Cell(unitSlow, 2, 1),
                     new AdaptiveTable.Cell(_optDwell, 0, 2),    new AdaptiveTable.Cell(_stpDwell, 1, 2),    new AdaptiveTable.Cell(unitDwell, 2, 2),
-                    new AdaptiveTable.Cell(sep, 0, 3, 3),
-                    new AdaptiveTable.Cell(_chkTimingAnimation, 0, 4),      // the radio buttons' column: one width, one right edge
+                    new AdaptiveTable.Cell(_optScanning, 0, 3), new AdaptiveTable.Cell(_btnScanning, 1, 3, 2),   // its settings: a window of their own
+                    new AdaptiveTable.Cell(sep, 0, 4, 3),
+                    new AdaptiveTable.Cell(_chkTimingAnimation, 0, 5),      // the radio buttons' column: one width, one right edge
                 };
             });
             grid.AddVariant(() =>
@@ -360,12 +374,13 @@ namespace OnScreenKeyboard
                     new AdaptiveTable.Cell(_optTimingOff, 0, 0, 3),
                     new AdaptiveTable.Cell(_optSlowKeys, 0, 1, 3), new AdaptiveTable.Cell(_stpSlowKeys, 0, 2), new AdaptiveTable.Cell(unitSlow, 1, 2),
                     new AdaptiveTable.Cell(_optDwell, 0, 3, 3),    new AdaptiveTable.Cell(_stpDwell, 0, 4),    new AdaptiveTable.Cell(unitDwell, 1, 4),
-                    new AdaptiveTable.Cell(sep, 0, 5, 3),
-                    new AdaptiveTable.Cell(_chkTimingAnimation, 0, 6, 3),
+                    new AdaptiveTable.Cell(_optScanning, 0, 5, 3), new AdaptiveTable.Cell(_btnScanning, 0, 6, 3),
+                    new AdaptiveTable.Cell(sep, 0, 7, 3),
+                    new AdaptiveTable.Cell(_chkTimingAnimation, 0, 8, 3),
                 };
             });
 
-            foreach (var r in new[] { _optTimingOff, _optSlowKeys, _optDwell })
+            foreach (var r in new[] { _optTimingOff, _optSlowKeys, _optDwell, _optScanning })
                 r.CheckedChanged += (s, e) => { if (((TouchRadioButton)s).Checked) OnTimingModeChanged(); };
 
             _chkCornerLabels = NewCheck(() => Lang.T("Show Shift and AltGr labels"));
@@ -373,6 +388,12 @@ namespace OnScreenKeyboard
 
             var group = MakeGroup(() => Lang.T("kbd: Timing aid"), grid);
             AddWideRow(t, OptionStack(_chkStickyMods, _chkHoldToEdit, group, _chkCornerLabels), fill: false);
+        }
+
+        private void OpenScanning()
+        {
+            using var dlg = new ScanSettingsDialog(ResultScan);
+            if (dlg.ShowDialog(this) == DialogResult.OK) ResultScan = dlg.Result;
         }
 
         private TouchStepper NewTimingStepper(int min, int max, int step, int value, string nameKey)
@@ -384,12 +405,13 @@ namespace OnScreenKeyboard
             return st;
         }
 
-        /// <summary>The timing aid chosen by the radio group.</summary>
-        private enum TimingMode { Off, SlowKeys, Dwell }
-        private TimingMode CurrentTimingMode => _optSlowKeys.Checked ? TimingMode.SlowKeys : _optDwell.Checked ? TimingMode.Dwell : TimingMode.Off;
+        /// <summary>The aid chosen by the radio group (access control): at most one of them.</summary>
+        private enum TimingMode { Off, SlowKeys, Dwell, Scanning }
+        private TimingMode CurrentTimingMode =>
+            _optSlowKeys.Checked ? TimingMode.SlowKeys : _optDwell.Checked ? TimingMode.Dwell : _optScanning.Checked ? TimingMode.Scanning : TimingMode.Off;
 
-        /// <summary>The animation applies while a timing aid is on; the steppers belong to the chosen option only.</summary>
-        private bool TimingAvailable() => CurrentTimingMode != TimingMode.Off;
+        /// <summary>The animation applies while slow keys or dwell click is on; the steppers belong to the chosen option only.</summary>
+        private bool TimingAvailable() => CurrentTimingMode == TimingMode.SlowKeys || CurrentTimingMode == TimingMode.Dwell;
 
         private void OnTimingModeChanged()
         {
@@ -538,7 +560,8 @@ namespace OnScreenKeyboard
                 _chkHoldToEdit.Checked = m.HoldToEdit;
                 WidenStepper(_stpSlowKeys, 100, 3000, m.SlowKeysMs);
                 WidenStepper(_stpDwell, 100, 5000, m.DwellMs);
-                if (m.SlowKeysMs > 0)      { _stpSlowKeys.Value = m.SlowKeysMs; _optSlowKeys.Checked = true; }   // both above 0: Slow keys (the first option)
+                if (ResultScan.Enabled)    _optScanning.Checked = true;                                          // scanning wins: it switches the others off
+                else if (m.SlowKeysMs > 0) { _stpSlowKeys.Value = m.SlowKeysMs; _optSlowKeys.Checked = true; }   // both above 0: Slow keys (the first option)
                 else if (m.DwellMs > 0)    { _stpDwell.Value = m.DwellMs;       _optDwell.Checked = true; }
                 else                       _optTimingOff.Checked = true;
                 _chkTimingAnimation.Checked = m.ShowTimingAnimation;
@@ -867,6 +890,8 @@ namespace OnScreenKeyboard
             ResultMeta.HoldToEdit          = _chkHoldToEdit.Checked;
             ResultMeta.SlowKeysMs          = CurrentTimingMode == TimingMode.SlowKeys ? (int)_stpSlowKeys.Value : 0;
             ResultMeta.DwellMs             = CurrentTimingMode == TimingMode.Dwell ? (int)_stpDwell.Value : 0;
+            ResultScan = ResultScan.Clone();
+            ResultScan.Enabled             = CurrentTimingMode == TimingMode.Scanning;
             ResultMeta.ShowTimingAnimation = _chkTimingAnimation.Checked;     // kept while its check box is disabled
             ResultMeta.ShowCornerLabels    = _chkCornerLabels.Checked;
             ResultMeta.Language            = SelectedKeyboardLanguage;

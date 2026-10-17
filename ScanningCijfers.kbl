@@ -1,0 +1,57 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<OnScreenKeyboard FormatVersion="2">
+  <Info>
+    <Title lang="nl">Scanning: cijfers en tekens</Title>
+    <Title lang="en">Scanning: numbers and signs</Title>
+    <Description lang="nl">Cijfers, rekentekens en leestekens voor scanning. De toets abc keert terug naar het letterbord.</Description>
+    <Description lang="en">Numbers, arithmetic signs and punctuation for scanning. The abc key returns to the letter keyboard.</Description>
+  </Info>
+  <Theme BackgroundColor="1C1C28" Opacity="1.00" FontName="Arial" FontSize="0" FontColor="EFEFFF" KeyColor="2C2C42" BorderColor="3C3C56" BorderThickness="1">
+    <Group Id="standard" FontName="" FontSize="0" FontColor="EFEFFF" KeyColor="2C2C42" BorderColor="3C3C56" BorderThickness="1" />
+    <Group Id="numbers" FontName="" FontSize="0" FontColor="C0D0FF" KeyColor="243050" BorderColor="344060" BorderThickness="1">
+      <Name lang="en">Numbers</Name>
+      <Name lang="nl">Cijfers</Name>
+    </Group>
+    <Group Id="controls" FontName="" FontSize="0" FontColor="B0B0C8" KeyColor="1C1C2E" BorderColor="2A2A3E" BorderThickness="1">
+      <Name lang="en">Controls</Name>
+      <Name lang="nl">Besturing</Name>
+    </Group>
+    <Group Id="punctuation" FontName="" FontSize="0" FontColor="D8C0F0" KeyColor="38283C" BorderColor="483848" BorderThickness="1">
+      <Name lang="en">Punctuation</Name>
+      <Name lang="nl">Leestekens</Name>
+    </Group>
+    <Group Id="arithmetic" FontName="" FontSize="0" FontColor="F0E0B0" KeyColor="4A3C20" BorderColor="5A4C30" BorderThickness="1">
+      <Name lang="en">Arithmetic</Name>
+      <Name lang="nl">Rekentekens</Name>
+    </Group>
+  </Theme>
+  <Layout Language="nl" GridRows="5" GridCols="6" GearRow="0" GearCol="5" WindowWidth="822" WindowHeight="272" HideTitlebar="0" StickyModifiers="1" HoldToEdit="0" AlwaysOnTop="1" SlowKeysMs="0" DwellMs="0" ShowTimingAnimation="1" LastFile="" ToolbarTheme="Dark" WordLearningEnabled="1">
+    <Key Row="0" Col="0" RowSpan="1" ColSpan="1" GroupId="numbers" Label="1" Send="1" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="0" Col="1" RowSpan="1" ColSpan="1" GroupId="numbers" Label="2" Send="2" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="0" Col="2" RowSpan="1" ColSpan="1" GroupId="numbers" Label="3" Send="3" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="0" Col="3" RowSpan="1" ColSpan="1" GroupId="numbers" Label="4" Send="4" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="0" Col="4" RowSpan="1" ColSpan="1" GroupId="numbers" Label="5" Send="5" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="1" Col="0" RowSpan="1" ColSpan="1" GroupId="numbers" Label="6" Send="6" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="1" Col="1" RowSpan="1" ColSpan="1" GroupId="numbers" Label="7" Send="7" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="1" Col="2" RowSpan="1" ColSpan="1" GroupId="numbers" Label="8" Send="8" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="1" Col="3" RowSpan="1" ColSpan="1" GroupId="numbers" Label="9" Send="9" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="1" Col="4" RowSpan="1" ColSpan="1" GroupId="numbers" Label="0" Send="0" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="2" Col="0" RowSpan="1" ColSpan="1" GroupId="controls" Label="Spatie" Send=" " ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="2" Col="1" RowSpan="1" ColSpan="1" GroupId="controls" Label="⌫" Send="{BACKSPACE}" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="2" Col="2" RowSpan="1" ColSpan="1" GroupId="controls" Label="Enter" Send="{ENTER}" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="2" Col="3" RowSpan="1" ColSpan="1" GroupId="punctuation" Label="." Send="." ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="2" Col="4" RowSpan="1" ColSpan="1" GroupId="punctuation" Label="," Send="," ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="2" Col="5" RowSpan="1" ColSpan="1" GroupId="numbers" Label="abc" Send="layout:Scanning.kbl" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="3" Col="0" RowSpan="1" ColSpan="1" GroupId="arithmetic" Label="+" Send="+" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="3" Col="1" RowSpan="1" ColSpan="1" GroupId="arithmetic" Label="-" Send="-" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="3" Col="2" RowSpan="1" ColSpan="1" GroupId="arithmetic" Label="*" Send="*" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="3" Col="3" RowSpan="1" ColSpan="1" GroupId="arithmetic" Label=":" Send=":" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="3" Col="4" RowSpan="1" ColSpan="1" GroupId="arithmetic" Label="=" Send="=" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="4" Col="0" RowSpan="1" ColSpan="1" GroupId="punctuation" Label=";" Send=";" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="4" Col="1" RowSpan="1" ColSpan="1" GroupId="punctuation" Label="/" Send="/" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="4" Col="2" RowSpan="1" ColSpan="1" GroupId="punctuation" Label="(" Send="(" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="4" Col="3" RowSpan="1" ColSpan="1" GroupId="punctuation" Label=")" Send=")" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="4" Col="4" RowSpan="1" ColSpan="1" GroupId="punctuation" Label="!" Send="!" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="4" Col="5" RowSpan="1" ColSpan="1" GroupId="punctuation" Label="?" Send="?" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+  </Layout>
+</OnScreenKeyboard>

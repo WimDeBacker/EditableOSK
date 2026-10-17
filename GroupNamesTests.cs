@@ -111,7 +111,7 @@ namespace OnScreenKeyboard
                     "importing groups from an older file gives the same ids");
 
                 // ── The ready-made layouts: every key points at a group that exists, and every group has its names ──
-                foreach (string file in new[] { "azerty.kbl", "azertycolor.kbl", "qwerty.kbl", "math.kbl" })
+                foreach (string file in new[] { "azerty.kbl", "azertycolor.kbl", "qwerty.kbl", "math.kbl", "Scanning.kbl", "ScanningCijfers.kbl" })
                 {
                     string p = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, file);
                     if (!File.Exists(p)) { Assert(false, $"{file}: not found next to the test binary"); continue; }

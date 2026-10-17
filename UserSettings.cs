@@ -3,6 +3,7 @@
 // languages, and a layout carries only the language of the keyboard itself (LayoutMeta.Language: its names and its word prediction).
 
 using System;
+using System.Drawing;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -21,10 +22,20 @@ namespace OnScreenKeyboard
         /// </summary>
         internal static string InterfaceLanguage
         {
-            get => _interfaceLanguage ??= Load() ?? Default();
+            get
+            {
+                if (_interfaceLanguage == null)
+                {
+                    string saved = Load();
+                    _languageIsChoice = saved != null;
+                    _interfaceLanguage = saved ?? Default();
+                }
+                return _interfaceLanguage;
+            }
             set
             {
                 if (string.IsNullOrWhiteSpace(value)) return;
+                _languageIsChoice = true;
                 // Nothing to write when it is what is saved already; a choice that equals the default is still written once, so it stays
                 // the user's choice when the language of Windows changes later.
                 bool same = string.Equals(_interfaceLanguage, value, StringComparison.OrdinalIgnoreCase);
@@ -43,9 +54,55 @@ namespace OnScreenKeyboard
         }
 
         /// <summary>For the tests: forget what was read, so the next access reads the file (or the default) again.</summary>
-        internal static void Reset() => _interfaceLanguage = null;
+        internal static void Reset() { _interfaceLanguage = null; _languageIsChoice = false; _scan = null; }
+
+        private static ScanSettings _scan;
+        private static bool _languageIsChoice;     // false while the language is only the default: then the file does not fix it
+
+        /// <summary>The settings of scanning (off by default). Change them through <see cref="SetScan"/>, which also saves.</summary>
+        internal static ScanSettings Scan => _scan ??= LoadScan();
+
+        internal static void SetScan(ScanSettings value)
+        {
+            var v = value.Clone(); v.Clamp();
+            _scan = v;
+            Save();
+        }
 
         private static string PathOfFile => UserData.FileFor(FileName);
+
+        private static ScanSettings LoadScan()
+        {
+            var s = new ScanSettings();
+            try
+            {
+                string path = PathOfFile;
+                if (!File.Exists(path)) return s;
+                var doc = new XmlDocument();
+                doc.Load(path);
+                var e = doc.SelectSingleNode("/UserSettings/Scanning") as XmlElement;
+                if (e == null) return s;
+                bool B(string n, bool d) => e.HasAttribute(n) ? e.GetAttribute(n) == "1" : d;
+                int  I(string n, int d)  => int.TryParse(e.GetAttribute(n), NumberStyles.Integer, CultureInfo.InvariantCulture, out int v) ? v : d;
+                s.Enabled        = B("Enabled", false);
+                s.TwoSwitch      = B("TwoSwitch", false);
+                s.SelectKey      = I("SelectKey", s.SelectKey);
+                s.StepKey        = I("StepKey", s.StepKey);
+                s.ScanMs         = I("ScanMs", s.ScanMs);
+                s.FirstExtraMs   = I("FirstExtraMs", s.FirstExtraMs);
+                s.Rounds         = I("Rounds", s.Rounds);
+                s.IgnoreRepeatMs = I("IgnoreRepeatMs", s.IgnoreRepeatMs);
+                s.SoundOnStep    = B("SoundOnStep", false);
+                s.SoundOnSelect  = B("SoundOnSelect", true);
+                Color C(string n, Color d) =>
+                    int.TryParse(e.GetAttribute(n), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out int v) ? Color.FromArgb(255, Color.FromArgb(v)) : d;
+                s.RowColor = C("RowColor", s.RowColor);
+                s.KeyColor = C("KeyColor", s.KeyColor);
+                s.Clamp();
+            }
+            catch { return new ScanSettings(); }
+            return s;
+        }
 
         /// <summary>The saved language when there is one and the program can still load it; otherwise null.</summary>
         private static string Load()
@@ -67,12 +124,29 @@ namespace OnScreenKeyboard
         {
             try
             {
+                _ = InterfaceLanguage;      // read what the file says before it is rewritten (the scan settings may be saved first)
                 string path = PathOfFile, tmp = path + ".tmp";
                 using (var w = XmlWriter.Create(tmp, new XmlWriterSettings { Indent = true }))
                 {
                     w.WriteStartDocument();
                     w.WriteStartElement("UserSettings");
-                    w.WriteAttributeString("InterfaceLanguage", _interfaceLanguage);
+                    if (_languageIsChoice) w.WriteAttributeString("InterfaceLanguage", _interfaceLanguage);
+                    var s = Scan;
+                    w.WriteStartElement("Scanning");
+                    string F(bool b) => b ? "1" : "0";
+                    w.WriteAttributeString("Enabled", F(s.Enabled));
+                    w.WriteAttributeString("TwoSwitch", F(s.TwoSwitch));
+                    w.WriteAttributeString("SelectKey", s.SelectKey.ToString(CultureInfo.InvariantCulture));
+                    w.WriteAttributeString("StepKey", s.StepKey.ToString(CultureInfo.InvariantCulture));
+                    w.WriteAttributeString("ScanMs", s.ScanMs.ToString(CultureInfo.InvariantCulture));
+                    w.WriteAttributeString("FirstExtraMs", s.FirstExtraMs.ToString(CultureInfo.InvariantCulture));
+                    w.WriteAttributeString("Rounds", s.Rounds.ToString(CultureInfo.InvariantCulture));
+                    w.WriteAttributeString("IgnoreRepeatMs", s.IgnoreRepeatMs.ToString(CultureInfo.InvariantCulture));
+                    w.WriteAttributeString("SoundOnStep", F(s.SoundOnStep));
+                    w.WriteAttributeString("SoundOnSelect", F(s.SoundOnSelect));
+                    w.WriteAttributeString("RowColor", (s.RowColor.ToArgb() & 0xFFFFFF).ToString("X6", CultureInfo.InvariantCulture));
+                    w.WriteAttributeString("KeyColor", (s.KeyColor.ToArgb() & 0xFFFFFF).ToString("X6", CultureInfo.InvariantCulture));
+                    w.WriteEndElement();
                     w.WriteEndElement();
                     w.WriteEndDocument();
                 }

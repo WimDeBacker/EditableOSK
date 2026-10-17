@@ -415,7 +415,7 @@ namespace OnScreenKeyboard
                 AutoSave();
             };
             SizeChanged += (s, e) => { if (!_inModeTransition) LayoutButtons(); };
-            Shown       += (s, e) => { LayoutButtons(); ForceTopMost(); _gearBtn.BringToFront(); _predictor.OnSentenceStart(); };
+            Shown       += (s, e) => { LayoutButtons(); ForceTopMost(); _gearBtn.BringToFront(); _predictor.OnSentenceStart(); UpdateScanning(); };
             // Not while a dialog is open over it (ShowDialog disables its owner): putting the keyboard at the top of the
             // always-on-top windows then lifts it above that dialog, which opens or stays behind the keyboard.
             Activated   += (s, e) => { if (Enabled) ForceTopMost(); };
@@ -429,6 +429,8 @@ namespace OnScreenKeyboard
                 _toolTip?.Dispose();
                 _slowTimer?.Stop();  _slowTimer?.Dispose();
                 _dwellTimer?.Stop(); _dwellTimer?.Dispose();
+                _scanTimer?.Stop();  _scanTimer?.Dispose();  _scanTimer = null;
+                _scanInput?.Uninstall(); _scanInput = null;
                 _wpSaveTimer?.Stop(); _wpSaveTimer?.Dispose();
                 // Final flush so learning from the last (up to) 30 s isn't lost.
                 // Synchronous: the app is closing anyway, and the overlay file
@@ -1121,6 +1123,7 @@ namespace OnScreenKeyboard
             // Tell the predictor how many slots this layout actually uses so it
             // generates enough predictions (max slot index + 1, capped at 10).
             SyncPredictorSlotCount();
+            _scanner?.SetRows(BuildScanRows());
         }
 
         /// <summary>
@@ -1273,7 +1276,7 @@ namespace OnScreenKeyboard
                 }
                 else
                 {
-                    if (_meta.SlowKeysMs > 0)
+                    if (SlowKeysActive)
                     {
                         _slowCell    = cell;
                         _slowBtn     = btn;
@@ -1314,7 +1317,7 @@ namespace OnScreenKeyboard
 
             btn.MouseEnter += (s, e) =>
             {
-                if (_mode != Mode.Normal || _meta.DwellMs <= 0) return;
+                if (_mode != Mode.Normal || !DwellActive) return;
                 _dwellCell    = cell;
                 _dwellBtn     = btn;
                 _dwellElapsed = 0;
@@ -1951,6 +1954,8 @@ namespace OnScreenKeyboard
                 using var fillBrush = new SolidBrush(Color.FromArgb(90, fc));
                 e.Graphics.FillRectangle(fillBrush, 0, fillY, btn.Width, fillH);
             }
+
+            DrawScanHighlight(e.Graphics, btn);
 
         }
 
@@ -2944,6 +2949,135 @@ namespace OnScreenKeyboard
             prev?.Invalidate();
         }
 
+        // ── Scanning ──────────────────────────────────────────────────
+        // A person with one or two switches steps through the rows and keys; see Scanner (the rules), ScanInput (the switch keys) and
+        // scanning_research.md. The settings are the user's (UserSettings.Scan). Scanning is exclusive with slow keys and dwell click, and it
+        // runs in Normal mode only. Esc pauses the scan (the select key starts it again); the mouse and the gear button keep working.
+        private Scanner      _scanner;
+        private ScanInput    _scanInput;
+        private System.Windows.Forms.Timer _scanTimer;
+        private readonly System.Diagnostics.Stopwatch _scanWatch = new();
+        private long         _scanLastMs;
+        private readonly Dictionary<Button, bool> _scanPaint = new();   // button → true: the key itself, false: a key of the highlighted row
+
+        /// <summary>Scanning is switched on in the user settings.</summary>
+        internal bool ScanningOn => UserSettings.Scan.Enabled;
+        internal bool ScanningRunning => _scanInput != null && (_scanInput.Installed || ScanInput.HookDisabledForTest);
+        internal Scanner CurrentScanner => _scanner;
+
+        // The timing aids that scanning replaces.
+        private bool SlowKeysActive => _meta.SlowKeysMs > 0 && !ScanningOn;
+        private bool DwellActive    => _meta.DwellMs    > 0 && !ScanningOn;
+
+        /// <summary>Starts, restarts or stops scanning to match the settings, the mode and Esc. Call after any of those changed.</summary>
+        internal void UpdateScanning()
+        {
+            bool arm = ScanningOn && _mode == Mode.Normal && IsHandleCreated;
+            if (!arm)
+            {
+                _scanTimer?.Stop(); _scanWatch.Reset();
+                _scanInput?.Uninstall(); _scanInput = null;
+                if (_scanner != null) { _scanner.Changed -= OnScanChanged; _scanner.Selected -= OnScanSelected; _scanner = null; }
+                RefreshScanHighlight();
+                return;
+            }
+
+            if (_scanner != null) { _scanner.Changed -= OnScanChanged; _scanner.Selected -= OnScanSelected; }
+            _scanInput?.Uninstall();
+            var settings = UserSettings.Scan.Clone();
+            _scanner = new Scanner(settings);
+            _scanner.Changed  += OnScanChanged;
+            _scanner.Selected += OnScanSelected;
+            _scanner.SetRows(BuildScanRows());
+            // The hook only queues the work: the window handles it on its own thread, outside the hook's time limit.
+            _scanInput = new ScanInput(() => settings,
+                press:  () => BeginInvoke((Action)(() => _scanner?.Press())),
+                step:   () => BeginInvoke((Action)(() => _scanner?.Step())),
+                escape: () => BeginInvoke((Action)PauseScanning),
+                running: () => _scanner != null && _scanner.Level != ScanLevel.Idle);
+            _scanInput.Install();
+
+            _scanTimer ??= new System.Windows.Forms.Timer { Interval = 50 };
+            _scanTimer.Tick -= OnScanTimer;
+            _scanTimer.Tick += OnScanTimer;
+            _scanWatch.Restart(); _scanLastMs = 0;
+            _scanTimer.Start();
+            RefreshScanHighlight();
+        }
+
+        private void OnScanTimer(object sender, EventArgs e)
+        {
+            long now = _scanWatch.ElapsedMilliseconds;
+            int  ms  = (int)(now - _scanLastMs);
+            _scanLastMs = now;
+            if (ms > 0) _scanner?.Tick(Math.Min(ms, 250));      // a stall of the window (sleep, a busy PC) must not make the highlight race
+        }
+
+        /// <summary>
+        /// Esc: the scan pauses (nothing is highlighted). The switch stays ready: the person who scans starts again with the select key, alone.
+        /// Esc itself is taken only while a scan runs, so it works as a normal key the rest of the time.
+        /// </summary>
+        private void PauseScanning()
+        {
+            ScanSounds.PlayStep();
+            _scanner?.Stop();
+        }
+
+        private void OnScanChanged()
+        {
+            RefreshScanHighlight();
+            if (_scanner != null && _scanner.Level != ScanLevel.Idle && UserSettings.Scan.SoundOnStep) ScanSounds.PlayStep();
+        }
+
+        private void OnScanSelected(GridCell cell)
+        {
+            if (UserSettings.Scan.SoundOnSelect) ScanSounds.PlaySelect();
+            OnKeyClick(cell);                         // the same path as a click: modifiers, word prediction, layout keys
+            _scanner?.SetRows(BuildScanRows());       // the keys may have changed (suggestions, another layout)
+        }
+
+        /// <summary>The keys that scanning visits: not empty, shown, not the gear button, and for suggestion keys only when they hold a word.</summary>
+        private List<List<GridCell>> BuildScanRows()
+        {
+            var (gr, gc) = GearCell(_layout.Cols);
+            return Scanner.BuildRows(_layout.Cells.Where(c =>
+            {
+                if (IsEmptyKey(c.Props)) return false;
+                if (gr >= c.Row && gr < c.Row + c.RowSpan && gc >= c.Col && gc < c.Col + c.ColSpan) return false;
+                if (!_buttons.TryGetValue(c, out var b) || !b.Visible) return false;
+                bool wp = c.Props.Send != null && c.Props.Send.StartsWith("wp:", StringComparison.Ordinal);
+                return !wp || (b.Tag is ValueTuple<string, string, string, Color, bool, int> t && !string.IsNullOrEmpty(t.Item1));
+            }));
+        }
+
+        /// <summary>Repaints the keys whose highlight changed.</summary>
+        private void RefreshScanHighlight()
+        {
+            var old = _scanPaint.Keys.ToList();
+            _scanPaint.Clear();
+            if (_scanner != null && _scanner.Level != ScanLevel.Idle)
+            {
+                var key = _scanner.CurrentKey;
+                foreach (var c in _scanner.CurrentRow)
+                    if (_buttons.TryGetValue(c, out var b)) _scanPaint[b] = key != null && ReferenceEquals(c, key);
+            }
+            foreach (var b in old.Union(_scanPaint.Keys)) if (!b.IsDisposed) b.Invalidate();
+        }
+
+        private void DrawScanHighlight(Graphics g, Button btn)
+        {
+            if (!_scanPaint.TryGetValue(btn, out bool isKey)) return;
+            // Only a ring: the key keeps its own colours. The row and the key have rings of their own colours (the person's choice).
+            var s = UserSettings.Scan;
+            var color = isKey ? s.KeyColor : s.RowColor;
+            int t = isKey ? 8 : 5;
+            using (var ring = new Pen(color, t))
+                g.DrawRectangle(ring, t / 2f, t / 2f, btn.Width - t, btn.Height - t);
+            // A thin line of black or white just inside the ring, so the ring shows against any key colour.
+            using (var thin = new Pen(ColorChip.LabelColorFor(color), 1))
+                g.DrawRectangle(thin, t, t, btn.Width - 2 * t - 1, btn.Height - 2 * t - 1);
+        }
+
         private void SetMode(Mode newMode)
         {
             CancelSlowKey();
@@ -2970,6 +3104,7 @@ namespace OnScreenKeyboard
             finally { _inModeTransition = false; }
             ApplyModeIndicators();          // sets toolbar visibility + LayoutButtons()
             RefreshAllButtons(skipFontCalc: true);
+            UpdateScanning();
         }
 
         /// <summary>
@@ -2986,6 +3121,7 @@ namespace OnScreenKeyboard
             finally { _inModeTransition = false; }
             ApplyModeIndicators();          // sets toolbar visibility + LayoutButtons()
             RefreshAllButtons(skipFontCalc: true);
+            UpdateScanning();
         }
 
         /// <summary>
@@ -3005,6 +3141,7 @@ namespace OnScreenKeyboard
             ApplyModeIndicators();           // sets toolbar visibility + LayoutButtons()
             RefreshAllButtons(skipFontCalc: true);
             AutoSave();
+            UpdateScanning();
         }
 
         /// <summary>
@@ -3577,6 +3714,8 @@ namespace OnScreenKeyboard
             _theme .CopyFrom(dlg.ResultTheme);
             _window.CopyFrom(dlg.ResultWindow);
             _meta  .CopyFrom(dlg.ResultMeta);
+            // The scan settings are the user's, not the layout's: saved apart. Scanning itself starts when Edit mode is left.
+            if (!dlg.ResultScan.SameAs(UserSettings.Scan)) { UserSettings.SetScan(dlg.ResultScan); UpdateScanning(); }
             foreach (var b in _buttons.Values) b.Invalidate();   // e.g. the corner labels were switched on or off: nothing else changes, so nothing else would repaint
             ApplyTitlebarState();
             ForceTopMost();  // re-apply always-on-top setting immediately

@@ -62,6 +62,9 @@ namespace OnScreenKeyboard
         [STAThread]  // Required by Windows Forms: the main thread must be a Single-Threaded Apartment
         static int Main(string[] args)
         {
+            // The tests and the gallery open windows and switch their tabs by code: that is not the person's choice to remember.
+            if (Array.IndexOf(args, "--gallery") >= 0 || Array.IndexOf(args, "--test") >= 0) FluentDialogBase.RememberSections = false;
+
             // Developer tool: "--gallery <folder>" saves PNGs of the editor dialogs (see DevGallery).
             int galleryAt = Array.IndexOf(args, "--gallery");
             if (galleryAt >= 0)

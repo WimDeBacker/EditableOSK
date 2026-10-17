@@ -195,9 +195,9 @@
   <String key="tip: Show Shift and AltGr labels" value="Toont de kleine Shift- en AltGr-labels in de hoeken van de toetsen. Vink uit om minder te zien: alleen het hoofdlabel wordt getekend. De toetsen werken precies hetzelfde." />
   <String key="General"                          value="Algemeen" />
   <String key="milliseconds"                     value="milliseconden" />
-  <String key="kbd: Timing aid"                  value="Tijdhulp" />
+  <String key="kbd: Timing aid"                  value="Hulp bij bediening" />
   <String key="kbd: Off"                         value="Uit" />
-  <String key="tip: Timing off"                  value="Geen tijdhulp: een toets wordt geregistreerd zodra u erop drukt of klikt." />
+  <String key="tip: Timing off"                  value="Geen hulp bij bediening: een toets wordt geregistreerd zodra u erop drukt of klikt." />
   <String key="tip: Sticky modifiers"            value="Tik twee keer op Shift, Ctrl of Alt om het vast te zetten tot u er een derde keer op tikt (zoals Plaktoetsen in Windows). Uit: één tik geldt alleen voor de volgende toets." />
   <String key="tip: Hold to edit"                value="Houd een toets even ingedrukt om de editor te openen. Een korte tik typt de toets gewoon, zodat de editor niet per ongeluk opent." />
   <String key="tip: Always on top"               value="Het toetsenbord boven alle andere vensters houden." />
@@ -247,6 +247,31 @@
   <String key="Keyboard language"                value="Toetsenbordtaal" />
   <String key="tip: Keyboard language"           value="De taal waarvoor dit toetsenbord bedoeld is. Ze bepaalt de woordvoorspelling en de getoonde namen van de stijlgroepen." />
   <String key="first run: start"                 value="Starten" />
+  <String key="Scanning…"                        value="Scannen…" />
+  <String key="Scanning"                         value="Scannen" />
+  <String key="scan: settings"                   value="Instellingen…" />
+  <String key="scan: colors"                     value="Markeringskleuren" />
+  <String key="scan: row color"                  value="Rij" />
+  <String key="scan: key color"                  value="Toets" />
+  <String key="tip: scan colors"                 value="De rand om de toetsen van de rij die wordt gescand, en de rand om de toets zelf. Kies twee kleuren die duidelijk verschillen." />
+  <String key="tip: scan use"                    value="Een schakelaar laat een markering over de rijen en toetsen van het toetsenbord lopen; de toets waarop ze staat wordt gekozen. Trage toetsen en verblijfsklik staan uit zolang scannen aan staat." />
+  <String key="scan: switches"                   value="Schakelaars" />
+  <String key="scan: one switch"                 value="1 schakelaar" />
+  <String key="scan: two switches"               value="2 schakelaars" />
+  <String key="tip: scan switches"               value="Eén schakelaar: de markering loopt vanzelf en de schakelaar kiest. Twee schakelaars: de ene stapt, de andere kiest." />
+  <String key="scan: keys"                       value="Toetsen" />
+  <String key="scan: select key"                 value="Kies" />
+  <String key="scan: step key"                   value="Stap" />
+  <String key="scan: press a key"                value="Druk op een toets…" />
+  <String key="scan: scan time"                  value="Tijd per toets (ms)" />
+  <String key="scan: first extra"                value="Extra tijd eerste (ms)" />
+  <String key="scan: rounds"                     value="Rondes voor het stopt" />
+  <String key="scan: ignore repeat"              value="Herhaling negeren (ms)" />
+  <String key="scan: sound step"                 value="Geluid als de markering verschuift" />
+  <String key="scan: sound select"               value="Geluid als een toets wordt gekozen" />
+  <String key="scan: hint"                       value="Esc pauzeert het scannen. Druk op de keuzetoets om opnieuw te beginnen." />
+  <String key="scan: key taken"                  value="Die toets is de andere schakelaar. Kies een andere toets." />
+  <String key="Space"                            value="Spatie" />
   <String key="wp: nothing to export"            value="Exporteren kan zodra er woorden zijn geleerd." />
   <String key="wp: no candidates"                value="Nog geen kandidaten." />
   <String key="wp: learning off hint"            value="Kandidaten worden verzameld zolang &quot;Getypte woorden onthouden&quot; aan staat." />

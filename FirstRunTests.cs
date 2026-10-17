@@ -1,6 +1,8 @@
 // FirstRunTests.cs — the question asked once, the first time the keyboard starts: key arrangement and language of the suggestions.
 
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Globalization;
 using System.Linq;
 
@@ -38,6 +40,9 @@ namespace OnScreenKeyboard
                     Assert(d.Arrangement == "azerty" && d.Language == "en", "the dialog opens on the suggested choices");
                 using (var d = new FirstRunDialog(langs, "qwerty", "nl"))
                     Assert(d.Arrangement == "qwerty" && d.Language == "nl", "the dialog opens on QWERTY and Dutch");
+                using (var d = new FirstRunDialog(langs, "scanning", "nl"))
+                    Assert(d.Arrangement == "Scanning" && File.Exists(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, d.Arrangement + ".kbl")),
+                        "the third choice is the letter keyboard for scanning, and its file is installed");
                 using (var d = new FirstRunDialog(langs, "whatever", "zz"))
                     Assert(d.Arrangement == "qwerty" && d.Language == "nl", "an unknown suggestion falls back to QWERTY and the first language");
                 using (var d = new FirstRunDialog(new (string, string)[] { ("en", "English") }, "qwerty", "nl"))

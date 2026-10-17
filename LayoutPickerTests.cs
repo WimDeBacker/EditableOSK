@@ -16,7 +16,7 @@ namespace OnScreenKeyboard
             Section("Open a keyboard — the ready-made layouts with title and description");
 
             string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-            foreach (string file in new[] { "azerty.kbl", "azertycolor.kbl", "qwerty.kbl", "math.kbl" })
+            foreach (string file in new[] { "azerty.kbl", "azertycolor.kbl", "qwerty.kbl", "math.kbl", "Scanning.kbl", "ScanningCijfers.kbl" })
             {
                 var info = SettingsManager.ReadInfo(Path.Combine(baseDir, file));
                 Assert(info != null, $"{file}: its info can be read");

@@ -564,6 +564,8 @@ namespace OnScreenKeyboard
             // The question asked at the very first start.
             CheckDialogGuards("FirstRunDialog", () =>
                 new FirstRunDialog(new[] { ("nl", "Nederlands"), ("en", "English") }, "qwerty", "nl"));
+            // The settings of scanning (opened from the gear button's menu).
+            CheckDialogGuards("ScanSettingsDialog", () => new ScanSettingsDialog(new ScanSettings()));
         }
 
         // ════════════════════════════════════════════════════════════════

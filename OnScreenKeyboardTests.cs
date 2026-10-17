@@ -70,6 +70,8 @@ namespace OnScreenKeyboard
             Step(T_LayoutLaunch);
             Step(T_UserData);
             Step(T_FirstRun);
+            Step(T_Scanning);
+            Step(T_RememberSection);
             Step(T_DialogOwners);
             Step(T_LayoutPicker);
             Step(T_GroupNames);

@@ -1,0 +1,86 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<OnScreenKeyboard FormatVersion="2">
+  <Info>
+    <Title lang="nl">Scanning: letters</Title>
+    <Title lang="en">Scanning: letters</Title>
+    <Description lang="nl">Letterbord voor scanning: de meest gebruikte Nederlandse letters staan linksboven, met woordvoorspelling bovenaan. De toets 123 opent het cijferbord.</Description>
+    <Description lang="en">Letter keyboard for scanning: the most frequent Dutch letters are at the top left, with word prediction on top. The 123 key opens the number keyboard.</Description>
+  </Info>
+  <Theme BackgroundColor="1C1C28" Opacity="1.00" FontName="Arial" FontSize="0" FontColor="EFEFFF" KeyColor="2C2C42" BorderColor="3C3C56" BorderThickness="1">
+    <Group Id="standard" FontName="" FontSize="0" FontColor="EFEFFF" KeyColor="2C2C42" BorderColor="3C3C56" BorderThickness="1" />
+    <Group Id="vowels" FontName="" FontSize="0" FontColor="EFEFFF" KeyColor="3A3A5A" BorderColor="4A4A6A" BorderThickness="1">
+      <Name lang="en">Vowels</Name>
+      <Name lang="nl">Klinkers</Name>
+    </Group>
+    <Group Id="consonants" FontName="" FontSize="0" FontColor="EFEFFF" KeyColor="2C2C42" BorderColor="3C3C56" BorderThickness="1">
+      <Name lang="en">Consonants</Name>
+      <Name lang="nl">Medeklinkers</Name>
+    </Group>
+    <Group Id="numbers" FontName="" FontSize="0" FontColor="C0D0FF" KeyColor="243050" BorderColor="344060" BorderThickness="1">
+      <Name lang="en">Numbers</Name>
+      <Name lang="nl">Cijfers</Name>
+    </Group>
+    <Group Id="controls" FontName="" FontSize="0" FontColor="B0B0C8" KeyColor="1C1C2E" BorderColor="2A2A3E" BorderThickness="1">
+      <Name lang="en">Controls</Name>
+      <Name lang="nl">Besturing</Name>
+    </Group>
+    <Group Id="punctuation" FontName="" FontSize="0" FontColor="D8C0F0" KeyColor="38283C" BorderColor="483848" BorderThickness="1">
+      <Name lang="en">Punctuation</Name>
+      <Name lang="nl">Leestekens</Name>
+    </Group>
+    <Group Id="prediction" FontName="" FontSize="0" FontColor="B0D0B0" KeyColor="263826" BorderColor="364836" BorderThickness="1">
+      <Name lang="en">Word prediction</Name>
+      <Name lang="nl">Woordvoorspelling</Name>
+    </Group>
+  </Theme>
+  <Layout Language="nl" GridRows="7" GridCols="7" GearRow="6" GearCol="6" WindowWidth="1096" WindowHeight="380" HideTitlebar="0" StickyModifiers="1" HoldToEdit="0" AlwaysOnTop="1" SlowKeysMs="0" DwellMs="0" ShowTimingAnimation="1" LastFile="" ToolbarTheme="Dark" WordLearningEnabled="1">
+    <Key Row="0" Col="0" RowSpan="1" ColSpan="1" GroupId="standard" Label="woord 1" Send="wp:0" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="1" Col="0" RowSpan="1" ColSpan="1" GroupId="controls" Label="Spatie" Send=" " ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="1" Col="1" RowSpan="1" ColSpan="1" GroupId="vowels" Label="e" Send="e" ShiftLabel="E" ShiftSend="E" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="1" Col="2" RowSpan="1" ColSpan="1" GroupId="consonants" Label="n" Send="n" ShiftLabel="N" ShiftSend="N" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="1" Col="3" RowSpan="1" ColSpan="1" GroupId="consonants" Label="t" Send="t" ShiftLabel="T" ShiftSend="T" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="1" Col="4" RowSpan="1" ColSpan="1" GroupId="consonants" Label="d" Send="d" ShiftLabel="D" ShiftSend="D" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="1" Col="5" RowSpan="1" ColSpan="1" GroupId="consonants" Label="g" Send="g" ShiftLabel="G" ShiftSend="G" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="1" Col="6" RowSpan="1" ColSpan="1" GroupId="consonants" Label="j" Send="j" ShiftLabel="J" ShiftSend="J" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="2" Col="0" RowSpan="1" ColSpan="1" GroupId="controls" Label="⌫" Send="{BACKSPACE}" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="2" Col="1" RowSpan="1" ColSpan="1" GroupId="vowels" Label="a" Send="a" ShiftLabel="A" ShiftSend="A" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="2" Col="2" RowSpan="1" ColSpan="1" GroupId="vowels" Label="i" Send="i" ShiftLabel="I" ShiftSend="I" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="2" Col="3" RowSpan="1" ColSpan="1" GroupId="consonants" Label="r" Send="r" ShiftLabel="R" ShiftSend="R" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="2" Col="4" RowSpan="1" ColSpan="1" GroupId="consonants" Label="h" Send="h" ShiftLabel="H" ShiftSend="H" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="2" Col="5" RowSpan="1" ColSpan="1" GroupId="consonants" Label="v" Send="v" ShiftLabel="V" ShiftSend="V" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="2" Col="6" RowSpan="1" ColSpan="1" GroupId="consonants" Label="c" Send="c" ShiftLabel="C" ShiftSend="C" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="3" Col="0" RowSpan="1" ColSpan="1" GroupId="controls" Label="⌫ woord" Send="^{BACKSPACE}" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="3" Col="1" RowSpan="1" ColSpan="1" GroupId="vowels" Label="o" Send="o" ShiftLabel="O" ShiftSend="O" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="3" Col="2" RowSpan="1" ColSpan="1" GroupId="consonants" Label="l" Send="l" ShiftLabel="L" ShiftSend="L" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="3" Col="3" RowSpan="1" ColSpan="1" GroupId="consonants" Label="k" Send="k" ShiftLabel="K" ShiftSend="K" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="3" Col="4" RowSpan="1" ColSpan="1" GroupId="consonants" Label="w" Send="w" ShiftLabel="W" ShiftSend="W" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="3" Col="5" RowSpan="1" ColSpan="1" GroupId="consonants" Label="f" Send="f" ShiftLabel="F" ShiftSend="F" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="4" Col="0" RowSpan="1" ColSpan="1" GroupId="numbers" Label="123" Send="layout:ScanningCijfers.kbl" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="4" Col="1" RowSpan="1" ColSpan="1" GroupId="consonants" Label="s" Send="s" ShiftLabel="S" ShiftSend="S" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="4" Col="2" RowSpan="1" ColSpan="1" GroupId="vowels" Label="u" Send="u" ShiftLabel="U" ShiftSend="U" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="4" Col="3" RowSpan="1" ColSpan="1" GroupId="consonants" Label="z" Send="z" ShiftLabel="Z" ShiftSend="Z" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="4" Col="4" RowSpan="1" ColSpan="1" GroupId="standard" Label="ij" Send="ij" ShiftLabel="IJ" ShiftSend="IJ" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="4" Col="5" RowSpan="1" ColSpan="1" GroupId="standard" Label="nt" Send="nt" ShiftLabel="Nt" ShiftSend="Nt" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="5" Col="0" RowSpan="1" ColSpan="1" GroupId="consonants" Label="m" Send="m" ShiftLabel="M" ShiftSend="M" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="5" Col="1" RowSpan="1" ColSpan="1" GroupId="consonants" Label="p" Send="p" ShiftLabel="P" ShiftSend="P" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="5" Col="2" RowSpan="1" ColSpan="1" GroupId="consonants" Label="b" Send="b" ShiftLabel="B" ShiftSend="B" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="5" Col="3" RowSpan="1" ColSpan="1" GroupId="consonants" Label="q" Send="q" ShiftLabel="Q" ShiftSend="Q" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="5" Col="4" RowSpan="1" ColSpan="1" GroupId="standard" Label="ch" Send="ch" ShiftLabel="Ch" ShiftSend="Ch" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="5" Col="5" RowSpan="1" ColSpan="1" GroupId="standard" Label="ing" Send="ing" ShiftLabel="Ing" ShiftSend="Ing" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="6" Col="0" RowSpan="1" ColSpan="1" GroupId="controls" Label="Enter" Send="{ENTER}" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="6" Col="1" RowSpan="1" ColSpan="1" GroupId="controls" Label="Shift" Send="" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="6" Col="2" RowSpan="1" ColSpan="1" GroupId="punctuation" Label="." Send="." ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="6" Col="3" RowSpan="1" ColSpan="1" GroupId="punctuation" Label="," Send="," ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="6" Col="4" RowSpan="1" ColSpan="1" GroupId="punctuation" Label="?" Send="?" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="6" Col="5" RowSpan="1" ColSpan="1" GroupId="punctuation" Label="!" Send="!" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="5" Col="6" RowSpan="1" ColSpan="1" GroupId="standard" Label="sch" Send="sch" ShiftLabel="Sch" ShiftSend="Sch" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="3" Col="6" RowSpan="1" ColSpan="1" GroupId="consonants" Label="x" Send="x" ShiftLabel="X" ShiftSend="X" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="4" Col="6" RowSpan="1" ColSpan="1" GroupId="standard" Label="ng" Send="ng" ShiftLabel="Ng" ShiftSend="Ng" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="0" Col="1" RowSpan="1" ColSpan="1" GroupId="standard" Label="woord 1" Send="wp:1" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="0" Col="2" RowSpan="1" ColSpan="1" GroupId="standard" Label="woord 1" Send="wp:2" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="0" Col="3" RowSpan="1" ColSpan="1" GroupId="standard" Label="woord 1" Send="wp:3" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="0" Col="4" RowSpan="1" ColSpan="1" GroupId="standard" Label="woord 1" Send="wp:4" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="0" Col="5" RowSpan="1" ColSpan="1" GroupId="standard" Label="woord 1" Send="wp:5" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+    <Key Row="0" Col="6" RowSpan="1" ColSpan="1" GroupId="standard" Label="woord 1" Send="wp:6" ShiftLabel="" ShiftSend="" AltGrLabel="" AltGrSend="" FontName="" FontSize="0" FontColor="" KeyColor="" BorderColor="" BorderThickness="-1" />
+  </Layout>
+</OnScreenKeyboard>

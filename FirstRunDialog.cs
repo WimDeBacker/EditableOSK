@@ -17,8 +17,8 @@ namespace OnScreenKeyboard
         private readonly string[] _screenCodes, _languageCodes;
         private readonly StylePreview _preview = new StylePreview { Dock = DockStyle.Fill, Margin = new Padding(0, Touch.Gap, 0, Touch.Gap) };
 
-        /// <summary><c>qwerty</c> or <c>azerty</c>: the ready-made layout file of that name is opened.</summary>
-        public string Arrangement => _cmbArrangement.SelectedIndex == 1 ? "azerty" : "qwerty";
+        /// <summary><c>qwerty</c>, <c>azerty</c> or <c>Scanning</c> (the letters by frequency, for scanning): the ready-made layout file of that name is opened.</summary>
+        public string Arrangement => _cmbArrangement.SelectedIndex == 1 ? "azerty" : _cmbArrangement.SelectedIndex == 2 ? "Scanning" : "qwerty";
 
         /// <summary>The language code (<c>nl</c>, <c>en</c>) of the chosen keyboard language: it chooses the word database.</summary>
         public string Language => _languageCodes[Math.Max(0, _cmbLanguage.SelectedIndex)];
@@ -51,7 +51,9 @@ namespace OnScreenKeyboard
             _cmbScreen = Chooser(screenLanguages.Select(l => l.Name), IndexOf(_screenCodes, defaultScreenLanguage), 0);
             AddRow(t, () => Lang.T("Interface language"), _cmbScreen);
 
-            _cmbArrangement = Chooser(new[] { "QWERTY", "AZERTY" }, string.Equals(defaultArrangement, "azerty", StringComparison.OrdinalIgnoreCase) ? 1 : 0, 1);
+            // The third choice is the letter keyboard for scanning (letters by frequency); it is never the suggestion.
+            _cmbArrangement = Chooser(new[] { "QWERTY", "AZERTY", Lang.T("Scanning") }, string.Equals(defaultArrangement, "azerty", StringComparison.OrdinalIgnoreCase) ? 1
+                                      : string.Equals(defaultArrangement, "scanning", StringComparison.OrdinalIgnoreCase) ? 2 : 0, 1);
             AddRow(t, () => Lang.T("first run: arrangement"), _cmbArrangement);
 
             _languageCodes = languages.Select(l => l.Code).ToArray();

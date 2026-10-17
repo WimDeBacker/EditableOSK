@@ -391,6 +391,16 @@ namespace OnScreenKeyboard
         /// <summary>The section buttons (null for a dialog built without sections).</summary>
         protected SectionBar Sections { get; private set; }
 
+        /// <summary>
+        /// Whether a window with tabs opens on the tab that was open last time (in this run of the program only: nothing is saved).
+        /// Switched off by the tests and the gallery, which switch tabs by code.
+        /// </summary>
+        internal static bool RememberSections = true;
+        private static readonly Dictionary<Type, int> _lastSection = new Dictionary<Type, int>();
+
+        /// <summary>For the tests: forget the tabs that were remembered.</summary>
+        internal static void ForgetSections() => _lastSection.Clear();
+
         /// <summary>Widest the content may grow before it is limited, in design pixels (the default for <see cref="ContentMaxWidth"/>).</summary>
         protected const int MaxContentWidth = 760;
 
@@ -414,7 +424,17 @@ namespace OnScreenKeyboard
             if (withSections)
             {
                 Sections = new SectionBar { Anchor = AnchorStyles.Left | AnchorStyles.Right };
-                Sections.SelectedIndexChanged += (s, e) => { _host.ShowSection(Sections.SelectedIndex); UpdateWrapWidths(); };
+                Sections.SelectedIndexChanged += (s, e) =>
+                {
+                    _host.ShowSection(Sections.SelectedIndex); UpdateWrapWidths();
+                    if (RememberSections && Visible) _lastSection[GetType()] = Sections.SelectedIndex;      // only what the person did on a window that is shown
+                };
+                // The next time a window of this kind opens it shows the tab that was open when the last one was closed.
+                Load += (s, e) =>
+                {
+                    if (RememberSections && _lastSection.TryGetValue(GetType(), out int i) && i > 0 && i < _host.SectionCount && i != Sections.SelectedIndex)
+                        Sections.Select(i, focus: false);
+                };
                 root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
                 Control top = Sections;
                 if (headerRight != null)
