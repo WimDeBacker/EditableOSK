@@ -7,6 +7,14 @@ A configurable on-screen keyboard for Windows, driven by XML layout files.
 
 ---
 
+## Download / Downloaden
+
+**English:** the installer of the latest version is on the [Releases page](https://github.com/WimDeBacker/EditableOSK/releases): download `EditableOSK-…-Setup.exe` under *Assets* and run it. It needs the .NET 10 Desktop Runtime (the installer tells you if it is missing).
+
+**Nederlands:** het installatiebestand van de laatste versie staat op de [pagina Releases](https://github.com/WimDeBacker/EditableOSK/releases): download `EditableOSK-…-Setup.exe` onder *Assets* en voer het uit. Het heeft de .NET 10 Desktop Runtime nodig (de installer meldt het als die ontbreekt).
+
+---
+
 ## Security — Layout files and the `Send` field
 
 ### English
