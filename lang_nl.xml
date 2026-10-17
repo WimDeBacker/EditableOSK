@@ -267,8 +267,30 @@
   <String key="scan: first extra"                value="Extra tijd eerste (ms)" />
   <String key="scan: rounds"                     value="Rondes voor het stopt" />
   <String key="scan: ignore repeat"              value="Herhaling negeren (ms)" />
-  <String key="scan: sound step"                 value="Geluid als de markering verschuift" />
-  <String key="scan: sound select"               value="Geluid als een toets wordt gekozen" />
+  <String key="scan: tab timing"                 value="Tempo" />
+  <String key="scan: tab back"                   value="Terug" />
+  <String key="scan: tab feedback"               value="Feedback" />
+  <String key="scan: back step"                  value="Terugstap na de laatste toets" />
+  <String key="tip: scan back step"              value="Na de laatste toets van een rij gaat de markering naar een gestippelde rand om de hele rij. Die kiezen gaat terug naar de rijen." />
+  <String key="scan: back switch"                value="Terug met schakelaar" />
+  <String key="tip: scan back switch"            value="Een eigen schakelaar gaat op elk moment terug: van de toetsen van een rij naar de rijen, en bij de rijen naar de eerste rij." />
+  <String key="scan: back key"                   value="Terugtoets" />
+  <String key="scan: long press"                 value="Lang indrukken" />
+  <String key="scan: long off"                   value="Uit" />
+  <String key="scan: long restarts"              value="Herstart scanning" />
+  <String key="scan: long steps back"            value="Stapt terug" />
+  <String key="tip: scan long press"             value="De keuzeschakelaar ingedrukt houden (de vasthoudtijd hieronder) doet één van twee dingen. Herstart scanning: een niveau terug (bij de rijen: naar de eerste rij). Stapt terug: er wordt in de andere richting gescand, van rechts naar links (en omhoog bij de rijen); vanaf het eerste item springt het naar het laatste, via de terugstap als die aan staat. Nog eens lang indrukken draait weer om. Kort indrukken kiest als je loslaat." />
+  <String key="scan: hold"                       value="Vasthoudtijd (ms)" />
+  <String key="scan: back hint"                  value="Terug gaan verlaat de toetsen van een rij voor de rijen; bij de rijen springt het naar de eerste rij. De terugstap, terug met schakelaar en lang indrukken mogen allemaal aan staan." />
+  <String key="scan: back color"                 value="Terug" />
+  <String key="scan: on release"                 value="Kiezen bij loslaten" />
+  <String key="tip: scan on release"             value="De keuzeschakelaar werkt als je loslaat, niet als je indrukt. Een ingedrukte of ongewilde druk doet niets tot je loslaat." />
+  <String key="tip: scan on release forced"      value="Staat aan omdat lang indrukken aanstaat: de keuzeschakelaar werkt dan altijd bij loslaten." />
+  <String key="scan: sound"                      value="Geluid" />
+  <String key="scan: sound none"                 value="Geen" />
+  <String key="scan: sound step"                 value="Stap" />
+  <String key="scan: sound select"               value="Kiezen" />
+  <String key="scan: sound both"                 value="Beide" />
   <String key="scan: hint"                       value="Esc pauzeert het scannen. Druk op de keuzetoets om opnieuw te beginnen." />
   <String key="scan: key taken"                  value="Die toets is de andere schakelaar. Kies een andere toets." />
   <String key="Space"                            value="Spatie" />

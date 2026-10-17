@@ -92,10 +92,18 @@ namespace OnScreenKeyboard
                 s.FirstExtraMs   = I("FirstExtraMs", s.FirstExtraMs);
                 s.Rounds         = I("Rounds", s.Rounds);
                 s.IgnoreRepeatMs = I("IgnoreRepeatMs", s.IgnoreRepeatMs);
+                s.SelectOnRelease = B("SelectOnRelease", false);
                 s.SoundOnStep    = B("SoundOnStep", false);
                 s.SoundOnSelect  = B("SoundOnSelect", true);
                 Color C(string n, Color d) =>
                     int.TryParse(e.GetAttribute(n), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out int v) ? Color.FromArgb(255, Color.FromArgb(v)) : d;
+                s.BackStep      = B("BackStep", true);
+                s.BackSwitch    = B("BackSwitch", false);
+                s.BackKey       = I("BackKey", s.BackKey);
+                s.BackLongPress = B("BackLongPress", false);
+                s.LongPressStepsBack = B("LongPressStepsBack", false);
+                s.BackHoldMs    = I("BackHoldMs", s.BackHoldMs);
+                s.BackColor = C("BackColor", s.BackColor);
                 s.RowColor = C("RowColor", s.RowColor);
                 s.KeyColor = C("KeyColor", s.KeyColor);
                 s.Clamp();
@@ -142,8 +150,16 @@ namespace OnScreenKeyboard
                     w.WriteAttributeString("FirstExtraMs", s.FirstExtraMs.ToString(CultureInfo.InvariantCulture));
                     w.WriteAttributeString("Rounds", s.Rounds.ToString(CultureInfo.InvariantCulture));
                     w.WriteAttributeString("IgnoreRepeatMs", s.IgnoreRepeatMs.ToString(CultureInfo.InvariantCulture));
+                    w.WriteAttributeString("SelectOnRelease", F(s.SelectOnRelease));
                     w.WriteAttributeString("SoundOnStep", F(s.SoundOnStep));
                     w.WriteAttributeString("SoundOnSelect", F(s.SoundOnSelect));
+                    w.WriteAttributeString("BackStep", F(s.BackStep));
+                    w.WriteAttributeString("BackSwitch", F(s.BackSwitch));
+                    w.WriteAttributeString("BackKey", s.BackKey.ToString(CultureInfo.InvariantCulture));
+                    w.WriteAttributeString("BackLongPress", F(s.BackLongPress));
+                    w.WriteAttributeString("LongPressStepsBack", F(s.LongPressStepsBack));
+                    w.WriteAttributeString("BackHoldMs", s.BackHoldMs.ToString(CultureInfo.InvariantCulture));
+                    w.WriteAttributeString("BackColor", (s.BackColor.ToArgb() & 0xFFFFFF).ToString("X6", CultureInfo.InvariantCulture));
                     w.WriteAttributeString("RowColor", (s.RowColor.ToArgb() & 0xFFFFFF).ToString("X6", CultureInfo.InvariantCulture));
                     w.WriteAttributeString("KeyColor", (s.KeyColor.ToArgb() & 0xFFFFFF).ToString("X6", CultureInfo.InvariantCulture));
                     w.WriteEndElement();

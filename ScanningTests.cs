@@ -27,7 +27,8 @@ namespace OnScreenKeyboard
                 UserSettings.InterfaceLanguage = "nl";
                 var s = UserSettings.Scan.Clone();
                 s.Enabled = true; s.TwoSwitch = true; s.SelectKey = 0x70; s.StepKey = 0x71; s.ScanMs = 1700; s.FirstExtraMs = 900; s.Rounds = 5; s.IgnoreRepeatMs = 450; s.SoundOnStep = true; s.SoundOnSelect = false;
-                s.RowColor = System.Drawing.Color.FromArgb(10, 200, 30); s.KeyColor = System.Drawing.Color.FromArgb(250, 20, 200);
+                s.SelectOnRelease = true; s.BackStep = false; s.BackSwitch = true; s.BackKey = 0x7A; s.BackLongPress = true; s.LongPressStepsBack = true; s.BackHoldMs = 2200;
+                s.BackColor = System.Drawing.Color.FromArgb(1, 2, 3);                s.RowColor = System.Drawing.Color.FromArgb(10, 200, 30); s.KeyColor = System.Drawing.Color.FromArgb(250, 20, 200);
                 Assert(UserSettings.Scan.RowColor.ToArgb() != UserSettings.Scan.KeyColor.ToArgb(), "the row ring and the key ring have different colours by default");
                 UserSettings.SetScan(s);
                 UserSettings.Reset();
@@ -62,7 +63,7 @@ namespace OnScreenKeyboard
                 "rows go top to bottom, keys left to right; the gaps do not matter");
             Assert(Scanner.BuildRows(Array.Empty<GridCell>()).Count == 0, "no keys: no rows");
 
-            ScanSettings Auto() => new ScanSettings { Enabled = true, ScanMs = 1000, FirstExtraMs = 500, Rounds = 2, IgnoreRepeatMs = 300 };
+            ScanSettings Auto() => new ScanSettings { Enabled = true, ScanMs = 1000, FirstExtraMs = 500, Rounds = 2, IgnoreRepeatMs = 300, BackStep = false };
             Scanner Make(ScanSettings st, List<GridCell> picked = null, Action stopped = null)
             {
                 var sc = new Scanner(st);
@@ -155,6 +156,136 @@ namespace OnScreenKeyboard
             }
             { Assert(Make(Auto(), null).CurrentKey == null && Make(Auto()).CurrentRow.Count == 0, "idle: nothing is highlighted"); }
 
+            Section("Scanning — one level back (back step, back switch, long press)");
+            { // the back step: after the last key of the row
+                var picked = new List<GridCell>();
+                var st = Auto(); st.BackStep = true;
+                var sc = Make(st, picked);
+                sc.Press(); sc.Tick(400); sc.Press();
+                Assert(sc.Level == ScanLevel.Keys && sc.CurrentKey.Props.Label == "a" && !sc.OnBack, "(in the keys of row 0)");
+                sc.Tick(1500); sc.Tick(1000);
+                Assert(sc.CurrentKey.Props.Label == "c" && !sc.OnBack, "(on the last key)");
+                sc.Tick(1000);
+                Assert(sc.OnBack && sc.CurrentKey == null && sc.CurrentRow.Count == 3, "after the last key the highlight is on the back step (the whole row, no key)");
+                sc.Press();
+                Assert(sc.Level == ScanLevel.Rows && sc.Row == 0 && picked.Count == 0, "selecting the back step goes back to the rows and selects nothing");
+                sc.Tick(1500); sc.Tick(400); sc.Press();                    // row 1 is one key: with a back step it is entered like any row
+                Assert(sc.Level == ScanLevel.Keys && picked.Count == 0, "a row of one key is entered, so it can be left again");
+                sc.Tick(1500); Assert(sc.OnBack, "…its key, then the back step");
+            }
+            { // the back step in two-switch mode: stepping goes round the keys and the back step
+                var st = Auto(); st.BackStep = true; st.TwoSwitch = true; st.IgnoreRepeatMs = 0;
+                var sc = Make(st);
+                sc.Step(); sc.Press();
+                sc.Step(); sc.Step(); sc.Step();
+                Assert(sc.OnBack, "two switches: stepping reaches the back step after the last key");
+                sc.Step(); Assert(sc.Level == ScanLevel.Keys && sc.CurrentKey.Props.Label == "a", "…and goes round to the first key");
+            }
+            { // the back switch / long press: Back() from the keys, nothing at the rows
+                var pickedNoBack = new List<GridCell>();
+                var sc = Make(Auto(), pickedNoBack);
+                sc.Back(); Assert(sc.Level == ScanLevel.Idle, "back while nothing scans: nothing happens");
+                sc.Press(); sc.Back(); Assert(sc.Level == ScanLevel.Rows && sc.Row == 0, "back on the first row stays there");
+                sc.Tick(1500); sc.Tick(1000); Assert(sc.Row == 2, "(row 2)");
+                sc.Back(); Assert(sc.Level == ScanLevel.Rows && sc.Row == 0, "back at the rows goes to the first row (quicker than waiting for the round)");
+                sc.Tick(1400); Assert(sc.Row == 0, "…and the first row gets its full time again");
+                sc.Tick(100); sc.Tick(400); sc.Press();
+                Assert(pickedNoBack.Count == 1 && pickedNoBack[0].Props.Label == "d", "(no way back is on: a row of one key is selected at once)");
+                var st = Auto(); st.BackSwitch = true;
+                var sd = Make(st);
+                sd.Press(); sd.Tick(400); sd.Press();
+                Assert(sd.Level == ScanLevel.Keys, "(in the keys of row 0)");
+                sd.Tick(1500);
+                sd.Back();
+                Assert(sd.Level == ScanLevel.Rows && sd.Row == 0, "the back switch goes back to the rows, to the row that was entered");
+                sd.Tick(1500 + 1000); sd.Press();
+                Assert(sd.Level == ScanLevel.Keys && sd.Row == 2, "(a later row can be entered)");
+                sd.Back();
+                Assert(sd.Level == ScanLevel.Rows && sd.Row == 2, "back stays on the row it left, so the next row is one step away");
+            }
+            { // the long press shows when it is long enough: the whole row dashed, like the back step
+                var st = Auto(); st.BackLongPress = true; st.BackHoldMs = 1500;
+                var sc = Make(st);
+                int changes = 0; sc.Changed += () => changes++;
+                sc.Press(); sc.Tick(400); sc.Press();
+                Assert(sc.Level == ScanLevel.Keys && sc.CurrentKey.Props.Label == "a", "(in the keys of row 0)");
+                sc.SetHolding(true);
+                sc.Tick(5000);
+                Assert(sc.CurrentKey.Props.Label == "a" && sc.Level == ScanLevel.Keys, "while the select switch is held the highlight stays where it is");
+                Assert(sc.BackPreview && !sc.OnBack, "…and after the hold time the back ring is shown (the press is long enough)");
+                int before = changes; sc.Tick(100); Assert(changes == before, "…it is shown once");
+                sc.SetHolding(false);
+                Assert(!sc.BackPreview, "letting go takes the ring away");
+                var shortHold = Make(st); shortHold.Press(); shortHold.Tick(400); shortHold.Press();
+                shortHold.SetHolding(true); shortHold.Tick(1000);
+                Assert(!shortHold.BackPreview, "a press shorter than the hold time shows no back ring");
+                shortHold.SetHolding(false);
+                var atRows = Make(st); atRows.Press(); atRows.Tick(1500); atRows.Tick(1000); atRows.SetHolding(true); atRows.Tick(3000);
+                Assert(atRows.BackPreview && atRows.Row == 2 && atRows.Level == ScanLevel.Rows, "at the rows the long press shows the ring too (the row waits while the switch is held)");
+                atRows.Back(); Assert(atRows.Row == 0 && !atRows.BackPreview, "…and letting go goes to the first row");
+                var noLong = Make(Auto()); noLong.Press(); noLong.Tick(400); noLong.Press(); noLong.SetHolding(true); noLong.Tick(5000);
+                Assert(!noLong.BackPreview, "without the long press option the ring never shows");
+            }
+
+            Section("Scanning — the long press: restarts scanning, or steps back (the other way round)");
+            ScanSettings LongPress(bool stepsBack, bool backStep = false) => new ScanSettings
+            { Enabled = true, ScanMs = 1000, FirstExtraMs = 500, Rounds = 2, IgnoreRepeatMs = 0, BackStep = backStep, BackLongPress = true, BackHoldMs = 1500, LongPressStepsBack = stepsBack };
+            { // steps back at the rows: the scan goes upwards, and jumps from the first row to the last
+                var sc = Make(LongPress(true));
+                sc.Press(); sc.Tick(1500); sc.Tick(1000);
+                Assert(sc.Row == 2 && !sc.Backwards, "(row 2, going forwards)");
+                sc.SetHolding(true); sc.Tick(1500);
+                Assert(sc.BackPreview, "(held long enough: the ring shows)");
+                sc.ReleaseSelect(); sc.SetHolding(false);
+                Assert(sc.Row == 1 && sc.Backwards && !sc.BackPreview, "letting go steps back one row, and the scan now goes the other way round");
+                sc.Tick(1000); Assert(sc.Row == 0, "…upwards");
+                sc.Tick(1000); Assert(sc.Row == 2 && sc.Level == ScanLevel.Rows, "…from the first row it jumps to the last");
+                sc.SetHolding(true); sc.Tick(1500); sc.ReleaseSelect(); sc.SetHolding(false);
+                Assert(!sc.Backwards, "another long press turns it round again");
+            }
+            { // steps back in a row: right to left, from the first key to the end of the row through the back step
+                var sc = Make(LongPress(true, backStep: true));
+                sc.Press(); sc.Tick(400); sc.Press();
+                Assert(sc.Level == ScanLevel.Keys && sc.CurrentKey.Props.Label == "a", "(in the keys of row 0)");
+                sc.SetHolding(true); sc.Tick(1500); sc.ReleaseSelect(); sc.SetHolding(false);
+                Assert(sc.OnBack && sc.Backwards, "from the first key a step back jumps to the end of the row: the back step comes in between");
+                sc.Tick(1500); Assert(sc.CurrentKey?.Props.Label == "c", "…then the last key");
+                sc.Tick(1000); Assert(sc.CurrentKey?.Props.Label == "b", "…right to left");
+                sc.Press();
+            }
+            { // a selection starts forwards again
+                var picked = new List<GridCell>();
+                var sc = Make(LongPress(true), picked);
+                sc.Press(); sc.Tick(400); sc.Press();
+                sc.SetHolding(true); sc.Tick(1500); sc.ReleaseSelect(); sc.SetHolding(false);
+                Assert(sc.Backwards, "(going the other way round in the keys of row 0)");
+                sc.Press();
+                Assert(!sc.Backwards && sc.Level == ScanLevel.Rows && picked.Count == 1, "a key chosen: the scan starts forwards again");
+            }
+            { // "restarts scanning": a level back, the direction is not changed
+                var sc = Make(LongPress(false));
+                sc.Press(); sc.Tick(400); sc.Press();
+                Assert(sc.Level == ScanLevel.Keys, "(in the keys of row 0)");
+                sc.SetHolding(true); sc.Tick(1500); sc.ReleaseSelect(); sc.SetHolding(false);
+                Assert(sc.Level == ScanLevel.Rows && !sc.Backwards, "restarts scanning: back at the rows");
+                sc.SetHolding(true); sc.Tick(1500);
+                sc.ReleaseSelect(); sc.SetHolding(false);
+                Assert(sc.Level == ScanLevel.Rows && sc.Row == 0, "…and at the rows it goes to the first row");
+            }
+            { // a short press still selects
+                var sc = Make(LongPress(true));
+                sc.Press(); sc.SetHolding(true); sc.Tick(500); sc.ReleaseSelect(); sc.SetHolding(false);
+                Assert(sc.Level == ScanLevel.Keys && !sc.Backwards, "a press shorter than the hold time chooses the row as usual");
+            }
+            { // two switches: the long press is one step back, the direction stays
+                var st = LongPress(true); st.TwoSwitch = true;
+                var sc = Make(st);
+                sc.Step(); sc.Step();
+                Assert(sc.Row == 1, "(row 1)");
+                sc.SetHolding(true); sc.Tick(1500); sc.ReleaseSelect(); sc.SetHolding(false);
+                Assert(sc.Row == 0 && !sc.Backwards, "two switches: a long press is one step back");
+            }
+
             Section("Scanning — switch keys (ScanInput)");
             {
                 var st = new ScanSettings { Enabled = true, SelectKey = 0x20, StepKey = 0x0D };
@@ -170,6 +301,38 @@ namespace OnScreenKeyboard
                 st.TwoSwitch = true;
                 Assert(inp.Handle(0x0D, true, false) && step == 1 && inp.Handle(0x0D, false, false), "two switches: the step key is taken");
                 Assert(inp.Handle(0x1B, true, false) && esc == 1 && inp.Handle(0x1B, false, false), "Esc is taken and stops scanning");
+                // Select on release: the key-down is taken and waits; the key-up makes the press. Repeats and the step key are not affected.
+                st.TwoSwitch = false; st.SelectOnRelease = true; press = 0;
+                var inp3 = new ScanInput(() => st, () => press++, () => step++, () => esc++);
+                Assert(inp3.Handle(0x20, true, false) && press == 0, "select on release: the key-down is taken and does nothing yet");
+                Assert(inp3.Handle(0x20, true, false) && press == 0, "…its auto-repeat does nothing either (a held switch is not a press)");
+                Assert(inp3.Handle(0x20, false, false) && press == 1, "…the key-up is the press");
+                Assert(!inp3.Handle(0x20, false, false) && press == 1, "…and a key-up of a key that was not taken does nothing");
+                Assert(!inp3.Handle(0x20, true, true) && !inp3.Handle(0x20, false, true) && press == 1, "keys sent by this program still pass");
+                st.TwoSwitch = true; step = 0;
+                Assert(inp3.Handle(0x0D, true, false) && step == 1, "the step key still acts on the press");
+                st.SelectOnRelease = false; st.TwoSwitch = false;
+                // The back switch (its own key) and the long press (the select switch held).
+                int backs = 0; press = 0;
+                var sb = new ScanSettings { Enabled = true, SelectKey = 0x20, StepKey = 0x0D, BackKey = 0x79, BackSwitch = false };
+                var inp4 = new ScanInput(() => sb, () => press++, () => { }, () => { }, null, () => backs++);
+                Assert(!inp4.Handle(0x79, true, false) && backs == 0, "the back key is not ours while the back switch is off");
+                sb.BackSwitch = true;
+                Assert(inp4.Handle(0x79, true, false) && backs == 1 && inp4.Handle(0x79, true, false) && backs == 1 && inp4.Handle(0x79, false, false), "the back switch goes back once per press (repeats do not count)");
+                sb.BackLongPress = true; sb.BackHoldMs = 1500;
+                Assert(inp4.Handle(0x20, true, false) && press == 0 && backs == 1, "long press on: the select key-down does nothing yet");
+                Assert(inp4.Handle(0x20, false, false) && press == 1 && backs == 1, "…letting go is the press (the scanner knows whether it was long: it showed the ring)");
+                sb.BackLongPress = false; sb.SelectOnRelease = false; press = 0;
+                Assert(inp4.Handle(0x20, true, false) && press == 1 && inp4.Handle(0x20, false, false), "long press off: the press acts at once again");
+                // The scanner is told when the select switch is held (it waits) and let go.
+                var holds = new List<bool>();
+                var inp5 = new ScanInput(() => sb, () => { }, () => { }, () => { }, null, null, holds.Add);
+                sb.BackLongPress = true;
+                inp5.Handle(0x20, true, false); inp5.Handle(0x20, true, false); inp5.Handle(0x20, false, false);
+                Assert(holds.Count == 2 && holds[0] && !holds[1], "held with a long press on: down, then up (repeats do not count)");
+                sb.BackLongPress = false; sb.SelectOnRelease = false; holds.Clear();
+                inp5.Handle(0x20, true, false); inp5.Handle(0x20, false, false);
+                Assert(holds.Count == 1 && !holds[0], "acting on the press: the switch is never held back (only the let-go is reported)");
                 bool running = false; int esc2 = 0;
                 var inp2 = new ScanInput(() => st, () => { }, () => { }, () => esc2++, () => running);
                 Assert(!inp2.Handle(0x1B, true, false) && !inp2.Handle(0x1B, false, false) && esc2 == 0, "no scan running: Esc is a normal key and passes");
@@ -199,8 +362,25 @@ namespace OnScreenKeyboard
                 Assert(!r.Enabled && !r.TwoSwitch && r.ScanMs == 1000 && r.FirstExtraMs == 800 && r.Rounds == 3 && r.IgnoreRepeatMs == 300 && r.SoundOnSelect && !r.SoundOnStep,
                     "the dialog opens on the settings it was given");
                 Assert(!d.TryCapture(Keys.A), "a key is not taken while no switch is being chosen");
+                Assert(d.HostSectionCount == 4, "the window has four tabs (switches, timing, back, feedback)");
+                Assert(d.OnReleaseEnabled, "select on release can be chosen");
+                Priv<TouchChoiceButton>(d, "_cmbLong").SelectedIndex = 1;
+                Assert(!d.OnReleaseEnabled, "…but not while a long press is in use (the select switch then acts on release by itself)");
+                Assert(Priv<TouchCheckBox>(d, "_chkOnRelease").Checked, "…it then shows as on (greyed): that is what happens");
+                Assert(!d.Result.SelectOnRelease, "…while the person's own choice (off) is kept");
+                Assert(Priv<Label>(d, "_hint").Text.StartsWith(Lang.T("tip: scan on release forced")), "…and the reason is written under it (a disabled control shows no tip)");
+                var lp = Priv<TouchChoiceButton>(d, "_cmbLong");
+                Assert(d.Result.BackLongPress && !d.Result.LongPressStepsBack, "the long press \"restarts scanning\" (the first of the two choices)");
+                lp.SelectedIndex = 2;
+                Assert(d.Result.BackLongPress && d.Result.LongPressStepsBack && !d.OnReleaseEnabled, "…or \"steps back\" (one of the two, not both)");
+                lp.SelectedIndex = 0;
+                Assert(!d.Result.BackLongPress && d.OnReleaseEnabled && !Priv<TouchCheckBox>(d, "_chkOnRelease").Checked && Priv<Label>(d, "_hint").Text == Lang.T("scan: hint"), "…and it is off again, and free, when the long press is off (the reason is gone)");
+                Priv<TouchCheckBox>(d, "_chkOnRelease").Checked = true;
+                lp.SelectedIndex = 1; lp.SelectedIndex = 0;
+                Assert(Priv<TouchCheckBox>(d, "_chkOnRelease").Checked && d.Result.SelectOnRelease, "a choice made (on) is still there after the long press was switched on and off");
             }
-            var given = new ScanSettings { Enabled = true, TwoSwitch = true, SelectKey = 0x70, StepKey = 0x71, ScanMs = 2500, FirstExtraMs = 0, Rounds = 7, IgnoreRepeatMs = 600, SoundOnStep = true, SoundOnSelect = false };
+            var given = new ScanSettings { Enabled = true, TwoSwitch = true, SelectKey = 0x70, StepKey = 0x71, ScanMs = 2500, FirstExtraMs = 0, Rounds = 7, IgnoreRepeatMs = 600, SoundOnStep = true, SoundOnSelect = false, SelectOnRelease = true,
+                BackStep = false, BackSwitch = true, BackKey = 0x7A, BackLongPress = true, LongPressStepsBack = true, BackHoldMs = 2000 };
             using (var d = new ScanSettingsDialog(given))
                 Assert(d.Result.SameAs(given), "…every value comes back unchanged");
             using (var f = new KeyboardEditorForm(new VisualTheme(), new WindowState(), new LayoutMeta { SlowKeysMs = 400 }, owner: null))
@@ -223,6 +403,10 @@ namespace OnScreenKeyboard
                 Assert(!d.TryCapture(Keys.F9), "…then keys are not taken any more");
                 d.BeginCapture(2);
                 Assert(d.TryCapture(Keys.F9) && d.Result.StepKey == 0x0D, "the other switch's key cannot be chosen again");
+                d.BeginCapture(3);
+                Assert(d.TryCapture(Keys.F9) && d.Result.BackKey == 0x79, "the back key cannot be a key that is a switch already");
+                Assert(d.TryCapture(Keys.F11) && d.Result.BackKey == 0x7A, "…another key can be chosen as the back key");
+                d.BeginCapture(2);
                 Assert(d.TryCapture(Keys.Escape) && d.Result.StepKey == 0x0D && !d.TryCapture(Keys.A), "Esc cancels the choice (and can never be a switch)");
                 d.BeginCapture(2);
                 Assert(d.TryCapture(Keys.F10) && d.Result.StepKey == 0x79, "the step key can be chosen");

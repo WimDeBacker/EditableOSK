@@ -2958,7 +2958,7 @@ namespace OnScreenKeyboard
         private System.Windows.Forms.Timer _scanTimer;
         private readonly System.Diagnostics.Stopwatch _scanWatch = new();
         private long         _scanLastMs;
-        private readonly Dictionary<Button, bool> _scanPaint = new();   // button → true: the key itself, false: a key of the highlighted row
+        private readonly Dictionary<Button, int> _scanPaint = new();   // button → 0: a key of the highlighted row, 1: the key itself, 2: the row while the back step is highlighted
 
         /// <summary>Scanning is switched on in the user settings.</summary>
         internal bool ScanningOn => UserSettings.Scan.Enabled;
@@ -2991,10 +2991,13 @@ namespace OnScreenKeyboard
             _scanner.SetRows(BuildScanRows());
             // The hook only queues the work: the window handles it on its own thread, outside the hook's time limit.
             _scanInput = new ScanInput(() => settings,
-                press:  () => BeginInvoke((Action)(() => _scanner?.Press())),
+                // The select switch let go: after the long press showed its ring this restarts or steps back (the ring is what the person saw).
+                press:  () => BeginInvoke((Action)(() => _scanner?.ReleaseSelect())),
                 step:   () => BeginInvoke((Action)(() => _scanner?.Step())),
                 escape: () => BeginInvoke((Action)PauseScanning),
-                running: () => _scanner != null && _scanner.Level != ScanLevel.Idle);
+                running: () => _scanner != null && _scanner.Level != ScanLevel.Idle,
+                back:   () => BeginInvoke((Action)(() => _scanner?.Back())),
+                hold:   down => BeginInvoke((Action)(() => _scanner?.SetHolding(down))));
             _scanInput.Install();
 
             _scanTimer ??= new System.Windows.Forms.Timer { Interval = 50 };
@@ -3058,21 +3061,26 @@ namespace OnScreenKeyboard
             if (_scanner != null && _scanner.Level != ScanLevel.Idle)
             {
                 var key = _scanner.CurrentKey;
+                bool back = _scanner.OnBack || _scanner.BackPreview;
                 foreach (var c in _scanner.CurrentRow)
-                    if (_buttons.TryGetValue(c, out var b)) _scanPaint[b] = key != null && ReferenceEquals(c, key);
+                    if (_buttons.TryGetValue(c, out var b)) _scanPaint[b] = back ? 2 : key != null && ReferenceEquals(c, key) ? 1 : 0;
             }
             foreach (var b in old.Union(_scanPaint.Keys)) if (!b.IsDisposed) b.Invalidate();
         }
 
         private void DrawScanHighlight(Graphics g, Button btn)
         {
-            if (!_scanPaint.TryGetValue(btn, out bool isKey)) return;
-            // Only a ring: the key keeps its own colours. The row and the key have rings of their own colours (the person's choice).
+            if (!_scanPaint.TryGetValue(btn, out int kind)) return;
+            // Only a ring: the key keeps its own colours. The row, the key and the back step have rings of their own colours (the person's
+            // choice); the back step is also dashed, so it is not told apart by colour alone.
             var s = UserSettings.Scan;
-            var color = isKey ? s.KeyColor : s.RowColor;
-            int t = isKey ? 8 : 5;
+            var color = kind == 1 ? s.KeyColor : kind == 2 ? s.BackColor : s.RowColor;
+            int t = kind == 0 ? 5 : 8;
             using (var ring = new Pen(color, t))
+            {
+                if (kind == 2) ring.DashStyle = DashStyle.Dash;
                 g.DrawRectangle(ring, t / 2f, t / 2f, btn.Width - t, btn.Height - t);
+            }
             // A thin line of black or white just inside the ring, so the ring shows against any key colour.
             using (var thin = new Pen(ColorChip.LabelColorFor(color), 1))
                 g.DrawRectangle(thin, t, t, btn.Width - 2 * t - 1, btn.Height - 2 * t - 1);

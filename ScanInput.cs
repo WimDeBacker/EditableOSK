@@ -13,31 +13,50 @@ namespace OnScreenKeyboard
     internal sealed class ScanInput : IDisposable
     {
         private readonly Func<ScanSettings> _settings;
-        private readonly Action _press, _step, _escape;
+        private readonly Action _press, _step, _escape, _back;
+        private readonly Action<bool> _hold;                // the select switch goes down / up while it acts on release (the highlight waits)
         private readonly Func<bool> _running;               // Esc is taken only while a scan runs (null: always)
         private readonly HashSet<int> _swallowed = new();   // keys whose key-down was taken: their repeats and key-up are taken too
 
         /// <summary>Test seam: Install() does not set the system-wide hook (a real hook would catch the keys of the whole machine).</summary>
         internal static bool HookDisabledForTest;
 
-        internal ScanInput(Func<ScanSettings> settings, Action press, Action step, Action escape, Func<bool> running = null)
-        { _settings = settings; _press = press; _step = step; _escape = escape; _running = running; }
+        internal ScanInput(Func<ScanSettings> settings, Action press, Action step, Action escape, Func<bool> running = null, Action back = null, Action<bool> hold = null)
+        { _settings = settings; _press = press; _step = step; _escape = escape; _running = running; _back = back ?? (() => { }); _hold = hold ?? (_ => { }); }
 
         /// <summary>Whether the key event is taken (true) or goes on to the program that has the focus (false).</summary>
         internal bool Handle(int vk, bool down, bool injected)
         {
             if (injected) return false;
-            if (!down) return _swallowed.Remove(vk);
+            var s = _settings();
+            if (!down)
+            {
+                bool taken = _swallowed.Remove(vk);
+                if (taken && vk == s.SelectKey)
+                {
+                    // Select on release, or a long press in use (the length of the press is only known now): the release is the press. The
+                    // scanner knows whether it was held long enough (it showed the ring) and then restarts or steps back instead of selecting.
+                    if (s.SelectOnRelease || s.BackLongPress) _press();
+                    _hold(false);                                                          // after the action: it still sees the highlight as it was held
+                }
+                return taken;
+            }
             if (_swallowed.Contains(vk)) return true;                  // auto-repeat of a key that is held
 
-            var s = _settings();
             if (vk == ScanSettings.VkEscape)
             {
                 if (_running != null && !_running()) return false;      // no scan to pause: Esc is a normal key
                 _swallowed.Add(vk); _escape(); return true;
             }
-            if (vk == s.SelectKey)                     { _swallowed.Add(vk); _press();  return true; }
+            if (vk == s.SelectKey)
+            {
+                _swallowed.Add(vk);
+                if (!s.SelectOnRelease && !s.BackLongPress) _press();
+                else _hold(true);
+                return true;
+            }
             if (s.TwoSwitch && vk == s.StepKey)        { _swallowed.Add(vk); _step();   return true; }
+            if (s.BackSwitch && vk == s.BackKey)       { _swallowed.Add(vk); _back();   return true; }
             return false;
         }
 

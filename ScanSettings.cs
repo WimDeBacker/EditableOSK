@@ -3,13 +3,14 @@
 
 using System;
 using System.Drawing;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace OnScreenKeyboard
 {
     internal sealed class ScanSettings
     {
-        internal const int VkEscape = 0x1B, VkSpace = 0x20, VkReturn = 0x0D, VkF8 = 0x77, VkF9 = 0x78;
+        internal const int VkEscape = 0x1B, VkSpace = 0x20, VkReturn = 0x0D, VkF8 = 0x77, VkF9 = 0x78, VkF10 = 0x79, VkF7 = 0x76;
 
         public bool Enabled;
         /// <summary>false: one switch, the highlight moves by itself; true: a step switch moves it and a select switch selects.</summary>
@@ -32,6 +33,26 @@ namespace OnScreenKeyboard
         public int  Rounds = 3;
         /// <summary>Presses closer together than this are one press (tremor, a switch that bounces).</summary>
         public int  IgnoreRepeatMs = 300;
+        /// <summary>The select switch acts when it is released instead of when it is pressed (a press that is not meant, or that is held, does nothing).</summary>
+        public bool SelectOnRelease;
+
+        // Three ways back from the keys of a row to the rows; any of them, or all, may be on at once.
+        /// <summary>An extra step after the last key of a row: selecting it goes back to the rows.</summary>
+        public bool BackStep = true;
+        /// <summary>A switch of its own (<see cref="BackKey"/>) goes back.</summary>
+        public bool BackSwitch;
+        public int  BackKey = VkF10;
+        /// <summary>
+        /// A long press (holding the select switch for <see cref="BackHoldMs"/>) is used: the select switch then acts on release, a short
+        /// press selects. What the long press does is <see cref="LongPressStepsBack"/>.
+        /// </summary>
+        public bool BackLongPress;
+        /// <summary>false: the long press restarts the scan (goes back a level); true: it steps back, the scan then goes the other way round.</summary>
+        public bool LongPressStepsBack;
+        public int  BackHoldMs = 1500;
+        internal const int MinBackHoldMs = 500, MaxBackHoldMs = 5000;
+        /// <summary>The dashed ring round the row while the highlight is on the back step.</summary>
+        public Color BackColor = Color.FromArgb(150, 60, 220);
         public bool SoundOnStep;
         public bool SoundOnSelect = true;
 
@@ -49,16 +70,19 @@ namespace OnScreenKeyboard
             if (SelectKey <= 0 || SelectKey == VkEscape) SelectKey = VkF8;
             if (StepKey   <= 0 || StepKey   == VkEscape) StepKey   = VkF9;
             if (StepKey == SelectKey) StepKey = SelectKey == VkF9 ? VkF8 : VkF9;
+            BackHoldMs = Math.Clamp(BackHoldMs, MinBackHoldMs, MaxBackHoldMs);            if (BackKey <= 0 || BackKey == VkEscape || BackKey == SelectKey || BackKey == StepKey) BackKey = new[] { VkF10, VkF7, VkF8, VkF9 }.First(k => k != SelectKey && k != StepKey);
             if (RowColor.IsEmpty) RowColor = new ScanSettings().RowColor;
             if (KeyColor.IsEmpty) KeyColor = new ScanSettings().KeyColor;
-            RowColor = Color.FromArgb(255, RowColor); KeyColor = Color.FromArgb(255, KeyColor);
+            if (BackColor.IsEmpty) BackColor = new ScanSettings().BackColor;
+            RowColor = Color.FromArgb(255, RowColor); KeyColor = Color.FromArgb(255, KeyColor); BackColor = Color.FromArgb(255, BackColor);
         }
 
         internal bool SameAs(ScanSettings o) =>
             o != null && Enabled == o.Enabled && TwoSwitch == o.TwoSwitch && SelectKey == o.SelectKey && StepKey == o.StepKey
-            && RowColor.ToArgb() == o.RowColor.ToArgb() && KeyColor.ToArgb() == o.KeyColor.ToArgb()
+            && RowColor.ToArgb() == o.RowColor.ToArgb() && KeyColor.ToArgb() == o.KeyColor.ToArgb() && BackColor.ToArgb() == o.BackColor.ToArgb()
+            && BackStep == o.BackStep && BackSwitch == o.BackSwitch && BackKey == o.BackKey && BackLongPress == o.BackLongPress && LongPressStepsBack == o.LongPressStepsBack && BackHoldMs == o.BackHoldMs
             && ScanMs == o.ScanMs && FirstExtraMs == o.FirstExtraMs && Rounds == o.Rounds && IgnoreRepeatMs == o.IgnoreRepeatMs
-            && SoundOnStep == o.SoundOnStep && SoundOnSelect == o.SoundOnSelect;
+            && SelectOnRelease == o.SelectOnRelease && SoundOnStep == o.SoundOnStep && SoundOnSelect == o.SoundOnSelect;
 
         /// <summary>The name of a key for the screens ("Space", "Enter", "F8"…).</summary>
         internal static string KeyName(int vk) => vk switch
