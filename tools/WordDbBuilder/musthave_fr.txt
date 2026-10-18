@@ -1,0 +1,219 @@
+# French: words and phrases of everyday conversation and care that must be among the first 3000 words of worddb_FR.
+# Each word of a phrase is checked (an elided word such as l' or qu' counts as a word).
+oui
+non
+peut-être
+bonjour
+bonsoir
+salut
+au revoir
+à bientôt
+bonne nuit
+bonne journée
+merci
+merci beaucoup
+de rien
+s'il vous plaît
+s'il te plaît
+excusez-moi
+pardon
+désolé
+d'accord
+ça va
+très bien
+pas mal
+je suis fatigué
+j'ai faim
+j'ai soif
+j'ai mal
+j'ai froid
+j'ai chaud
+je ne comprends pas
+je ne sais pas
+je voudrais
+je veux
+je peux
+je dois
+je vais
+je suis
+je t'aime
+aidez-moi
+à l'aide
+j'ai besoin de
+qu'est-ce que c'est
+c'est quoi
+c'est bon
+c'est bien
+c'est possible
+ce n'est pas
+est-ce que
+où est
+comment allez-vous
+comment vas-tu
+quel âge
+quelle heure
+quelque chose
+quelqu'un
+aujourd'hui
+demain
+hier
+maintenant
+plus tard
+toujours
+jamais
+souvent
+parfois
+bientôt
+encore
+déjà
+beaucoup
+trop
+assez
+peu
+plus
+moins
+tout
+tous
+rien
+personne
+ici
+là
+là-bas
+dedans
+dehors
+avec
+sans
+pour
+contre
+dans
+sur
+sous
+entre
+chez
+vers
+depuis
+pendant
+avant
+après
+maison
+famille
+mère
+père
+frère
+sœur
+fils
+fille
+enfant
+ami
+amie
+mari
+femme
+homme
+médecin
+infirmière
+hôpital
+pharmacie
+toilettes
+salle de bain
+chambre
+cuisine
+table
+chaise
+lit
+porte
+fenêtre
+eau
+manger
+boire
+dormir
+pain
+lait
+café
+thé
+repas
+déjeuner
+dîner
+petit déjeuner
+fromage
+viande
+poisson
+légumes
+fruits
+pomme
+chaud
+froid
+bon
+mauvais
+grand
+petit
+nouveau
+vieux
+content
+triste
+malade
+fatigué
+heureux
+fâché
+peur
+douleur
+tête
+ventre
+dos
+main
+bras
+jambe
+pied
+yeux
+dents
+médicament
+téléphone
+télévision
+musique
+livre
+voiture
+travail
+argent
+temps
+jour
+nuit
+matin
+soir
+semaine
+mois
+année
+lundi
+mardi
+mercredi
+jeudi
+vendredi
+samedi
+dimanche
+un
+deux
+trois
+quatre
+cinq
+dix
+vingt
+cent
+premier
+dernier
+quoi
+qui
+quand
+pourquoi
+comment
+combien
+peux-tu
+pouvez-vous
+voulez-vous
+avez-vous
+pouvez-vous m'aider
+je ne peux pas
+je ne veux pas
+il faut
+il y a
+il fait
+on va
+on peut
+on y va

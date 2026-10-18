@@ -1,0 +1,215 @@
+# Italian: words and phrases of everyday conversation and care that must be among the first 3000 words of worddb_IT.
+# Each word of a phrase is checked (an elided word such as l' or dell' counts as a word).
+sì
+no
+forse
+ciao
+buongiorno
+buonasera
+buonanotte
+arrivederci
+a presto
+grazie
+grazie mille
+prego
+per favore
+scusi
+scusa
+mi dispiace
+va bene
+come stai
+come sta
+sto bene
+sto male
+ho fame
+ho sete
+ho dolore
+ho freddo
+ho caldo
+non capisco
+non lo so
+vorrei
+voglio
+posso
+devo
+vado
+sono
+ti voglio bene
+ti amo
+aiuto
+aiutami
+mi aiuti
+ho bisogno di
+che cos'è
+cos'è
+è possibile
+non è
+dov'è
+dove
+quanto
+quando
+perché
+come
+chi
+che cosa
+oggi
+domani
+ieri
+adesso
+dopo
+sempre
+mai
+spesso
+qualche volta
+presto
+ancora
+già
+molto
+troppo
+abbastanza
+poco
+più
+meno
+tutto
+tutti
+niente
+nulla
+nessuno
+qualcuno
+qualcosa
+qui
+qua
+lì
+là
+dentro
+fuori
+con
+senza
+per
+contro
+in
+su
+sotto
+tra
+fra
+da
+verso
+durante
+prima
+casa
+famiglia
+madre
+padre
+mamma
+papà
+fratello
+sorella
+figlio
+figlia
+bambino
+amico
+amica
+marito
+moglie
+uomo
+donna
+medico
+infermiera
+ospedale
+farmacia
+bagno
+camera
+cucina
+tavolo
+sedia
+letto
+porta
+finestra
+acqua
+mangiare
+bere
+dormire
+pane
+latte
+caffè
+tè
+pranzo
+cena
+colazione
+formaggio
+carne
+pesce
+verdura
+frutta
+mela
+caldo
+freddo
+buono
+cattivo
+grande
+piccolo
+nuovo
+vecchio
+contento
+triste
+malato
+stanco
+felice
+arrabbiato
+paura
+dolore
+testa
+pancia
+schiena
+mano
+braccio
+gamba
+piede
+occhi
+denti
+medicina
+telefono
+televisione
+musica
+libro
+macchina
+lavoro
+soldi
+tempo
+giorno
+notte
+mattina
+sera
+settimana
+mese
+anno
+lunedì
+martedì
+mercoledì
+giovedì
+venerdì
+sabato
+domenica
+uno
+due
+tre
+quattro
+cinque
+dieci
+venti
+cento
+primo
+ultimo
+cosa
+quale
+puoi aiutarmi
+non posso
+non voglio
+bisogna
+c'è
+ci sono
+si può
+all'ospedale
+dell'acqua
+l'altro
+un'altra

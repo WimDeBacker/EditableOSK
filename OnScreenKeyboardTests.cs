@@ -74,6 +74,8 @@ namespace OnScreenKeyboard
             Step(T_RememberSection);
             Step(T_LayoutText);
             Step(T_NationalLayouts);
+            Step(T_Elision);
+            Step(T_WordLists);
             Step(T_DialogOwners);
             Step(T_LayoutPicker);
             Step(T_GroupNames);

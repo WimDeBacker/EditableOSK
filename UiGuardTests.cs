@@ -317,9 +317,9 @@ namespace OnScreenKeyboard
                     string textWhileAsking = null; int askedBefore = asked;
                     st.BeforeChange = () => { asked++; box.SelectAll(); Msg(WM_CLEAR); textWhileAsking = box.Text; return true; };
                     box.Text = "4"; box.SelectAll();
-                    Msg(WM_CUT);
+                    Msg(WM_CLEAR);          // (not WM_CUT: a cut needs the clipboard, which another program may be holding at that moment)
                     Assert(textWhileAsking == "4" && asked == askedBefore + 1 && box.Text == "",
-                        "stepper: an edit that arrives while the question is open is refused, and does not open a second question");
+                        $"stepper: an edit that arrives while the question is open is refused, and does not open a second question (text while asking '{textWhileAsking}', questions asked {asked - askedBefore}, text now '{box.Text}')");
                     st.BeforeChange = null;
                     Assert(!box.AllowDrop, "stepper: dropped text is not accepted");
                 }

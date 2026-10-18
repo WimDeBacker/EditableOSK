@@ -150,6 +150,12 @@ Source: "{#BuildDir}\worddb_NL.wfq";                  DestDir: "{app}"; Flags: i
 Source: "{#BuildDir}\worddb_EN.wfq";  DestDir: "{app}"; \
     Flags: ignoreversion skipifsourcedoesntexist
 
+; French, Italian, Spanish — made from Tatoeba and Europarl (tools\WordDbBuilder); the sources and their terms are in NOTICE_worddb.md
+Source: "{#BuildDir}\worddb_FR.wfq";                  DestDir: "{app}"; Flags: ignoreversion
+Source: "{#BuildDir}\worddb_IT.wfq";                  DestDir: "{app}"; Flags: ignoreversion
+Source: "{#BuildDir}\worddb_ES.wfq";                  DestDir: "{app}"; Flags: ignoreversion
+Source: "NOTICE_worddb.md";                           DestDir: "{app}"; Flags: ignoreversion
+
 ; ── Translation ──────────────────────────────────────────────────────────
 Source: "{#BuildDir}\lang_nl.xml";                    DestDir: "{app}"; Flags: ignoreversion
 Source: "{#BuildDir}\lang_fr.xml";                    DestDir: "{app}"; Flags: ignoreversion

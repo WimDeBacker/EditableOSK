@@ -6,9 +6,8 @@ Only what is still to be done is listed here, in the order of the owner's priori
 
 ### Priority 5 — French, Italian and Spanish: what is left ▶ *(screens, group names and installer are done, see Completed; requested by the owner 2026-10-11)*
 
-- 5.3 **Word prediction:** a word database per language is a separate piece of work (`worddb_FR/IT/ES`), the keyboard works without; until then the language of a keyboard has no database of its own and the "(auto)" choice falls back to another one.
 - 5.7 **Rules of the language of a keyboard (for when the other languages are worked out):** sentence and spacing rules per language (when a sentence starts and the next word is capitalised; French has a space before `? ! : ;` and inside « »), quotation marks (“ ” in English, „ ” in German, « » in French), and the decimal separator (a point or a comma) for the keys and the word prediction; chosen by the language tag of the keyboard (`LayoutMeta.Language`, Priority 4).
-- 5.6 **Quality:** a machine translation is only a first draft: each language needs a review by a native speaker, with the program in front of them (a word that fits a menu is not always the word for a button). Decision for the owner: who reviews, and whether a language is shipped before its review.
+- 5.6 **Quality:** a machine translation is only a first draft: each language needs a review by a native speaker, with the program in front of them (a word that fits a menu is not always the word for a button). Decision for the owner: who reviews, and whether a language is shipped before its review. **Also for the review:** the blocked (vulgar) words of `tools/WordDbBuilder/blocklist_fr/it/es.txt`, the must-have phrases (`musthave_*.txt`), and the word lists themselves (`worddb_FR/IT/ES.xml`: do the suggestions after common words sound natural?). A weakness known now: the lists lean on Tatoeba's learner sentences (e.g. Italian "il" → "passaporto", "francese").
 
 ---
 
@@ -41,6 +40,18 @@ Nothing here is to be worked on until it shows up again or the owner decides oth
 ---
 
 ## Completed
+
+### Word lists for French, Italian and Spanish ✓ *(was 5.3; built 2026-10-18)*
+
+`worddb_FR.xml`, `worddb_IT.xml`, `worddb_ES.xml` (20,000 words each, 10 next words per word, 6.4–6.8 MB; csproj targets `ConvertWordDb_FR/IT/ES`, installer lines, found by `LanguageRegistry` as `fr`/`it`/`es`). Made by **`tools/WordDbBuilder`** (README there; the corpora are in `C:\dev\worddb_bronnen\`, not in git) from **Tatoeba** (CC BY 2.0 FR, weight 0.96: everyday sentences, 0.5–1M per language) and **Europarl v7** (weight 0.04: general vocabulary and names). Chosen under the owner's licence stance (no commercial use by others): no CC BY-SA sources (Wikipedia, FrequencyWords, Lexique, wordfreq); sources and terms in **`NOTICE_worddb.md`** (also installed). 
+- **Method:** letters only, a hyphen ends a word and a digit makes a break (as in the keyboard); **elisions are words of their own** (`l'`, `qu'`, `dell'` …, see the elision item); lower case unless a name (names count only by Europarl: Tatoeba is full of "Tom"); forms without accents dropped when the accented one is 5× as frequent; Tatoeba floods of made-up sentences cut (exact repeats once, 60 sentences per three-word opening: one Italian word was in 4 % of the sentences); a short blocked list of vulgar words and derivatives; **seeds**: words of the must-have lists that rank low are raised to rank 2500 (like the Dutch additions of 2026-10-09).
+- **Quality gate** (`musthave_fr/it/es.txt`, ~215 conversation and care words and phrases, all in the first 3000): 217/217, 213/213, 203/203. Builder: a cache (a run with other weights takes seconds, a full one ~20 minutes), `--sample-every K`, a self-test before every run.
+- **Tests:** `T_WordLists` (they load and are found; bonj → bonjour, grazie → mille, buenos → días; j'/c'/qu'/dell' as words; blocked words not suggested; Spanish unchanged), `T_Elision`.
+- **Open (5.6):** a native speaker should read the blocked words, the must-have lists and some suggestions. The test of the stepper that cut a number through the clipboard failed while another program held the clipboard: it now clears instead of cuts.
+
+### Word prediction: French and Italian elision ✓ *(part of 5.3, built 2026-10-18 before the word lists)*
+
+An elided word (`l'`, `qu'`, `d'`, `j'`, `c'`, `dell'`, `all'` …) is a word of its own in a database that has it **with the apostrophe**: typing `l` and `'` finishes the word `l'` (no space), the next word is predicted from it (`l'` → homme, eau, on …), choosing `l'` from the suggestions replaces what was typed and adds **no space** (`WPClickResult.Suffix` is empty; nothing to take away before punctuation). An apostrophe inside a longer word of the database (`aujourd'hui`) is added to the word being typed. A database without such words (Dutch, English, Spanish) works as before: an apostrophe ends the word; `’` is read as `'`. Code: `WordDatabase.IsElisionToken` / `HasWordStartingWith`, `WordPredictor.TryApostropheInWord` and `OnWPClick`; test `T_Elision`. (Before, the apostrophe always ended the word, so `l'homme` was `l` + `homme`; and the existing rule that suggestions after the first word of a sentence are still capitalised until a letter is typed applies to `L'` too.)
 
 ### Keyboards for France, Italy and Spain ✓ *(was 5.4; built 2026-10-18)*
 

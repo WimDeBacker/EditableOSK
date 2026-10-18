@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Builds a word database source (worddb_XX.xml, the format of worddb_NL.xml) from text corpora.
+    Run with dotnet run, the arguments after a double dash (language, output file, one source per corpus as name:path:format:weight).
+    See tools\WordDbBuilder\README.md.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>WordDbBuilder</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <Optimize>true</Optimize>              <!-- a run reads 60 million words: optimised even when built as Debug -->
+    <ServerGarbageCollector>true</ServerGarbageCollector>
+  </PropertyGroup>
+
+</Project>

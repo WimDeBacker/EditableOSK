@@ -716,6 +716,31 @@ namespace OnScreenKeyboard
             }
         }
 
+        /// <summary>
+        /// True when the loaded database has <paramref name="token"/> as a word of its own that ends with an apostrophe: an elided article,
+        /// pronoun or preposition of French or Italian ("l'", "qu'", "dell'"). The word before the apostrophe and the apostrophe are then
+        /// one completed word, and the word that follows is predicted from it ("l'" → "homme", "eau"). A database without such words
+        /// (Dutch, English, Spanish) never says yes, so an apostrophe there ends a word as before.
+        /// </summary>
+        public static bool IsElisionToken(string token)
+        {
+            if (!_isLoaded || string.IsNullOrEmpty(token) || token[^1] != '\'') return false;
+            var snap = _snapshot;
+            return snap.ByExact.ContainsKey(token) || snap.ByExact.ContainsKey(token.ToLower());
+        }
+
+        /// <summary>
+        /// True when some word of the loaded database starts with <paramref name="prefix"/> (case-insensitive). Asked for a prefix that ends
+        /// with an apostrophe: the apostrophe then belongs to a word ("aujourd'" → "aujourd'hui") and does not end it.
+        /// </summary>
+        public static bool HasWordStartingWith(string prefix)
+        {
+            if (!_isLoaded || string.IsNullOrEmpty(prefix)) return false;
+            foreach (var entry in _snapshot.ByFrequency)
+                if (entry.Word.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
         // The actual prediction logic, separated so the public method can wrap it safely.
         private static List<string> GetPredictionsCore(
             DbSnapshot snap,

@@ -1,0 +1,204 @@
+# Spanish: words and phrases of everyday conversation and care that must be among the first 3000 words of worddb_ES.
+sí
+no
+quizás
+hola
+buenos días
+buenas tardes
+buenas noches
+adiós
+hasta luego
+hasta pronto
+gracias
+muchas gracias
+de nada
+por favor
+perdón
+disculpe
+lo siento
+de acuerdo
+cómo estás
+cómo está
+estoy bien
+estoy mal
+tengo hambre
+tengo sed
+tengo dolor
+tengo frío
+tengo calor
+no entiendo
+no sé
+quisiera
+quiero
+puedo
+tengo que
+voy
+soy
+estoy
+te quiero
+ayuda
+ayúdame
+necesito
+qué es
+es posible
+no es
+dónde está
+dónde
+cuánto
+cuándo
+por qué
+cómo
+quién
+qué
+hoy
+mañana
+ayer
+ahora
+después
+siempre
+nunca
+a menudo
+a veces
+pronto
+todavía
+ya
+mucho
+demasiado
+bastante
+poco
+más
+menos
+todo
+todos
+nada
+nadie
+alguien
+algo
+aquí
+allí
+dentro
+fuera
+con
+sin
+para
+contra
+en
+sobre
+bajo
+entre
+desde
+hacia
+durante
+antes
+casa
+familia
+madre
+padre
+mamá
+papá
+hermano
+hermana
+hijo
+hija
+niño
+amigo
+amiga
+marido
+esposa
+hombre
+mujer
+médico
+enfermera
+hospital
+farmacia
+baño
+habitación
+cocina
+mesa
+silla
+cama
+puerta
+ventana
+agua
+comer
+beber
+dormir
+pan
+leche
+café
+té
+comida
+almuerzo
+cena
+desayuno
+queso
+carne
+pescado
+verdura
+fruta
+manzana
+caliente
+frío
+bueno
+malo
+grande
+pequeño
+nuevo
+viejo
+contento
+triste
+enfermo
+cansado
+feliz
+enfadado
+miedo
+dolor
+cabeza
+barriga
+espalda
+mano
+brazo
+pierna
+pie
+ojos
+dientes
+medicina
+teléfono
+televisión
+música
+libro
+coche
+trabajo
+dinero
+tiempo
+día
+noche
+tarde
+semana
+mes
+año
+lunes
+martes
+miércoles
+jueves
+viernes
+sábado
+domingo
+uno
+dos
+tres
+cuatro
+cinco
+diez
+veinte
+cien
+primero
+último
+cosa
+cuál
+puedes ayudarme
+no puedo
+no quiero
+hay que
+hay
+vamos

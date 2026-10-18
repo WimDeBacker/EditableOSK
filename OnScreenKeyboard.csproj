@@ -14,6 +14,8 @@
   <ItemGroup>
     <!-- One-off ICO assembly script — not part of the app build -->
     <Compile Remove="MakeIco.cs" />
+    <!-- The word-list builder is a program of its own (tools\WordDbBuilder), not part of the keyboard -->
+    <Compile Remove="tools\**" />
   </ItemGroup>
 
   <ItemGroup>
@@ -59,6 +61,25 @@
           Inputs="$(MSBuildProjectDirectory)\worddb_EN.xml"
           Outputs="$(OutputPath)worddb_EN.wfq">
     <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\tools\ConvertWordDb.ps1&quot; -Source &quot;$(MSBuildProjectDirectory)\worddb_EN.xml&quot; -Dest &quot;$(OutputPath)worddb_EN.wfq&quot; -Language en" />
+  </Target>
+
+  <!-- French, Italian and Spanish: made by tools\WordDbBuilder from Tatoeba and Europarl (see NOTICE_worddb.md) -->
+  <Target Name="ConvertWordDb_FR" BeforeTargets="Build"
+          Inputs="$(MSBuildProjectDirectory)\worddb_FR.xml"
+          Outputs="$(OutputPath)worddb_FR.wfq">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\tools\ConvertWordDb.ps1&quot; -Source &quot;$(MSBuildProjectDirectory)\worddb_FR.xml&quot; -Dest &quot;$(OutputPath)worddb_FR.wfq&quot; -Language fr" />
+  </Target>
+
+  <Target Name="ConvertWordDb_IT" BeforeTargets="Build"
+          Inputs="$(MSBuildProjectDirectory)\worddb_IT.xml"
+          Outputs="$(OutputPath)worddb_IT.wfq">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\tools\ConvertWordDb.ps1&quot; -Source &quot;$(MSBuildProjectDirectory)\worddb_IT.xml&quot; -Dest &quot;$(OutputPath)worddb_IT.wfq&quot; -Language it" />
+  </Target>
+
+  <Target Name="ConvertWordDb_ES" BeforeTargets="Build"
+          Inputs="$(MSBuildProjectDirectory)\worddb_ES.xml"
+          Outputs="$(OutputPath)worddb_ES.wfq">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\tools\ConvertWordDb.ps1&quot; -Source &quot;$(MSBuildProjectDirectory)\worddb_ES.xml&quot; -Dest &quot;$(OutputPath)worddb_ES.wfq&quot; -Language es" />
   </Target>
 
 </Project>

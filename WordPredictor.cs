@@ -277,6 +277,9 @@ namespace OnScreenKeyboard
             {
                 char c = send[0];
 
+                // ── An apostrophe inside a word (French and Italian elision) ──
+                if ((c == '\'' || c == '’') && _wordBuffer.Length > 0 && TryApostropheInWord()) return;
+
                 // ── Punctuation / symbol ──────────────────────────────
                 if (char.IsPunctuation(c) || char.IsSymbol(c))
                 {
@@ -419,6 +422,33 @@ namespace OnScreenKeyboard
         }
 
         /// <summary>
+        /// An apostrophe was typed after letters. In a database that has elided words ("l'", "qu'", "dell'" — see
+        /// <see cref="WordDatabase.IsElisionToken"/>) the letters and the apostrophe are one finished word, with no space after it: the next
+        /// word is predicted from it. When the apostrophe is inside a longer word of the database ("aujourd'hui") it is added to the word
+        /// being typed. Otherwise (Dutch, English, any other apostrophe) it is ordinary punctuation, as before.
+        /// </summary>
+        private bool TryApostropheInWord()
+        {
+            string withApostrophe = _wordBuffer + "'";
+            if (WordDatabase.IsElisionToken(withApostrophe))
+            {
+                _lastActionWasPrediction = false;
+                CompleteWord(withApostrophe);
+                if (_nextWordUpper) _sentenceFirstWordDone = true;      // as after a space: the next word is not the first of the sentence
+                RefreshPredictions();
+                return true;
+            }
+            if (WordDatabase.HasWordStartingWith(withApostrophe))
+            {
+                _lastActionWasPrediction = false;
+                _wordBuffer = withApostrophe;
+                RefreshPredictions();
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
         /// Call when the user clicks a word-prediction (WP) key at
         /// the given slot index.
         /// </summary>
@@ -457,12 +487,14 @@ namespace OnScreenKeyboard
             _atSentenceStart         = false;
             _shiftLatched            = false;
             _sentenceFirstWordDone   = false;
-            _lastActionWasPrediction = true; // caller may need to remove trailing space before punctuation
+            // An elided word ("l'") is followed directly by the next word: no space is added, so none has to be taken away before punctuation.
+            bool elided = toSend.EndsWith("'", StringComparison.Ordinal);
+            _lastActionWasPrediction = !elided; // caller may need to remove trailing space before punctuation
             ShiftLatchChanged?.Invoke(false); // tell UI to release the Shift key
 
             RefreshPredictions();
 
-            return new WPClickResult(backspaces, toSend, " ");
+            return new WPClickResult(backspaces, toSend, elided ? "" : " ");
         }
 
         /// <summary>
