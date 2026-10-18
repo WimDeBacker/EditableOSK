@@ -2,7 +2,7 @@
 
 ## Pending
 
-Numbering: **P** = priority, then sub-sections, steps and details (**1.1**, **3.4**). The open priorities were numbered from 1 again on 2026-10-06 (Priority 4 was added on 2026-10-07 and is completed, Priority 5 was added on 2026-10-09); the items under Completed keep the numbers they had when they were done (so "Priority 7" there is not Priority 7 here). The numbers of the notes under "On hold" (3.0 – 3.5) are those of the old Priority 3. Status marks: ✓ done, ▶ in progress, ☐ not started.
+Only what is still to be done is listed here, in the order of the owner's priorities (Priority 1, then 6, then 5). Numbering: **P** = priority, then steps and details (**1.1**, **6.3**); the numbers are kept when something moves, so a finished step keeps its number under Completed (the items there also keep the numbers they had when they were done: "Priority 7" there is not Priority 7 here). Not planned ideas and a bug that no longer shows up are under "On hold"; everything finished is under "Completed". Status marks: ✓ done, ▶ in progress, ☐ not started.
 
 ### Priority 1 — Scanning, follow-up: step back with a key as well ☐ *(requested by the owner 2026-10-18; nothing is built yet)*
 
@@ -15,9 +15,9 @@ Today "steps back" (the scan goes the other way round, right to left, and jumps 
 ### Priority 6 — New Keyboard wizard: word prediction keys and letter keys ☐ *(requested by the owner 2026-10-17; nothing is built yet)*
 
 For the wizard that makes a new keyboard (`NewKeyboardWizard`):
+- 6.0 **Title and description of a keyboard (found 2026-10-17):** a keyboard made with the wizard has no `<Info>` (title and description per language), so it shows no name and no description in the layout picker and cannot be shipped without editing the file by hand (this happened with `azertycolor.kbl` and `Scanning.kbl`). The wizard should ask for a title and a description (at least in the keyboard's language, optionally in more languages), and Edit Keyboard (General) should let the user change them: today no window sets them. The file format and the loading and saving already carry them (`LayoutMeta.Titles` / `Descriptions`).
 - 6.1 **A key for word prediction:** the wizard can add a word-prediction key (`wp:n`); the numbering (`wp:0`, `wp:1`, …) is filled in automatically, the user never types the code.
 - 6.2 **A letter key is always a lower-case letter, and the upper-case letter with Shift:** a letter key made by the wizard gets the small letter as its normal output and the capital as its Shift output (`Send` / `ShiftSend`), so the user does not have to enter both.
-- 6.0 **Title and description of a keyboard (found 2026-10-17):** a keyboard made with the wizard has no `<Info>` (title and description per language), so it shows no name and no description in the layout picker and cannot be shipped without editing the file by hand (this happened with `azertycolor.kbl` and `Scanning.kbl`). The wizard should ask for a title and a description (at least in the keyboard's language, optionally in more languages), and Edit Keyboard (General) should let the user change them: today no window sets them. The file format and the loading and saving already carry them (`LayoutMeta.Titles` / `Descriptions`).
 - 6.3 **Export in a text format:** a keyboard can be exported as plain text (rows and keys, readable and editable by hand), next to the `.kbl` file.
 - 6.4 **A notation for the text format** that covers more than the plain letter: how a key is written when **AltGr** has an output of its own, for **shortcuts** (Ctrl/Alt/Shift/Win combinations, `{ENTER}`-style special keys), word-prediction keys (`wp:n`), layout switch keys (`layout:`), modifier keys, empty cells and keys that span more than one cell, and so on. To decide when this is built: whether the same notation is also read back (an import into the wizard, so a keyboard can be written by hand), and what is left out of the text (colours, groups, window settings).
 
@@ -29,12 +29,16 @@ Today the screens exist in English (built in, `LanguageManager.cs`) and Dutch (`
 - 5.3 **Word prediction:** a word database per language is a separate piece of work (`worddb_FR/IT/ES`), the keyboard works without; until then the language of a keyboard has no database of its own and the "(auto)" choice falls back to another one.
 - 5.4 **Keyboard layouts:** French (AZERTY France), Italian and Spanish (QWERTY with their accents, dead keys, `ñ`, `ç`) as ready-made layouts and as choices in the first-start dialog and the wizard (the wizard's help for the pasted keys has Dutch and English spellings).
 - 5.5 **Installer:** Inno Setup has French, Italian and Spanish message files; the own texts of `setup.iss` (`[CustomMessages]`) get the three languages too.
-- 5.8 ✓ **A title and a description of a keyboard per language, and a list of the ready-made keyboards (done 2026-10-11, first because the layouts live in Program Files where nobody looks):** `LayoutMeta.Titles` / `Descriptions`, stored in the layout as `<Info><Title lang="…"><Description lang="…">` (only when there are any; `SettingsManager.ReadInfo` reads them without loading the layout); the four shipped `.kbl` files have a Dutch and an English title and description. **Load** (toolbar and Edit Keyboard) now opens `LayoutPickerDialog` ("Open a keyboard"): the layouts in the program's folder with their titles in the language of the screens (else the keyboard's language, else English, else the file name), the description under the list, **Open** and **Other file…** (the ordinary file dialog). A new language (5.1–5.4) adds its title and description to the four files. Tests: `T_LayoutPicker`, the dialog guards, the narrow-width check, gallery `layoutpicker_*.png`. By hand: Load in the toolbar, Load in Edit Keyboard (also with the program installed in Program Files), double-click and Enter in the list, "Other file…".
 - 5.7 **Rules of the language of a keyboard (for when the other languages are worked out):** sentence and spacing rules per language (when a sentence starts and the next word is capitalised; French has a space before `? ! : ;` and inside « »), quotation marks (“ ” in English, „ ” in German, « » in French), and the decimal separator (a point or a comma) for the keys and the word prediction; chosen by the language tag of the keyboard (`LayoutMeta.Language`, Priority 4).
 - 5.6 **Quality:** a machine translation is only a first draft: each language needs a review by a native speaker, with the program in front of them (a word that fits a menu is not always the word for a button). Decision for the owner: who reviews, and whether a language is shipped before its review.
 
+---
 
-Not planned; decided later, if at all (from the touch-friendly work, 2.4.8):
+## On hold — not current for now
+
+Nothing here is to be worked on until it shows up again or the owner decides otherwise. The notes stay so that the work does not have to start from zero.
+
+### Ideas that are not planned *(decided later, if at all; from the touch-friendly work, 2.4.8)*
 
 - I.1 The same flyout for every other list (Language, Toolbar theme, word-database choice).
 - I.2 A shortcut builder (`Ctrl`/`Alt`/`Shift`/`Win` toggles + key) instead of "Record", for people who cannot type combinations.
@@ -44,12 +48,6 @@ Not planned; decided later, if at all (from the touch-friendly work, 2.4.8):
   - **Safety:** Win must always be released when the keyboard closes, crashes, loses focus (`Deactivate`) or after a time-out; otherwise Win stays pressed in Windows.
   - **How the user chooses it:** a separate "hold Win" key, or the existing Win sticky key that from then on really holds (this changes the behaviour for people who use sticky keys now).
   - Until then: if Windows has Alt+Shift or Ctrl+Shift switched on for the input language (Settings → Time & language → Typing → Advanced keyboard settings), a Key/Shortcut key `{Alt}{Shift}` or `{Ctrl}{Shift}` already switches it.
-
----
-
-## On hold — pending problems and difficulties that are not current for now
-
-Nothing here is to be worked on until it shows up again. The notes stay so that the work does not have to start from zero when it does.
 
 ### `OnScreenKeyboard.exe` stays in Task Manager after closing the window in edit mode ▶ *(was Priority 3; bug; no longer reproducible after the safety net, root cause unknown; on hold since the owner's decision of 2026-10-07, moved here 2026-10-11)*
 
@@ -66,7 +64,7 @@ Nothing here is to be worked on until it shows up again. The notes stay so that 
 
 ## Completed
 
-### Scanning ✓ *(accessibility; was Priority 1; research 2026-10-11, built 2026-10-12 to 2026-10-18, tested by the owner with a real user and switch; released in 1.0.0)*
+### Scanning ✓ *(accessibility; was Priority 1; research 2026-10-11, built 2026-10-12 to 2026-10-18, tested by the owner with a real user, a switch and a gamepad; in release 1.0.0 except the gamepad switch)*
 
 Research and the list of options: **`scanning_research.md`**. What was built, with the owner's decisions:
 - **Switches:** keyboard keys (a global low-level hook, `ScanInput`, swallows the switch keys and never touches keys the program sends itself) and **gamepad buttons** (`Gamepad.cs`: XInput for Xbox-type controllers and the Xbox Adaptive Controller, winmm for other game controllers; polled on the window's thread, only while a button is a switch). A switch is a key **or** a button, chosen with one choice in the settings (press the key or the button); a key and a button are not combined as one switch. One switch (automatic) or two (step + select). Defaults F8 (select), F9 (step), F10 (back): not Space/Enter, because the switch keys are swallowed while scanning is on.
@@ -80,11 +78,19 @@ Research and the list of options: **`scanning_research.md`**. What was built, wi
 - Code: `Scanner.cs` (state machine, no window), `ScanInput.cs`, `Gamepad.cs`, `ScanSettings.cs`, `ScanSettingsDialog.cs`, `ScanSounds.cs`, the part "Scanning" in `KeyboardForm.cs`; tests `ScanningTests.cs`, `SectionMemoryTests.cs`.
 - Hold (inverse) scanning was tried and removed (it did not work as it should). Other ideas (other patterns, a mouse click as the switch, highlight options, speech, a switch test) were dropped by the owner on 2026-10-18.
 
+### First release 1.0.0 on GitHub ✓ *(2026-10-17)*
+
+Release build, the full test suite, the Inno Setup installer (`installer/setup.iss`, `EditableOSK-1.0.0-Setup.exe`, not in git) and a published GitHub release `v1.0.0` with the installer as its asset; the README says where to download it (Releases page). The installer is not code-signed (Windows SmartScreen may warn: "More info", "Run anyway"; the release notes say so). The gamepad switch and the later scanning changes came after 1.0.0 and are in the next version.
+
+### A title and a description of a keyboard per language, and a list of the ready-made keyboards ✓ *(was 5.8; done 2026-10-11, first because the layouts live in Program Files where nobody looks)*
+
+`LayoutMeta.Titles` / `Descriptions`, stored in the layout as `<Info><Title lang="…"><Description lang="…">` (only when there are any; `SettingsManager.ReadInfo` reads them without loading the layout); the shipped `.kbl` files have a Dutch and an English title and description. **Load** (toolbar and Edit Keyboard) opens `LayoutPickerDialog` ("Open a keyboard"): the layouts in the program's folder with their titles in the language of the screens (else the keyboard's language, else English, else the file name), the description under the list, **Open** and **Other file…** (the ordinary file dialog). A new language (Priority 5) adds its title and description to the shipped files. Tests: `T_LayoutPicker`, the dialog guards, the narrow-width check, gallery `layoutpicker_*.png`. Still missing: a window that lets the user enter a title and description (see Priority 6, 6.0).
+
 ### Bundled keyboard layouts ✓ *(was Priority 2; closed by the owner 2026-10-11)*
 
 The wish was eight ready-made `.kbl` files (4 wizard styles × 2 key arrangements) and that a user can open one at once without the wizard. Done in another way, which makes the eight files unnecessary:
 - **Four ready-made layouts** ship in the program's folder: `azerty.kbl`, `azertycolor.kbl`, `qwerty.kbl` and `math.kbl`, each with a title and a description in Dutch and English.
-- **Opening one without the wizard:** Load (toolbar and Edit Keyboard) opens "Open a keyboard", a list of the ready-made layouts with their titles and descriptions (`LayoutPickerDialog`, see 5.8 below); "Other file…" opens the ordinary file dialog. The first start opens `qwerty.kbl` or `azerty.kbl` by the arrangement chosen.
+- **Opening one without the wizard:** Load (toolbar and Edit Keyboard) opens "Open a keyboard", a list of the ready-made layouts with their titles and descriptions (`LayoutPickerDialog`, see "A title and a description of a keyboard per language" above); "Other file…" opens the ordinary file dialog. The first start opens `qwerty.kbl` or `azerty.kbl` by the arrangement chosen.
 - **The 4 styles × any arrangement:** the Style section of Edit Keyboard (and the style choice at the first start) gives any layout one of the four standard styles of the wizard (Dark, Light, High Contrast, Colorful), so no file is needed per combination.
 - Extra arrangements for French, Italian and Spanish remain under Priority 5 (5.4).
 
@@ -100,7 +106,7 @@ The wish was eight ready-made `.kbl` files (4 wizard styles × 2 key arrangement
 - **The ids and names of the ready-made groups:** `standard`; `prediction` (Woordvoorspelling / Word prediction); `function-keys` (Functietoetsen); `numbers` (Cijfers); `vowels` (Klinkers); `consonants` (Medeklinkers); `punctuation` (Leestekens); `controls` (Besturing); math: `arithmetic` (Rekenkunde), `comparisons` (Vergelijkingen), `brackets` (Haakjes), `constants` (Constanten), `calculus` (Analyse), `sets` (Verzamelingen), `logic` (Logica), `trigonometry` (Goniometrie), `greek` (Grieks, "Greek letters"), `editing` (Bewerken), `modifiers` (Modifier, "Modifier keys"), `navigation` (Navigatie). In `math.kbl` the `azerty` layout key stays in `navigation` (owner, 2026-10-11).
 - **Consequences:** the heading "Window" was removed from Edit Keyboard to make room for the second language row (the supported minimum widths are 530 px for the Group Editor at +40 % text, was 520, and 560 px for Edit Keyboard at +80 % text, was 540). The owner found no old `.kbl` files to convert; the old-format reader is tested with a made-up old file (`T_GroupNames`). All manual checks of the owner done.
 
-**Not done, moved:** sentence and spacing rules, quotation marks and the decimal separator per language, and a title and description per keyboard: Priority 5 (5.7 and 5.8). Right-to-left was dropped. Translating names automatically is not planned.
+**Not done, moved:** sentence and spacing rules, quotation marks and the decimal separator per language, : Priority 5 (5.7). The title and description per keyboard were done, see the entry above. Right-to-left was dropped. Translating names automatically is not planned.
 
 ### Dialogs opened behind the keyboard again ✓ *(was Priority 0; reported by the owner 2026-10-11, fixed and confirmed by the owner the same day)*
 
