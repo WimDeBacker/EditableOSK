@@ -13,8 +13,8 @@ namespace OnScreenKeyboard
     {
         private readonly ScanSettings _value;
         private readonly TouchChoiceButton _cmbSwitches, _cmbSound;
-        private readonly TouchCheckBox _chkOnRelease, _chkBackStep, _chkBackSwitch;
-        private readonly TouchChoiceButton _cmbLong;
+        private readonly TouchCheckBox _chkOnRelease, _chkBackStep;
+        private readonly TouchChoiceButton _cmbLong, _cmbBackSwitch;
         private readonly FluentButton _btnSelect, _btnStep, _btnBack;
         private GamepadPoller _pad;              // looks at the controllers only while a switch is being chosen (a key or a gamepad button)
         private readonly TouchStepper _stpScan, _stpExtra, _stpRounds, _stpIgnore, _stpHold;
@@ -36,7 +36,8 @@ namespace OnScreenKeyboard
                 r.Rounds          = (int)_stpRounds.Value;
                 r.IgnoreRepeatMs  = (int)_stpIgnore.Value;
                 r.BackStep        = _chkBackStep.Checked;
-                r.BackSwitch      = _chkBackSwitch.Checked;
+                r.BackSwitch      = _cmbBackSwitch.SelectedIndex > 0;
+                r.BackSwitchStepsBack = _cmbBackSwitch.SelectedIndex == 2;
                 r.BackLongPress   = _cmbLong.SelectedIndex > 0;
                 r.LongPressStepsBack = _cmbLong.SelectedIndex == 2;
                 r.BackHoldMs      = (int)_stpHold.Value;
@@ -105,15 +106,17 @@ namespace OnScreenKeyboard
             // ── Tab 3: Back — three ways, each on or off, all at once if wanted ──
             t = AddSection(() => Lang.T("scan: tab back"));
             _chkBackStep   = NewCheck(() => Lang.T("scan: back step"));
-            _chkBackSwitch = NewCheck(() => Lang.T("scan: back switch"));
-            _chkBackStep.Checked = _value.BackStep; _chkBackSwitch.Checked = _value.BackSwitch;
-            SetTip(_chkBackStep,   () => Lang.T("tip: scan back step"));
-            SetTip(_chkBackSwitch, () => Lang.T("tip: scan back switch"));
-            foreach (var c in new[] { _chkBackStep, _chkBackSwitch }) c.CheckedChanged += (s, e) => UpdateEnabled();
-            // Each way with the settings that belong to it right under it: the back step; back with a switch and its key; the long press (off,
-            // restarts scanning, or steps back: one of the two) and its time.
+            _chkBackStep.Checked = _value.BackStep;
+            SetTip(_chkBackStep, () => Lang.T("tip: scan back step"));
+            // Each way with the settings that belong to it right under it: the back step; back with a switch (off, restarts scanning, or
+            // steps back: one of the two) and its key; the long press (the same choice) and its time. The two choices are independent.
             AddWideRow(t, OptionStack(_chkBackStep), fill: false);
-            AddWideRow(t, OptionStack(_chkBackSwitch), fill: false);
+            _cmbBackSwitch = new TouchChoiceButton { RowHeight = 44 };
+            _cmbBackSwitch.SetItems(new[] { "scan: long off", "scan: long restarts", "scan: long steps back" }.Select(k => new TouchChoice { Text = Lang.T(k) }),
+                                    !_value.BackSwitch ? 0 : _value.BackSwitchStepsBack ? 2 : 1);
+            _cmbBackSwitch.SelectedIndexChanged += (s, e) => UpdateEnabled();
+            SetTip(_cmbBackSwitch, () => Lang.T("tip: scan back switch"));
+            AddRow(t, () => Lang.T("scan: back switch"), _cmbBackSwitch);
             _btnBack = MakeTouchButton(() => KeyText(3));
             _btnBack.Click += (s, e) => BeginCapture(3);
             AddRow(t, () => Lang.T("scan: back key"), _btnBack, fill: false);
@@ -180,7 +183,7 @@ namespace OnScreenKeyboard
             _stpScan.Enabled   = !two;       // a person who steps by hand sets the pace
             _stpExtra.Enabled  = !two;
             _stpRounds.Enabled = !two;
-            _btnBack.Enabled   = _chkBackSwitch.Checked;
+            _btnBack.Enabled   = _cmbBackSwitch.SelectedIndex > 0;
             _stpHold.Enabled   = _cmbLong.SelectedIndex > 0;
             // A long press needs the length of the press: the select switch then acts when it is let go. The check box shows that ("on", and
             // greyed, with the reason in its tip); what the person chose is kept and comes back when the long press is switched off.

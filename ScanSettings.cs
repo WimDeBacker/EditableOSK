@@ -43,6 +43,8 @@ namespace OnScreenKeyboard
         /// <summary>A switch of its own (<see cref="BackKey"/>) goes back.</summary>
         public bool BackSwitch;
         public int  BackKey = VkF10;
+        /// <summary>false: the back switch restarts the scan (goes back a level); true: it steps back, the scan then goes the other way round.</summary>
+        public bool BackSwitchStepsBack;
         /// <summary>
         /// A long press (holding the select switch for <see cref="BackHoldMs"/>) is used: the select switch then acts on release, a short
         /// press selects. What the long press does is <see cref="LongPressStepsBack"/>.
@@ -82,7 +84,7 @@ namespace OnScreenKeyboard
         internal bool SameAs(ScanSettings o) =>
             o != null && Enabled == o.Enabled && TwoSwitch == o.TwoSwitch && SelectKey == o.SelectKey && StepKey == o.StepKey
             && RowColor.ToArgb() == o.RowColor.ToArgb() && KeyColor.ToArgb() == o.KeyColor.ToArgb() && BackColor.ToArgb() == o.BackColor.ToArgb()
-            && BackStep == o.BackStep && BackSwitch == o.BackSwitch && BackKey == o.BackKey && BackLongPress == o.BackLongPress && LongPressStepsBack == o.LongPressStepsBack && BackHoldMs == o.BackHoldMs
+            && BackStep == o.BackStep && BackSwitch == o.BackSwitch && BackKey == o.BackKey && BackSwitchStepsBack == o.BackSwitchStepsBack && BackLongPress == o.BackLongPress && LongPressStepsBack == o.LongPressStepsBack && BackHoldMs == o.BackHoldMs
             && ScanMs == o.ScanMs && FirstExtraMs == o.FirstExtraMs && Rounds == o.Rounds && IgnoreRepeatMs == o.IgnoreRepeatMs
             && SelectOnRelease == o.SelectOnRelease && SoundOnStep == o.SoundOnStep && SoundOnSelect == o.SoundOnSelect;
 

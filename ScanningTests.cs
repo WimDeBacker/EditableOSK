@@ -27,7 +27,7 @@ namespace OnScreenKeyboard
                 UserSettings.InterfaceLanguage = "nl";
                 var s = UserSettings.Scan.Clone();
                 s.Enabled = true; s.TwoSwitch = true; s.SelectKey = 0x70; s.StepKey = 0x71; s.ScanMs = 1700; s.FirstExtraMs = 900; s.Rounds = 5; s.IgnoreRepeatMs = 450; s.SoundOnStep = true; s.SoundOnSelect = false;
-                s.SelectOnRelease = true; s.BackStep = false; s.BackSwitch = true; s.BackKey = 0x7A; s.BackLongPress = true; s.LongPressStepsBack = true; s.BackHoldMs = 2200;
+                s.SelectOnRelease = true; s.BackStep = false; s.BackSwitch = true; s.BackKey = 0x7A; s.BackSwitchStepsBack = true; s.BackLongPress = true; s.LongPressStepsBack = false; s.BackHoldMs = 2200;
                 s.BackColor = System.Drawing.Color.FromArgb(1, 2, 3);                s.RowColor = System.Drawing.Color.FromArgb(10, 200, 30); s.KeyColor = System.Drawing.Color.FromArgb(250, 20, 200);
                 Assert(UserSettings.Scan.RowColor.ToArgb() != UserSettings.Scan.KeyColor.ToArgb(), "the row ring and the key ring have different colours by default");
                 UserSettings.SetScan(s);
@@ -272,6 +272,40 @@ namespace OnScreenKeyboard
                 sc.ReleaseSelect(); sc.SetHolding(false);
                 Assert(sc.Level == ScanLevel.Rows && sc.Row == 0, "…and at the rows it goes to the first row");
             }
+            { // the back switch: its own choice, independent of the long press
+                var st = new ScanSettings { Enabled = true, ScanMs = 1000, FirstExtraMs = 500, Rounds = 2, IgnoreRepeatMs = 0, BackStep = false, BackSwitch = true, BackSwitchStepsBack = true };
+                var sc = Make(st);
+                sc.Press(); sc.Tick(1500); sc.Tick(1000);
+                Assert(sc.Row == 2 && !sc.Backwards, "(row 2, going forwards)");
+                sc.BackSwitchPressed();
+                Assert(sc.Row == 1 && sc.Backwards, "the back switch \"steps back\": one row up, and the scan goes the other way round");
+                sc.Tick(1000); Assert(sc.Row == 0, "…upwards");
+                sc.BackSwitchPressed(); Assert(!sc.Backwards, "another press turns it round again");
+
+                st.BackSwitchStepsBack = false;
+                var sc2 = Make(st);
+                sc2.Press(); sc2.Tick(400); sc2.Press();
+                Assert(sc2.Level == ScanLevel.Keys, "(in the keys of row 0)");
+                sc2.BackSwitchPressed();
+                Assert(sc2.Level == ScanLevel.Rows && !sc2.Backwards, "the back switch \"restarts scanning\": back at the rows");
+
+                // Different settings: the switch restarts, the long press steps back (and the other way round).
+                var mix = new ScanSettings { Enabled = true, ScanMs = 1000, FirstExtraMs = 500, Rounds = 2, IgnoreRepeatMs = 0, BackStep = false,
+                    BackSwitch = true, BackSwitchStepsBack = false, BackLongPress = true, LongPressStepsBack = true, BackHoldMs = 1500 };
+                var m = Make(mix);
+                m.Press(); m.Tick(400); m.Press();
+                m.SetHolding(true); m.Tick(1500); m.ReleaseSelect(); m.SetHolding(false);
+                Assert(m.Level == ScanLevel.Keys && m.Backwards, "the long press steps back…");
+                m.BackSwitchPressed();
+                Assert(m.Level == ScanLevel.Rows && !m.Backwards, "…while the back switch restarts scanning");
+                mix.BackSwitchStepsBack = true; mix.LongPressStepsBack = false;
+                var m2 = Make(mix);
+                m2.Press(); m2.Tick(400); m2.Press();
+                m2.BackSwitchPressed();
+                Assert(m2.Level == ScanLevel.Keys && m2.Backwards, "turned round: the switch steps back…");
+                m2.SetHolding(true); m2.Tick(1500); m2.ReleaseSelect(); m2.SetHolding(false);
+                Assert(m2.Level == ScanLevel.Rows && !m2.Backwards, "…while the long press restarts scanning");
+            }
             { // a short press still selects
                 var sc = Make(LongPress(true));
                 sc.Press(); sc.SetHolding(true); sc.Tick(500); sc.ReleaseSelect(); sc.SetHolding(false);
@@ -453,9 +487,15 @@ namespace OnScreenKeyboard
                 Priv<TouchCheckBox>(d, "_chkOnRelease").Checked = true;
                 lp.SelectedIndex = 1; lp.SelectedIndex = 0;
                 Assert(Priv<TouchCheckBox>(d, "_chkOnRelease").Checked && d.Result.SelectOnRelease, "a choice made (on) is still there after the long press was switched on and off");
+                var bs = Priv<TouchChoiceButton>(d, "_cmbBackSwitch");
+                Assert(!d.Result.BackSwitch && !Priv<FluentButton>(d, "_btnBack").Enabled, "the back switch is off: its key cannot be chosen");
+                bs.SelectedIndex = 1;
+                Assert(d.Result.BackSwitch && !d.Result.BackSwitchStepsBack && Priv<FluentButton>(d, "_btnBack").Enabled, "the back switch \"restarts scanning\"");
+                bs.SelectedIndex = 2;
+                Assert(d.Result.BackSwitch && d.Result.BackSwitchStepsBack && !d.Result.BackLongPress, "…or \"steps back\", whatever the long press is set to");
             }
             var given = new ScanSettings { Enabled = true, TwoSwitch = true, SelectKey = 0x70, StepKey = 0x71, ScanMs = 2500, FirstExtraMs = 0, Rounds = 7, IgnoreRepeatMs = 600, SoundOnStep = true, SoundOnSelect = false, SelectOnRelease = true,
-                BackStep = false, BackSwitch = true, BackKey = 0x7A, BackLongPress = true, LongPressStepsBack = true, BackHoldMs = 2000 };
+                BackStep = false, BackSwitch = true, BackKey = 0x7A, BackSwitchStepsBack = true, BackLongPress = true, LongPressStepsBack = false, BackHoldMs = 2000 };
             using (var d = new ScanSettingsDialog(given))
                 Assert(d.Result.SameAs(given), "…every value comes back unchanged");
             using (var f = new KeyboardEditorForm(new VisualTheme(), new WindowState(), new LayoutMeta { SlowKeysMs = 400 }, owner: null))

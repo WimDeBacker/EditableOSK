@@ -3000,7 +3000,7 @@ namespace OnScreenKeyboard
                 step:   () => BeginInvoke((Action)(() => _scanner?.Step())),
                 escape: () => BeginInvoke((Action)PauseScanning),
                 running: () => _scanner != null && _scanner.Level != ScanLevel.Idle,
-                back:   () => BeginInvoke((Action)(() => _scanner?.Back())),
+                back:   () => BeginInvoke((Action)(() => _scanner?.BackSwitchPressed())),
                 hold:   down => BeginInvoke((Action)(() => _scanner?.SetHolding(down))));
             _scanInput.Install();
             // A controller is looked at only when one of its buttons is a switch (a switch is a key or a button). Its buttons go through the

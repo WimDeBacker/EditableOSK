@@ -100,6 +100,7 @@ namespace OnScreenKeyboard
                 s.BackStep      = B("BackStep", true);
                 s.BackSwitch    = B("BackSwitch", false);
                 s.BackKey       = I("BackKey", s.BackKey);
+                s.BackSwitchStepsBack = B("BackSwitchStepsBack", false);
                 s.BackLongPress = B("BackLongPress", false);
                 s.LongPressStepsBack = B("LongPressStepsBack", false);
                 s.BackHoldMs    = I("BackHoldMs", s.BackHoldMs);
@@ -156,6 +157,7 @@ namespace OnScreenKeyboard
                     w.WriteAttributeString("BackStep", F(s.BackStep));
                     w.WriteAttributeString("BackSwitch", F(s.BackSwitch));
                     w.WriteAttributeString("BackKey", s.BackKey.ToString(CultureInfo.InvariantCulture));
+                    w.WriteAttributeString("BackSwitchStepsBack", F(s.BackSwitchStepsBack));
                     w.WriteAttributeString("BackLongPress", F(s.BackLongPress));
                     w.WriteAttributeString("LongPressStepsBack", F(s.LongPressStepsBack));
                     w.WriteAttributeString("BackHoldMs", s.BackHoldMs.ToString(CultureInfo.InvariantCulture));

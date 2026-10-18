@@ -262,6 +262,11 @@
   <String key="scan: keys"                       value="Toetsen / knoppen" />
   <String key="tip: scan pad"                    value="Een schakelaar is een toets van het toetsenbord of een knop van een gamepad (een Xbox-controller, een andere spelcontroller of een schakelaarinterface die zich als zodanig aanmeldt). Klik en druk dan op de toets of de knop. Esc annuleert." />
   <String key="button"                           value="knop" />
+  <String key="D-pad up"                         value="D-pad boven" />
+  <String key="D-pad down"                       value="D-pad onder" />
+  <String key="D-pad left"                       value="D-pad links" />
+  <String key="D-pad right"                      value="D-pad rechts" />
+
   <String key="scan: select key"                 value="Kies" />
   <String key="scan: step key"                   value="Stap" />
   <String key="scan: press a key"                value="Druk op een toets of knop…" />
@@ -275,7 +280,7 @@
   <String key="scan: back step"                  value="Terugstap na de laatste toets" />
   <String key="tip: scan back step"              value="Na de laatste toets van een rij gaat de markering naar een gestippelde rand om de hele rij. Die kiezen gaat terug naar de rijen." />
   <String key="scan: back switch"                value="Terug met schakelaar" />
-  <String key="tip: scan back switch"            value="Een eigen schakelaar gaat op elk moment terug: van de toetsen van een rij naar de rijen, en bij de rijen naar de eerste rij." />
+  <String key="tip: scan back switch"            value="Een eigen schakelaar, op elk moment ingedrukt, doet één van twee dingen. Herstart scanning: een niveau terug (bij de rijen: naar de eerste rij). Stapt terug: er wordt in de andere richting gescand, van rechts naar links (en omhoog bij de rijen); nog eens indrukken draait weer om. Dit hoeft niet hetzelfde te zijn als bij lang indrukken." />
   <String key="scan: back key"                   value="Terugtoets / -knop" />
   <String key="scan: long press"                 value="Lang indrukken" />
   <String key="scan: long off"                   value="Uit" />

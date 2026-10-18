@@ -2,15 +2,7 @@
 
 ## Pending
 
-Only what is still to be done is listed here, in the order of the owner's priorities (Priority 1, then 6, then 5). Numbering: **P** = priority, then steps and details (**1.1**, **6.3**); the numbers are kept when something moves, so a finished step keeps its number under Completed (the items there also keep the numbers they had when they were done: "Priority 7" there is not Priority 7 here). Not planned ideas and a bug that no longer shows up are under "On hold"; everything finished is under "Completed". Status marks: ✓ done, ▶ in progress, ☐ not started.
-
-### Priority 1 — Scanning, follow-up: step back with a key as well ☐ *(requested by the owner 2026-10-18; nothing is built yet)*
-
-Today "steps back" (the scan goes the other way round, right to left, and jumps from the first item to the last, through the back step) exists only as a choice of the **long press**; the back switch (the key or gamepad button under "Back with switch") only goes back a level (restarts). The back switch should offer the same two choices as the long press: **restarts scanning** or **steps back**.
-- 1.1 In the Back tab, a choice for the back switch next to its key (Restarts scanning / Steps back), like "Long press".
-- 1.2 `Scanner.Back` / `Reverse`: the back switch calls `Reverse` when "steps back" is chosen (one press turns the direction round and takes one step; another press turns it round again; a selection or a new level starts forwards again; with two switches it is one step back). Both the long press and the back switch may be set to "steps back" at once.
-- 1.3 Tests for the scanner and the dialog; update the hint of the Back tab and the todo/summary under Completed.
-- To decide when it is built: whether the back switch and the long press must differ in what they do (for instance the key restarts and the long press steps back) — the two choices are independent, so any combination is allowed.
+Only what is still to be done is listed here, in the order of the owner's priorities (Priority 6, then 5). Numbering: **P** = priority, then steps and details (**1.1**, **6.3**); the numbers are kept when something moves, so a finished step keeps its number under Completed (the items there also keep the numbers they had when they were done: "Priority 7" there is not Priority 7 here). Not planned ideas and a bug that no longer shows up are under "On hold"; everything finished is under "Completed". Status marks: ✓ done, ▶ in progress, ☐ not started.
 
 ### Priority 6 — New Keyboard wizard: word prediction keys and letter keys ☐ *(requested by the owner 2026-10-17; nothing is built yet)*
 
@@ -63,6 +55,10 @@ Nothing here is to be worked on until it shows up again or the owner decides oth
 ---
 
 ## Completed
+
+### Scanning, follow-up: the back switch can step back as well ✓ *(was Priority 1; requested and built 2026-10-18)*
+
+In the Back tab, "Back with switch" is now a choice like "Long press": **Off / Restarts scanning / Steps back** (`ScanSettings.BackSwitch` + `BackSwitchStepsBack`, saved in `user.xml`); its key or gamepad button is chosen under it. `Scanner.BackSwitchPressed()` calls `Back()` or `Reverse()`. The back switch and the long press are independent: any combination is allowed (for instance the key restarts and the long press steps back). Tests in `ScanningTests.cs`. Not yet in a release (1.0.0 predates it).
 
 ### Scanning ✓ *(accessibility; was Priority 1; research 2026-10-11, built 2026-10-12 to 2026-10-18, tested by the owner with a real user, a switch and a gamepad; in release 1.0.0 except the gamepad switch)*
 

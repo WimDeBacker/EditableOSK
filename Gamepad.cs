@@ -27,7 +27,8 @@ namespace OnScreenKeyboard
             if (code >= TriggerBase) return code == TriggerBase + 1 ? "Pad LT" : "Pad RT";
             return (code - XInputBase) switch
             {
-                0x0001 => "Pad ↑", 0x0002 => "Pad ↓", 0x0004 => "Pad ←", 0x0008 => "Pad →",
+                0x0001 => "Pad " + Lang.T("D-pad up"), 0x0002 => "Pad " + Lang.T("D-pad down"),
+                0x0004 => "Pad " + Lang.T("D-pad left"), 0x0008 => "Pad " + Lang.T("D-pad right"),
                 0x0010 => "Pad Start", 0x0020 => "Pad Back", 0x0040 => "Pad L3", 0x0080 => "Pad R3",
                 0x0100 => "Pad LB", 0x0200 => "Pad RB", 0x1000 => "Pad A", 0x2000 => "Pad B", 0x4000 => "Pad X", 0x8000 => "Pad Y",
                 var m => "Pad 0x" + m.ToString("X"),
@@ -48,6 +49,7 @@ namespace OnScreenKeyboard
 
         private const int Slots = 4, RetryMs = 2000, TriggerOn = 150;
         private readonly long[] _xRetry = new long[Slots], _jRetry = new long[Slots];
+        private readonly bool[] _xSeen = new bool[Slots];   // the slot had an XInput controller at the last look
         private bool _xinputMissing;
 
         /// <summary>The codes of the buttons that are down now (empty when there is no controller or the system cannot be asked).</summary>
@@ -57,17 +59,19 @@ namespace OnScreenKeyboard
             long now = Environment.TickCount64;
             for (int i = 0; i < Slots; i++)
             {
+                bool xPresent = false;
                 if (!_xinputMissing && now >= _xRetry[i])
                 {
                     try
                     {
                         if (XInputGetState(i, out var st) == 0)
                         {
+                            xPresent = _xSeen[i] = true;
                             for (int b = 0; b < 16; b++) if ((st.Gamepad.wButtons & (1 << b)) != 0) down.Add(Gamepad.XInputBase + (1 << b));
                             if (st.Gamepad.bLeftTrigger  > TriggerOn) down.Add(Gamepad.TriggerBase + 1);
                             if (st.Gamepad.bRightTrigger > TriggerOn) down.Add(Gamepad.TriggerBase + 2);
                         }
-                        else _xRetry[i] = now + RetryMs;
+                        else { _xRetry[i] = now + RetryMs; _xSeen[i] = false; }
                     }
                     catch (DllNotFoundException) { _xinputMissing = true; }
                     catch (EntryPointNotFoundException) { _xinputMissing = true; }
@@ -79,7 +83,10 @@ namespace OnScreenKeyboard
                         var info = new JOYINFOEX { dwSize = (uint)Marshal.SizeOf<JOYINFOEX>(), dwFlags = 0xFF };   // JOY_RETURNALL
                         if (joyGetPosEx(i, ref info) == 0)
                         {
-                            for (int b = 0; b < 32; b++) if ((info.dwButtons & (1u << b)) != 0) down.Add(Gamepad.JoyBase + b + 1);
+                            // An Xbox-type controller shows up in both APIs: its first ten winmm buttons are the same A, B, X, Y, LB, RB, Back,
+                            // Start, L3, R3 that XInput names, so they are left out here (one button, one name, "Pad A" and not "Pad button 1").
+                            int skip = xPresent || _xSeen[i] ? 10 : 0;
+                            for (int b = skip; b < 32; b++) if ((info.dwButtons & (1u << b)) != 0) down.Add(Gamepad.JoyBase + b + 1);
                         }
                         else _jRetry[i] = now + RetryMs;
                     }

@@ -70,6 +70,12 @@ namespace OnScreenKeyboard
             else Press();
         }
 
+        /// <summary>The back switch: restarts the scan or steps back, as chosen (independent of the long press).</summary>
+        internal void BackSwitchPressed()
+        {
+            if (_s.BackSwitchStepsBack) Reverse(); else Back();
+        }
+
         /// <summary>
         /// Steps back: the direction turns round and the highlight takes one step the new way (with two switches: one step back, and the
         /// direction stays). Nothing while scanning is paused.
