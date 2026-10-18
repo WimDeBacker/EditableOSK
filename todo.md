@@ -4,14 +4,10 @@
 
 Only what is still to be done is listed here, in the order of the owner's priorities (only Priority 5 is left). Numbering: **P** = priority, then steps and details (**1.1**, **6.3**); the numbers are kept when something moves, so a finished step keeps its number under Completed (the items there also keep the numbers they had when they were done: "Priority 7" there is not Priority 7 here). Not planned ideas and a bug that no longer shows up are under "On hold"; everything finished is under "Completed". Status marks: ✓ done, ▶ in progress, ☐ not started.
 
-### Priority 5 — Translations of the whole program: French, Italian and Spanish ☐ *(requested by the owner 2026-10-11; nothing is built yet)*
+### Priority 5 — French, Italian and Spanish: what is left ▶ *(screens, group names and installer are done, see Completed; requested by the owner 2026-10-11)*
 
-Today the screens exist in English (built in, `LanguageManager.cs`) and Dutch (`lang_nl.xml`). To add (each a file of its own, `lang_fr.xml`, `lang_it.xml`, `lang_es.xml`, found automatically by `Lang.GetAvailable`):
-- 5.1 **The screens:** every string of `lang_nl.xml` (about 600 keys), including the accelerator marks (`&`), the tooltips and the key help of the wizard. The language tests already compare the key lists, so a missing key shows up; the layout guards (English, Dutch, +40 %, +80 %) must also hold for the longer French, Italian and Spanish texts (they are often 20–30 % longer than English).
-- 5.2 **Group names:** the Dutch and English names of the ready-made groups (`GroupNames.Known`, the four shipped `.kbl` files, `DefaultNames` of the wizard) get a `fr`, `it` and `es` name; the first-start dialog and the language lists show the native names (`FirstRunDialog.LanguageName` already does).
 - 5.3 **Word prediction:** a word database per language is a separate piece of work (`worddb_FR/IT/ES`), the keyboard works without; until then the language of a keyboard has no database of its own and the "(auto)" choice falls back to another one.
 - 5.4 **Keyboard layouts:** French (AZERTY France), Italian and Spanish (QWERTY with their accents, dead keys, `ñ`, `ç`) as ready-made layouts and as choices in the first-start dialog and the wizard (the wizard's help for the pasted keys has Dutch and English spellings).
-- 5.5 **Installer:** Inno Setup has French, Italian and Spanish message files; the own texts of `setup.iss` (`[CustomMessages]`) get the three languages too.
 - 5.7 **Rules of the language of a keyboard (for when the other languages are worked out):** sentence and spacing rules per language (when a sentence starts and the next word is capitalised; French has a space before `? ! : ;` and inside « »), quotation marks (“ ” in English, „ ” in German, « » in French), and the decimal separator (a point or a comma) for the keys and the word prediction; chosen by the language tag of the keyboard (`LayoutMeta.Language`, Priority 4).
 - 5.6 **Quality:** a machine translation is only a first draft: each language needs a review by a native speaker, with the program in front of them (a word that fits a menu is not always the word for a button). Decision for the owner: who reviews, and whether a language is shipped before its review.
 
@@ -46,6 +42,14 @@ Nothing here is to be worked on until it shows up again or the owner decides oth
 ---
 
 ## Completed
+
+### French, Italian and Spanish: the screens, the group names, the installer ✓ *(was 5.1, 5.2 and 5.5; built 2026-10-18)*
+
+`lang_fr.xml`, `lang_it.xml`, `lang_es.xml` (each every string of `lang_nl.xml`, 470 keys, with accelerator marks and tooltips; found by `Lang.GetAvailable`, copied by the csproj and the installer). Each text was translated from its **meaning** (the English text, the Dutch text and the place in the window were read together) with a fixed word list per language: e.g. layout = disposition / layout / distribución, scanning = balayage / scansione / barrido, switch = contacteur / interruttore / pulsador, slow keys = touches lentes / tasti lenti / teclas lentas, dwell click = clic par survol / clic con permanenza / clic por permanencia, word prediction = prédiction de mots / previsione delle parole / predicción de palabras.
+- **Group names and titles:** the ready-made groups get their `fr`/`it`/`es` names (the lang files: `group default: …`, so the wizard's new keyboards have them at once) and the six shipped `.kbl` files have a title, description and group names in the three languages. The wizard can make a keyboard in any of the five languages (word-prediction keys get "Mot / Parola / Palabra n"); pasted special keys keep their English (and Dutch) spellings.
+- **Installer:** `setup.iss` has French, Italian and Spanish (`[Languages]`, `[CustomMessages]`, the three lang files); the script now has a UTF-8 BOM (the accents). Not compiled by me.
+- **Found on the way:** three English texts were missing (`WP all slots full`, `WP paste full msg/title`: the key itself was shown); added to `LanguageManager.cs`.
+- **Window sizes:** all layout guards, narrow-width checks, accelerator checks and the gallery now run in the five languages. A row label of every dialog wraps on a narrow window instead of pushing its input out (`FluentDialogBase.AddRow`: `LabelInputReserve`, never narrower than its longest word). Tests `T_LanguageManager` (the three files: all keys, placeholders, accelerators, tooltips), `T_Accelerators`, `T_LayoutPicker`.
 
 ### Wizard and text format: word-prediction keys, shortcuts, layers, sizes, export as text ✓ *(was 6.1, 6.3 and 6.4; built 2026-10-18)*
 

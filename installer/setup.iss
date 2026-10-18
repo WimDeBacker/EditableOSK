@@ -1,4 +1,4 @@
-; ═══════════════════════════════════════════════════════════════════════════
+﻿; ═══════════════════════════════════════════════════════════════════════════
 ;  Editable On-Screen Keyboard  —  Inno Setup script
 ;
 ;  Prerequisites:
@@ -79,6 +79,9 @@ DisableFinishedPage      = no
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "dutch";   MessagesFile: "compiler:Languages\Dutch.isl"
+Name: "french";  MessagesFile: "compiler:Languages\French.isl"
+Name: "italian"; MessagesFile: "compiler:Languages\Italian.isl"
+Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 
 ; ── [Tasks] ─────────────────────────────────────────────────────────────────
 
@@ -146,6 +149,9 @@ Source: "{#BuildDir}\worddb_EN.wfq";  DestDir: "{app}"; \
 
 ; ── Translation ──────────────────────────────────────────────────────────
 Source: "{#BuildDir}\lang_nl.xml";                    DestDir: "{app}"; Flags: ignoreversion
+Source: "{#BuildDir}\lang_fr.xml";                    DestDir: "{app}"; Flags: ignoreversion
+Source: "{#BuildDir}\lang_it.xml";                    DestDir: "{app}"; Flags: ignoreversion
+Source: "{#BuildDir}\lang_es.xml";                    DestDir: "{app}"; Flags: ignoreversion
 
 ; ── Fonts ────────────────────────────────────────────────────────────────
 ; SchoolKX_New — used by azertycolor.kbl. Installed into the system Fonts folder so
@@ -208,6 +214,27 @@ english.DotNetMissing=%1 requires the .NET 10 Desktop Runtime, which was not fou
 dutch.DotNetMissing=%1 heeft de .NET 10 Desktop Runtime nodig, die op deze computer niet gevonden werd.%n%nDownload ze gratis via:%nhttps://dotnet.microsoft.com/download/dotnet/10.0%n%nDe downloadpagina nu openen?
 english.RemoveUserDataPrompt=Also remove all your data of {#AppName}?%n%nThis deletes your settings, the layout that was open and all learned words (the folder %1), and cannot be undone. Choose No to keep them for a later installation.
 dutch.RemoveUserDataPrompt=Ook al uw gegevens van {#AppName} verwijderen?%n%nDit verwijdert uw instellingen, het geopende toetsenbord en alle geleerde woorden (de map %1) en kan niet ongedaan worden gemaakt. Kies Nee om ze te bewaren voor een latere installatie.
+french.StartupTask=Démarrer automatiquement avec Windows
+french.StartupGroup=Démarrage :
+french.KblAssocTask=Ouvrir les fichiers de disposition de clavier (.kbl) avec %1
+french.KblAssocGroup=Type de fichier :
+french.KblTypeName=Disposition de clavier
+french.DotNetMissing=%1 nécessite le runtime .NET 10 Desktop, qui n’a pas été trouvé sur cet ordinateur.%n%nTéléchargez-le gratuitement ici :%nhttps://dotnet.microsoft.com/download/dotnet/10.0%n%nOuvrir la page de téléchargement maintenant ?
+french.RemoveUserDataPrompt=Supprimer aussi toutes vos données de {#AppName} ?%n%nCela supprime vos paramètres, la disposition qui était ouverte et tous les mots appris (le dossier %1), et ne peut pas être annulé. Choisissez Non pour les conserver en vue d’une installation ultérieure.
+italian.StartupTask=Avvia automaticamente con Windows
+italian.StartupGroup=Avvio:
+italian.KblAssocTask=Apri i file di layout della tastiera (.kbl) con %1
+italian.KblAssocGroup=Tipo di file:
+italian.KblTypeName=Layout di tastiera
+italian.DotNetMissing=%1 richiede .NET 10 Desktop Runtime, che non è stato trovato su questo computer.%n%nScaricarlo gratuitamente da:%nhttps://dotnet.microsoft.com/download/dotnet/10.0%n%nAprire ora la pagina di download?
+italian.RemoveUserDataPrompt=Rimuovere anche tutti i dati di {#AppName}?%n%nVerranno eliminate le impostazioni, il layout che era aperto e tutte le parole apprese (la cartella %1); l’operazione non può essere annullata. Scegliere No per conservarli per un’installazione successiva.
+spanish.StartupTask=Iniciar automáticamente con Windows
+spanish.StartupGroup=Inicio:
+spanish.KblAssocTask=Abrir los archivos de distribución de teclado (.kbl) con %1
+spanish.KblAssocGroup=Tipo de archivo:
+spanish.KblTypeName=Distribución de teclado
+spanish.DotNetMissing=%1 requiere el runtime .NET 10 Desktop, que no se encontró en este equipo.%n%nDescárguelo gratis desde:%nhttps://dotnet.microsoft.com/download/dotnet/10.0%n%n¿Abrir ahora la página de descarga?
+spanish.RemoveUserDataPrompt=¿Eliminar también todos sus datos de {#AppName}?%n%nSe eliminarán su configuración, la distribución que estaba abierta y todas las palabras aprendidas (la carpeta %1), y no se puede deshacer. Elija No para conservarlos para una instalación posterior.
 
 ; ── [Code] ─────────────────────────────────────────────────────────────────
 ; Checks for .NET 10 Desktop Runtime before starting the install.

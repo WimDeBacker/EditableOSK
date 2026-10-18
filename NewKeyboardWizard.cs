@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace OnScreenKeyboard
@@ -267,7 +268,8 @@ namespace OnScreenKeyboard
 
             // The language of the new keyboard's labels and tips (it also decides how pasted words such as "Space" are read).
             _cmbLanguage = new TouchChoiceButton { RowHeight = 44, AutoSize = false, Size = new Size(280, Touch.Target), MinimumSize = new Size(Touch.InputMinWidth * 2 / 3, Touch.Target), MaximumSize = new Size(280, Touch.Target) };
-            _cmbLanguage.SetItems(new[] { new TouchChoice { Text = "English (en)" }, new TouchChoice { Text = "Nederlands (nl)" } }, Lang.CurrentCode == "nl" ? 1 : 0);
+            _cmbLanguage.SetItems(KeyboardLanguages.Select(l => new TouchChoice { Text = l.Name + " (" + l.Code + ")" }),
+                                  Math.Max(0, Array.FindIndex(KeyboardLanguages, l => l.Code == Lang.CurrentCode)));
             AddRow(t, () => Lang.T("wiz: Language"), _cmbLanguage, fill: false);
             _cmbLanguage.Anchor = AnchorStyles.Left | AnchorStyles.Right;       // 280 wide when there is room, narrower when there is not
             SetTip(_cmbLanguage, () => Lang.T("tip: Language"));
@@ -353,7 +355,7 @@ namespace OnScreenKeyboard
             if (_txtPaste == null) return "";
             var rows = WizardKeyParser.Parse(_txtPaste.Text, IsDutch());
             if (rows.Count == 0) return Lang.T("wiz: paste nothing");
-            var grid = LayoutText.BuildGrid(rows, IsDutch());
+            var grid = LayoutText.BuildGrid(rows, IsDutch(), LanguageCode());
             return string.Format(Lang.T("wiz: paste size"), grid.Rows, grid.Cols - 1);
         }
 
@@ -362,7 +364,7 @@ namespace OnScreenKeyboard
         {
             if (_previewPaste == null || _previewBlank == null || _lblCopyInfo == null) return;
             _previewBlank.ShowBlank((int)_stpRows.Value, (int)_stpCols.Value);
-            _previewPaste.ShowParsed(WizardKeyParser.Parse(_txtPaste.Text, IsDutch()), IsDutch());
+            _previewPaste.ShowParsed(WizardKeyParser.Parse(_txtPaste.Text, IsDutch()), IsDutch(), LanguageCode());
             _lblPasteSize.Text = PasteSizeText();
             _lblCopyInfo.Text  = CopyInfoText();
             if (_rbPaste.Checked) { _gridRows = _previewPaste.GridRows; _gridCols = _previewPaste.GridCols; }
@@ -836,7 +838,7 @@ namespace OnScreenKeyboard
 
         // The last column is always reserved for the settings (gear) button; sizes, shortcuts, word-prediction keys and the extra layers
         // of the pasted text are placed by LayoutText.
-        private GridLayout BuildGridFromRows(List<List<WizardKeyParser.KeySpec>> rows) => LayoutText.BuildGrid(rows, IsDutch());
+        private GridLayout BuildGridFromRows(List<List<WizardKeyParser.KeySpec>> rows) => LayoutText.BuildGrid(rows, IsDutch(), LanguageCode());
 
         private static GridLayout BuildBlankGrid(int rows,int cols)
         {
@@ -968,8 +970,13 @@ namespace OnScreenKeyboard
         }
 
         // ── Misc helpers ──────────────────────────────────────────────────
-        private bool   IsDutch()       => _cmbLanguage!=null&&_cmbLanguage.SelectedIndex==1;
-        private string LanguageCode()  => IsDutch() ? "nl" : "en";
+        // The languages a new keyboard can be made for (the index 1 is Dutch). Pasted special keys have English and Dutch spellings; the
+        // other languages read the English ones.
+        private static readonly (string Code, string Name)[] KeyboardLanguages =
+            { ("en", "English"), ("nl", "Nederlands"), ("fr", "Français"), ("it", "Italiano"), ("es", "Español") };
+        private bool   IsDutch()       => LanguageCode() == "nl";
+        private string LanguageCode()  => _cmbLanguage != null && _cmbLanguage.SelectedIndex >= 0 && _cmbLanguage.SelectedIndex < KeyboardLanguages.Length
+                                              ? KeyboardLanguages[_cmbLanguage.SelectedIndex].Code : "en";
         private string ThemeDisplayName()
         {
             if (_selectedPreset>=0&&_selectedPreset<Presets.Length)

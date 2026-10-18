@@ -154,12 +154,12 @@ namespace OnScreenKeyboard
         public void ShowBlank(int rows, int cols) => Refill(rows, cols, null);
 
         /// <summary>Shows the keys parsed from the pasted text; the size follows the longest row.</summary>
-        internal void ShowParsed(List<List<WizardKeyParser.KeySpec>> rows, bool dutch = false)
+        internal void ShowParsed(List<List<WizardKeyParser.KeySpec>> rows, bool dutch = false, string language = null)
         {
             if (rows == null || rows.Count == 0) { Refill(1, 1, null); return; }
             // The same placement as the keyboard that will be made (wide and tall keys, word-prediction keys): a wide key shows its label in
             // its first cell; the cells it covers stay empty.
-            var grid = LayoutText.BuildGrid(rows, dutch);
+            var grid = LayoutText.BuildGrid(rows, dutch, language);
             int cols = Math.Max(1, grid.Cols - 1);
             var labels = new string[grid.Rows][];
             for (int r = 0; r < grid.Rows; r++) labels[r] = new string[cols];

@@ -22,7 +22,7 @@ namespace OnScreenKeyboard
             Application.SetCompatibleTextRenderingDefault(false);
 
             var languages = new (string Tag, string Code, double Pseudo)[]
-                { ("en", "en", 0), ("nl", "nl", 0), ("pseudo", "en", 0.4) };
+                { ("en", "en", 0), ("nl", "nl", 0), ("fr", "fr", 0), ("it", "it", 0), ("es", "es", 0), ("pseudo", "en", 0.4) };
             try
             {
                 foreach (var (tag, code, pseudo) in languages)

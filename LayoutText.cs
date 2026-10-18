@@ -26,8 +26,9 @@ namespace OnScreenKeyboard
         /// Places the keys: left to right in each row, skipping the cells a key from a row above (a tall key) already covers. The grid gets one
         /// extra column at the right for the settings (gear) button, and a blank cell wherever no key is.
         /// </summary>
-        internal static GridLayout BuildGrid(List<List<WizardKeyParser.KeySpec>> rows, bool dutch)
+        internal static GridLayout BuildGrid(List<List<WizardKeyParser.KeySpec>> rows, bool dutch, string language = null)
         {
+            string wordLabel = WordKeyLabel(language ?? (dutch ? "nl" : "en"));
             var occupied = new HashSet<(int, int)>();
             var placed = new List<(int R, int C, int RS, int CS, WizardKeyParser.KeySpec K)>();
             int maxCol = 0, maxRow = Math.Max(1, rows.Count);
@@ -63,7 +64,7 @@ namespace OnScreenKeyboard
                 if (k.IsBlank || (k.IsWordPrediction && slot >= MaxWordKeys)) p = new KeyProps("", "");
                 else if (k.IsWordPrediction)
                 {
-                    p = new KeyProps((dutch ? "Woord " : "Word ") + (slot + 1), "wp:" + slot);
+                    p = new KeyProps(wordLabel + " " + (slot + 1), "wp:" + slot);
                     slot++;
                 }
                 else
@@ -79,6 +80,14 @@ namespace OnScreenKeyboard
                     if (!occupied.Contains((r, c))) layout.Cells.Add(new GridCell(r, c, new KeyProps("", "")));
             return layout;
         }
+
+        /// <summary>The label of a word-prediction key before its number ("Word 1", "Woord 1", "Mot 1", "Parola 1", "Palabra 1") in the language of the keyboard.</summary>
+        internal static string WordKeyLabel(string language) => (language ?? "en").Split('-', '_')[0].ToLowerInvariant() switch
+        {
+            "nl" => "Woord", "fr" => "Mot", "it" => "Parola", "es" => "Palabra", _ => "Word",
+        };
+
+        private static readonly string[] WordKeyLabels = { "Word", "Woord", "Mot", "Parola", "Palabra" };
 
         // ── Grid → text ───────────────────────────────────────────────────
 
@@ -122,7 +131,8 @@ namespace OnScreenKeyboard
             if (label.Length == 0 && send.Length == 0 && noLayers) core = "_";
             else if (send.StartsWith("wp:", StringComparison.Ordinal))
             {
-                bool inOrder = send == "wp:" + wpOrder && noLayers && (label == "Word " + (wpOrder + 1) || label == "Woord " + (wpOrder + 1));
+                int next = wpOrder;                                 // (a ref parameter cannot be used inside the lambda)
+                bool inOrder = send == "wp:" + next && noLayers && WordKeyLabels.Any(w => label == w + " " + (next + 1));
                 if (inOrder) { core = "[wp]"; wpOrder++; }          // only the [wp] keys count: the wizard numbers just those, in this order
             }
             if (core == null) core = Simple(label, send, sl, ss, al, asd);

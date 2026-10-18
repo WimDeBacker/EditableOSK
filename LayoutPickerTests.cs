@@ -25,6 +25,7 @@ namespace OnScreenKeyboard
                 Assert(titles.ContainsKey("nl") && titles.ContainsKey("en") && descriptions.ContainsKey("nl") && descriptions.ContainsKey("en"),
                     $"{file}: a title and a description in Dutch and in English");
                 Assert(descriptions["nl"].Length > 20 && descriptions["en"].Length > 20 && descriptions.Values.All(d => d.Length <= 160), $"{file}: descriptions are one or two lines (20–160 characters)");
+                Assert(new[] { "fr", "it", "es" }.All(l => titles.ContainsKey(l) && descriptions.ContainsKey(l)), $"{file}: a title and a description in French, Italian and Spanish too");
                 Assert(language.Length > 0, $"{file}: it names the language of the keyboard");
             }
             Assert(SettingsManager.ReadInfo(Path.Combine(baseDir, "does not exist.kbl")) == null, "a file that cannot be read gives no info (no exception)");
@@ -35,7 +36,9 @@ namespace OnScreenKeyboard
             Assert(nl.Count >= 4 && en.Count == nl.Count, $"the folder of the program lists its layouts ({nl.Count})");
             Assert(nl.Any(i => i.Title == "Wiskunde") && en.Any(i => i.Title == "Mathematics"), "titles follow the language of the screens (Wiskunde / Mathematics)");
             Assert(nl.Select(i => i.Title).SequenceEqual(nl.Select(i => i.Title).OrderBy(t => t, StringComparer.CurrentCultureIgnoreCase)), "the list is sorted by title");
-            Assert(LayoutInfo.FromFolder(baseDir, "fr").First(i => Path.GetFileName(i.Path) == "math.kbl").Title == "Wiskunde",
+            Assert(LayoutInfo.FromFolder(baseDir, "fr").First(i => Path.GetFileName(i.Path) == "math.kbl").Title == "Mathématiques" &&
+                   LayoutInfo.FromFolder(baseDir, "es").First(i => Path.GetFileName(i.Path) == "math.kbl").Title == "Matemáticas", "French and Spanish titles follow the language of the screens");
+            Assert(LayoutInfo.FromFolder(baseDir, "de").First(i => Path.GetFileName(i.Path) == "math.kbl").Title == "Wiskunde",
                 "a language the layout has no title in: the language of the keyboard itself (Dutch), then English");
 
             // A layout without info is listed under its file name; the info of a saved layout survives a save and a load.

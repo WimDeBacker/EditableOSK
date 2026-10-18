@@ -994,6 +994,28 @@ namespace OnScreenKeyboard
                 // The file ships with the build; a missing one is a broken build, not a reason to skip.
                 Assert(false, "lang_nl.xml is present next to the test executable");
             }
+
+            // French, Italian and Spanish: the same checks, and every string Dutch has (a language file lists the whole set).
+            Lang.Load("nl");
+            var nlAll = LangOverrides().Keys.ToList();
+            Lang.Load("en");
+            foreach (var (code, native) in new[] { ("fr", "Français"), ("it", "Italiano"), ("es", "Español") })
+            {
+                string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"lang_{code}.xml");
+                Assert(File.Exists(path), $"lang_{code}.xml is present next to the test executable");
+                if (!File.Exists(path)) continue;
+                Lang.Load(code);
+                var en = LangEnglish();
+                var tr = LangOverrides();
+                Assert(Lang.CurrentCode == code && Lang.GetAvailable().Any(l => l.Code == code && l.Name == native), $"{native}: loads, and is listed under its own name");
+                AssertAll(nlAll, k => tr.ContainsKey(k), k => $"'{k}'", $"{native}: every string the Dutch file has is translated");
+                AssertAll(tr, kv => !en.ContainsKey(kv.Key) || PlaceholdersOf(kv.Value) == PlaceholdersOf(en[kv.Key]),
+                    kv => $"'{kv.Key}': en=\"{(en.TryGetValue(kv.Key, out var e2) ? e2 : "")}\" {code}=\"{kv.Value}\"", $"{native}: {{n}} placeholders match the English string");
+                AssertAll(tr, kv => MnemonicCount(kv.Value) <= 1, kv => $"'{kv.Key}' = \"{kv.Value}\"", $"{native}: at most one accelerator (&) per string");
+                AssertAll(tr, kv => kv.Value.Trim().Length > 0, kv => $"'{kv.Key}'", $"{native}: no empty text");
+                AssertAll(tr.Where(kv => kv.Key.StartsWith("tip: ")), kv => kv.Value != kv.Key, kv => $"'{kv.Key}'", $"{native}: every tooltip has real text");
+                Lang.Load("en");
+            }
         }
 
         // ════════════════════════════════════════════════════════════════
@@ -5164,9 +5186,9 @@ namespace OnScreenKeyboard
 
         private static void T_Accelerators()
         {
-            Section("Accelerators — every named control has an Alt+letter, unique where it is visible together, English and Dutch");
+            Section("Accelerators — every named control has an Alt+letter, unique where it is visible together, in every language");
 
-            foreach (string lang in new[] { "en", "nl" })
+            foreach (string lang in new[] { "en", "nl", "fr", "it", "es" })
             {
                 Lang.Load(lang);
                 var dialogs = new (string Name, Func<FluentDialogBase> Make, int Min)[]

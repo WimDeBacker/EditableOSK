@@ -35,6 +35,9 @@
     <Content Include="Scanning.kbl">        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory> </Content>
     <Content Include="ScanningCijfers.kbl"> <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory> </Content>
     <Content Include="lang_nl.xml">     <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory> </Content>
+    <Content Include="lang_fr.xml">     <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory> </Content>
+    <Content Include="lang_it.xml">     <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory> </Content>
+    <Content Include="lang_es.xml">     <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory> </Content>
   </ItemGroup>
 
   <!--

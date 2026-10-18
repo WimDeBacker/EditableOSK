@@ -5,32 +5,56 @@
     <Title lang="en">AZERTY colourful</Title>
     <Description lang="nl">Groot, kleurrijk AZERTY-toetsenbord met woordvoorspelling, in het lettertype SchoolKX_New.</Description>
     <Description lang="en">Large, colourful AZERTY keyboard with word prediction, in the SchoolKX_New font.</Description>
+    <Title lang="fr">AZERTY coloré</Title>
+    <Title lang="it">AZERTY colorato</Title>
+    <Title lang="es">AZERTY de colores</Title>
+    <Description lang="fr">Grand clavier AZERTY coloré avec prédiction de mots, dans la police SchoolKX_New.</Description>
+    <Description lang="it">Tastiera AZERTY grande e colorata con previsione delle parole, nel carattere SchoolKX_New.</Description>
+    <Description lang="es">Teclado AZERTY grande y de colores con predicción de palabras, en la fuente SchoolKX_New.</Description>
   </Info>
   <Theme BackgroundColor="808080" Opacity="1.00" FontName="SchoolKX_New" FontSize="0" FontColor="000000" KeyColor="C0C0C0" BorderColor="808000" BorderThickness="3">
     <Group Id="standard" FontName="SchoolKX_New" FontSize="0" FontColor="000000" KeyColor="FF0000" BorderColor="000000" BorderThickness="1" />
     <Group Id="prediction" FontName="" FontSize="0" FontColor="E8D4FF" KeyColor="5B3080" BorderColor="8000FF" BorderThickness="0">
       <Name lang="nl">Woordvoorspelling</Name>
       <Name lang="en">Word prediction</Name>
+      <Name lang="fr">Prédiction de mots</Name>
+      <Name lang="it">Previsione delle parole</Name>
+      <Name lang="es">Predicción de palabras</Name>
     </Group>
     <Group Id="numbers" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="B52535" BorderColor="91201A" BorderThickness="2">
       <Name lang="nl">Cijfers</Name>
       <Name lang="en">Numbers</Name>
+      <Name lang="fr">Chiffres</Name>
+      <Name lang="it">Numeri</Name>
+      <Name lang="es">Números</Name>
     </Group>
     <Group Id="vowels" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="4A8FD4" BorderColor="0080FF" BorderThickness="2">
       <Name lang="nl">Klinkers</Name>
       <Name lang="en">Vowels</Name>
+      <Name lang="fr">Voyelles</Name>
+      <Name lang="it">Vocali</Name>
+      <Name lang="es">Vocales</Name>
     </Group>
     <Group Id="consonants" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="1A4E8A" BorderColor="0080FF" BorderThickness="2">
       <Name lang="nl">Medeklinkers</Name>
       <Name lang="en">Consonants</Name>
+      <Name lang="fr">Consonnes</Name>
+      <Name lang="it">Consonanti</Name>
+      <Name lang="es">Consonantes</Name>
     </Group>
     <Group Id="punctuation" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="C86A00" BorderColor="804000" BorderThickness="2">
       <Name lang="nl">Leestekens</Name>
       <Name lang="en">Punctuation</Name>
+      <Name lang="fr">Ponctuation</Name>
+      <Name lang="it">Punteggiatura</Name>
+      <Name lang="es">Puntuación</Name>
     </Group>
     <Group Id="controls" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="2A6B35" BorderColor="003700" BorderThickness="2">
       <Name lang="nl">Besturing</Name>
       <Name lang="en">Controls</Name>
+      <Name lang="fr">Commandes</Name>
+      <Name lang="it">Controlli</Name>
+      <Name lang="es">Control</Name>
     </Group>
   </Theme>
   <Layout Language="nl" GridRows="6" GridCols="18" GearRow="5" GearCol="17" WindowWidth="1063" WindowHeight="375" HideTitlebar="0" StickyModifiers="0" HoldToEdit="0" AlwaysOnTop="1" SlowKeysMs="0" DwellMs="0" ShowTimingAnimation="1" ShowCornerLabels="0" LastFile="C:\dev\EditableOSK\azertycolor.kbl" ToolbarTheme="Light" WordLearningEnabled="1">

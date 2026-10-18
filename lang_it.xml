@@ -1,0 +1,512 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Italian / Italiano language file for On-Screen Keyboard.
+  Keys match the English text used in Lang.T("...") calls (the same keys as lang_nl.xml).
+  Translated from the meaning of each text, not word for word from English or Dutch.
+-->
+<Language code="it" name="Italiano">
+
+  <!-- Touch-friendly controls (steppers, section bar) -->
+  <String key="Decrease"                value="Diminuisci" />
+  <String key="Increase"                value="Aumenta" />
+  <String key="contains an error"       value="contiene un errore" />
+  <String key="Search"                  value="Cerca" />
+  <String key="Type to search…"         value="Digitare per cercare…" />
+  <String key="No matches"              value="Nessun risultato" />
+  <String key="More colours…"           value="Altri colori…" />
+  <String key="Colour palette"          value="Tavolozza dei colori" />
+  <String key="Hex color"               value="Colore esadecimale" />
+
+  <!-- Key editor: layers, actions, colours -->
+  <String key="Action"                  value="Azione" />
+  <String key="Normal"                  value="Normale" />
+  <String key="Browse…"                 value="Sfoglia…" />
+  <String key="Record…"                 value="Registra…" />
+  <String key="Colors"                  value="Colori" />
+  <String key="chip: Font"              value="Testo" />
+  <String key="chip: Key"               value="Tasto" />
+  <String key="chip: Border"            value="Bordo" />
+  <String key="Types these characters"  value="Digita questi caratteri" />
+  <String key="Presses a key or a shortcut, e.g. Ctrl+C" value="Preme un tasto o una scorciatoia, ad es. Ctrl+C" />
+  <String key="Holds Shift, Ctrl or Alt for the next key" value="Mantiene Shift, Ctrl o Alt per il tasto successivo" />
+  <String key="Shows a word suggestion to tap" value="Mostra un suggerimento di parola da toccare" />
+  <String key="Jumps to another layout file" value="Passa a un altro file di layout" />
+  <String key="Whole key only: set it on the Normal layer" value="Solo per l’intero tasto: impostarlo al livello Normale" />
+  <String key="A word prediction key has no label. An action on Shift or AltGr is not possible." value="Un tasto di previsione delle parole non ha etichetta. Un’azione con Shift o AltGr non è possibile." />
+  <String key="word {0}" value="parola {0}" />
+  <String key="Slot {0} (automatic)" value="Posizione {0} (automatica)" />
+
+  <!-- Toolbar tooltips -->
+  <String key="tip: Load"               value="Carica un file di layout" />
+  <String key="tip: Save"               value="Salva il file di layout" />
+  <String key="tip: Undo"               value="Annulla l’ultima modifica" />
+  <String key="tip: Redo"               value="Ripeti la modifica annullata" />
+  <String key="tip: Edit mode"          value="Passa alla modalità di modifica" />
+  <String key="tip: Edit Keyboard"      value="Impostazioni della tastiera" />
+  <String key="tip: Exit edit mode"     value="Esci dalla modalità di modifica" />
+  <String key="tip: Edit key"           value="Modifica il tasto selezionato" />
+  <String key="tip: Remove key"         value="Svuota il tasto selezionato" />
+  <String key="tip: Copy formatting"    value="Copia la formattazione — poi fare clic su un tasto per applicarla" />
+  <String key="tip: Copy key"           value="Copia il tasto — poi fare clic su un tasto per incollarlo" />
+  <String key="tip: Insert row above"   value="Inserisci una riga sopra quella selezionata" />
+  <String key="tip: Insert row below"   value="Inserisci una riga sotto quella selezionata" />
+  <String key="tip: Insert column left"  value="Inserisci una colonna a sinistra" />
+  <String key="tip: Insert column right" value="Inserisci una colonna a destra" />
+  <String key="tip: Remove row"         value="Elimina la riga selezionata" />
+  <String key="tip: Remove column"      value="Elimina la colonna selezionata" />
+  <String key="tip: Merge right"        value="Unisci la cella selezionata con quella a destra" />
+  <String key="tip: Merge down"         value="Unisci la cella selezionata con quella sottostante" />
+  <String key="tip: Split cell"         value="Dividi la cella unita in celle singole" />
+
+  <!-- Dialog control tooltips -->
+  <String key="tip: Color swatch"          value="Fare clic per aprire il selettore colori" />
+  <String key="tip: Hex color"             value="Digitare un colore esadecimale (#RRGGBB)" />
+  <String key="tip: Font size"             value="0 = adatta automaticamente al tasto" />
+  <String key="tip: Border thickness"      value="−1 = spessore del gruppo di stile Standard  |  0 = nessun bordo" />
+  <String key="tip: Key width"             value="Larghezza relativa  (ad es. 1 = normale,  1,5 = 50% più largo)" />
+  <String key="tip: Row span"              value="1 = altezza normale  |  2 = altezza doppia (solo l’ultimo tasto della colonna)" />
+  <String key="tip: Record"                value="Registra un tasto o una scorciatoia" />
+  <String key="tip: Browse layout"         value="Cerca un file di layout" />
+  <String key="tip: Mode Text"             value="Il tasto digita testo" />
+  <String key="tip: Mode Key"              value="Il tasto invia una scorciatoia da tastiera o un tasto speciale" />
+  <String key="tip: Mode Modifier"         value="Il tasto agisce da interruttore Shift, Ctrl, Alt o di un altro modificatore" />
+  <String key="tip: Mode Word prediction"  value="Il tasto mostra un suggerimento di previsione delle parole" />
+  <String key="tip: Mode Layout"           value="Il tasto passa a un altro layout di tastiera" />
+  <String key="tip: Add group"             value="Crea un nuovo gruppo di stile" />
+  <String key="tip: Delete group"          value="Elimina il gruppo di stile selezionato" />
+  <String key="tip: Import groups"         value="Importa gruppi di stile da un altro file di layout" />
+  <String key="tip: Opacity"               value="Trasparenza della finestra della tastiera  (0 = completamente opaca,  80 = quasi trasparente)" />
+  <String key="tip: Manage Groups"         value="Apri l’editor dei gruppi di stile" />
+  <String key="tip: Language"              value="Seleziona la lingua dell’interfaccia" />
+  <String key="tip: WP slot"               value="Numero della posizione di previsione delle parole (0–9)" />
+
+  <!-- Validation error messages -->
+  <String key="err: invalid hex"           value="Inserire un colore esadecimale valido (#RRGGBB)" />
+  <String key="err: layout file not found" value="Impossibile trovare questo file di layout." />
+  <String key="warn: font not installed"   value="Il carattere «{0}» non è installato su questo computer." />
+
+  <!-- Accessible descriptions -->
+  <String key="preview: key '{0}', key colour {1}, font colour {2}, {3} {4} pt"
+          value="Anteprima: tasto «{0}», colore del tasto {1}, colore del testo {2}, {3} {4} pt" />
+  <String key="import row: {0}: New — will be added"
+          value="{0}: nuovo — verrà aggiunto" />
+  <String key="import row: {0}: Conflict — choose Overwrite, Add as new, or Skip"
+          value="{0}: conflitto — scegliere Sovrascrivi, Aggiungi come nuovo o Salta" />
+  <String key="import row: {0}: Protected — choose Update or Skip"
+          value="{0}: protetto — scegliere Aggiorna o Salta" />
+
+  <!-- Toolbar button labels -->
+  <String key="tb: Load"      value="Carica" />
+  <String key="tb: Save"      value="Salva" />
+  <String key="tb: Undo"      value="Annulla" />
+  <String key="tb: Redo"      value="Ripeti" />
+  <String key="tb: Edit"      value="Modifica" />
+  <String key="tb: Keyboard"  value="Impost." />
+  <String key="tb: Exit"      value="Esci" />
+  <String key="tb: Edit key"  value="Mod. tasto" />
+  <String key="tb: Remove"    value="Cancella" />
+  <String key="tb: Copy fmt"  value="Cop. form." />
+  <String key="tb: Copy key"  value="Cop. tasto" />
+  <String key="tb: Row ↑"     value="Riga ↑" />
+  <String key="tb: Row ↓"     value="Riga ↓" />
+  <String key="tb: Col ←"     value="Col. ←" />
+  <String key="tb: Col →"     value="Col. →" />
+  <String key="tb: Del ─"     value="Elim. ─" />
+  <String key="tb: Del │"     value="Elim. │" />
+  <String key="tb: Merge →"   value="Unisci →" />
+  <String key="tb: Merge ↓"   value="Unisci ↓" />
+  <String key="tb: Split"     value="Dividi" />
+
+  <!-- Gear menu -->
+  <String key="📌 Move gear button…" value="📌 Sposta il pulsante a forma di ingranaggio…" />
+
+  <!-- Dialog buttons (clean keys, no emoji) -->
+  <String key="Apply"      value="&amp;Applica" />
+  <String key="Cancel"     value="A&amp;nnulla" />
+  <String key="Save"       value="Salva" />
+  <String key="Save As…"   value="Salva con &amp;nome…" />
+  <String key="Load…"      value="Carica…" />
+  <String key="Import"     value="Importa" />
+
+  <!-- Key editor — Key Content group -->
+  <String key="Edit Key"      value="Modifica tasto" />
+  <String key="Key Content"   value="Contenuto del tasto" />
+  <String key="Label"         value="&amp;Etichetta" />
+  <String key="Send"          value="Invio" />
+  <String key="Shift label"   value="Etichetta Sh&amp;ift" />
+  <String key="Shift send"    value="Invio S&amp;hift" />
+  <String key="AltGr label"   value="Etichetta AltGr" />
+  <String key="AltGr send"    value="Invio AltGr" />
+  <String key="Key width"     value="&amp;Larghezza del tasto" />
+  <String key="Key height"    value="A&amp;ltezza del tasto" />
+
+  <!-- Key editor — Send mode -->
+  <String key="Text"                        value="Testo" />
+  <String key="Key/Shortcut"                value="Tasto/&amp;scorciatoia" />
+  <String key="Modifier"                    value="&amp;Modificatore" />
+  <String key="Layout"                      value="La&amp;yout" />
+  <String key="Word prediction"             value="Previsione delle parole" />
+  <String key="Prediction cell"             value="Tasto di previsione" />
+  <String key="WP all slots full"           value="⚠ Tutte le 10 posizioni di previsione sono già in uso — questo tasto non funzionerà" />
+  <String key="WP paste full msg"           value="Impossibile incollare: questo layout contiene già 10 tasti di previsione delle parole. Eliminarne prima uno, poi incollare." />
+  <String key="WP paste full title"         value="Incolla annullato" />
+  <String key="Record key / shortcut"       value="Registra tasto / scorciatoia" />
+  <String key="Perform the key combination you want on the keyboard." value="Eseguire sulla tastiera la combinazione di tasti desiderata." />
+  <String key="Stop recording"              value="Interrompi la registrazione" />
+  <String key="tip: Stop recording"         value="Interrompi la registrazione (non viene modificato nulla)" />
+  <String key="Cancelled"                   value="Annullato" />
+  <String key="Recorded — edit if needed"   value="Registrato — modificare se necessario" />
+  <String key="Press the record button to record, or type directly"    value="Premere il pulsante di registrazione per registrare, oppure digitare direttamente" />
+  <String key="Press the record button to record again, or edit directly" value="Premere il pulsante di registrazione per registrare di nuovo, oppure modificare direttamente" />
+  <String key="Browse (Send)"               value="Sfoglia (Invio)" />
+  <String key="Browse (Shift-send)"         value="Sfoglia (Invio Shift)" />
+  <String key="Browse (AltGr-send)"         value="Sfoglia (Invio AltGr)" />
+
+
+  <!-- Key editor — Appearance group -->
+  <String key="Appearance"        value="Aspetto" />
+  <String key="Font"              value="Carattere" />
+  <String key="Font size"         value="Dimensione ca&amp;rattere" />
+  <String key="Auto"              value="Auto" />
+  <String key="Font color"        value="Colore del &amp;testo" />
+  <String key="Key color"         value="Colore del ta&amp;sto" />
+  <String key="Border color"      value="Colore del bordo" />
+  <String key="Border thickness"  value="Spessore (p&amp;x)" />
+  <String key="Preview"           value="Anteprima" />
+
+  <!-- Keyboard editor -->
+  <String key="Edit Keyboard"      value="Modifica tastiera" />
+  <String key="Language"           value="Lingua" />
+  <String key="Layout file"        value="File di layout" />
+  <String key="Window"             value="Finestra" />
+  <String key="Opacity"            value="Trasparenza" />
+  <String key="Background"         value="Sfondo" />
+  <String key="Default Key Style"  value="Stile predefinito dei tasti" />
+  <String key="Apply to all keys"  value="Applica ora lo stile a tutti i tasti" />
+  <String key="Always on top"      value="Sempre in &amp;primo piano" />
+  <String key="Hide title bar"     value="Nascondi la barra del &amp;titolo" />
+  <String key="Accessibility"      value="Accessibilità" />
+  <String key="Sticky modifiers"   value="Tasti &amp;permanenti" />
+  <String key="Hold to edit"       value="Tenere premuto per la modalità di &amp;modifica" />
+  <String key="Slow keys"          value="Tasti &amp;lenti" />
+  <String key="Dwell click"        value="Clic con p&amp;ermanenza" />
+  <String key="tip: Slow keys"     value="Tenere premuto un tasto per questo numero di millisecondi prima che venga registrato. Evita le pressioni accidentali." />
+  <String key="tip: Dwell click"          value="Passare con il puntatore su un tasto per questo numero di millisecondi per attivarlo automaticamente, senza fare clic." />
+  <String key="Show Shift and AltGr labels"      value="Mostra le etichette Shi&amp;ft e AltGr" />
+  <String key="tip: Show Shift and AltGr labels" value="Mostra le piccole etichette Shift e AltGr negli angoli dei tasti. Deselezionare per vedere meno cose: viene disegnata solo l’etichetta principale. I tasti funzionano esattamente allo stesso modo." />
+  <String key="General"                          value="Generale" />
+  <String key="milliseconds"                     value="millisecondi" />
+  <String key="kbd: Timing aid"                  value="Aiuto all’attivazione" />
+  <String key="kbd: Off"                         value="Disattivato" />
+  <String key="tip: Timing off"                  value="Nessun aiuto all’attivazione: un tasto viene registrato non appena lo si preme o si fa clic su di esso." />
+  <String key="tip: Sticky modifiers"            value="Premere due volte Shift, Ctrl o Alt per bloccarlo finché non lo si preme una terza volta (come i Tasti permanenti di Windows). Disattivato: una sola pressione vale solo per il tasto successivo." />
+  <String key="tip: Hold to edit"                value="Tenere premuto un tasto per un momento per aprirne l’editor. Una pressione breve digita semplicemente il tasto, così l’editor non si apre per errore." />
+  <String key="tip: Always on top"               value="Mantenere la tastiera sopra tutte le altre finestre." />
+  <String key="tip: Hide title bar"              value="Nascondere la barra del titolo di Windows per una tastiera mobile più essenziale." />
+  <String key="tip: Toolbar theme"               value="Colori della barra degli strumenti sopra la tastiera: scuro, chiaro o uguale a Windows." />
+  <String key="tip: Background"                  value="Colore della finestra della tastiera dietro i tasti. Fare clic per scegliere." />
+  <String key="tip: Save settings"               value="Applica le modifiche e salva il file di layout." />
+  <String key="tip: Save settings as"            value="Applica le modifiche e salva il file di layout con un nuovo nome." />
+  <String key="kbd: Load title"                  value="Carica un layout" />
+  <String key="kbd: Load msg"                    value="Il caricamento sostituisce subito la tastiera attuale. Le modifiche fatte in questa finestra andranno perse e Annulla non può annullare il caricamento.&#10;&#10;Continuare?" />
+  <String key="first run: title"                 value="Benvenuto" />
+  <String key="first run: intro"                 value="Scegliere come si avvia la tastiera. La lingua determina anche i suggerimenti di parole. Si potrà modificare tutto più avanti in modalità di modifica." />
+  <String key="first run: arrangement"           value="Disposizione dei tasti" />
+  <String key="first run: language"              value="Lingua della tastiera" />
+  <String key="layouts: title"                   value="Apri una tastiera" />
+  <String key="layouts: hint"                    value="Scegliere una delle tastiere incluse oppure aprire un altro file." />
+  <String key="layouts: other"                   value="Altro file…" />
+  <String key="layouts: open"                    value="Apri" />
+  <String key="layouts: none"                    value="Non è stata trovata nessuna tastiera inclusa." />
+  <String key="style: keep current"              value="(mantieni lo stile attuale)" />
+  <String key="style: hint"                      value="Dà alla tastiera i colori di uno stile standard: lo sfondo, i tasti e i gruppi di stile. Un tasto con un colore proprio lo mantiene." />
+  <String key="tip: Style"                       value="Scegliere uno degli stili standard della procedura guidata Nuova tastiera. Viene applicato con Applica." />
+  <String key="group name: standard"             value="Standard" />
+  <String key="group default: prediction"        value="Previsione delle parole" />
+  <String key="group default: function-keys"     value="Tasti funzione" />
+  <String key="group default: numbers"           value="Numeri" />
+  <String key="group default: vowels"            value="Vocali" />
+  <String key="group default: consonants"        value="Consonanti" />
+  <String key="group default: punctuation"       value="Punteggiatura" />
+  <String key="group default: controls"          value="Controlli" />
+  <String key="group default: arithmetic"        value="Aritmetica" />
+  <String key="group default: comparisons"       value="Confronti" />
+  <String key="group default: brackets"          value="Parentesi" />
+  <String key="group default: constants"         value="Costanti" />
+  <String key="group default: calculus"          value="Analisi" />
+  <String key="group default: sets"              value="Insiemi" />
+  <String key="group default: logic"             value="Logica" />
+  <String key="group default: trigonometry"      value="Trigonometria" />
+  <String key="group default: greek"             value="Lettere greche" />
+  <String key="group default: editing"           value="Modifica" />
+  <String key="group default: modifiers"         value="Tasti modificatori" />
+  <String key="group default: navigation"        value="Navigazione" />
+  <String key="Name language"                    value="Lingua del nome" />
+  <String key="tip: Name language"               value="Un gruppo di stile ha un nome in ogni lingua. Scegliere la lingua del nome inserito sopra." />
+  <String key="Interface language"               value="Lingua dell’interfaccia" />
+  <String key="tip: Interface language"          value="La lingua dei menu e delle finestre della tastiera. È una scelta personale: un file di tastiera non la contiene." />
+  <String key="Keyboard language"                value="Lingua della tastiera" />
+  <String key="tip: Keyboard language"           value="La lingua per cui è pensata questa tastiera. Determina la previsione delle parole e i nomi mostrati dei gruppi di stile." />
+  <String key="first run: start"                 value="Avvia" />
+  <String key="Scanning…"                        value="Scansione…" />
+  <String key="Scanning"                         value="Scansione" />
+  <String key="scan: settings"                   value="Impostazioni…" />
+  <String key="scan: colors"                     value="Colori di evidenziazione" />
+  <String key="scan: row color"                  value="Riga" />
+  <String key="scan: key color"                  value="Tasto" />
+  <String key="tip: scan colors"                 value="Il contorno attorno ai tasti della riga in scansione e il contorno attorno al tasto stesso. Scegliere due colori ben distinti." />
+  <String key="tip: scan use"                    value="Un interruttore sposta un’evidenziazione sulle righe e sui tasti della tastiera; il tasto evidenziato viene selezionato. I tasti lenti e il clic con permanenza sono disattivati finché la scansione è attiva." />
+  <String key="scan: switches"                   value="Interruttori" />
+  <String key="scan: one switch"                 value="Un interruttore" />
+  <String key="scan: two switches"               value="Due interruttori" />
+  <String key="tip: scan switches"               value="Un interruttore: l’evidenziazione avanza da sola e l’interruttore seleziona. Due interruttori: uno fa avanzare passo passo, l’altro seleziona." />
+  <String key="scan: keys"                       value="Tasti / pulsanti" />
+  <String key="tip: scan pad"                    value="Un interruttore è un tasto della tastiera o un pulsante di un gamepad (un controller Xbox, un altro controller di gioco o un’interfaccia per interruttori che si presenta come tale). Fare clic, poi premere il tasto o il pulsante. Esc annulla." />
+  <String key="button"                           value="pulsante" />
+  <String key="D-pad up"                         value="D-pad su" />
+  <String key="D-pad down"                       value="D-pad giù" />
+  <String key="D-pad left"                       value="D-pad sinistra" />
+  <String key="D-pad right"                      value="D-pad destra" />
+
+  <String key="scan: select key"                 value="Scegli" />
+  <String key="scan: step key"                   value="Avanza" />
+  <String key="scan: press a key"                value="Premere un tasto o un pulsante…" />
+  <String key="scan: scan time"                  value="Tempo per tasto (ms)" />
+  <String key="scan: first extra"                value="Tempo aggiuntivo sul primo (ms)" />
+  <String key="scan: rounds"                     value="Giri prima di fermarsi" />
+  <String key="scan: ignore repeat"              value="Ignora le pressioni ripetute (ms)" />
+  <String key="scan: tab timing"                 value="Tempi" />
+  <String key="scan: tab back"                   value="Indietro" />
+  <String key="scan: tab feedback"               value="Segnalazioni" />
+  <String key="scan: back step"                  value="Passo indietro dopo l’ultimo tasto" />
+  <String key="tip: scan back step"              value="Dopo l’ultimo tasto di una riga l’evidenziazione passa a un contorno tratteggiato attorno all’intera riga. Selezionarlo riporta alle righe." />
+  <String key="scan: back switch"                value="Indietro con interruttore" />
+  <String key="tip: scan back switch"            value="Un interruttore a parte, premuto in qualsiasi momento, fa una di due cose. Riavvia la scansione: torna indietro di un livello (alle righe: alla prima riga). Torna indietro: la scansione procede nell’altro senso, da destra a sinistra (e verso l’alto sulle righe); un’altra pressione la inverte di nuovo. Non deve essere uguale alla pressione lunga." />
+  <String key="scan: back key"                   value="Tasto / pulsante indietro" />
+  <String key="scan: long press"                 value="Pressione lunga" />
+  <String key="scan: long off"                   value="Disattivato" />
+  <String key="scan: long restarts"              value="Riavvia la scansione" />
+  <String key="scan: long steps back"            value="Torna indietro" />
+
+  <String key="tip: scan long press"             value="Tenere premuto l’interruttore di selezione (il tempo indicato sotto) fa una di due cose. Riavvia la scansione: torna indietro di un livello (alle righe: alla prima riga). Torna indietro: la scansione procede nell’altro senso, da destra a sinistra (e verso l’alto sulle righe); dalla prima posizione salta all’ultima, passando per il passo indietro se è attivo. Un’altra pressione lunga la inverte di nuovo. Una pressione breve seleziona quando si rilascia l’interruttore." />
+  <String key="scan: hold"                       value="Tempo di pressione (ms)" />
+  <String key="scan: back hint"                  value="Tornare indietro lascia i tasti di una riga per le righe; alle righe si salta alla prima riga. Il passo indietro, l’indietro con interruttore e la pressione lunga possono essere attivi tutti insieme." />
+  <String key="scan: back color"                 value="Indietro" />
+  <String key="scan: on release"                 value="Seleziona al rilascio" />
+  <String key="tip: scan on release"             value="L’interruttore di selezione agisce quando viene rilasciato, non quando viene premuto. Una pressione prolungata o involontaria non fa nulla finché non viene rilasciata." />
+  <String key="tip: scan on release forced"      value="Attivo perché la pressione lunga è attiva: l’interruttore di selezione agisce sempre al rilascio." />
+  <String key="scan: sound"                      value="Suono" />
+  <String key="scan: sound none"                 value="Nessuno" />
+  <String key="scan: sound step"                 value="Ogni passo" />
+  <String key="scan: sound select"               value="Selezione" />
+  <String key="scan: sound both"                 value="Entrambi" />
+  <String key="scan: hint"                       value="Esc mette in pausa la scansione. Premere il tasto di selezione per ripartire." />
+  <String key="scan: key taken"                  value="Quel tasto è l’altro interruttore. Scegliere un altro tasto." />
+  <String key="Space"                            value="Spazio" />
+  <String key="wp: nothing to export"            value="L’esportazione sarà disponibile dopo che sono state apprese delle parole." />
+  <String key="wp: no candidates"                value="Ancora nessun candidato." />
+  <String key="wp: learning off hint"            value="I candidati vengono raccolti finché «Ricorda le parole digitate» è attivo." />
+  <String key="wp: immediate"                    value="Aggiungi e Scarta hanno effetto subito; Annulla non li annulla." />
+  <String key="wp: (not found)"                  value="(non trovato)" />
+  <String key="warn: database not found"         value="Il file di database «{0}» non è stato trovato. Resta selezionato finché non ne viene scelto un altro." />
+  <String key="Show timing animation"            value="Mostra l’animazione dell’&amp;avanzamento" />
+  <String key="tip: Show timing animation"       value="Mostra un’animazione di riempimento sui tasti mentre il conto alla rovescia dei tasti lenti o del clic con permanenza è in corso. Deselezionare se l’animazione distrae." />
+  <String key="Toolbar theme"                    value="Tema della barra degli &amp;strumenti" />
+  <String key="Dark"                             value="Scuro" />
+  <String key="Light"                            value="Chiaro" />
+  <String key="System default"                   value="Predefinito di sistema" />
+  <String key="Key Groups"                       value="Gruppi di stile dei tasti" />
+  <String key="Manage Groups…"                   value="&amp;Gruppi di stile…" />
+  <String key="Group"                            value="Gruppo di stile" />
+  <String key="(no group)"                       value="(nessun gruppo di stile)" />
+  <String key="title: leave group"               value="Togliere il tasto dal suo gruppo di stile?" />
+  <String key="ask: leave group"                 value="Questo tasto segue il gruppo di stile ‘{0}’. Modificarlo toglie il tasto dal gruppo di stile: mantiene il proprio aspetto e non segue più il gruppo di stile." />
+  <String key="Manage Groups"                    value="Gestisci i gruppi di stile" />
+  <String key="Groups"                           value="Gruppi di stile" />
+  <String key="Style"                            value="Stile" />
+  <String key="+ Add group"                      value="+ &amp;Aggiungi" />
+  <String key="− Delete group"                   value="− &amp;Elimina" />
+  <String key="Name"                             value="&amp;Nome" />
+  <String key="(inherit)"                        value="(eredita)" />
+  <String key="0 = auto / inherit"               value="0 = auto / eredita" />
+  <String key="(inherit standard)"               value="(standard)" />
+  <String key="-1 = inherit standard"            value="-1 = eredita dallo standard" />
+  <String key="Clear (inherit standard)"         value="Cancella (eredita dallo standard)" />
+  <String key="Inherit from standard"            value="Eredita dallo standard" />
+  <String key="Inherit"                          value="Eredita" />
+  <String key="Import..."                        value="Importa..." />
+  <String key="inherited"                        value="ereditato" />
+  <String key="(none / auto)"                    value="(nessuno / auto)" />
+  <String key="Clear"                            value="Cancella" />
+  <String key="Delete Group"                     value="Elimina il gruppo di stile" />
+  <String key="Delete group msg"                 value="Eliminare il gruppo di stile «{0}»?&#10;&#10;I tasti assegnati a questo gruppo di stile torneranno allo stile globale." />
+  <String key="New Group"                        value="Nuovo gruppo di stile" />
+  <String key="Import Groups"                    value="Importa gruppi di stile" />
+  <String key="Select a layout file to import groups from" value="Selezionare un file di layout da cui importare i gruppi di stile" />
+  <String key="No groups found in the selected file." value="Nessun gruppo di stile trovato nel file selezionato." />
+  <String key="{0} groups found — choose action for each conflict:" value="{0} gruppi di stile trovati — scegliere un’azione per ogni conflitto:" />
+  <String key="{0} groups found — all new, no conflicts." value="{0} gruppi di stile trovati — tutti nuovi, nessun conflitto." />
+  <String key="Status"                           value="Stato" />
+  <String key="New"                              value="Nuovo" />
+  <String key="Conflict"                         value="Conflitto" />
+  <String key="Overwrite"                        value="Sovrascrivi" />
+  <String key="Add as new"                       value="Aggiungi come nuovo" />
+  <String key="Skip"                             value="Salta" />
+  <String key="Add"                              value="Aggiungi" />
+  <String key="Name 'standard' is reserved."     value="Il nome «standard» è riservato." />
+  <String key="A group with this name already exists." value="Esiste già un gruppo di stile con questo nome." />
+  <String key="Update standard group style"      value="Aggiorna lo stile del gruppo di stile standard" />
+  <String key="Protected"                        value="Protetto" />
+  <String key="tip: New"                         value="Crea un nuovo layout di tastiera con la procedura guidata" />
+  <String key="tb: New"                          value="Nuovo" />
+  <String key="New Keyboard"                     value="Nuova tastiera" />
+  <String key="wiz: p1 title"                    value="Come si vuole iniziare?" />
+  <String key="wiz: p1 sub"                      value="Scegliere il punto di partenza per il nuovo layout di tastiera." />
+  <String key="wiz: p2 title"                    value="Griglia ed etichette dei tasti" />
+  <String key="wiz: p4 title"                    value="Tema" />
+  <String key="wiz: p4 sub"                      value="Scegliere un tema di colori per la tastiera." />
+  <String key="wiz: p5 title"                    value="Salva con nome" />
+  <String key="wiz: p5 sub"                      value="Scegliere un nome di file e una cartella, poi fare clic su Crea." />
+  <String key="wiz: Blank grid"                  value="Griglia vuota — compilerò i tasti nell’editor" />
+  <String key="wiz: Paste labels"                value="Digitare o incollare le etichette dei tasti" />
+  <String key="wiz: Copy from file"              value="Copia da un file di layout esistente" />
+  <String key="wiz: Layout file"                 value="File di layout" />
+  <String key="wiz: Key labels"                  value="Etichette dei tasti" />
+  <String key="wiz: Rows"                        value="Righe" />
+  <String key="wiz: Columns"                     value="Colonne" />
+  <String key="wiz: Preview"                     value="Anteprima" />
+  <String key="wiz: Language"                    value="Lingua della tastiera" />
+  <String key="Info"                             value="I&amp;nfo" />
+  <String key="Export as text…"                  value="Come testo…" />
+  <String key="tip: Export as text"              value="Salva i tasti di questa tastiera come semplice file di testo: una riga per fila, una parola per tasto. Si può modificare a mano e incollare nella procedura guidata Nuova tastiera. Colori, gruppi e impostazioni non ne fanno parte." />
+  <String key="info: language hint"              value="Questi testi sono nella lingua della tastiera (Generale › Lingua della tastiera). Scegliere lì un’altra lingua per scrivere i testi anche in quella lingua." />
+  <String key="Title"                            value="Titolo" />
+  <String key="Description"                      value="Descrizione" />
+  <String key="tip: Keyboard title"              value="Il nome di questa tastiera nella lingua scelta sopra. L’elenco delle tastiere lo mostra. Vuoto: la tastiera non ha nome." />
+  <String key="tip: Keyboard description"        value="Una o due frasi su questa tastiera, nella lingua scelta sopra. L’elenco delle tastiere la mostra sotto il nome." />
+  <String key="wiz: Theme file"                  value="File del tema" />
+  <String key="wiz: From file…"                  value="Da file…" />
+  <String key="wiz: File name"                   value="Nome del file" />
+  <String key="wiz: Folder"                      value="Cartella" />
+  <String key="wiz: default filename"            value="nuova tastiera" />
+  <String key="wiz: Step {0} of {1}"             value="Passo {0} di {1}" />
+  <String key="Next →"                           value="Avanti →" />
+  <String key="← Back"                           value="← Indietro" />
+  <String key="Create"                           value="Crea" />
+  <String key="Yes"                              value="Sì" />
+  <String key="No"                               value="No" />
+  <String key="wiz: theme dark"                  value="Scuro" />
+  <String key="wiz: theme light"                 value="Chiaro" />
+  <String key="wiz: theme hc"                    value="Contrasto elevato" />
+  <String key="wiz: theme colorful"              value="Colorato" />
+  <String key="wiz: tip Blank grid"              value="Una griglia vuota; i tasti si compilano nell’editor." />
+  <String key="wiz: tip Paste labels"            value="Una fila per riga, parole separate da spazi." />
+  <String key="wiz: tip Copy from file"          value="Parte dai tasti di un file di layout esistente." />
+  <String key="wiz: tip paste"                   value="Una fila per riga, parole separate da spazi o tabulazioni.&#10;I tasti speciali vanno tra parentesi quadre, ad esempio [Enter] o [Shift]; il pulsante ? li elenca tutti.&#10;&quot;frase tra virgolette&quot;  →  un tasto con quell’etichetta&#10;_  →  spazio vuoto&#10;Una lettera (a o A)  →  la minuscola, e la maiuscola con Shift; [A]  →  una maiuscola sul tasto stesso&#10;[wp]  →  previsione delle parole;  [ctrl+c]  →  una scorciatoia;  q*2  →  larga due celle;  e[shift:É]  →  uscita con Shift" />
+  <String key="wiz: tip folder"                  value="Cartella in cui verrà salvato il nuovo file di layout." />
+  <String key="wiz: Special keys help"           value="Tutti i tasti speciali" />
+  <String key="wiz: Close"                       value="Chiudi" />
+  <String key="wiz: keys title"                  value="Tasti speciali nelle etichette dei tasti" />
+  <String key="wiz: keys tab how"                value="Come funziona" />
+  <String key="wiz: keys tab keys"               value="Tasti" />
+  <String key="wiz: keys tab notations"          value="Notazioni" />
+  <String key="wiz: how 1"                       value="Una fila per riga, un tasto per parola. Ogni parola è un tasto con quel testo." />
+  <String key="wiz: how 2"                       value="Un tasto speciale va tra parentesi quadre, maiuscole o minuscole: [enter]." />
+  <String key="wiz: how 3"                       value="Le virgolette uniscono più parole in un solo tasto: &quot;grazie mille&quot;. Un trattino basso _ è un tasto vuoto." />
+  <String key="wiz: how 4"                       value="Gli extra vanno subito dopo il tasto, senza spazio: e[shift:É], q*2." />
+  <String key="wiz: how 5"                       value="Una lettera è la minuscola, con la maiuscola su Shift; [A] è una maiuscola così com’è." />
+  <String key="wiz: keys group examples"         value="Esempi" />
+  <String key="wiz: ex letter"                   value="a, e A con Shift" />
+  <String key="wiz: ex capital"                  value="A (senza variante Shift)" />
+  <String key="wiz: ex phrase"                   value="grazie mille" />
+  <String key="wiz: ex shortcut"                 value="Ctrl+C" />
+  <String key="wiz: ex wp"                       value="Parola 1, Parola 2" />
+  <String key="wiz: ex layer"                    value="e, e É con Shift" />
+  <String key="wiz: ex size"                     value="Spazio, largo 4 celle" />
+  <String key="wiz: ex layout"                   value="123, apre x.kbl" />
+  <String key="wiz: keys group typing"           value="Tasti di digitazione" />
+  <String key="wiz: keys group nav"              value="Spostamento e modifica" />
+  <String key="wiz: keys group mod"              value="Tasti modificatori" />
+  <String key="wiz: keys group other"            value="Altri tasti" />
+  <String key="wiz: keys group dead"             value="Tasti morti (accenti)" />
+  <String key="wiz: keys group more"             value="Notazioni" />
+  <String key="wiz: more wp"                     value="previsione delle parole" />
+  <String key="wiz: more shortcut"               value="scorciatoie" />
+  <String key="wiz: more layout"                 value="apre un layout" />
+  <String key="wiz: more key layout"             value="etichetta, apre un layout" />
+  <String key="wiz: more key"                    value="etichetta, uscita" />
+  <String key="wiz: more layers"                 value="Shift, AltGr" />
+  <String key="wiz: more size"                   value="largo, largo e alto" />
+  <String key="wiz: more letter"                 value="minuscola, maiuscola con Shift" />
+  <String key="wiz: more capital"                value="maiuscola così com’è" />
+  <String key="wiz: paste hint 2"                value="Tasti speciali: [Enter] [Backspace] [Tab] [Space] [Up] [Down] [Left] [Right]" />
+  <String key="wiz: paste hint 3"                value="&quot;frase tra virgolette&quot; è un solo tasto; _ è un tasto vuoto." />
+  <String key="wiz: Select layout"               value="Selezionare un file di layout esistente" />
+  <String key="wiz: Select theme file"           value="Selezionare il file di layout da cui copiare il tema" />
+  <String key="wiz: copy info"                   value="I tasti verranno copiati da: {0}" />
+  <String key="wiz: preview description"        value="{0} righe, {1} colonne; l’ultima colonna della prima riga contiene il tasto a forma di ingranaggio." />
+  <String key="wiz: p2 sub blank"                value="Scegliere quante righe e colonne ha la tastiera. L’ultima colonna viene aggiunta per il pulsante delle impostazioni." />
+  <String key="wiz: p2 sub paste"                value="Una fila per riga, un tasto per parola." />
+  <String key="wiz: p2 sub copy"                 value="I tasti provengono dal file di layout scelto." />
+  <String key="wiz: Starting point"              value="Punto di partenza" />
+  <String key="wiz: Sample keys"                 value="Tasti di esempio" />
+  <String key="wiz: Summary"                     value="Riepilogo" />
+  <String key="wiz: Browse"                      value="Sfoglia" />
+  <String key="wiz: paste size"                  value="{0} righe, {1} tasti di larghezza (viene aggiunta una colonna per le impostazioni)" />
+  <String key="wiz: paste nothing"               value="Ancora nessun tasto" />
+  <String key="wiz: sum copy"                    value="Tasti: copiati da {0}" />
+  <String key="wiz: sum window"                  value="Finestra: sempre in primo piano, barra del titolo visibile" />
+  <String key="wiz: err bad name"                value="Il nome del file contiene un carattere non consentito." />
+  <String key="wiz: replace title"               value="Sostituire il file?" />
+  <String key="wiz: replace text"                value="In questa cartella esiste già un file di nome {0}. Sostituirlo?" />
+  <String key="wiz: err no copy file"            value="Selezionare un file di layout da copiare." />
+  <String key="wiz: err empty paste"             value="Incollare almeno un tasto prima di continuare." />
+  <String key="wiz: err no theme file"           value="Selezionare il file di layout da cui copiare il tema." />
+  <String key="wiz: err no name"                 value="Inserire un nome di file." />
+  <String key="wiz: err bad folder"              value="La cartella selezionata non esiste." />
+  <String key="wiz: sum rows cols"               value="Griglia: {0} righe × {1} colonne (ultima colonna riservata al pulsante delle impostazioni)" />
+  <String key="wiz: sum theme"                   value="Tema: {0}" />
+  <String key="wiz: sum language"                value="Lingua: {0}" />
+  <String key="wp: Word prediction"              value="Previsione delle parole" />
+  <String key="wp: Remember typed words"         value="Ricorda le parole digitate" />
+  <String key="wp: tip remember"                 value="Impara le parole e le coppie di parole che si digitano, così le parole usate spesso vengono suggerite prima. Si può disattivare in qualsiasi momento per la privacy." />
+  <String key="wp: learning on"                  value="ricorda le parole" />
+  <String key="wp: learning off"                 value="non ricorda le parole" />
+  <String key="wp: Database"                     value="Database" />
+  <String key="wp: Auto"                         value="(auto)" />
+  <String key="wp: Export…"                      value="Esporta…" />
+  <String key="wp: Export learned words"         value="Esporta le parole apprese" />
+  <String key="wp: Import…"                      value="Importa…" />
+  <String key="wp: Import learned words"         value="Importa parole apprese" />
+  <String key="wp: tip import"                   value="Aggiunge le parole apprese da un file creato con Esporta alle parole apprese su questo PC. Nulla di ciò che è stato appreso qui viene rimosso; i conteggi vengono sommati." />
+  <String key="wp: import confirm"               value="Aggiungere le parole apprese da «{0}» alle parole apprese su questo PC? I conteggi vengono sommati. Il file attuale viene conservato come copia di backup (.bak)." />
+  <String key="wp: Import done"                  value="Aggiunti: {0} parole, {1} coppie di parole e {2} candidati." />
+  <String key="wp: Import failed"                value="Importazione non riuscita. Non è stato modificato nulla." />
+  <String key="wp: import not valid"             value="Questo non è un file di parole apprese (creato con Esporta)." />
+  <String key="wp: import empty"                 value="Questo file non contiene parole apprese." />
+  <String key="wp: import corrupt"               value="Non è stato possibile leggere il file." />
+  <String key="wp: import missing"               value="Impossibile trovare il file." />
+  <String key="wp: import loading"               value="Il database delle parole è ancora in caricamento. Riprovare tra un momento." />
+  <String key="wp: import wrong language"        value="Queste parole sono state apprese per la lingua «{0}», ma questo database è per «{1}»." />
+  <String key="wp: import target corrupt"        value="Non è stato possibile leggere le parole apprese su questo PC, quindi non è stato aggiunto nulla." />
+  <String key="wp: words"                        value="parole" />
+  <String key="wp: No database loaded"           value="Nessun database caricato" />
+  <String key="wp: Export failed"                value="Esportazione non riuscita:" />
+  <String key="wp: tip database"                 value="Scegliere il database delle parole per questa tastiera." />
+  <String key="wp: tip export"                   value="Esporta le parole apprese in un’altra posizione (backup o trasferimento su un altro PC)." />
+  <String key="wp: Candidates"                   value="Candidati" />
+  <String key="wp: Promote"                      value="Aggiungi" />
+  <String key="wp: Reject"                       value="Scarta" />
+  <String key="wp: tip candidates"               value="Parole sconosciute incontrate durante la digitazione, non ancora aggiunte all’elenco delle parole. Una parola viene aggiunta automaticamente quando è stata digitata più di due volte." />
+  <String key="wp: tip promote"                  value="Aggiunge subito il candidato selezionato all’elenco delle parole, senza aspettare che venga digitato di nuovo." />
+  <String key="wp: tip reject"                   value="Scarta il candidato selezionato. Se viene digitato di nuovo, il conteggio ripartirà da zero." />
+  <String key="Save failed"                      value="Salvataggio non riuscito:" />
+  <String key="Save invalid msg"                 value="Il layout contiene celle sovrapposte o mancanti e non può essere salvato nello stato attuale.&#10;&#10;Suggerimento: passare alla modalità di modifica per controllare e correggere il layout, poi riprovare a salvare." />
+  <String key="Save invalid title"               value="Layout non valido — non salvato" />
+  <String key="Invalid file title"               value="Impossibile aprire il file" />
+  <String key="Invalid file msg"                 value="Non è stato possibile aprire il file perché non è un file di layout di tastiera valido, oppure è stato creato da una versione incompatibile.&#10;&#10;Il layout della tastiera non è stato modificato." />
+  <String key="Invalid file detail"              value="Dettagli tecnici:" />
+  <String key="font missing title"               value="Carattere non installato" />
+  <String key="font missing msg"                 value="Questa tastiera usa i seguenti caratteri, che non sono installati su questo computer: {0}.&#10;&#10;Viene usato un carattere sostitutivo. Cercare online per scaricare e installare i caratteri mancanti se si vuole che la tastiera abbia esattamente l’aspetto previsto." />
+
+</Language>

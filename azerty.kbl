@@ -5,36 +5,63 @@
     <Title lang="en">AZERTY</Title>
     <Description lang="nl">AZERTY-toetsenbord met functietoetsen, cijfers, leestekens en een rij voor woordvoorspelling. De toetsen zijn per groep gekleurd.</Description>
     <Description lang="en">AZERTY keyboard with function keys, numbers, punctuation and a row for word prediction. The keys are coloured by group.</Description>
+    <Title lang="fr">AZERTY</Title>
+    <Title lang="it">AZERTY</Title>
+    <Title lang="es">AZERTY</Title>
+    <Description lang="fr">Clavier AZERTY avec touches de fonction, chiffres, ponctuation et une rangée pour la prédiction de mots. Les touches sont colorées par groupe.</Description>
+    <Description lang="it">Tastiera AZERTY con tasti funzione, numeri, punteggiatura e una fila per la previsione delle parole. I tasti sono colorati per gruppo.</Description>
+    <Description lang="es">Teclado AZERTY con teclas de función, números, puntuación y una fila para la predicción de palabras. Las teclas están coloreadas por grupo.</Description>
   </Info>
   <Theme BackgroundColor="1A2E2C" Opacity="1.00" FontName="Arial" FontSize="0" FontColor="E0FAF8" KeyColor="2C4845" BorderColor="3E5E5A" BorderThickness="1">
     <Group Id="standard" FontName="Arial" FontSize="0" FontColor="E0FAF8" KeyColor="2C4845" BorderColor="3E5E5A" BorderThickness="1" />
     <Group Id="prediction" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="34657C" BorderColor="2E5460" BorderThickness="-1">
       <Name lang="nl">Woordvoorspelling</Name>
       <Name lang="en">Word prediction</Name>
+      <Name lang="fr">Prédiction de mots</Name>
+      <Name lang="it">Previsione delle parole</Name>
+      <Name lang="es">Predicción de palabras</Name>
     </Group>
     <Group Id="function-keys" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="1C3832" BorderColor="2C5048" BorderThickness="-1">
       <Name lang="nl">Functietoetsen</Name>
       <Name lang="en">Function keys</Name>
+      <Name lang="fr">Touches de fonction</Name>
+      <Name lang="it">Tasti funzione</Name>
+      <Name lang="es">Teclas de función</Name>
     </Group>
     <Group Id="numbers" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="005B70" BorderColor="304060" BorderThickness="-1">
       <Name lang="nl">Cijfers</Name>
       <Name lang="en">Numbers</Name>
+      <Name lang="fr">Chiffres</Name>
+      <Name lang="it">Numeri</Name>
+      <Name lang="es">Números</Name>
     </Group>
     <Group Id="vowels" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="1A4840" BorderColor="2A6058" BorderThickness="-1">
       <Name lang="nl">Klinkers</Name>
       <Name lang="en">Vowels</Name>
+      <Name lang="fr">Voyelles</Name>
+      <Name lang="it">Vocali</Name>
+      <Name lang="es">Vocales</Name>
     </Group>
     <Group Id="consonants" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="3E6C60" BorderColor="345850" BorderThickness="-1">
       <Name lang="nl">Medeklinkers</Name>
       <Name lang="en">Consonants</Name>
+      <Name lang="fr">Consonnes</Name>
+      <Name lang="it">Consonanti</Name>
+      <Name lang="es">Consonantes</Name>
     </Group>
     <Group Id="punctuation" FontName="" FontSize="0" FontColor="CCE8DC" KeyColor="2E4035" BorderColor="3E5848" BorderThickness="-1">
       <Name lang="nl">Leestekens</Name>
       <Name lang="en">Punctuation</Name>
+      <Name lang="fr">Ponctuation</Name>
+      <Name lang="it">Punteggiatura</Name>
+      <Name lang="es">Puntuación</Name>
     </Group>
     <Group Id="controls" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="162820" BorderColor="243C30" BorderThickness="-1">
       <Name lang="nl">Besturing</Name>
       <Name lang="en">Controls</Name>
+      <Name lang="fr">Commandes</Name>
+      <Name lang="it">Controlli</Name>
+      <Name lang="es">Control</Name>
     </Group>
   </Theme>
   <Layout Language="nl" GridRows="7" GridCols="14" GearRow="6" GearCol="13" WindowWidth="1036" WindowHeight="368" HideTitlebar="0" StickyModifiers="0" HoldToEdit="0" AlwaysOnTop="1" SlowKeysMs="0" DwellMs="0" ShowTimingAnimation="1" LastFile="C:\dev\EditableOSK\azerty.kbl" ToolbarTheme="Dark" WordLearningEnabled="1">

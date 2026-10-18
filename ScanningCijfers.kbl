@@ -5,23 +5,41 @@
     <Title lang="en">Scanning: numbers and signs</Title>
     <Description lang="nl">Cijfers, rekentekens en leestekens voor scanning. De toets abc keert terug naar het letterbord.</Description>
     <Description lang="en">Numbers, arithmetic signs and punctuation for scanning. The abc key returns to the letter keyboard.</Description>
+    <Title lang="fr">Balayage : chiffres et signes</Title>
+    <Title lang="it">Scansione: numeri e segni</Title>
+    <Title lang="es">Barrido: números y signos</Title>
+    <Description lang="fr">Chiffres, signes de calcul et ponctuation pour le balayage. La touche abc ramène au clavier de lettres.</Description>
+    <Description lang="it">Numeri, segni aritmetici e punteggiatura per la scansione. Il tasto abc riporta alla tastiera di lettere.</Description>
+    <Description lang="es">Números, signos aritméticos y puntuación para el barrido. La tecla abc vuelve al teclado de letras.</Description>
   </Info>
   <Theme BackgroundColor="1C1C28" Opacity="1.00" FontName="Arial" FontSize="0" FontColor="EFEFFF" KeyColor="2C2C42" BorderColor="3C3C56" BorderThickness="1">
     <Group Id="standard" FontName="" FontSize="0" FontColor="EFEFFF" KeyColor="2C2C42" BorderColor="3C3C56" BorderThickness="1" />
     <Group Id="numbers" FontName="" FontSize="0" FontColor="C0D0FF" KeyColor="243050" BorderColor="344060" BorderThickness="1">
       <Name lang="en">Numbers</Name>
+      <Name lang="fr">Chiffres</Name>
+      <Name lang="it">Numeri</Name>
+      <Name lang="es">Números</Name>
       <Name lang="nl">Cijfers</Name>
     </Group>
     <Group Id="controls" FontName="" FontSize="0" FontColor="B0B0C8" KeyColor="1C1C2E" BorderColor="2A2A3E" BorderThickness="1">
       <Name lang="en">Controls</Name>
+      <Name lang="fr">Commandes</Name>
+      <Name lang="it">Controlli</Name>
+      <Name lang="es">Control</Name>
       <Name lang="nl">Besturing</Name>
     </Group>
     <Group Id="punctuation" FontName="" FontSize="0" FontColor="D8C0F0" KeyColor="38283C" BorderColor="483848" BorderThickness="1">
       <Name lang="en">Punctuation</Name>
+      <Name lang="fr">Ponctuation</Name>
+      <Name lang="it">Punteggiatura</Name>
+      <Name lang="es">Puntuación</Name>
       <Name lang="nl">Leestekens</Name>
     </Group>
     <Group Id="arithmetic" FontName="" FontSize="0" FontColor="F0E0B0" KeyColor="4A3C20" BorderColor="5A4C30" BorderThickness="1">
       <Name lang="en">Arithmetic</Name>
+      <Name lang="fr">Arithmétique</Name>
+      <Name lang="it">Aritmetica</Name>
+      <Name lang="es">Aritmética</Name>
       <Name lang="nl">Rekentekens</Name>
     </Group>
   </Theme>

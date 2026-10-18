@@ -524,6 +524,14 @@ namespace OnScreenKeyboard
                 int avail = Math.Max(80, hostRight - left - chrome - (int)Math.Round(_wrapReserve[c] * DeviceDpi / 96.0));
                 int cap = _wrapCaps[c];
                 if (cap > 0) avail = Math.Min(avail, (int)Math.Round(cap * DeviceDpi / 96.0));       // the cap was given in design pixels
+                // A row label that leaves room for its input still never gets narrower than its longest word (a word cannot wrap).
+                if (c is Label rowLabel && _wrapReserve[c] > 0)
+                {
+                    int word = 0;
+                    foreach (string w in rowLabel.Text.Replace("&", "").Split(' ', '/', '-'))
+                        word = Math.Max(word, TextRenderer.MeasureText(w, rowLabel.Font).Width);       // with the default padding, as the label measures itself
+                    avail = Math.Max(avail, word + 8);
+                }
                 if (Math.Abs(c.MaximumSize.Width - avail) > 1) c.MaximumSize = new Size(avail, 0);
             }
         }
@@ -572,6 +580,9 @@ namespace OnScreenKeyboard
             return t;
         }
 
+        /// <summary>The room (design pixels) a row's label leaves to its input on a narrow window.</summary>
+        private const int LabelInputReserve = 250;
+
         /// <summary>
         /// Adds "label | input" as a new row. The label sizes to its text (wrapping past
         /// <see cref="Touch.LabelMaxWidth"/>); the input is at least 44 px tall and fills the column,
@@ -589,6 +600,9 @@ namespace OnScreenKeyboard
                 TabIndex = _nextTab++,
             };
             _transLabels.Add((lbl, label));
+            // A long label (French, Italian and Spanish texts are 20–30 % longer than English) wraps on a narrow window instead of pushing the
+            // input out of it: it never takes the room the input needs (a stepper or a short field; a wide window is not affected).
+            Wrap(lbl, reserveRight: LabelInputReserve);
             lbl.SetTargets(input);
             NameInput(input, Lang.StripMnemonic(label()));
 

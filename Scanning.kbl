@@ -5,31 +5,55 @@
     <Title lang="en">Scanning: letters</Title>
     <Description lang="nl">Letterbord voor scanning: de meest gebruikte Nederlandse letters staan linksboven, met woordvoorspelling bovenaan. De toets 123 opent het cijferbord.</Description>
     <Description lang="en">Letter keyboard for scanning: the most frequent Dutch letters are at the top left, with word prediction on top. The 123 key opens the number keyboard.</Description>
+    <Title lang="fr">Balayage : lettres</Title>
+    <Title lang="it">Scansione: lettere</Title>
+    <Title lang="es">Barrido: letras</Title>
+    <Description lang="fr">Lettres pour le balayage : les plus fréquentes (en néerlandais) en haut à gauche, prédiction de mots en haut. La touche 123 ouvre les chiffres.</Description>
+    <Description lang="it">Lettere per la scansione: le più frequenti (in olandese) in alto a sinistra, previsione delle parole in alto. Il tasto 123 apre i numeri.</Description>
+    <Description lang="es">Letras para el barrido: las más frecuentes (en neerlandés) arriba a la izquierda, predicción de palabras arriba. La tecla 123 abre los números.</Description>
   </Info>
   <Theme BackgroundColor="1C1C28" Opacity="1.00" FontName="Arial" FontSize="0" FontColor="EFEFFF" KeyColor="2C2C42" BorderColor="3C3C56" BorderThickness="1">
     <Group Id="standard" FontName="" FontSize="0" FontColor="EFEFFF" KeyColor="2C2C42" BorderColor="3C3C56" BorderThickness="1" />
     <Group Id="vowels" FontName="" FontSize="0" FontColor="EFEFFF" KeyColor="3A3A5A" BorderColor="4A4A6A" BorderThickness="1">
       <Name lang="en">Vowels</Name>
+      <Name lang="fr">Voyelles</Name>
+      <Name lang="it">Vocali</Name>
+      <Name lang="es">Vocales</Name>
       <Name lang="nl">Klinkers</Name>
     </Group>
     <Group Id="consonants" FontName="" FontSize="0" FontColor="EFEFFF" KeyColor="2C2C42" BorderColor="3C3C56" BorderThickness="1">
       <Name lang="en">Consonants</Name>
+      <Name lang="fr">Consonnes</Name>
+      <Name lang="it">Consonanti</Name>
+      <Name lang="es">Consonantes</Name>
       <Name lang="nl">Medeklinkers</Name>
     </Group>
     <Group Id="numbers" FontName="" FontSize="0" FontColor="C0D0FF" KeyColor="243050" BorderColor="344060" BorderThickness="1">
       <Name lang="en">Numbers</Name>
+      <Name lang="fr">Chiffres</Name>
+      <Name lang="it">Numeri</Name>
+      <Name lang="es">Números</Name>
       <Name lang="nl">Cijfers</Name>
     </Group>
     <Group Id="controls" FontName="" FontSize="0" FontColor="B0B0C8" KeyColor="1C1C2E" BorderColor="2A2A3E" BorderThickness="1">
       <Name lang="en">Controls</Name>
+      <Name lang="fr">Commandes</Name>
+      <Name lang="it">Controlli</Name>
+      <Name lang="es">Control</Name>
       <Name lang="nl">Besturing</Name>
     </Group>
     <Group Id="punctuation" FontName="" FontSize="0" FontColor="D8C0F0" KeyColor="38283C" BorderColor="483848" BorderThickness="1">
       <Name lang="en">Punctuation</Name>
+      <Name lang="fr">Ponctuation</Name>
+      <Name lang="it">Punteggiatura</Name>
+      <Name lang="es">Puntuación</Name>
       <Name lang="nl">Leestekens</Name>
     </Group>
     <Group Id="prediction" FontName="" FontSize="0" FontColor="B0D0B0" KeyColor="263826" BorderColor="364836" BorderThickness="1">
       <Name lang="en">Word prediction</Name>
+      <Name lang="fr">Prédiction de mots</Name>
+      <Name lang="it">Previsione delle parole</Name>
+      <Name lang="es">Predicción de palabras</Name>
       <Name lang="nl">Woordvoorspelling</Name>
     </Group>
   </Theme>

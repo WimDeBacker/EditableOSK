@@ -410,7 +410,7 @@ namespace OnScreenKeyboard
             Section("Touch dialog frame — sections, sizing, validation, languages");
 
             var cases = new (string Name, string Code, double Pseudo)[]
-                { ("English", "en", 0), ("Dutch", "nl", 0), ("+40 % text", "en", 0.4), ("+80 % text", "en", 0.8) };
+                { ("English", "en", 0), ("Dutch", "nl", 0), ("French", "fr", 0), ("Italian", "it", 0), ("Spanish", "es", 0), ("+40 % text", "en", 0.4), ("+80 % text", "en", 0.8) };
             try
             {
                 foreach (var (name, code, pseudo) in cases)
@@ -501,7 +501,7 @@ namespace OnScreenKeyboard
             // The guards measure geometry only and the theme changes colours only (contrast: T_ColourContrastAaa), so one theme is enough.
             var cases = Quick
                 ? new (string Name, string Code, double Pseudo)[] { ("en", "en", 0), ("+80%", "en", 0.8) }
-                : new (string Name, string Code, double Pseudo)[] { ("en", "en", 0), ("nl", "nl", 0), ("+40%", "en", 0.4), ("+80%", "en", 0.8) };
+                : new (string Name, string Code, double Pseudo)[] { ("en", "en", 0), ("nl", "nl", 0), ("fr", "fr", 0), ("it", "it", 0), ("es", "es", 0), ("+40%", "en", 0.4), ("+80%", "en", 0.8) };
             bool wasLight = ToolbarButton.IsLightTheme;
             try
             {

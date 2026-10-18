@@ -97,10 +97,10 @@ namespace OnScreenKeyboard
             try
             {
                 foreach (var (name, make, normal, plus40, plus80) in NarrowDialogs())
-                    foreach (var (label, code, pseudo, minimum) in new[] { ("en", "en", 0.0, normal), ("nl", "nl", 0.0, normal), ("+40%", "en", 0.4, plus40), ("+80%", "en", 0.8, plus80) })
+                    foreach (var (label, code, pseudo, minimum) in new[] { ("en", "en", 0.0, normal), ("nl", "nl", 0.0, normal), ("fr", "fr", 0.0, normal), ("it", "it", 0.0, normal), ("es", "es", 0.0, normal), ("+40%", "en", 0.4, plus40), ("+80%", "en", 0.8, plus80) })
                     {
                         if (minimum == 0) continue;
-                        if (Quick && label is "nl" or "+40%") continue;      // --quick: English and the widest text only
+                        if (Quick && label is "nl" or "fr" or "it" or "es" or "+40%") continue;      // --quick: English and the widest text only
                         Lang.Load(code);
                         Lang.PseudoExpansion = pseudo;
                         using var d = make();
@@ -138,7 +138,7 @@ namespace OnScreenKeyboard
             try
             {
                 foreach (var (name, make, _, _, _) in NarrowDialogs())
-                    foreach (var (label, code, pseudo) in new[] { ("en", "en", 0.0), ("nl", "nl", 0.0), ("+40%", "en", 0.4), ("+80%", "en", 0.8) })
+                    foreach (var (label, code, pseudo) in new[] { ("en", "en", 0.0), ("nl", "nl", 0.0), ("fr", "fr", 0.0), ("it", "it", 0.0), ("es", "es", 0.0), ("+40%", "en", 0.4), ("+80%", "en", 0.8) })
                     {
                         if (only.Count > 0 && !only.Any(t => name.IndexOf(t, StringComparison.OrdinalIgnoreCase) >= 0)) continue;
                         Lang.Load(code);
