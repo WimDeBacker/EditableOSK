@@ -57,6 +57,30 @@ namespace OnScreenKeyboard
             Section("Wizard paste text — modifier, navigation and function keys");
             WizardKeyParser.KeySpec One(string text, bool dutch = false) => WizardKeyParser.Parse(text, dutch)[0][0];
 
+            // One letter: the small letter, with the capital on Shift. [A] is a capital on the key itself.
+            foreach (var typed in new[] { "a", "A", "é", "É" })
+            {
+                var k = One(typed);
+                string lo = typed.ToLowerInvariant(), up = typed.ToUpperInvariant();
+                Assert(k.Label == lo && k.Send == lo && k.ShiftLabel == up && k.ShiftSend == up, $"'{typed}' is the key {lo} with {up} on Shift");
+            }
+            Assert(One("ß").Label == "ß" && One("ß").ShiftLabel == null, "a letter whose capital is the same has no Shift variant");
+            { var k = One("[A]"); Assert(k.Label == "A" && k.Send == "A" && k.ShiftLabel == null, "[A] is a capital on the key itself, without a Shift variant"); }
+            { var k = One("[a]"); Assert(k.Label == "a" && k.Send == "a" && k.ShiftLabel == null, "[a] is the letter as typed: no Shift variant either"); }
+            Assert(One("1").ShiftLabel == null && One(".").ShiftLabel == null && One("ab").ShiftLabel == null && One("\"A\"").ShiftLabel == null && One("\"A\"").Label == "A",
+                "only an unquoted single letter gets the Shift variant (digits, signs, words and quoted text stay as typed)");
+            Assert(WizardKeyParser.Help.All(h => h.Tokens.All(t => t.Length > 1)), "no special key is one letter long: [A] cannot be mixed up with one");
+            {
+                using var wz = Wizard();
+                Priv<TouchRadioButton>(wz, "_rbPaste").Checked = true;
+                WizSet(wz, "_txtPaste", "q W [E]");
+                var (lay, _, _, _) = WizCall<(GridLayout, VisualTheme, WindowState, LayoutMeta)>(wz, "BuildLayoutData");
+                KeyProps At(int c) => lay.Cells.First(x => x.Row == 0 && x.Col == c).Props;
+                Assert(At(0).Label == "q" && At(0).ShiftSend == "Q" && At(0).ShiftLabel == "Q" && At(1).Label == "w" && At(1).ShiftSend == "W"
+                    && At(2).Label == "E" && At(2).Send == "E" && string.IsNullOrEmpty(At(2).ShiftSend),
+                    "the created layout: letters are small with the capital on Shift; [E] stays a capital");
+            }
+
             // Modifier keys: the label must be one the keyboard recognises as a modifier, the send text the one the stock layouts use.
             foreach (var (token, label, send) in new[] {
                 ("shift", "Shift", ""), ("ctrl", "Ctrl", ""), ("alt", "Alt", ""), ("altgr", "AltGr", ""),
@@ -147,6 +171,17 @@ namespace OnScreenKeyboard
                 "the created layout has the special keys in their cells");
             Assert(layout.Cells.First(x => x.Row == 1 && x.Col == 2).Props.Send == "" && layout.Cells.First(x => x.Row == 1 && x.Col == 2).Props.Label == "Alt" && layout.Cells.First(x => x.Row == 1 && x.Col == 3).Props.GroupName == "controls",
                 "the created keys carry the send text and group of the stock layouts");
+
+            // Title and description: asked on the first page, stored in the language of the keyboard.
+            using var w2 = Wizard();
+            WizSet(w2, "_txtTitle", "  Mijn bord ");
+            Priv<TouchChoiceButton>(w2, "_cmbLanguage").SelectedIndex = 1;      // Nederlands
+            var (_, _, _, meta0) = WizCall<(GridLayout, VisualTheme, WindowState, LayoutMeta)>(w2, "BuildLayoutData");
+            Assert(meta0.Language == "nl" && meta0.Titles["nl"] == "Mijn bord" && meta0.Descriptions.Count == 0,
+                "the wizard stores the title (trimmed) in the keyboard's language; an empty description stores nothing");
+            WizSet(w2, "_txtDescription", "Voor mij");
+            var (_, _, _, meta1) = WizCall<(GridLayout, VisualTheme, WindowState, LayoutMeta)>(w2, "BuildLayoutData");
+            Assert(meta1.Descriptions["nl"] == "Voor mij", "…and the description too");
         }
 
         private static void T_Wizard()

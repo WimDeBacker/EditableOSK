@@ -379,6 +379,14 @@
   <String key="wiz: Columns"               value="Kolommen" />
   <String key="wiz: Preview"               value="Voorbeeld" />
   <String key="wiz: Language"               value="Taal van het toetsenbord" />
+  <String key="Info"                        value="I&amp;nfo" />
+  <String key="Export as text…"             value="Als tekst…" />
+  <String key="tip: Export as text"         value="Slaat de toetsen van dit toetsenbord op als gewoon tekstbestand: één rij per regel, één toets per woord. Je kunt het met de hand aanpassen en in de wizard Nieuw toetsenbord plakken. Kleuren, groepen en instellingen staan er niet in." />
+  <String key="info: language hint"         value="Deze teksten staan in de taal van het toetsenbord (Algemeen › Taal van het toetsenbord). Kies daar een andere taal om de teksten ook in die taal te schrijven." />
+  <String key="Title"                       value="Titel" />
+  <String key="Description"                 value="Omschrijving" />
+  <String key="tip: Keyboard title"         value="De naam van dit toetsenbord in de hierboven gekozen taal. De lijst met toetsenborden toont ze. Leeg: het toetsenbord heeft geen naam." />
+  <String key="tip: Keyboard description"   value="Een of twee zinnen over dit toetsenbord, in de hierboven gekozen taal. De lijst met toetsenborden toont ze onder de naam." />
   <String key="wiz: Theme file"             value="Themabestand" />
   <String key="wiz: From file…"             value="Uit bestand…" />
   <String key="wiz: File name"              value="Bestandsnaam" />
@@ -397,19 +405,43 @@
   <String key="wiz: tip Blank grid"         value="Een leeg raster; u vult de toetsen in de editor in." />
   <String key="wiz: tip Paste labels"       value="Eén rij per regel, woorden gescheiden door spaties." />
   <String key="wiz: tip Copy from file"     value="Begint met de toetsen van een bestaand lay-outbestand." />
-  <String key="wiz: tip paste"              value="Één rij per regel, woorden gescheiden door spaties of tabs.&#10;Speciale toetsen staan tussen vierkante haken, zoals [Enter] of [Shift]; de knop ? toont ze allemaal.&#10;&quot;geciteerde zin&quot;  =  één toets met dat label&#10;_  =  lege spacer" />
+  <String key="wiz: tip paste"              value="Één rij per regel, woorden gescheiden door spaties of tabs.&#10;Speciale toetsen staan tussen vierkante haken, zoals [Enter] of [Shift]; de knop ? toont ze allemaal.&#10;&quot;geciteerde zin&quot;  =  één toets met dat label&#10;_  =  lege spacer&#10;Eén letter (a of A)  =  de kleine letter, en de hoofdletter met Shift; [A]  =  een hoofdletter op de toets zelf&#10;[wp]  =  woordvoorspelling;  [ctrl+c]  =  een sneltoets;  q*2  =  twee cellen breed;  e[shift:É]  =  uitvoer met Shift" />
   <String key="wiz: tip folder"             value="Map waar het nieuwe lay-outbestand wordt opgeslagen." />
   <String key="wiz: Special keys help"      value="Alle speciale toetsen" />
   <String key="wiz: Close"                  value="Sluiten" />
   <String key="wiz: keys title"             value="Speciale toetsen in de toetsnamen" />
-  <String key="wiz: keys intro"             value="Typ een speciale toets tussen vierkante haken, hoofdletters maken niet uit." />
-  <String key="wiz: keys intro 2"           value="Elk ander woord is een toets met die tekst; aanhalingstekens maken van meerdere woorden één toets, en _ is een lege toets." />
+  <String key="wiz: keys tab how"           value="Werking" />
+  <String key="wiz: keys tab keys"          value="Toetsen" />
+  <String key="wiz: keys tab notations"     value="Notaties" />
+  <String key="wiz: how 1"                  value="Eén rij per regel, één toets per woord. Elk woord is een toets met die tekst." />
+  <String key="wiz: how 2"                  value="Een speciale toets staat tussen vierkante haken, hoofdletters maken niet uit: [enter]." />
+  <String key="wiz: how 3"                  value="Aanhalingstekens maken van woorden één toets: &quot;dank je&quot;. Een underscore _ is een lege toets." />
+  <String key="wiz: how 4"                  value="Extra's staan direct achter de toets, zonder spatie: e[shift:É], q*2." />
+  <String key="wiz: how 5"                  value="Eén letter is de kleine letter, met de hoofdletter bij Shift; [A] is een hoofdletter zoals ze is." />
+  <String key="wiz: keys group examples"    value="Voorbeelden" />
+  <String key="wiz: ex letter"              value="a, en A met Shift" />
+  <String key="wiz: ex capital"             value="A (geen Shift-variant)" />
+  <String key="wiz: ex phrase"              value="dank je" />
+  <String key="wiz: ex shortcut"            value="Ctrl+C" />
+  <String key="wiz: ex wp"                  value="Woord 1, Woord 2" />
+  <String key="wiz: ex layer"               value="e, en É met Shift" />
+  <String key="wiz: ex size"                value="Spatie, 4 cellen breed" />
+  <String key="wiz: ex layout"              value="123, opent x.kbl" />
   <String key="wiz: keys group typing"      value="Typeertoetsen" />
   <String key="wiz: keys group nav"         value="Verplaatsen en bewerken" />
   <String key="wiz: keys group mod"         value="Wijzigingstoetsen" />
   <String key="wiz: keys group other"       value="Overige toetsen" />
   <String key="wiz: keys group dead"        value="Dode toetsen (accenten)" />
-  <String key="wiz: keys dead note"         value="Een dode toets zet zijn accent op de volgende letter die wordt getypt." />
+  <String key="wiz: keys group more"        value="Notaties" />
+  <String key="wiz: more wp"                value="woordvoorspelling" />
+  <String key="wiz: more shortcut"          value="sneltoetsen" />
+  <String key="wiz: more layout"            value="opent een indeling" />
+  <String key="wiz: more key layout"        value="label, opent een indeling" />
+  <String key="wiz: more key"               value="label, uitvoer" />
+  <String key="wiz: more layers"            value="Shift, AltGr" />
+  <String key="wiz: more size"              value="breed, breed en hoog" />
+  <String key="wiz: more letter"            value="klein, hoofdletter bij Shift" />
+  <String key="wiz: more capital"           value="hoofdletter zoals ze is" />
   <String key="wiz: paste hint 2"           value="Speciale toetsen: [Enter] [Backspace] [Tab] [Spatie] [Omhoog] [Omlaag] [Links] [Rechts]" />
   <String key="wiz: paste hint 3"           value="&quot;geciteerde zin&quot; is één toets; _ is een lege toets." />
   <String key="wiz: Select layout"          value="Selecteer een bestaand lay-outbestand" />

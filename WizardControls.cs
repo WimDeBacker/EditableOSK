@@ -154,18 +154,18 @@ namespace OnScreenKeyboard
         public void ShowBlank(int rows, int cols) => Refill(rows, cols, null);
 
         /// <summary>Shows the keys parsed from the pasted text; the size follows the longest row.</summary>
-        internal void ShowParsed(List<List<WizardKeyParser.KeySpec>> rows)
+        internal void ShowParsed(List<List<WizardKeyParser.KeySpec>> rows, bool dutch = false)
         {
             if (rows == null || rows.Count == 0) { Refill(1, 1, null); return; }
-            int cols = 0;
-            foreach (var r in rows) cols = Math.Max(cols, r.Count);
-            var labels = new string[rows.Count][];
-            for (int r = 0; r < rows.Count; r++)
-            {
-                labels[r] = new string[rows[r].Count];
-                for (int c = 0; c < rows[r].Count; c++) labels[r][c] = rows[r][c].IsBlank ? "" : rows[r][c].Label;
-            }
-            Refill(rows.Count, Math.Max(1, cols), labels);
+            // The same placement as the keyboard that will be made (wide and tall keys, word-prediction keys): a wide key shows its label in
+            // its first cell; the cells it covers stay empty.
+            var grid = LayoutText.BuildGrid(rows, dutch);
+            int cols = Math.Max(1, grid.Cols - 1);
+            var labels = new string[grid.Rows][];
+            for (int r = 0; r < grid.Rows; r++) labels[r] = new string[cols];
+            foreach (var cell in grid.Cells)
+                if (cell.Col < cols) labels[cell.Row][cell.Col] = cell.Props.Label ?? "";
+            Refill(grid.Rows, cols, labels);
         }
 
         private void Refill(int rows, int cols, string[][] labels)

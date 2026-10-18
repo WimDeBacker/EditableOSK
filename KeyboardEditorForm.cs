@@ -21,7 +21,7 @@ using System.Windows.Forms;
 namespace OnScreenKeyboard
 {
     /// <summary>What the user asked the caller to do with the layout file after the dialog closed with OK.</summary>
-    public enum KeyboardFileAction { None, Save, SaveAs }
+    public enum KeyboardFileAction { None, Save, SaveAs, ExportText }
 
     /// <summary>
     /// The word-prediction data the dialog reads and changes. Every member defaults to the static <see cref="WordDatabase"/> /
@@ -86,7 +86,7 @@ namespace OnScreenKeyboard
         private TouchStepper      _stpOpacity;
         private ColorChip         _chipBackground;
         private TouchCheckBox     _chkAlwaysOnTop, _chkHideTitlebar;
-        private FluentButton      _btnSaveFile, _btnSaveAsFile, _btnLoadFile;
+        private FluentButton      _btnSaveFile, _btnSaveAsFile, _btnLoadFile, _btnExportText;
 
         // ── Controls: Accessibility ──────────────────────────────────
         private TouchCheckBox    _chkStickyMods, _chkHoldToEdit, _chkTimingAnimation, _chkCornerLabels;
@@ -188,6 +188,7 @@ namespace OnScreenKeyboard
             BuildAccessibility(AddSection(() => Lang.T("Accessibility")));
             BuildWordPrediction(AddSection(() => Lang.T("wp: Word prediction")));
             BuildStyle(AddSection(() => Lang.T("Style")));
+            BuildInfo(AddSection(() => Lang.T("Info")));
         }
 
         // ── Section 4: Style ────────────────────────────────────────
@@ -233,6 +234,30 @@ namespace OnScreenKeyboard
             else _stylePreview.ShowCurrent(_sourceTheme, _groups, Lang.T("style: keep current"));
         }
 
+        // ── Section: Information — the title and the description ─────
+
+        /// <summary>
+        /// The title and the description of the keyboard in the keyboard's language (the layout picker shows them). The texts in other
+        /// languages the file has are kept as they are.
+        /// </summary>
+        private void BuildInfo(TableLayoutPanel t)
+        {
+            _txtTitle = new TouchTextBox { AccessibleName = Lang.StripMnemonic(Lang.T("Title")), MaxLength = 80 };
+            _txtDescription = new TouchTextBox { AccessibleName = Lang.StripMnemonic(Lang.T("Description")), MaxLength = 300 };
+            SetTip(_txtTitle, () => Lang.T("tip: Keyboard title"));
+            SetTip(_txtDescription, () => Lang.T("tip: Keyboard description"));
+            AddRow(t, () => Lang.T("Title"), _txtTitle);
+            AddRow(t, () => Lang.T("Description"), _txtDescription);
+            var hint = Wrap(new Label
+            {
+                AutoSize = true, UseMnemonic = false, Font = Fluent.FontHint, BackColor = Color.Transparent, ForeColor = Fluent.TextPrimary,
+                MaximumSize = new Size(Touch.LabelMaxWidth * 3 / 2 + 60, 0), Margin = new Padding(0, 4, 0, 4),
+            });
+            hint.Text = Lang.T("info: language hint");
+            _transTexts.Add((hint, () => Lang.T("info: language hint")));
+            AddWideRow(t, hint, fill: false);
+        }
+
         // ── Section 1: General ──────────────────────────────────────
 
         private void BuildGeneral(TableLayoutPanel t)
@@ -258,6 +283,7 @@ namespace OnScreenKeyboard
             {
                 if (_loading) return;
                 UpdateDatabaseWarning(); UpdateWPInfo(); UpdateExportState();      // the automatic word database follows the language
+                SwitchInfoLanguage();                                              // the title and description shown are those in this language
             };
             SetTip(_cmbKeyboardLanguage, () => Lang.T("tip: Keyboard language"));
             AddRow(t, () => Lang.T("Keyboard language"), _cmbKeyboardLanguage, fill: false);
@@ -300,7 +326,11 @@ namespace OnScreenKeyboard
             _btnSaveFile.Click   += (s, e) => ApplyWith(KeyboardFileAction.Save);
             _btnSaveAsFile.Click += (s, e) => ApplyWith(KeyboardFileAction.SaveAs);
             _btnLoadFile.Click   += (s, e) => LoadLayout();
-            AddWideRow(t, ButtonRow(_btnSaveFile, _btnSaveAsFile, _btnLoadFile), fill: false);
+            // The keyboard as plain text (the notation of the wizard's paste box): the edits are applied, then the caller asks where to put it.
+            _btnExportText = MakeTouchButton(() => Lang.T("Export as text…"));
+            SetTip(_btnExportText, () => Lang.T("tip: Export as text"));
+            _btnExportText.Click += (s, e) => ApplyWith(KeyboardFileAction.ExportText);
+            AddWideRow(t, ButtonRow(_btnSaveFile, _btnSaveAsFile, _btnLoadFile, _btnExportText), fill: false);
         }
 
         private IEnumerable<TouchChoice> ToolbarThemeItems()
@@ -548,6 +578,11 @@ namespace OnScreenKeyboard
             {
                 SyncLanguageChooser();
                 FillKeyboardLanguages(m.Language);
+                _titles = new Dictionary<string, string>(m.Titles, StringComparer.OrdinalIgnoreCase);
+                _descriptions = new Dictionary<string, string>(m.Descriptions, StringComparer.OrdinalIgnoreCase);
+                _infoLang = SelectedKeyboardLanguage;
+                _txtTitle.Text = _titles.TryGetValue(_infoLang ?? "", out var ti) ? ti : "";
+                _txtDescription.Text = _descriptions.TryGetValue(_infoLang ?? "", out var de) ? de : "";
                 if (_cmbStyle != null) { FillStyleChooser(0); UpdateStylePreview(); }   // a loaded file starts at "keep the current style"
                 _cmbToolbarTheme.SetItems(ToolbarThemeItems(), Math.Max(0, Array.IndexOf(ToolbarThemeOrder, m.ToolbarTheme)));
 
@@ -603,6 +638,27 @@ namespace OnScreenKeyboard
             _keyboardLanguages.AddRange(codes);
             int sel = Math.Max(0, _keyboardLanguages.FindIndex(c => string.Equals(c, current, StringComparison.OrdinalIgnoreCase)));
             _cmbKeyboardLanguage.SetItems(_keyboardLanguages.Select(c => new TouchChoice { Text = c.Contains('-') ? c : FirstRunDialog.LanguageName(c) }), sel);
+        }
+
+        private TouchTextBox _txtTitle, _txtDescription;
+        private Dictionary<string, string> _titles = new(StringComparer.OrdinalIgnoreCase), _descriptions = new(StringComparer.OrdinalIgnoreCase);
+        private string _infoLang = "";                    // the language the two text boxes are the title and description in
+
+        /// <summary>Keeps what is typed under the language it was typed in; an empty text removes that language's entry.</summary>
+        private void StoreInfoTexts()
+        {
+            if (string.IsNullOrWhiteSpace(_infoLang)) return;
+            void Put(Dictionary<string, string> d, string text) { if (text.Trim().Length > 0) d[_infoLang] = text.Trim(); else d.Remove(_infoLang); }
+            Put(_titles, _txtTitle.Text); Put(_descriptions, _txtDescription.Text);
+        }
+
+        /// <summary>The keyboard's language was changed: the text boxes show the title and description in the new language.</summary>
+        private void SwitchInfoLanguage()
+        {
+            StoreInfoTexts();
+            _infoLang = SelectedKeyboardLanguage;
+            _txtTitle.Text = _titles.TryGetValue(_infoLang ?? "", out var ti) ? ti : "";
+            _txtDescription.Text = _descriptions.TryGetValue(_infoLang ?? "", out var de) ? de : "";
         }
 
         /// <summary>The language tag chosen for the keyboard; the one the layout had when nothing can be chosen.</summary>
@@ -895,6 +951,9 @@ namespace OnScreenKeyboard
             ResultMeta.ShowTimingAnimation = _chkTimingAnimation.Checked;     // kept while its check box is disabled
             ResultMeta.ShowCornerLabels    = _chkCornerLabels.Checked;
             ResultMeta.Language            = SelectedKeyboardLanguage;
+            StoreInfoTexts();
+            ResultMeta.Titles       = new Dictionary<string, string>(_titles, StringComparer.OrdinalIgnoreCase);
+            ResultMeta.Descriptions = new Dictionary<string, string>(_descriptions, StringComparer.OrdinalIgnoreCase);
             ResultMeta.WordDatabase        = SelectedDatabaseFile;
             ResultMeta.WordLearningEnabled = _chkWPLearning.Checked;
 

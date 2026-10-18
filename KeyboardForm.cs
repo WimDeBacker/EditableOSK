@@ -3260,16 +3260,23 @@ namespace OnScreenKeyboard
         // ── Toolbar state helpers ─────────────────────────────────────
 
         /// <summary>
-        /// Updates the filename label in the toolbar to show the current layout file's
-        /// base name, or "default" when no file has been explicitly loaded.
+        /// Updates the name label in the toolbar: the keyboard's title (in the language of the screens, else the keyboard's own language, else
+        /// English); a keyboard without a title shows its file name, or "default" when no file has been explicitly loaded. The file name is
+        /// no use as a name: a layout from the program folder is saved as settings.xml once it is changed.
         /// </summary>
         private void UpdateFilenameLabel()
         {
             if (_lblFilename == null) return;
-            string name = _currentFilePath != null
-                ? Path.GetFileName(_currentFilePath)
-                : "default";
+            string name = KeyboardName(_meta, _currentFilePath);
             _lblFilename.Text = name;
+        }
+
+        /// <summary>The name to show for a keyboard: its title, else the file name, else "default".</summary>
+        internal static string KeyboardName(LayoutMeta meta, string filePath)
+        {
+            string title = GroupNames.Lookup(meta.Titles, Lang.CurrentCode) ?? GroupNames.Lookup(meta.Titles, meta.Language) ?? GroupNames.Lookup(meta.Titles, "en") ?? "";
+            if (title.Trim().Length > 0) return title.Trim();
+            return filePath != null ? Path.GetFileName(filePath) : "default";
         }
 
         /// <summary>
@@ -3734,6 +3741,7 @@ namespace OnScreenKeyboard
             _theme .CopyFrom(dlg.ResultTheme);
             _window.CopyFrom(dlg.ResultWindow);
             _meta  .CopyFrom(dlg.ResultMeta);
+            UpdateFilenameLabel();           // the title may have been changed (or the language of the screens)
             // The scan settings are the user's, not the layout's: saved apart. Scanning itself starts when Edit mode is left.
             if (!dlg.ResultScan.SameAs(UserSettings.Scan)) { UserSettings.SetScan(dlg.ResultScan); UpdateScanning(); }
             foreach (var b in _buttons.Values) b.Invalidate();   // e.g. the corner labels were switched on or off: nothing else changes, so nothing else would repaint
@@ -3748,6 +3756,21 @@ namespace OnScreenKeyboard
             // The user pressed Save or Save As in the dialog: write the layout file now, with the values that were just applied.
             if (dlg.FileAction == KeyboardFileAction.Save)        SaveSettings(false);
             else if (dlg.FileAction == KeyboardFileAction.SaveAs) SaveSettings(true);
+            else if (dlg.FileAction == KeyboardFileAction.ExportText) ExportAsText();
+        }
+
+        /// <summary>Writes the keyboard as plain text (see <see cref="LayoutText"/>): asks where; the keys only, not the colours or settings.</summary>
+        private void ExportAsText()
+        {
+            string start = _currentFilePath != null ? Path.ChangeExtension(Path.GetFileName(_currentFilePath), ".txt") : "keyboard.txt";
+            using var dlg = new SaveFileDialog
+            {
+                Title = Lang.StripMnemonic(Lang.T("Export as text…")), Filter = "Text (*.txt)|*.txt|All files (*.*)|*.*", DefaultExt = "txt",
+                InitialDirectory = UserData.DocumentsFolder, FileName = start,
+            };
+            if (dlg.ShowDialog(DialogOwner()) != DialogResult.OK) return;
+            try { File.WriteAllText(dlg.FileName, LayoutText.Export(_layout, _meta.GearRow, _meta.GearCol), new System.Text.UTF8Encoding(false)); }
+            catch (Exception ex) { MessageBox.Show(DialogOwner(), $"{Lang.T("Save failed")}\n{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error); }
         }
 
         // ── Save / Load ───────────────────────────────────────────────

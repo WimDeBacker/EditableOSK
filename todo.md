@@ -2,16 +2,7 @@
 
 ## Pending
 
-Only what is still to be done is listed here, in the order of the owner's priorities (Priority 6, then 5). Numbering: **P** = priority, then steps and details (**1.1**, **6.3**); the numbers are kept when something moves, so a finished step keeps its number under Completed (the items there also keep the numbers they had when they were done: "Priority 7" there is not Priority 7 here). Not planned ideas and a bug that no longer shows up are under "On hold"; everything finished is under "Completed". Status marks: ✓ done, ▶ in progress, ☐ not started.
-
-### Priority 6 — New Keyboard wizard: word prediction keys and letter keys ☐ *(requested by the owner 2026-10-17; nothing is built yet)*
-
-For the wizard that makes a new keyboard (`NewKeyboardWizard`):
-- 6.0 **Title and description of a keyboard (found 2026-10-17):** a keyboard made with the wizard has no `<Info>` (title and description per language), so it shows no name and no description in the layout picker and cannot be shipped without editing the file by hand (this happened with `azertycolor.kbl` and `Scanning.kbl`). The wizard should ask for a title and a description (at least in the keyboard's language, optionally in more languages), and Edit Keyboard (General) should let the user change them: today no window sets them. The file format and the loading and saving already carry them (`LayoutMeta.Titles` / `Descriptions`).
-- 6.1 **A key for word prediction:** the wizard can add a word-prediction key (`wp:n`); the numbering (`wp:0`, `wp:1`, …) is filled in automatically, the user never types the code.
-- 6.2 **A letter key is always a lower-case letter, and the upper-case letter with Shift:** a letter key made by the wizard gets the small letter as its normal output and the capital as its Shift output (`Send` / `ShiftSend`), so the user does not have to enter both.
-- 6.3 **Export in a text format:** a keyboard can be exported as plain text (rows and keys, readable and editable by hand), next to the `.kbl` file.
-- 6.4 **A notation for the text format** that covers more than the plain letter: how a key is written when **AltGr** has an output of its own, for **shortcuts** (Ctrl/Alt/Shift/Win combinations, `{ENTER}`-style special keys), word-prediction keys (`wp:n`), layout switch keys (`layout:`), modifier keys, empty cells and keys that span more than one cell, and so on. To decide when this is built: whether the same notation is also read back (an import into the wizard, so a keyboard can be written by hand), and what is left out of the text (colours, groups, window settings).
+Only what is still to be done is listed here, in the order of the owner's priorities (only Priority 5 is left). Numbering: **P** = priority, then steps and details (**1.1**, **6.3**); the numbers are kept when something moves, so a finished step keeps its number under Completed (the items there also keep the numbers they had when they were done: "Priority 7" there is not Priority 7 here). Not planned ideas and a bug that no longer shows up are under "On hold"; everything finished is under "Completed". Status marks: ✓ done, ▶ in progress, ☐ not started.
 
 ### Priority 5 — Translations of the whole program: French, Italian and Spanish ☐ *(requested by the owner 2026-10-11; nothing is built yet)*
 
@@ -56,6 +47,19 @@ Nothing here is to be worked on until it shows up again or the owner decides oth
 
 ## Completed
 
+### Wizard and text format: word-prediction keys, shortcuts, layers, sizes, export as text ✓ *(was 6.1, 6.3 and 6.4; built 2026-10-18)*
+
+One notation, used by the wizard's paste box and by the new **Edit Keyboard › General › Export as text…** (so an export can be edited by hand and pasted into the wizard again — that is the import). Described in **`wizard_text_format.md`**; code `WizardKeyParser.cs` (parser, `Shortcut`), `LayoutText.cs` (`BuildGrid`, `Export`), tests `T_LayoutText` (`LayoutTextTests.cs`).
+- **`[wp]`** adds a word-prediction key; `wp:0`, `wp:1`, … follow the order of the keys (row by row), labelled Word n / Woord n, at most 10; the user never types a number.
+- **Shortcuts** `[ctrl+c]`, `[alt+f4]`, `[ctrl+shift+esc]`, `[win+d]` (send `^c`, `%{F4}`, `^+{ESC}`, `win:d`), **`[layout:file.kbl]`**, and `[key:label|send|shift label|shift send|altgr label|altgr send]` for a key with every layer (the form for what the short ones cannot say).
+- **Layers attached to a key** with no space: `e[shift:É]`, `e[altgr:€]`; **sizes** `q*2` (two wide), `[enter]*2x2` (two wide and tall) — the next keys and rows skip the covered cells, a size never covers another key, the grid stays valid.
+- **Export** writes every key in its shortest form that reads back as the same key (verified by a round-trip test, including awkward keys); the empty settings button and blank cells at the end of a row are left out. **Left out of the text (decision):** colours, fonts, groups, the window and all settings; a keyboard made from text gets the style chosen in the wizard and its groups from `AutoClassifyLayout`.
+- The wizard preview and the size line follow the same placement (wide and tall keys, `[wp]`); the tip of the paste box lists the new forms.
+
+### Wizard: one letter is a small letter with the capital on Shift ✓ *(was 6.2; built 2026-10-18)*
+
+In the pasted text of the wizard (`WizardKeyParser`) an unquoted single letter (`a` or `A`, also `é`) becomes a key with the small letter as label and output and the capital as `ShiftLabel` / `ShiftSend`; a letter whose capital is the same (`ß`) has no Shift variant. A capital on the key itself is written **`[A]`** (a single letter in brackets is taken exactly as typed, no Shift variant): no special key is one letter long, so it cannot be mixed up with `[enter]`, `[f5]`, `[dead:^]` (a test checks the help list). Digits, signs, words and quoted text stay as typed. Explained in the tip of the paste box. Tests: `T_WizardSpecialKeys`.
+
 ### Scanning, follow-up: the back switch can step back as well ✓ *(was Priority 1; requested and built 2026-10-18)*
 
 In the Back tab, "Back with switch" is now a choice like "Long press": **Off / Restarts scanning / Steps back** (`ScanSettings.BackSwitch` + `BackSwitchStepsBack`, saved in `user.xml`); its key or gamepad button is chosen under it. `Scanner.BackSwitchPressed()` calls `Back()` or `Reverse()`. The back switch and the long press are independent: any combination is allowed (for instance the key restarts and the long press steps back). Tests in `ScanningTests.cs`. Not yet in a release (1.0.0 predates it).
@@ -80,7 +84,7 @@ Release build, the full test suite, the Inno Setup installer (`installer/setup.i
 
 ### A title and a description of a keyboard per language, and a list of the ready-made keyboards ✓ *(was 5.8; done 2026-10-11, first because the layouts live in Program Files where nobody looks)*
 
-`LayoutMeta.Titles` / `Descriptions`, stored in the layout as `<Info><Title lang="…"><Description lang="…">` (only when there are any; `SettingsManager.ReadInfo` reads them without loading the layout); the shipped `.kbl` files have a Dutch and an English title and description. **Load** (toolbar and Edit Keyboard) opens `LayoutPickerDialog` ("Open a keyboard"): the layouts in the program's folder with their titles in the language of the screens (else the keyboard's language, else English, else the file name), the description under the list, **Open** and **Other file…** (the ordinary file dialog). A new language (Priority 5) adds its title and description to the shipped files. Tests: `T_LayoutPicker`, the dialog guards, the narrow-width check, gallery `layoutpicker_*.png`. Still missing: a window that lets the user enter a title and description (see Priority 6, 6.0).
+`LayoutMeta.Titles` / `Descriptions`, stored in the layout as `<Info><Title lang="…"><Description lang="…">` (only when there are any; `SettingsManager.ReadInfo` reads them without loading the layout); the shipped `.kbl` files have a Dutch and an English title and description. **Load** (toolbar and Edit Keyboard) opens `LayoutPickerDialog` ("Open a keyboard"): the layouts in the program's folder with their titles in the language of the screens (else the keyboard's language, else English, else the file name), the description under the list, **Open** and **Other file…** (the ordinary file dialog). A new language (Priority 5) adds its title and description to the shipped files. Tests: `T_LayoutPicker`, the dialog guards, the narrow-width check, gallery `layoutpicker_*.png`. The user enters them in the wizard (save page: Title, Description, in the language chosen on page 1) and in Edit Keyboard (tab **Info**, in the keyboard language chosen under General; the texts in other languages stay as they are) — built 2026-10-18 (was 6.0). The shipped `Scanning.kbl`/`ScanningCijfers.kbl`/`azertycolor.kbl` already had their `<Info>` added by hand.
 
 ### Bundled keyboard layouts ✓ *(was Priority 2; closed by the owner 2026-10-11)*
 

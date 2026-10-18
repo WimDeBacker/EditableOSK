@@ -103,6 +103,7 @@ namespace OnScreenKeyboard
         private Label             _lblCopyRow, _lblCopyErr;
         private Control           _copyRowInput;
         private TouchChoiceButton _cmbLanguage;
+        private TouchTextBox _txtTitle, _txtDescription;
 
         // Page 2: grid and labels (what shows depends on page 1)
         private TouchStepper      _stpRows, _stpCols;
@@ -352,9 +353,8 @@ namespace OnScreenKeyboard
             if (_txtPaste == null) return "";
             var rows = WizardKeyParser.Parse(_txtPaste.Text, IsDutch());
             if (rows.Count == 0) return Lang.T("wiz: paste nothing");
-            int cols = 0;
-            foreach (var r in rows) cols = Math.Max(cols, r.Count);
-            return string.Format(Lang.T("wiz: paste size"), rows.Count, cols);
+            var grid = LayoutText.BuildGrid(rows, IsDutch());
+            return string.Format(Lang.T("wiz: paste size"), grid.Rows, grid.Cols - 1);
         }
 
         /// <summary>Redraws the previews and the texts that depend on what was typed; remembers the size the summary reports.</summary>
@@ -362,7 +362,7 @@ namespace OnScreenKeyboard
         {
             if (_previewPaste == null || _previewBlank == null || _lblCopyInfo == null) return;
             _previewBlank.ShowBlank((int)_stpRows.Value, (int)_stpCols.Value);
-            _previewPaste.ShowParsed(WizardKeyParser.Parse(_txtPaste.Text, IsDutch()));
+            _previewPaste.ShowParsed(WizardKeyParser.Parse(_txtPaste.Text, IsDutch()), IsDutch());
             _lblPasteSize.Text = PasteSizeText();
             _lblCopyInfo.Text  = CopyInfoText();
             if (_rbPaste.Checked) { _gridRows = _previewPaste.GridRows; _gridCols = _previewPaste.GridCols; }
@@ -495,6 +495,14 @@ namespace OnScreenKeyboard
         private void BuildSavePage(TableLayoutPanel t)
         {
             PageTitle(t, () => Lang.T("wiz: p5 title"), () => Lang.T("wiz: p5 sub"));
+
+            // The name and a short description in the keyboard's language (chosen on the first page): the list of keyboards shows them.
+            _txtTitle = new TouchTextBox { AccessibleName = Lang.StripMnemonic(Lang.T("Title")), MaxLength = 80 };
+            _txtDescription = new TouchTextBox { AccessibleName = Lang.StripMnemonic(Lang.T("Description")), MaxLength = 300 };
+            SetTip(_txtTitle, () => Lang.T("tip: Keyboard title"));
+            SetTip(_txtDescription, () => Lang.T("tip: Keyboard description"));
+            AddRow(t, () => Lang.T("Title"), _txtTitle);
+            AddRow(t, () => Lang.T("Description"), _txtDescription);
 
             _txtFileName = new TouchTextBox { Text = Lang.T("wiz: default filename") };
             AddRow(t, () => Lang.T("wiz: File name"), _txtFileName);
@@ -821,28 +829,14 @@ namespace OnScreenKeyboard
                 HideTitlebar = false,
             };
             var meta=new LayoutMeta { Language=LanguageCode(), GearRow=0, GearCol=-1 };
+            if (_txtTitle.Text.Trim().Length > 0)       meta.Titles[LanguageCode()]       = _txtTitle.Text.Trim();
+            if (_txtDescription.Text.Trim().Length > 0) meta.Descriptions[LanguageCode()] = _txtDescription.Text.Trim();
             return (layout,theme,window,meta);
         }
 
-        private GridLayout BuildGridFromRows(List<List<WizardKeyParser.KeySpec>> rows)
-        {
-            int maxCols=0;
-            foreach (var r in rows) if (r.Count>maxCols) maxCols=r.Count;
-            int totalCols=maxCols+1;  // always reserve last col for gear
-            int totalRows=Math.Max(1,rows.Count);
-            var layout=new GridLayout(totalRows,totalCols);
-            for (int r=0; r<totalRows; r++)
-                for (int c=0; c<totalCols; c++)
-                {
-                    if (r==0&&c==totalCols-1)
-                    { layout.Cells.Add(new GridCell(r,c,new KeyProps("",""))); continue; }
-                    string lbl="",snd="";
-                    if (r<rows.Count&&c<rows[r].Count)
-                    { var s=rows[r][c]; lbl=s.IsBlank?"":s.Label; snd=s.IsBlank?"":s.Send; }
-                    layout.Cells.Add(new GridCell(r,c,new KeyProps(lbl,snd)));
-                }
-            return layout;
-        }
+        // The last column is always reserved for the settings (gear) button; sizes, shortcuts, word-prediction keys and the extra layers
+        // of the pasted text are placed by LayoutText.
+        private GridLayout BuildGridFromRows(List<List<WizardKeyParser.KeySpec>> rows) => LayoutText.BuildGrid(rows, IsDutch());
 
         private static GridLayout BuildBlankGrid(int rows,int cols)
         {

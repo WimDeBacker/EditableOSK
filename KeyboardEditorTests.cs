@@ -211,6 +211,20 @@ namespace OnScreenKeyboard
                 Assert(Math.Abs(f.ResultTheme.Opacity - 0.75) < 1e-9, $"opacity stepper 25 → opacity 0.75 ({f.ResultTheme.Opacity})");
                 Assert(f.ResultTheme.BackgroundColor.ToArgb() == Color.FromArgb(200, 10, 20).ToArgb(), "the background chip writes the background colour");
             }
+            { // title and description, per language of the keyboard
+                var m = new LayoutMeta { Language = "nl" };
+                m.Titles["nl"] = "Mijn bord"; m.Titles["en"] = "My board"; m.Descriptions["en"] = "About it";
+                using var f = KeyboardEditor(meta: m);
+                var title = Priv<TouchTextBox>(f, "_txtTitle"); var desc = Priv<TouchTextBox>(f, "_txtDescription");
+                Assert(title.Text == "Mijn bord" && desc.Text == "", "the title and description are shown in the keyboard's language");
+                title.Text = "  Nieuw  "; desc.Text = "Omschrijving";
+                f.ApplyForTest();
+                Assert(f.ResultMeta.Titles["nl"] == "Nieuw" && f.ResultMeta.Descriptions["nl"] == "Omschrijving", "…what is typed is stored (trimmed) under that language");
+                Assert(f.ResultMeta.Titles["en"] == "My board" && f.ResultMeta.Descriptions["en"] == "About it", "…and the texts in the other languages stay as they were");
+                title.Text = "";
+                f.ApplyForTest();
+                Assert(!f.ResultMeta.Titles.ContainsKey("nl"), "…an empty title removes that language's title");
+            }
             using (var f = KeyboardEditor()) { Priv<TouchStepper>(f, "_stpOpacity").Value = 80; f.ApplyForTest(); Assert(Math.Abs(f.ResultTheme.Opacity - 0.2) < 1e-9, "opacity stepper 80 → 0.2"); }
             using (var f = KeyboardEditor(theme: new VisualTheme { Opacity = 1.0 })) { f.ApplyForTest(); Assert(f.ResultTheme.Opacity == 1.0, "an untouched opaque window stays opaque"); }
             using (var f = KeyboardEditor(theme: new VisualTheme { Opacity = 0.755 })) { f.ApplyForTest(); Assert(f.ResultTheme.Opacity == 0.755, "an untouched 0.755 is not rounded to 0.76 (kept as it is)"); }
@@ -286,6 +300,7 @@ namespace OnScreenKeyboard
             using (var f = KeyboardEditor()) { Chk(f, "_chkHoldToEdit").Checked = true; Assert(f.ApplyForTest(KeyboardFileAction.Save) && f.FileAction == KeyboardFileAction.Save && f.ResultMeta.HoldToEdit,
                 "Save: the file action is set and the result already holds the edit made just before (the old dialog saved the previous values)"); }
             using (var f = KeyboardEditor()) { Assert(f.ApplyForTest(KeyboardFileAction.SaveAs) && f.FileAction == KeyboardFileAction.SaveAs, "Save As: the file action is set"); }
+            using (var f = KeyboardEditor()) { DevGallery.Show(f); ClickButton(Priv<FluentButton>(f, "_btnExportText")); Assert(f.FileAction == KeyboardFileAction.ExportText && f.DialogResult == DialogResult.OK, "Export as text applies the edits and closes with the export action"); }
             using (var f = KeyboardEditor()) { DevGallery.Show(f); ClickButton(Priv<FluentButton>(f, "_btnSaveFile")); Assert(f.FileAction == KeyboardFileAction.Save && f.DialogResult == DialogResult.OK, "the Save button applies and closes with OK"); }
             using (var f = KeyboardEditor()) { DevGallery.Show(f); ClickButton(Priv<FluentButton>(f, "_btnApply")); Assert(f.FileAction == KeyboardFileAction.None && f.DialogResult == DialogResult.OK, "the Apply button: OK, no file action"); }
 
@@ -433,7 +448,7 @@ namespace OnScreenKeyboard
                 err.SetError(ctrl, "");
                 Assert(f.ApplyForTest() && !f.SectionBarAccess.HasError(s), $"section {s + 1}: once the error is gone Apply works and the mark clears");
             }
-            using (var f = KeyboardEditor()) Assert(f.Text == "Edit Keyboard" && f.SectionBarAccess.Count == 4, "window title and four sections (General, Accessibility, Word prediction, Style)");
+            using (var f = KeyboardEditor()) Assert(f.Text == "Edit Keyboard" && f.SectionBarAccess.Count == 5, "window title and five sections (General, Accessibility, Word prediction, Style, Info)");
 
             // The static event handler is removed when the form is disposed, even when it was never shown.
             var loadedField = typeof(WordDatabase).GetField("Loaded", BindingFlags.NonPublic | BindingFlags.Static);

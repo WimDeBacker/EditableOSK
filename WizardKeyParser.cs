@@ -15,7 +15,16 @@ namespace OnScreenKeyboard
     //   [omhoog]      → same as [up] (Dutch alias)
     //   [shift] [ctrl] [alt] [altgr] [win] [caps], [home] [end] [pageup] [pagedown] [insert] [printscreen] [numlock]
     //                 [scrolllock] [pause], [f1] … [f16]: see the SpecialKeys table (any case)
-    //   _             → blank spacer (no label, no send)
+    //   a  or  A      → a single letter is always the small letter ("a"), and the capital ("A") with Shift
+//   [A]           → a single letter in brackets is that letter exactly as typed: a capital on the key itself, no Shift variant
+//                   (no special key is one letter long, so this cannot be mixed up with [enter], [f5] …)
+//   [wp]          → a word-prediction key; the numbers (wp:0, wp:1 …) are filled in by the order of the keys (at most 10)
+//   [layout:file.kbl] → a key that switches to another layout file
+//   [ctrl+c] [alt+f4] [ctrl+shift+esc] [win+d] → a shortcut (Ctrl, Alt, Shift, Win, then one key)
+//   e[shift:É] e[altgr:€] → extra layers attached to a key (no space): what it shows and sends with Shift / AltGr
+//   [key:label|send|shift label|shift send|altgr label|altgr send] → every layer written out (\| and \] for those characters)
+//   q*2  [wp]*2  [enter]*2x2 → a key two cells wide (and two tall): the size comes last
+//   _             → blank spacer (no label, no send)
     //   ""            → same as _ (an empty quoted phrase is a blank spacer, so a gap written
     //                   the CSV / spreadsheet way keeps its column instead of shifting the
     //                   rest of the row left)
@@ -34,12 +43,48 @@ namespace OnScreenKeyboard
             public readonly string Label;
             public readonly string Send;
             public readonly bool   IsBlank;
+            /// <summary>What the key shows and sends with Shift; null: the same as without (only a single letter has them).</summary>
+            public readonly string ShiftLabel, ShiftSend;
+            /// <summary>What the key shows and sends with AltGr; null: nothing of its own.</summary>
+            public readonly string AltGrLabel, AltGrSend;
+            /// <summary>A word-prediction key: its number (<c>wp:n</c>) is filled in when the grid is built, in the order of the keys.</summary>
+            public readonly bool IsWordPrediction;
+            /// <summary>Cells wide and tall (0 is read as 1: a default value).</summary>
+            public readonly int ColSpan, RowSpan;
 
-            public KeySpec(string label, string send, bool isBlank = false)
+            public KeySpec(string label, string send, bool isBlank = false, string shiftLabel = null, string shiftSend = null,
+                           string altGrLabel = null, string altGrSend = null, bool isWordPrediction = false, int colSpan = 1, int rowSpan = 1)
             {
                 Label   = label;
                 Send    = send;
                 IsBlank = isBlank;
+                ShiftLabel = shiftLabel;
+                ShiftSend  = shiftSend;
+                AltGrLabel = altGrLabel;
+                AltGrSend  = altGrSend;
+                IsWordPrediction = isWordPrediction;
+                ColSpan = Math.Max(1, colSpan);
+                RowSpan = Math.Max(1, rowSpan);
+            }
+
+            internal KeySpec WithShift(string label, string send) =>
+                new KeySpec(Label, Send, IsBlank, label, send, AltGrLabel, AltGrSend, IsWordPrediction, ColSpan, RowSpan);
+            internal KeySpec WithAltGr(string label, string send) =>
+                new KeySpec(Label, Send, IsBlank, ShiftLabel, ShiftSend, label, send, IsWordPrediction, ColSpan, RowSpan);
+            internal KeySpec WithSpan(int cols, int rows) =>
+                new KeySpec(Label, Send, IsBlank, ShiftLabel, ShiftSend, AltGrLabel, AltGrSend, IsWordPrediction, cols, rows);
+
+            /// <summary>A word-prediction key; the label ("Word 1"…) and the number are given when the grid is built.</summary>
+            internal static KeySpec WordPrediction() => new KeySpec("", "wp:", isWordPrediction: true);
+
+            /// <summary>
+            /// A key for one letter: the small letter normally, the capital with Shift. A letter without a capital (or whose capital is the
+            /// same) has no Shift variant.
+            /// </summary>
+            internal static KeySpec Letter(char ch)
+            {
+                string lower = char.ToLowerInvariant(ch).ToString(), upper = char.ToUpperInvariant(ch).ToString();
+                return upper == lower ? new KeySpec(lower, lower) : new KeySpec(lower, lower, false, upper, upper);
             }
 
             public static readonly KeySpec Blank = new KeySpec("", "", isBlank: true);
@@ -174,6 +219,27 @@ namespace OnScreenKeyboard
             return rows.ToArray();
         }
 
+        /// <summary>The special key (send text and labels) a bracket token names; null when it is none.</summary>
+        internal static (string Send, string LabelEn, string LabelNl)? LookupSend(string token) => Lookup(token);
+
+        /// <summary>The first spelling of the special key that sends <paramref name="send"/> (<c>{ENTER}</c> → "enter", <c>{F5}</c> → "f5"); null when there is none.</summary>
+        internal static string NameOfSend(string send)
+        {
+            foreach (var kv in SpecialKeys) if (kv.Value.Send == send && send.Length > 2 && send[0] == '{') return kv.Key;
+            for (int n = 1; n <= 16; n++) if (send == "{F" + n + "}") return "f" + n;
+            return null;
+        }
+
+        /// <summary>The first spelling of the special key with exactly this label and send text (<c>↵</c> + <c>{ENTER}</c> → "enter"); null when there is none.</summary>
+        internal static string NameOfKey(string label, string send)
+        {
+            foreach (var kv in SpecialKeys)
+                if (kv.Value.Send == send && (kv.Value.LabelEn == label || kv.Value.LabelNl == label)) return kv.Key;
+            for (int n = 1; n <= 16; n++) if (send == "{F" + n + "}" && label == "F" + n) return "f" + n;
+            if (send.StartsWith("dead:", StringComparison.Ordinal) && send.Length == 6 && label == send[5].ToString() && DeadChars.IndexOf(send[5]) >= 0) return send;
+            return null;
+        }
+
         /// <summary>The label a bracket token gives its key (null when the token is not a special key).</summary>
         internal static string LabelOf(string token, bool dutch) => Lookup(token) is { } k ? (dutch ? k.LabelNl : k.LabelEn) : null;
 
@@ -222,17 +288,18 @@ namespace OnScreenKeyboard
                 if (i >= len) break;
 
                 char c = line[i];
+                KeySpec key;
 
                 if (c == '_')
                 {
                     // Blank spacer.
-                    row.Add(KeySpec.Blank);
+                    key = KeySpec.Blank;
                     i++;
                 }
                 else if (c == '[')
                 {
-                    // Special-key token: [xxx]
-                    int close = line.IndexOf(']', i + 1);
+                    // Special-key token: [xxx]. [key:…] has its own escapes (a backslash takes the next character literally).
+                    int close = FindClose(line, i, escapes: StartsAt(line, i + 1, "key:"));
                     if (close < 0)
                     {
                         // Unclosed bracket → treat the remainder as one text key.
@@ -242,17 +309,7 @@ namespace OnScreenKeyboard
                     }
                     string token = line[(i + 1)..close];
                     i = close + 1;
-
-                    if (Lookup(token) is { } spec)
-                    {
-                        string label = dutch ? spec.LabelNl : spec.LabelEn;
-                        row.Add(new KeySpec(label, spec.Send));
-                    }
-                    else
-                    {
-                        // Unknown bracket token → use verbatim as text.
-                        row.Add(new KeySpec(token, token));
-                    }
+                    key = ResolveBracket(token, dutch);
                 }
                 else if (c == '"')
                 {
@@ -272,17 +329,199 @@ namespace OnScreenKeyboard
                     // it one column to the left. (An unclosed lone quote, above, is left alone:
                     // the preview re-parses on every keystroke and half-typed input must not
                     // flicker a blank key into the row.)
-                    row.Add(quoted.Length > 0 ? new KeySpec(quoted, quoted) : KeySpec.Blank);
+                    key = quoted.Length > 0 ? new KeySpec(quoted, quoted) : KeySpec.Blank;
                 }
                 else
                 {
-                    // Plain word: read until next whitespace.
+                    // Plain word: read until the next whitespace, or until a layer ([shift:…] / [altgr:…]) is attached to it.
                     int start = i;
-                    while (i < len && !char.IsWhiteSpace(line[i])) i++;
+                    while (i < len && !char.IsWhiteSpace(line[i]) && !(i > start && IsLayerAt(line, i))) i++;
                     string word = line[start..i];
-                    row.Add(new KeySpec(word, word));
+                    int cols = 1, rows = 1;
+                    if (i >= len || char.IsWhiteSpace(line[i])) TrySplitSpan(ref word, out cols, out rows);     // a-b*2 or w*2x2 at the end of the word
+                    // One letter is always the small letter, with the capital on Shift; a capital that must be on the key itself is [A].
+                    key = word.Length == 1 && char.IsLetter(word[0]) ? KeySpec.Letter(word[0]) : new KeySpec(word, word);
+                    if (cols > 1 || rows > 1) key = key.WithSpan(cols, rows);
                 }
+
+                // What may follow a key without a space: the layers of Shift and AltGr, then the size (*2 wide, *2x2 wide and tall).
+                while (i < len && IsLayerAt(line, i))
+                {
+                    int close = FindClose(line, i, escapes: true);
+                    if (close < 0) break;
+                    bool shift = StartsAt(line, i + 1, "shift:");
+                    string text = Unescape(line[(i + 7)..close]);
+                    i = close + 1;
+                    if (key.IsBlank) continue;
+                    key = shift ? key.WithShift(text, text) : key.WithAltGr(text, text);
+                }
+                if (i < len && line[i] == '*' && ReadSpan(line, ref i, out int sc, out int sr)) key = key.WithSpan(sc, sr);
+                row.Add(key);
             }
+        }
+
+        // ── The bracket tokens beyond the special keys ────────────────────
+
+        /// <summary>The key a bracket token stands for: a special key, <c>[wp]</c>, <c>[layout:path]</c>, <c>[key:…]</c>, a shortcut, else the text itself.</summary>
+        private static KeySpec ResolveBracket(string token, bool dutch)
+        {
+            if (Lookup(token) is { } spec) return new KeySpec(dutch ? spec.LabelNl : spec.LabelEn, spec.Send);
+            if (token.Equals("wp", StringComparison.OrdinalIgnoreCase)) return KeySpec.WordPrediction();
+            if (StartsAt(token, 0, "layout:") && token.Length > 7 && token[7..].Trim().Length > 0)
+            {
+                string path = token[7..].Trim();
+                return new KeySpec(System.IO.Path.GetFileNameWithoutExtension(path), "layout:" + path);
+            }
+            if (StartsAt(token, 0, "key:")) return FromFields(token[4..]);
+            if (Shortcut.TryParse(token, out string slabel, out string ssend)) return new KeySpec(slabel, ssend);
+            return new KeySpec(token, token);        // unknown bracket token → used verbatim as text
+        }
+
+        /// <summary><c>[key:label|send|shift label|shift send|altgr label|altgr send]</c>: every layer written out (what the other forms cannot say).</summary>
+        private static KeySpec FromFields(string body)
+        {
+            var f = new List<string>();
+            var cur = new System.Text.StringBuilder();
+            for (int j = 0; j < body.Length; j++)
+            {
+                if (body[j] == '\\' && j + 1 < body.Length) { cur.Append(body[++j]); continue; }
+                if (body[j] == '|') { f.Add(cur.ToString()); cur.Clear(); continue; }
+                cur.Append(body[j]);
+            }
+            f.Add(cur.ToString());
+            string At(int n) => n < f.Count && f[n].Length > 0 ? f[n] : null;
+            string label = At(0) ?? "", send = f.Count > 1 ? (At(1) ?? "") : label;       // one field only: the key sends what it shows
+            if (label.Length == 0 && send.Length == 0) return KeySpec.Blank;
+            if (send == "wp:") return KeySpec.WordPrediction();
+            return new KeySpec(label, send, false, At(2), At(3), At(4), At(5));
+        }
+
+        private static bool StartsAt(string s, int i, string prefix) =>
+            i >= 0 && i + prefix.Length <= s.Length && string.Compare(s, i, prefix, 0, prefix.Length, StringComparison.OrdinalIgnoreCase) == 0;
+
+        /// <summary>A layer starts at <paramref name="i"/>: <c>[shift:</c> or <c>[altgr:</c>.</summary>
+        private static bool IsLayerAt(string line, int i) => line[i] == '[' && (StartsAt(line, i + 1, "shift:") || StartsAt(line, i + 1, "altgr:"));
+
+        /// <summary>The ']' that closes the '[' at <paramref name="open"/>; with <paramref name="escapes"/> a backslash takes the next character literally.</summary>
+        private static int FindClose(string line, int open, bool escapes)
+        {
+            for (int j = open + 1; j < line.Length; j++)
+            {
+                if (escapes && line[j] == '\\' && j + 1 < line.Length) { j++; continue; }
+                if (line[j] == ']') return j;
+            }
+            return -1;
+        }
+
+        internal static string Unescape(string s)
+        {
+            if (s.IndexOf('\\') < 0) return s;
+            var sb = new System.Text.StringBuilder();
+            for (int j = 0; j < s.Length; j++) sb.Append(s[j] == '\\' && j + 1 < s.Length ? s[++j] : s[j]);
+            return sb.ToString();
+        }
+
+        /// <summary>Reads <c>*3</c> or <c>*3x2</c> (columns, then rows) at <paramref name="i"/> (which is the '*').</summary>
+        private static bool ReadSpan(string line, ref int i, out int cols, out int rows)
+        {
+            cols = rows = 1;
+            int j = i + 1, s = j;
+            while (j < line.Length && char.IsAsciiDigit(line[j])) j++;
+            if (j == s || j - s > 2) return false;
+            cols = Math.Clamp(int.Parse(line.AsSpan(s, j - s)), 1, MaxSpan);
+            if (j + 1 < line.Length && (line[j] == 'x' || line[j] == 'X') && char.IsAsciiDigit(line[j + 1]))
+            {
+                int s2 = ++j;
+                while (j < line.Length && char.IsAsciiDigit(line[j])) j++;
+                if (j - s2 <= 2) rows = Math.Clamp(int.Parse(line.AsSpan(s2, j - s2)), 1, MaxSpan);
+            }
+            if (j < line.Length && !char.IsWhiteSpace(line[j])) return false;      // *2abc is not a size
+            i = j;
+            return true;
+        }
+
+        private const int MaxSpan = 60;
+
+        /// <summary>Takes a size off the end of a plain word ("q*2" is the key q, two wide); a word that is only a size ("*2", "**") stays as it is.</summary>
+        private static void TrySplitSpan(ref string word, out int cols, out int rows)
+        {
+            cols = rows = 1;
+            int star = word.LastIndexOf('*');
+            if (star <= 0) return;
+            int at = star;
+            if (!ReadSpan(word, ref at, out int c, out int r) || at != word.Length) return;
+            word = word[..star]; cols = c; rows = r;
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Shortcut — [ctrl+c], [alt+f4], [ctrl+shift+esc], [win+d]: the modifiers, then one key.
+    // Sends the SendKeys way: ^ Ctrl, % Alt, + Shift; the Windows key goes through "win:" (SendKeys has no prefix for it).
+    // ══════════════════════════════════════════════════════════════════════
+    internal static class Shortcut
+    {
+        private static readonly (string Name, string Label)[] Mods = { ("ctrl", "Ctrl"), ("alt", "Alt"), ("shift", "Shift"), ("win", "Win") };
+
+        private static readonly int[] LabelOrder = { 3, 0, 1, 2 };      // Win, Ctrl, Alt, Shift
+
+        private static int ModIndex(string name) => name.ToLowerInvariant() switch
+        {
+            "ctrl" or "control" => 0, "alt" => 1, "shift" => 2, "win" or "windows" => 3, _ => -1,
+        };
+
+        /// <summary>The label and the send text of a shortcut written as <c>ctrl+c</c>; false when the text is not one.</summary>
+        internal static bool TryParse(string token, out string label, out string send)
+        {
+            label = send = null;
+            var mods = new bool[4];
+            string rest = token;
+            int count = 0;
+            while (true)
+            {
+                int plus = rest.IndexOf('+');
+                if (plus <= 0) break;
+                int m = ModIndex(rest[..plus]);
+                if (m < 0) break;
+                if (mods[m]) return false;
+                mods[m] = true; count++; rest = rest[(plus + 1)..];
+            }
+            if (count == 0 || rest.Length == 0) return false;
+
+            string keyLabel, keySend;
+            if (rest.Length == 1) { keyLabel = rest.ToUpperInvariant(); keySend = "+^%~(){}[]".IndexOf(rest[0]) >= 0 ? "{" + rest + "}" : rest; }
+            else if (WizardKeyParser.LookupSend(rest) is { } k && k.Send.Length > 2 && k.Send[0] == '{') { keyLabel = k.LabelEn; keySend = k.Send; }
+            else return false;
+
+            string prefix = (mods[0] ? "^" : "") + (mods[1] ? "%" : "") + (mods[2] ? "+" : "");
+            send = (mods[3] ? "win:" : "") + prefix + keySend;
+            var names = new List<string>();
+            foreach (int m in LabelOrder) if (mods[m]) names.Add(Mods[m].Label);        // Win+Shift+S, Ctrl+Alt+Del
+            names.Add(keyLabel);
+            label = string.Join("+", names);
+            return true;
+        }
+
+        /// <summary>The text of a shortcut for a key with this label and send text (<c>ctrl+c</c>); null when the key is not one that <see cref="TryParse"/> would give back.</summary>
+        internal static string Format(string label, string send)
+        {
+            if (string.IsNullOrEmpty(send)) return null;
+            bool win = send.StartsWith("win:", StringComparison.Ordinal);
+            string s = win ? send[4..] : send;
+            var mods = new bool[4];
+            mods[3] = win;
+            int p = 0;
+            while (p < s.Length - 1 && (s[p] == '^' || s[p] == '%' || s[p] == '+'))
+            { mods[s[p] == '^' ? 0 : s[p] == '%' ? 1 : 2] = true; p++; }
+            string key = s[p..], name;
+            if (key.Length == 1) name = key.ToLowerInvariant();
+            else if (key.Length == 3 && key[0] == '{' && key[2] == '}') name = key[1].ToString().ToLowerInvariant();
+            else name = WizardKeyParser.NameOfSend(key);
+            if (name == null || (!mods[0] && !mods[1] && !mods[2] && !mods[3])) return null;
+            var parts = new List<string>();
+            for (int m = 0; m < 4; m++) if (mods[m]) parts.Add(Mods[m].Name);
+            parts.Add(name);
+            string token = string.Join("+", parts);
+            return TryParse(token, out string l, out string sd) && l == label && sd == send ? token : null;       // only when it reads back as the same key
         }
     }
 }
