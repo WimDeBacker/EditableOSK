@@ -115,6 +115,17 @@ namespace OnScreenKeyboard
             ["delete"]    = ("{DELETE}",    "Del",    "Del"),
             ["del"]       = ("{DELETE}",    "Del",    "Del"),
 
+            // The same keys under their French, Italian and Spanish names (a label in that language where it differs).
+            ["haut"]      = ("{UP}",        "↑",      "↑"),   ["su"]        = ("{UP}",        "↑",      "↑"),   ["arriba"]    = ("{UP}",        "↑",      "↑"),
+            ["bas"]       = ("{DOWN}",      "↓",      "↓"),   ["giù"]       = ("{DOWN}",      "↓",      "↓"),   ["giu"]       = ("{DOWN}",      "↓",      "↓"),   ["abajo"]     = ("{DOWN}",      "↓",      "↓"),
+            ["gauche"]    = ("{LEFT}",      "←",      "←"),   ["sinistra"]  = ("{LEFT}",      "←",      "←"),   ["izquierda"] = ("{LEFT}",      "←",      "←"),
+            ["droite"]    = ("{RIGHT}",     "→",      "→"),   ["destra"]    = ("{RIGHT}",     "→",      "→"),   ["derecha"]   = ("{RIGHT}",     "→",      "→"),
+            ["entrée"]    = ("{ENTER}",     "↵",      "↵"),   ["entree"]    = ("{ENTER}",     "↵",      "↵"),   ["invio"]     = ("{ENTER}",     "↵",      "↵"),   ["intro"]     = ("{ENTER}",     "↵",      "↵"),
+            ["espace"]    = (" ",           "Espace", "Espace"), ["spazio"]   = (" ",           "Spazio", "Spazio"), ["espacio"]  = (" ",           "Espacio", "Espacio"),
+            ["suppr"]     = ("{DELETE}",    "Suppr",  "Suppr"), ["canc"]      = ("{DELETE}",    "Canc",   "Canc"),  ["supr"]      = ("{DELETE}",    "Supr",   "Supr"),
+            ["inizio"]    = ("{HOME}",      "Home",   "Home"), ["inicio"]    = ("{HOME}",      "Home",   "Home"),
+            ["fin"]       = ("{END}",       "End",    "End"),  ["fine"]      = ("{END}",       "End",    "End"),
+
             // Navigation and editing keys (SendKeys names).
             ["home"]        = ("{HOME}",   "Home",  "Home"),
             ["end"]         = ("{END}",    "End",   "End"),
@@ -199,10 +210,13 @@ namespace OnScreenKeyboard
             // The window shows at most two spellings of a key (the line must stay short); every spelling in Tokens is accepted.
             void Add(string group, params string[] tokens) =>
                 rows.Add(new HelpRow(group, string.Join(" or ", Array.ConvertAll(tokens, t => "[" + t + "]"), 0, Math.Min(2, tokens.Length)), tokens));
-            Add("typing", "enter"); Add("typing", "backspace"); Add("typing", "tab"); Add("typing", "space", "spatie");
-            Add("typing", "esc", "escape"); Add("typing", "delete", "del");
-            Add("nav", "up", "omhoog"); Add("nav", "down", "omlaag"); Add("nav", "left", "links"); Add("nav", "right", "rechts");
-            Add("nav", "home"); Add("nav", "end", "einde"); Add("nav", "pageup", "pgup"); Add("nav", "pagedown", "pgdn");
+            // Every spelling is accepted (English, Dutch, French, Italian, Spanish); the window shows the first two.
+            Add("typing", "enter", "entrée", "entree", "invio", "intro"); Add("typing", "backspace"); Add("typing", "tab");
+            Add("typing", "space", "spatie", "espace", "spazio", "espacio");
+            Add("typing", "esc", "escape"); Add("typing", "delete", "del", "suppr", "canc", "supr");
+            Add("nav", "up", "omhoog", "haut", "su", "arriba"); Add("nav", "down", "omlaag", "bas", "giù", "giu", "abajo");
+            Add("nav", "left", "links", "gauche", "sinistra", "izquierda"); Add("nav", "right", "rechts", "droite", "destra", "derecha");
+            Add("nav", "home", "inizio", "inicio"); Add("nav", "end", "einde", "fin", "fine"); Add("nav", "pageup", "pgup"); Add("nav", "pagedown", "pgdn");
             Add("nav", "insert", "ins", "invoegen");
             Add("mod", "shift"); Add("mod", "ctrl", "control"); Add("mod", "alt"); Add("mod", "altgr"); Add("mod", "win", "windows");
             Add("mod", "caps", "capslock");

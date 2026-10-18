@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="utf-8"?>
+<OnScreenKeyboard FormatVersion="2">
+  <Info>
+    <Title lang="nl">AZERTY (Frankrijk)</Title>
+    <Title lang="en">AZERTY (France)</Title>
+    <Title lang="fr">AZERTY (France)</Title>
+    <Title lang="it">AZERTY (Francia)</Title>
+    <Title lang="es">AZERTY (Francia)</Title>
+    <Description lang="nl">Frans AZERTY-toetsenbord (Windows-indeling voor Frankrijk) met functietoetsen, cijfers, accenten en een rij voor woordvoorspelling.</Description>
+    <Description lang="en">French AZERTY keyboard (the Windows layout for France) with function keys, numbers, accents and a row for word prediction.</Description>
+    <Description lang="fr">Clavier AZERTY français (la disposition Windows pour la France) avec touches de fonction, chiffres, accents et une rangée pour la prédiction de mots.</Description>
+    <Description lang="it">Tastiera AZERTY francese (il layout di Windows per la Francia) con tasti funzione, numeri, accenti e una fila per la previsione delle parole.</Description>
+    <Description lang="es">Teclado AZERTY francés (la distribución de Windows para Francia) con teclas de función, números, acentos y una fila para la predicción de palabras.</Description>
+  </Info>
+  <Theme BackgroundColor="1A2E2C" Opacity="1.00" FontName="Arial" FontSize="0" FontColor="E0FAF8" KeyColor="2C4845" BorderColor="3E5E5A" BorderThickness="1">
+    <Group Id="standard" FontName="Arial" FontSize="0" FontColor="E0FAF8" KeyColor="2C4845" BorderColor="3E5E5A" BorderThickness="1" />
+    <Group Id="prediction" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="34657C" BorderColor="2E5460" BorderThickness="-1">
+      <Name lang="nl">Woordvoorspelling</Name>
+      <Name lang="en">Word prediction</Name>
+      <Name lang="fr">Prédiction de mots</Name>
+      <Name lang="it">Previsione delle parole</Name>
+      <Name lang="es">Predicción de palabras</Name>
+    </Group>
+    <Group Id="function-keys" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="1C3832" BorderColor="2C5048" BorderThickness="-1">
+      <Name lang="nl">Functietoetsen</Name>
+      <Name lang="en">Function keys</Name>
+      <Name lang="fr">Touches de fonction</Name>
+      <Name lang="it">Tasti funzione</Name>
+      <Name lang="es">Teclas de función</Name>
+    </Group>
+    <Group Id="numbers" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="005B70" BorderColor="304060" BorderThickness="-1">
+      <Name lang="nl">Cijfers</Name>
+      <Name lang="en">Numbers</Name>
+      <Name lang="fr">Chiffres</Name>
+      <Name lang="it">Numeri</Name>
+      <Name lang="es">Números</Name>
+    </Group>
+    <Group Id="vowels" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="1A4840" BorderColor="2A6058" BorderThickness="-1">
+      <Name lang="nl">Klinkers</Name>
+      <Name lang="en">Vowels</Name>
+      <Name lang="fr">Voyelles</Name>
+      <Name lang="it">Vocali</Name>
+      <Name lang="es">Vocales</Name>
+    </Group>
+    <Group Id="consonants" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="3E6C60" BorderColor="345850" BorderThickness="-1">
+      <Name lang="nl">Medeklinkers</Name>
+      <Name lang="en">Consonants</Name>
+      <Name lang="fr">Consonnes</Name>
+      <Name lang="it">Consonanti</Name>
+      <Name lang="es">Consonantes</Name>
+    </Group>
+    <Group Id="punctuation" FontName="" FontSize="0" FontColor="CCE8DC" KeyColor="2E4035" BorderColor="3E5848" BorderThickness="-1">
+      <Name lang="nl">Leestekens</Name>
+      <Name lang="en">Punctuation</Name>
+      <Name lang="fr">Ponctuation</Name>
+      <Name lang="it">Punteggiatura</Name>
+      <Name lang="es">Puntuación</Name>
+    </Group>
+    <Group Id="controls" FontName="" FontSize="0" FontColor="FFFFFF" KeyColor="162820" BorderColor="243C30" BorderThickness="-1">
+      <Name lang="nl">Besturing</Name>
+      <Name lang="en">Controls</Name>
+      <Name lang="fr">Commandes</Name>
+      <Name lang="it">Controlli</Name>
+      <Name lang="es">Control</Name>
+    </Group>
+  </Theme>
+  <Layout Language="fr" GridRows="7" GridCols="14" GearRow="6" GearCol="13" WindowWidth="1036" WindowHeight="368" HideTitlebar="0" StickyModifiers="0" HoldToEdit="0" AlwaysOnTop="1" SlowKeysMs="0" DwellMs="0" ShowTimingAnimation="1" ToolbarTheme="Dark" WordLearningEnabled="1">
+    <Key Row="0" Col="0" ColSpan="2" GroupId="prediction" Label="Mot 1" Send="wp:0" />
+    <Key Row="0" Col="2" ColSpan="2" GroupId="prediction" Label="Mot 2" Send="wp:1" />
+    <Key Row="0" Col="4" ColSpan="2" GroupId="prediction" Label="Mot 3" Send="wp:2" />
+    <Key Row="0" Col="6" ColSpan="2" GroupId="prediction" Label="Mot 4" Send="wp:3" />
+    <Key Row="0" Col="8" ColSpan="2" GroupId="prediction" Label="Mot 5" Send="wp:4" />
+    <Key Row="0" Col="10" ColSpan="2" GroupId="prediction" Label="Mot 6" Send="wp:5" />
+    <Key Row="0" Col="12" ColSpan="2" GroupId="prediction" Label="Mot 7" Send="wp:6" />
+    <Key Row="1" Col="0" GroupId="function-keys" Label="Esc" Send="{ESC}" />
+    <Key Row="1" Col="1" GroupId="function-keys" Label="F1" Send="{F1}" />
+    <Key Row="1" Col="2" GroupId="function-keys" Label="F2" Send="{F2}" />
+    <Key Row="1" Col="3" GroupId="function-keys" Label="F3" Send="{F3}" />
+    <Key Row="1" Col="4" GroupId="function-keys" Label="F4" Send="{F4}" />
+    <Key Row="1" Col="5" GroupId="function-keys" Label="F5" Send="{F5}" />
+    <Key Row="1" Col="6" GroupId="function-keys" Label="F6" Send="{F6}" />
+    <Key Row="1" Col="7" GroupId="function-keys" Label="F7" Send="{F7}" />
+    <Key Row="1" Col="8" GroupId="function-keys" Label="F8" Send="{F8}" />
+    <Key Row="1" Col="9" GroupId="function-keys" Label="F9" Send="{F9}" />
+    <Key Row="1" Col="10" GroupId="function-keys" Label="F10" Send="{F10}" />
+    <Key Row="1" Col="11" GroupId="function-keys" Label="F11" Send="{F11}" />
+    <Key Row="1" Col="12" GroupId="function-keys" Label="F12" Send="{F12}" />
+    <Key Row="2" Col="0" GroupId="numbers" Label="²" Send="²" />
+    <Key Row="2" Col="1" GroupId="numbers" Label="&amp;" Send="&amp;" ShiftLabel="1" ShiftSend="1" />
+    <Key Row="2" Col="2" GroupId="numbers" Label="é" Send="é" ShiftLabel="2" ShiftSend="2" AltGrLabel="~" AltGrSend="dead:~" />
+    <Key Row="2" Col="3" GroupId="numbers" Label="&quot;" Send="&quot;" ShiftLabel="3" ShiftSend="3" AltGrLabel="#" AltGrSend="#" />
+    <Key Row="2" Col="4" GroupId="numbers" Label="'" Send="'" ShiftLabel="4" ShiftSend="4" AltGrLabel="{" AltGrSend="{" />
+    <Key Row="2" Col="5" GroupId="numbers" Label="(" Send="(" ShiftLabel="5" ShiftSend="5" AltGrLabel="[" AltGrSend="[" />
+    <Key Row="2" Col="6" GroupId="numbers" Label="-" Send="-" ShiftLabel="6" ShiftSend="6" AltGrLabel="|" AltGrSend="|" />
+    <Key Row="2" Col="7" GroupId="numbers" Label="è" Send="è" ShiftLabel="7" ShiftSend="7" AltGrLabel="`" AltGrSend="dead:`" />
+    <Key Row="2" Col="8" GroupId="numbers" Label="_" Send="_" ShiftLabel="8" ShiftSend="8" AltGrLabel="\" AltGrSend="\" />
+    <Key Row="2" Col="9" GroupId="numbers" Label="ç" Send="ç" ShiftLabel="9" ShiftSend="9" AltGrLabel="^" AltGrSend="^" />
+    <Key Row="2" Col="10" GroupId="numbers" Label="à" Send="à" ShiftLabel="0" ShiftSend="0" AltGrLabel="@" AltGrSend="@" />
+    <Key Row="2" Col="11" GroupId="numbers" Label=")" Send=")" ShiftLabel="°" ShiftSend="°" AltGrLabel="]" AltGrSend="]" />
+    <Key Row="2" Col="12" GroupId="numbers" Label="=" Send="=" ShiftLabel="+" ShiftSend="+" AltGrLabel="}" AltGrSend="}" />
+    <Key Row="2" Col="13" GroupId="controls" Label="⌫" Send="{BACKSPACE}" />
+    <Key Row="3" Col="0" GroupId="controls" Label="Tab" Send="{TAB}" />
+    <Key Row="3" Col="1" GroupId="vowels" Label="a" Send="a" ShiftLabel="A" ShiftSend="A" />
+    <Key Row="3" Col="2" GroupId="consonants" Label="z" Send="z" ShiftLabel="Z" ShiftSend="Z" />
+    <Key Row="3" Col="3" GroupId="vowels" Label="e" Send="e" ShiftLabel="E" ShiftSend="E" AltGrLabel="€" AltGrSend="€" />
+    <Key Row="3" Col="4" GroupId="consonants" Label="r" Send="r" ShiftLabel="R" ShiftSend="R" />
+    <Key Row="3" Col="5" GroupId="consonants" Label="t" Send="t" ShiftLabel="T" ShiftSend="T" />
+    <Key Row="3" Col="6" GroupId="consonants" Label="y" Send="y" ShiftLabel="Y" ShiftSend="Y" />
+    <Key Row="3" Col="7" GroupId="vowels" Label="u" Send="u" ShiftLabel="U" ShiftSend="U" />
+    <Key Row="3" Col="8" GroupId="vowels" Label="i" Send="i" ShiftLabel="I" ShiftSend="I" />
+    <Key Row="3" Col="9" GroupId="vowels" Label="o" Send="o" ShiftLabel="O" ShiftSend="O" />
+    <Key Row="3" Col="10" GroupId="consonants" Label="p" Send="p" ShiftLabel="P" ShiftSend="P" />
+    <Key Row="3" Col="11" GroupId="punctuation" Label="^" Send="dead:^" ShiftLabel="¨" ShiftSend="dead:¨" />
+    <Key Row="3" Col="12" GroupId="punctuation" Label="$" Send="$" ShiftLabel="£" ShiftSend="£" AltGrLabel="¤" AltGrSend="¤" />
+    <Key Row="3" Col="13" RowSpan="2" GroupId="controls" Label="↵" Send="{ENTER}" />
+    <Key Row="4" Col="0" GroupId="controls" Label="Caps" Send="{CAPSLOCK}" />
+    <Key Row="4" Col="1" GroupId="consonants" Label="q" Send="q" ShiftLabel="Q" ShiftSend="Q" />
+    <Key Row="4" Col="2" GroupId="consonants" Label="s" Send="s" ShiftLabel="S" ShiftSend="S" />
+    <Key Row="4" Col="3" GroupId="consonants" Label="d" Send="d" ShiftLabel="D" ShiftSend="D" />
+    <Key Row="4" Col="4" GroupId="consonants" Label="f" Send="f" ShiftLabel="F" ShiftSend="F" />
+    <Key Row="4" Col="5" GroupId="consonants" Label="g" Send="g" ShiftLabel="G" ShiftSend="G" />
+    <Key Row="4" Col="6" GroupId="consonants" Label="h" Send="h" ShiftLabel="H" ShiftSend="H" />
+    <Key Row="4" Col="7" GroupId="consonants" Label="j" Send="j" ShiftLabel="J" ShiftSend="J" />
+    <Key Row="4" Col="8" GroupId="consonants" Label="k" Send="k" ShiftLabel="K" ShiftSend="K" />
+    <Key Row="4" Col="9" GroupId="consonants" Label="l" Send="l" ShiftLabel="L" ShiftSend="L" />
+    <Key Row="4" Col="10" GroupId="consonants" Label="m" Send="m" ShiftLabel="M" ShiftSend="M" />
+    <Key Row="4" Col="11" GroupId="punctuation" Label="ù" Send="ù" ShiftLabel="%" ShiftSend="%" />
+    <Key Row="4" Col="12" GroupId="punctuation" Label="*" Send="*" ShiftLabel="µ" ShiftSend="µ" />
+    <Key Row="5" Col="0" GroupId="controls" Label="Shift" Send="" />
+    <Key Row="5" Col="1" GroupId="punctuation" Label="&lt;" Send="&lt;" ShiftLabel="&gt;" ShiftSend="&gt;" />
+    <Key Row="5" Col="2" GroupId="consonants" Label="w" Send="w" ShiftLabel="W" ShiftSend="W" />
+    <Key Row="5" Col="3" GroupId="consonants" Label="x" Send="x" ShiftLabel="X" ShiftSend="X" />
+    <Key Row="5" Col="4" GroupId="consonants" Label="c" Send="c" ShiftLabel="C" ShiftSend="C" />
+    <Key Row="5" Col="5" GroupId="consonants" Label="v" Send="v" ShiftLabel="V" ShiftSend="V" />
+    <Key Row="5" Col="6" GroupId="consonants" Label="b" Send="b" ShiftLabel="B" ShiftSend="B" />
+    <Key Row="5" Col="7" GroupId="consonants" Label="n" Send="n" ShiftLabel="N" ShiftSend="N" />
+    <Key Row="5" Col="8" GroupId="punctuation" Label="," Send="," ShiftLabel="?" ShiftSend="?" />
+    <Key Row="5" Col="9" GroupId="punctuation" Label=";" Send=";" ShiftLabel="." ShiftSend="." />
+    <Key Row="5" Col="10" GroupId="punctuation" Label=":" Send=":" ShiftLabel="/" ShiftSend="/" />
+    <Key Row="5" Col="11" GroupId="punctuation" Label="!" Send="!" ShiftLabel="§" ShiftSend="§" />
+    <Key Row="5" Col="12" ColSpan="2" GroupId="controls" Label="Shift" Send="" />
+    <Key Row="6" Col="0" GroupId="controls" Label="Ctrl" Send="^" />
+    <Key Row="6" Col="1" GroupId="controls" Label="Win" Send="win:" />
+    <Key Row="6" Col="2" GroupId="controls" Label="Alt" Send="%" />
+    <Key Row="6" Col="3" ColSpan="5" GroupId="controls" Label="Espace" Send=" " />
+    <Key Row="6" Col="8" GroupId="controls" Label="AltGr" Send="" />
+    <Key Row="6" Col="9" GroupId="controls" Label="↑" Send="{UP}" />
+    <Key Row="6" Col="10" GroupId="controls" Label="←" Send="{LEFT}" />
+    <Key Row="6" Col="11" GroupId="controls" Label="↓" Send="{DOWN}" />
+    <Key Row="6" Col="12" GroupId="controls" Label="→" Send="{RIGHT}" />
+    <Key Row="6" Col="13" KeyColor="1A2E2C" BorderColor="1A2E2C" />
+  </Layout>
+</OnScreenKeyboard>

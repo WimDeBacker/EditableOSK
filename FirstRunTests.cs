@@ -16,7 +16,17 @@ namespace OnScreenKeyboard
             var langs = new (string Code, string Name)[] { ("nl", "Nederlands"), ("en", "English") };
 
             Assert(FirstRunDialog.GuessArrangement(new CultureInfo("nl-BE")) == "azerty", "a Belgian system: AZERTY");
-            Assert(FirstRunDialog.GuessArrangement(new CultureInfo("fr-FR")) == "azerty", "a French system: AZERTY");
+            Assert(FirstRunDialog.GuessArrangement(new CultureInfo("fr-BE")) == "azerty", "a Belgian French system: the Belgian AZERTY");
+            Assert(FirstRunDialog.GuessArrangement(new CultureInfo("fr-FR")) == "azerty_fr", "a French system: the French AZERTY");
+            Assert(FirstRunDialog.GuessArrangement(new CultureInfo("fr-CH")) == "qwerty" && FirstRunDialog.GuessArrangement(new CultureInfo("fr-CA")) == "qwerty",
+                "Swiss and Canadian French keyboards are another kind: QWERTY");
+            Assert(FirstRunDialog.GuessArrangement(new CultureInfo("it-IT")) == "qwerty_it" && FirstRunDialog.GuessArrangement(new CultureInfo("es-ES")) == "qwerty_es" &&
+                   FirstRunDialog.GuessArrangement(new CultureInfo("es-MX")) == "qwerty_es", "an Italian system: the Italian layout; a Spanish one: the Spanish layout");
+            Assert(FirstRunDialog.Refine("azerty", new CultureInfo("fr-FR")) == "azerty_fr" && FirstRunDialog.Refine("azerty", new CultureInfo("nl-BE")) == "azerty" &&
+                   FirstRunDialog.Refine("azerty", new CultureInfo("fr-BE")) == "azerty" && FirstRunDialog.Refine("qwerty", new CultureInfo("it-IT")) == "qwerty_it" &&
+                   FirstRunDialog.Refine("qwerty", new CultureInfo("es-ES")) == "qwerty_es" && FirstRunDialog.Refine("qwerty", new CultureInfo("nl-NL")) == "qwerty" &&
+                   FirstRunDialog.Refine(null, new CultureInfo("fr-FR")) == null,
+                "an AZERTY keyboard of a French input language is the French layout, the other AZERTY the Belgian one; QWERTY of Italian or Spanish input is that layout");
             Assert(FirstRunDialog.GuessArrangement(new CultureInfo("nl-NL")) == "qwerty", "a Dutch system: QWERTY");
             Assert(FirstRunDialog.GuessArrangement(new CultureInfo("en-US")) == "qwerty", "an American system: QWERTY");
             Assert(FirstRunDialog.GuessArrangement(CultureInfo.InvariantCulture) == "qwerty", "no region: QWERTY");
@@ -25,7 +35,7 @@ namespace OnScreenKeyboard
                    FirstRunDialog.ArrangementFromKey('w') == null && FirstRunDialog.ArrangementFromKey('\0') == null,
                 "the key where Q sits on QWERTY types 'a' on an AZERTY keyboard, 'q' on a QWERTY one; anything else is unknown");
             string detected = FirstRunDialog.DetectKeyboardArrangement();
-            Assert(detected == null || detected == "azerty" || detected == "qwerty", $"the keyboard layout in use is detected without an error ({detected ?? "unknown"})");
+            Assert(detected == null || new[] { "azerty", "azerty_fr", "qwerty", "qwerty_it", "qwerty_es" }.Contains(detected), $"the keyboard layout in use is detected without an error ({detected ?? "unknown"})");
             Assert(FirstRunDialog.TypingCulture() != null, "the culture of the language typed in is found");
             Assert(FirstRunDialog.GuessLanguage(new CultureInfo("nl-BE"), langs) == "nl", "a Dutch system: the Dutch database");
             Assert(FirstRunDialog.GuessLanguage(new CultureInfo("en-GB"), langs) == "en", "an English system: the English database");
@@ -42,7 +52,10 @@ namespace OnScreenKeyboard
                     Assert(d.Arrangement == "qwerty" && d.Language == "nl", "the dialog opens on QWERTY and Dutch");
                 using (var d = new FirstRunDialog(langs, "scanning", "nl"))
                     Assert(d.Arrangement == "Scanning" && File.Exists(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, d.Arrangement + ".kbl")),
-                        "the third choice is the letter keyboard for scanning, and its file is installed");
+                        "the last choice is the letter keyboard for scanning, and its file is installed");
+                foreach (string a in new[] { "qwerty", "azerty", "azerty_fr", "qwerty_it", "qwerty_es", "Scanning" })
+                    using (var d = new FirstRunDialog(langs, a, "nl"))
+                        Assert(d.Arrangement == a && File.Exists(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, d.Arrangement + ".kbl")), $"the arrangement '{a}' can be chosen and its layout file is installed");
                 using (var d = new FirstRunDialog(langs, "whatever", "zz"))
                     Assert(d.Arrangement == "qwerty" && d.Language == "nl", "an unknown suggestion falls back to QWERTY and the first language");
                 using (var d = new FirstRunDialog(new (string, string)[] { ("en", "English") }, "qwerty", "nl"))

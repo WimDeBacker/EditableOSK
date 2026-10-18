@@ -3889,9 +3889,11 @@ namespace OnScreenKeyboard
                 .ToList();
 
             var screens   = Lang.GetAvailable();
-            var languages = databases.Count > 0
-                ? databases.Select(d => (d.Code, FirstRunDialog.LanguageName(d.Code))).ToList()
-                : screens.Select(l => (l.Code, l.Name)).ToList();          // no word database installed: the languages of the screens
+            // The languages of the word databases, then the other languages the program is translated into (a keyboard in those has no database
+            // of its own yet: "(auto)" falls back to another one, but its group names and layout are in its language).
+            var languages = databases.Select(d => (d.Code, FirstRunDialog.LanguageName(d.Code))).ToList();
+            foreach (var l in screens)
+                if (!languages.Any(x => string.Equals(x.Code, l.Code, StringComparison.OrdinalIgnoreCase))) languages.Add((l.Code, l.Name));
             // What the person types on and in, not what the screens of Windows say: the keyboard layout in use decides the arrangement, the input
             // language the language of the keyboard (the region of Windows is the fallback).
             var culture   = FirstRunDialog.TypingCulture();

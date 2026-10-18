@@ -1,13 +1,13 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <OnScreenKeyboard FormatVersion="2">
   <Info>
-    <Title lang="nl">QWERTY</Title>
-    <Title lang="en">QWERTY</Title>
+    <Title lang="nl">QWERTY (Amerikaans)</Title>
+    <Title lang="en">QWERTY (US)</Title>
     <Description lang="nl">QWERTY-toetsenbord met functietoetsen, cijfers en een rij voor woordvoorspelling.</Description>
     <Description lang="en">QWERTY keyboard with function keys, numbers and a row for word prediction.</Description>
-    <Title lang="fr">QWERTY</Title>
-    <Title lang="it">QWERTY</Title>
-    <Title lang="es">QWERTY</Title>
+    <Title lang="fr">QWERTY (américain)</Title>
+    <Title lang="it">QWERTY (americano)</Title>
+    <Title lang="es">QWERTY (americano)</Title>
     <Description lang="fr">Clavier QWERTY avec touches de fonction, chiffres et une rangée pour la prédiction de mots.</Description>
     <Description lang="it">Tastiera QWERTY con tasti funzione, numeri e una fila per la previsione delle parole.</Description>
     <Description lang="es">Teclado QWERTY con teclas de función, números y una fila para la predicción de palabras.</Description>

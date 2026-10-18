@@ -133,6 +133,9 @@ Source: "{#BuildDir}\icons\*"; DestDir: "{app}\icons"; Flags: ignoreversion recu
 ; ── Keyboard layouts ─────────────────────────────────────────────────────
 Source: "{#BuildDir}\azerty.kbl";                     DestDir: "{app}"; Flags: ignoreversion
 Source: "{#BuildDir}\azertycolor.kbl";                DestDir: "{app}"; Flags: ignoreversion
+Source: "{#BuildDir}\azerty_fr.kbl";                  DestDir: "{app}"; Flags: ignoreversion
+Source: "{#BuildDir}\qwerty_it.kbl";                  DestDir: "{app}"; Flags: ignoreversion
+Source: "{#BuildDir}\qwerty_es.kbl";                  DestDir: "{app}"; Flags: ignoreversion
 Source: "{#BuildDir}\qwerty.kbl";                     DestDir: "{app}"; Flags: ignoreversion
 Source: "{#BuildDir}\math.kbl";                       DestDir: "{app}"; Flags: ignoreversion
 Source: "{#BuildDir}\Scanning.kbl";                   DestDir: "{app}"; Flags: ignoreversion

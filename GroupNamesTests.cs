@@ -111,7 +111,7 @@ namespace OnScreenKeyboard
                     "importing groups from an older file gives the same ids");
 
                 // ── The ready-made layouts: every key points at a group that exists, and every group has its names ──
-                foreach (string file in new[] { "azerty.kbl", "azertycolor.kbl", "qwerty.kbl", "math.kbl", "Scanning.kbl", "ScanningCijfers.kbl" })
+                foreach (string file in new[] { "azerty.kbl", "azertycolor.kbl", "qwerty.kbl", "azerty_fr.kbl", "qwerty_it.kbl", "qwerty_es.kbl", "math.kbl", "Scanning.kbl", "ScanningCijfers.kbl" })
                 {
                     string p = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, file);
                     if (!File.Exists(p)) { Assert(false, $"{file}: not found next to the test binary"); continue; }
@@ -121,8 +121,8 @@ namespace OnScreenKeyboard
                     var l = SettingsManager.LoadSettings(new VisualTheme(), new WindowState(), m, p);
                     var ids = new HashSet<string>(l.Groups.Select(x => x.Name));
                     Assert(l.Cells.All(c => string.IsNullOrEmpty(c.Props.GroupName) || ids.Contains(c.Props.GroupName)), $"{file}: every key points at a group that exists");
-                    Assert(l.Groups.Where(x => x.Name != SettingsManager.StandardGroupName).All(x => x.Names.ContainsKey("nl") && x.Names.ContainsKey("en")),
-                        $"{file}: every group has a Dutch and an English name");
+                    Assert(l.Groups.Where(x => x.Name != SettingsManager.StandardGroupName).All(x => new[] { "nl", "en", "fr", "it", "es" }.All(x.Names.ContainsKey)),
+                        $"{file}: every group has a name in Dutch, English, French, Italian and Spanish");
                     Assert(l.Groups.Select(x => x.Name).Distinct().Count() == l.Groups.Count, $"{file}: the ids are unique");
                     Assert(!string.IsNullOrEmpty(m.Language), $"{file}: the keyboard has a language");
                 }

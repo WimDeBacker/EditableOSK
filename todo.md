@@ -7,7 +7,6 @@ Only what is still to be done is listed here, in the order of the owner's priori
 ### Priority 5 — French, Italian and Spanish: what is left ▶ *(screens, group names and installer are done, see Completed; requested by the owner 2026-10-11)*
 
 - 5.3 **Word prediction:** a word database per language is a separate piece of work (`worddb_FR/IT/ES`), the keyboard works without; until then the language of a keyboard has no database of its own and the "(auto)" choice falls back to another one.
-- 5.4 **Keyboard layouts:** French (AZERTY France), Italian and Spanish (QWERTY with their accents, dead keys, `ñ`, `ç`) as ready-made layouts and as choices in the first-start dialog and the wizard (the wizard's help for the pasted keys has Dutch and English spellings).
 - 5.7 **Rules of the language of a keyboard (for when the other languages are worked out):** sentence and spacing rules per language (when a sentence starts and the next word is capitalised; French has a space before `? ! : ;` and inside « »), quotation marks (“ ” in English, „ ” in German, « » in French), and the decimal separator (a point or a comma) for the keys and the word prediction; chosen by the language tag of the keyboard (`LayoutMeta.Language`, Priority 4).
 - 5.6 **Quality:** a machine translation is only a first draft: each language needs a review by a native speaker, with the program in front of them (a word that fits a menu is not always the word for a button). Decision for the owner: who reviews, and whether a language is shipped before its review.
 
@@ -42,6 +41,13 @@ Nothing here is to be worked on until it shows up again or the owner decides oth
 ---
 
 ## Completed
+
+### Keyboards for France, Italy and Spain ✓ *(was 5.4; built 2026-10-18)*
+
+Three ready-made layouts next to `azerty.kbl` (the **Belgian** AZERTY, now titled "AZERTY (Belgium)"; `qwerty.kbl` is "QWERTY (US)"): **`azerty_fr.kbl`** (French AZERTY, with the dead ^ ¨ and AltGr+é/è as dead ~ and `), **`qwerty_it.kbl`** (Italian, è é ò ç à ° ù §, no dead keys) and **`qwerty_es.kbl`** (Spanish, ñ ç ¡ ¿, dead ` ^ ´ ¨ and AltGr+4 ~). The keys are those of the Windows layouts, taken from the Interactive Comparator of National Layouts (farah.cl: `France (frFR)`, `Italian (141)`, `Spanish (Spain)`; Italian 141 is the standard one, 142 and "New Italian" are not offered). Same grid and window as `azerty.kbl` (7 rows × 14: word prediction, function keys, four letter rows, bottom row), `Shift` wide at the right, a tall Enter; word keys are "Mot / Parola / Palabra n"; each file has title, description and group names in all five languages.
+- **First start:** the arrangement chooser has QWERTY, AZERTY (BE), AZERTY (FR), QWERTY (IT), QWERTY (ES) and Scanning; the suggestion follows the typing language (`GuessArrangement`, and `Refine` for what Windows says about the Q key: French AZERTY only for French outside Belgium; Swiss and Canadian French are another kind of keyboard and get QWERTY). The language chooser now also offers the languages the program is translated into when there is no word database for them.
+- **Wizard:** the pasted special keys also have French, Italian and Spanish names (`[entrée]`, `[invio]`, `[intro]`, `[haut]`, `[su]`, `[arriba]`, `[espace]`, `[spazio]`, `[espacio]`, `[suppr]`, `[canc]`, `[supr]`, `[inizio]`, `[fine]` …; the space key carries the word of that language), listed in the "?" window.
+- **Limits:** one AltGr layer only (Shift+AltGr characters such as the Italian `{ }` are not on the keys; the Windows layout of Latin America and the Italian 142 / Swiss / Canadian layouts are not made). Tests: `T_NationalLayouts` (`NationalLayoutsTests.cs`: every key of the three rows against the table, all letters and digits once, dead keys valid), `T_FirstRun`, `T_LayoutPicker`, `T_GroupNames`.
 
 ### French, Italian and Spanish: the screens, the group names, the installer ✓ *(was 5.1, 5.2 and 5.5; built 2026-10-18)*
 

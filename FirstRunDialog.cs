@@ -17,8 +17,16 @@ namespace OnScreenKeyboard
         private readonly string[] _screenCodes, _languageCodes;
         private readonly StylePreview _preview = new StylePreview { Dock = DockStyle.Fill, Margin = new Padding(0, Touch.Gap, 0, Touch.Gap) };
 
-        /// <summary><c>qwerty</c>, <c>azerty</c> or <c>Scanning</c> (the letters by frequency, for scanning): the ready-made layout file of that name is opened.</summary>
-        public string Arrangement => _cmbArrangement.SelectedIndex == 1 ? "azerty" : _cmbArrangement.SelectedIndex == 2 ? "Scanning" : "qwerty";
+        // The key arrangements offered: the ready-made layout file of that name is opened. azerty is the Belgian AZERTY, azerty_fr the
+        // French one (they differ in many keys); qwerty is the American one, qwerty_it and qwerty_es the Italian and the Spanish; Scanning is the
+        // letter keyboard for scanning (letters by frequency), never the suggestion. A null text is shown as "Scanning" in the language of the screens.
+        private static readonly (string Text, string File)[] Arrangements =
+        {
+            ("QWERTY", "qwerty"), ("AZERTY (BE)", "azerty"), ("AZERTY (FR)", "azerty_fr"), ("QWERTY (IT)", "qwerty_it"), ("QWERTY (ES)", "qwerty_es"), (null, "Scanning"),
+        };
+
+        /// <summary>The file name (without .kbl) of the chosen arrangement: <c>qwerty</c>, <c>azerty</c>, <c>azerty_fr</c>, <c>qwerty_it</c>, <c>qwerty_es</c> or <c>Scanning</c>.</summary>
+        public string Arrangement => Arrangements[Math.Clamp(_cmbArrangement.SelectedIndex, 0, Arrangements.Length - 1)].File;
 
         /// <summary>The language code (<c>nl</c>, <c>en</c>) of the chosen keyboard language: it chooses the word database.</summary>
         public string Language => _languageCodes[Math.Max(0, _cmbLanguage.SelectedIndex)];
@@ -51,9 +59,9 @@ namespace OnScreenKeyboard
             _cmbScreen = Chooser(screenLanguages.Select(l => l.Name), IndexOf(_screenCodes, defaultScreenLanguage), 0);
             AddRow(t, () => Lang.T("Interface language"), _cmbScreen);
 
-            // The third choice is the letter keyboard for scanning (letters by frequency); it is never the suggestion.
-            _cmbArrangement = Chooser(new[] { "QWERTY", "AZERTY", Lang.T("Scanning") }, string.Equals(defaultArrangement, "azerty", StringComparison.OrdinalIgnoreCase) ? 1
-                                      : string.Equals(defaultArrangement, "scanning", StringComparison.OrdinalIgnoreCase) ? 2 : 0, 1);
+            // The last choice is the letter keyboard for scanning (letters by frequency); it is never the suggestion.
+            _cmbArrangement = Chooser(Arrangements.Select(a => a.Text ?? Lang.T("Scanning")),
+                                      Math.Max(0, Array.FindIndex(Arrangements, a => string.Equals(a.File, defaultArrangement, StringComparison.OrdinalIgnoreCase))), 1);
             AddRow(t, () => Lang.T("first run: arrangement"), _cmbArrangement);
 
             _languageCodes = languages.Select(l => l.Code).ToArray();
@@ -101,10 +109,25 @@ namespace OnScreenKeyboard
                 uint vk = MapVirtualKeyEx(0x10, 1 /* MAPVK_VSC_TO_VK */, hkl);
                 if (vk == 0) return null;
                 uint ch = MapVirtualKeyEx(vk, 2 /* MAPVK_VK_TO_CHAR */, hkl) & 0x7FFF;      // the top bit marks a dead key
-                return ArrangementFromKey((char)ch);
+                return Refine(ArrangementFromKey((char)ch), TypingCulture());
             }
             catch { return null; }
         }
+
+        /// <summary>
+        /// Says which of the ready-made layouts a basic arrangement (<c>azerty</c> or <c>qwerty</c>, as the Q key shows it) is, from the language
+        /// and region of the input language: AZERTY in France is the French layout, in Belgium (and elsewhere) the Belgian one; QWERTY of an
+        /// Italian or Spanish input language is the Italian or the Spanish layout. Null stays null.
+        /// </summary>
+        internal static string Refine(string basic, CultureInfo culture)
+        {
+            if (basic == null) return null;
+            string lang = culture.TwoLetterISOLanguageName, region = RegionOf(culture);
+            if (basic == "azerty") return lang == "fr" && region != "BE" ? "azerty_fr" : "azerty";
+            return lang == "it" ? "qwerty_it" : lang == "es" ? "qwerty_es" : "qwerty";
+        }
+
+        private static string RegionOf(CultureInfo culture) => culture.Name.Length >= 5 ? culture.Name.Substring(culture.Name.Length - 2).ToUpperInvariant() : "";
 
         /// <summary>The arrangement for the character the first letter key of the top letter row types: "a" is AZERTY, "q" QWERTY, anything else unknown (null).</summary>
         internal static string ArrangementFromKey(char c) =>
@@ -117,11 +140,16 @@ namespace OnScreenKeyboard
             catch { return CultureInfo.CurrentUICulture; }
         }
 
-        /// <summary>AZERTY for a Belgian or French system, QWERTY otherwise: what the person at this PC most likely has.</summary>
+        /// <summary>
+        /// What the person at this PC most likely has: the Belgian AZERTY for Belgium, the French AZERTY for French (not in Switzerland, Canada or
+        /// Luxembourg: those keyboards are another kind), the Italian and the Spanish layout for those languages, QWERTY otherwise.
+        /// </summary>
         internal static string GuessArrangement(CultureInfo culture)
         {
-            string region = culture.Name.Length >= 5 ? culture.Name.Substring(culture.Name.Length - 2) : "";
-            return region.Equals("BE", StringComparison.OrdinalIgnoreCase) || culture.TwoLetterISOLanguageName == "fr" ? "azerty" : "qwerty";
+            string lang = culture.TwoLetterISOLanguageName, region = RegionOf(culture);
+            if (region == "BE") return "azerty";
+            if (lang == "fr") return region is "CH" or "CA" or "LU" ? "qwerty" : "azerty_fr";
+            return lang == "it" ? "qwerty_it" : lang == "es" ? "qwerty_es" : "qwerty";
         }
 
         /// <summary>The language of this system when the program has it in <paramref name="languages"/>; else English when that is there; else the first.</summary>

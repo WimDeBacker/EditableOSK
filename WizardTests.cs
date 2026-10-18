@@ -113,6 +113,10 @@ namespace OnScreenKeyboard
                 Assert(NewKeyboardWizard.ClassifyKey(k.Label, k.Send) == "controls", $"[{token}] is put in the Besturing group");
             }
             Assert(One("[einde]", dutch: true).Send == "{END}" && One("[invoegen]", dutch: true).Send == "{INSERT}", "Dutch aliases for End and Insert");
+            Assert(One("[entrée]").Send == "{ENTER}" && One("[invio]").Send == "{ENTER}" && One("[intro]").Send == "{ENTER}" && One("[haut]").Send == "{UP}" && One("[giù]").Send == "{DOWN}" &&
+                   One("[izquierda]").Send == "{LEFT}" && One("[droite]").Send == "{RIGHT}" && One("[suppr]").Send == "{DELETE}" && One("[inicio]").Send == "{HOME}" && One("[fine]").Send == "{END}",
+                "French, Italian and Spanish names of the special keys");
+            Assert(One("[espace]").Label == "Espace" && One("[spazio]").Label == "Spazio" && One("[espacio]").Label == "Espacio" && One("[espace]").Send == " ", "…the space key under those names carries the word of that language");
 
             // Function keys F1 to F16, nothing else.
             for (int n = 1; n <= 16; n++)
