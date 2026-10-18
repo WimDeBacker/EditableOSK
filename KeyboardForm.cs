@@ -3003,9 +3003,9 @@ namespace OnScreenKeyboard
                 back:   () => BeginInvoke((Action)(() => _scanner?.Back())),
                 hold:   down => BeginInvoke((Action)(() => _scanner?.SetHolding(down))));
             _scanInput.Install();
-            // A controller is looked at only when one of its buttons is a switch. Its buttons go through the same decisions as the keys; the
-            // poller runs on this thread, so the results are handled at once.
-            if (settings.SelectPad != 0 || (settings.TwoSwitch && settings.StepPad != 0) || (settings.BackSwitch && settings.BackPad != 0))
+            // A controller is looked at only when one of its buttons is a switch (a switch is a key or a button). Its buttons go through the
+            // same decisions as the keys; the poller runs on this thread, so the results are handled at once.
+            if (Gamepad.IsButton(settings.SelectKey) || (settings.TwoSwitch && Gamepad.IsButton(settings.StepKey)) || (settings.BackSwitch && Gamepad.IsButton(settings.BackKey)))
             {
                 var input = _scanInput;
                 _gamepad = new GamepadPoller((code, down) => input.Handle(code, down, false));

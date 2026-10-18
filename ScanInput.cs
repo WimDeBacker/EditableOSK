@@ -32,7 +32,7 @@ namespace OnScreenKeyboard
             if (!down)
             {
                 bool taken = _swallowed.Remove(vk);
-                if (taken && Is(vk, s.SelectKey, s.SelectPad))
+                if (taken && vk == s.SelectKey)
                 {
                     // Select on release, or a long press in use (the length of the press is only known now): the release is the press. The
                     // scanner knows whether it was held long enough (it showed the ring) and then restarts or steps back instead of selecting.
@@ -48,20 +48,17 @@ namespace OnScreenKeyboard
                 if (_running != null && !_running()) return false;      // no scan to pause: Esc is a normal key
                 _swallowed.Add(vk); _escape(); return true;
             }
-            if (Is(vk, s.SelectKey, s.SelectPad))
+            if (vk == s.SelectKey)
             {
                 _swallowed.Add(vk);
                 if (!s.SelectOnRelease && !s.BackLongPress) _press();
                 else _hold(true);
                 return true;
             }
-            if (s.TwoSwitch && Is(vk, s.StepKey, s.StepPad))  { _swallowed.Add(vk); _step();   return true; }
-            if (s.BackSwitch && Is(vk, s.BackKey, s.BackPad)) { _swallowed.Add(vk); _back();   return true; }
+            if (s.TwoSwitch && vk == s.StepKey)        { _swallowed.Add(vk); _step();   return true; }
+            if (s.BackSwitch && vk == s.BackKey)       { _swallowed.Add(vk); _back();   return true; }
             return false;
         }
-
-        /// <summary>The key or the gamepad button of a switch (a button code is never a key code; 0 = no button).</summary>
-        private static bool Is(int code, int key, int pad) => code == key || (pad != 0 && code == pad);
 
         // ── The hook ──────────────────────────────────────────────────
         private delegate IntPtr HookProc(int nCode, IntPtr wParam, IntPtr lParam);

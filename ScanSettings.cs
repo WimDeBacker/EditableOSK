@@ -16,7 +16,8 @@ namespace OnScreenKeyboard
         /// <summary>false: one switch, the highlight moves by itself; true: a step switch moves it and a select switch selects.</summary>
         public bool TwoSwitch;
         /// <summary>
-        /// Virtual-key codes of the switches. The select key also starts scanning; the step key is used in two-switch mode only. While scanning
+        /// The switches: the virtual-key code of a key of the keyboard, or the code of a gamepad button (<see cref="Gamepad"/>; a button code
+        /// is never a key code), whichever the person pressed when choosing. The select key also starts scanning; the step key is used in two-switch mode only. While scanning
         /// is on these keys do not reach the program that is typed in, so the defaults are keys that nobody types with (a switch interface is
         /// set to send them); Space or Enter can be chosen, but then they are no longer typed.
         /// </summary>
@@ -56,12 +57,6 @@ namespace OnScreenKeyboard
         public bool SoundOnStep;
         public bool SoundOnSelect = true;
 
-        /// <summary>
-        /// Gamepad buttons (<see cref="Gamepad"/> codes, 0 = none) used next to the keys: the select button, the step button (two switches) and
-        /// the back button (when back with switch is on). A controller button and a key can both be the same switch.
-        /// </summary>
-        public int  SelectPad, StepPad, BackPad;
-
         internal const int MinScanMs = 200, MaxScanMs = 10000, MaxExtraMs = 5000, MinRounds = 1, MaxRounds = 10, MaxIgnoreMs = 2000;
 
         internal ScanSettings Clone() => (ScanSettings)MemberwiseClone();
@@ -77,9 +72,6 @@ namespace OnScreenKeyboard
             if (StepKey   <= 0 || StepKey   == VkEscape) StepKey   = VkF9;
             if (StepKey == SelectKey) StepKey = SelectKey == VkF9 ? VkF8 : VkF9;
             BackHoldMs = Math.Clamp(BackHoldMs, MinBackHoldMs, MaxBackHoldMs);
-            if (!Gamepad.IsButton(SelectPad)) SelectPad = 0;                  // 0 or a button code; the three buttons differ
-            if (!Gamepad.IsButton(StepPad) || StepPad == SelectPad) StepPad = 0;
-            if (!Gamepad.IsButton(BackPad) || BackPad == SelectPad || BackPad == StepPad) BackPad = 0;
             if (BackKey <= 0 || BackKey == VkEscape || BackKey == SelectKey || BackKey == StepKey) BackKey = new[] { VkF10, VkF7, VkF8, VkF9 }.First(k => k != SelectKey && k != StepKey);
             if (RowColor.IsEmpty) RowColor = new ScanSettings().RowColor;
             if (KeyColor.IsEmpty) KeyColor = new ScanSettings().KeyColor;
@@ -92,7 +84,6 @@ namespace OnScreenKeyboard
             && RowColor.ToArgb() == o.RowColor.ToArgb() && KeyColor.ToArgb() == o.KeyColor.ToArgb() && BackColor.ToArgb() == o.BackColor.ToArgb()
             && BackStep == o.BackStep && BackSwitch == o.BackSwitch && BackKey == o.BackKey && BackLongPress == o.BackLongPress && LongPressStepsBack == o.LongPressStepsBack && BackHoldMs == o.BackHoldMs
             && ScanMs == o.ScanMs && FirstExtraMs == o.FirstExtraMs && Rounds == o.Rounds && IgnoreRepeatMs == o.IgnoreRepeatMs
-            && SelectPad == o.SelectPad && StepPad == o.StepPad && BackPad == o.BackPad
             && SelectOnRelease == o.SelectOnRelease && SoundOnStep == o.SoundOnStep && SoundOnSelect == o.SoundOnSelect;
 
         /// <summary>The name of a key for the screens ("Space", "Enter", "F8"…).</summary>

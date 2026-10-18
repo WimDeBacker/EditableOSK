@@ -4,6 +4,14 @@
 
 Numbering: **P** = priority, then sub-sections, steps and details (**1.1**, **3.4**). The open priorities were numbered from 1 again on 2026-10-06 (Priority 4 was added on 2026-10-07 and is completed, Priority 5 was added on 2026-10-09); the items under Completed keep the numbers they had when they were done (so "Priority 7" there is not Priority 7 here). The numbers of the notes under "On hold" (3.0 – 3.5) are those of the old Priority 3. Status marks: ✓ done, ▶ in progress, ☐ not started.
 
+### Priority 1 — Scanning, follow-up: step back with a key as well ☐ *(requested by the owner 2026-10-18; nothing is built yet)*
+
+Today "steps back" (the scan goes the other way round, right to left, and jumps from the first item to the last, through the back step) exists only as a choice of the **long press**; the back switch (the key or gamepad button under "Back with switch") only goes back a level (restarts). The back switch should offer the same two choices as the long press: **restarts scanning** or **steps back**.
+- 1.1 In the Back tab, a choice for the back switch next to its key (Restarts scanning / Steps back), like "Long press".
+- 1.2 `Scanner.Back` / `Reverse`: the back switch calls `Reverse` when "steps back" is chosen (one press turns the direction round and takes one step; another press turns it round again; a selection or a new level starts forwards again; with two switches it is one step back). Both the long press and the back switch may be set to "steps back" at once.
+- 1.3 Tests for the scanner and the dialog; update the hint of the Back tab and the todo/summary under Completed.
+- To decide when it is built: whether the back switch and the long press must differ in what they do (for instance the key restarts and the long press steps back) — the two choices are independent, so any combination is allowed.
+
 ### Priority 6 — New Keyboard wizard: word prediction keys and letter keys ☐ *(requested by the owner 2026-10-17; nothing is built yet)*
 
 For the wizard that makes a new keyboard (`NewKeyboardWizard`):
@@ -61,7 +69,7 @@ Nothing here is to be worked on until it shows up again. The notes stay so that 
 ### Scanning ✓ *(accessibility; was Priority 1; research 2026-10-11, built 2026-10-12 to 2026-10-18, tested by the owner with a real user and switch; released in 1.0.0)*
 
 Research and the list of options: **`scanning_research.md`**. What was built, with the owner's decisions:
-- **Switches:** keyboard keys (a global low-level hook, `ScanInput`, swallows the switch keys and never touches keys the program sends itself) and **gamepad buttons** (`Gamepad.cs`: XInput for Xbox-type controllers and the Xbox Adaptive Controller, winmm for other game controllers; polled on the window's thread, only while a button is a switch; a button and a key can be the same switch). One switch (automatic) or two (step + select). Defaults F8 (select), F9 (step), F10 (back): not Space/Enter, because the switch keys are swallowed while scanning is on.
+- **Switches:** keyboard keys (a global low-level hook, `ScanInput`, swallows the switch keys and never touches keys the program sends itself) and **gamepad buttons** (`Gamepad.cs`: XInput for Xbox-type controllers and the Xbox Adaptive Controller, winmm for other game controllers; polled on the window's thread, only while a button is a switch). A switch is a key **or** a button, chosen with one choice in the settings (press the key or the button); a key and a button are not combined as one switch. One switch (automatic) or two (step + select). Defaults F8 (select), F9 (step), F10 (back): not Space/Enter, because the switch keys are swallowed while scanning is on.
 - **Settings** are the user's (`user.xml`, `UserSettings.Scan`, `ScanSettings`), not the layout's; window `ScanSettingsDialog` with four tabs (Switches, Timing, Back, Feedback), opened from Edit Keyboard › Accessibility › Access control (NL "Hulp bij bediening", formerly "Timing aid") › Scanning (a radio button next to Off / Slow keys / Dwell click) › Settings…. Exclusive with slow keys and dwell.
 - **Pattern:** row-column, following the rows and columns of the layout (empty keys, empty suggestion keys and the gear button are skipped; Shift/AltGr are normal keys). Scan time 1000 ms, extra time on the first 800 ms, 3 rounds, ignore repeated presses 300 ms. Select on press or **on release**.
 - **Esc pauses** the scan (a person who needs scanning must be able to start it again alone: the select switch stays taken and starts it again); the gear button with the mouse still opens Edit mode.

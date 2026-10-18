@@ -377,12 +377,12 @@ namespace OnScreenKeyboard
                 }
                 Assert(new GamepadReader().Read() != null, "asking the system for controllers does not fail (none may be connected)");
 
-                // The same decisions as for the keys.
-                var st = new ScanSettings { Enabled = true, SelectKey = 0x77, StepKey = 0x78, BackKey = 0x79, SelectPad = A, StepPad = B, BackPad = J3 };
+                // A switch is a key or a button: the same decisions. Here the switches are buttons.
+                var st = new ScanSettings { Enabled = true, SelectKey = A, StepKey = B, BackKey = J3 };
                 int press = 0, step = 0, back = 0;
                 var inp = new ScanInput(() => st, () => press++, () => step++, () => { }, null, () => back++);
-                Assert(inp.Handle(A, true, false) && press == 1 && inp.Handle(A, true, false) && press == 1 && inp.Handle(A, false, false), "the select button acts like the select key (a held button is one press)");
-                Assert(inp.Handle(0x77, true, false) && press == 2 && inp.Handle(0x77, false, false), "…and the key still works next to it");
+                Assert(inp.Handle(A, true, false) && press == 1 && inp.Handle(A, true, false) && press == 1 && inp.Handle(A, false, false), "the select button acts like a select key (a held button is one press)");
+                Assert(!inp.Handle(0x77, true, false), "a key that is not a switch passes (the keyboard keys are free)");
                 Assert(!inp.Handle(B, true, false) && step == 0, "one switch: the step button is not used");
                 st.TwoSwitch = true;
                 Assert(inp.Handle(B, true, false) && step == 1 && inp.Handle(B, false, false), "two switches: the step button steps");
@@ -392,13 +392,11 @@ namespace OnScreenKeyboard
                 Assert(!inp.Handle(Gamepad.XInputBase + 0x4000, true, false), "any other button passes");
                 st.SelectOnRelease = true; press = 0;
                 Assert(inp.Handle(A, true, false) && press == 0 && inp.Handle(A, false, false) && press == 1, "select on release works for the button too");
-                st.SelectPad = 0;
-                Assert(!inp.Handle(A, true, false), "no button chosen: nothing is taken");
 
-                // Settings: saved with the others, and only buttons (never a key code) are kept.
-                var c = new ScanSettings { SelectPad = 0x20, StepPad = A, BackPad = A };
+                // Settings: a switch may be a button; the three differ.
+                var c = new ScanSettings { SelectKey = A, StepKey = A, BackKey = J3 };
                 c.Clamp();
-                Assert(c.SelectPad == 0 && c.StepPad == A && c.BackPad == 0, "a key code is not a button; the three buttons differ");
+                Assert(c.SelectKey == A && c.StepKey != A && c.BackKey == J3, "a button can be a switch; two switches never share one");
             }
             {
                 string saved2 = UserData.DirectoryOverride;
@@ -406,28 +404,29 @@ namespace OnScreenKeyboard
                 try
                 {
                     UserData.DirectoryOverride = dir2; UserSettings.Reset();
-                    var s = new ScanSettings { SelectPad = Gamepad.XInputBase + 0x1000, StepPad = Gamepad.XInputBase + 0x2000, BackPad = Gamepad.JoyBase + 2 };
+                    var s = new ScanSettings { SelectKey = Gamepad.XInputBase + 0x1000, StepKey = Gamepad.XInputBase + 0x2000, BackKey = Gamepad.JoyBase + 2 };
                     UserSettings.SetScan(s); UserSettings.Reset();
-                    Assert(UserSettings.Scan.SameAs(s) && UserSettings.Scan.BackPad == Gamepad.JoyBase + 2, "the gamepad buttons come back after a restart");
+                    Assert(UserSettings.Scan.SameAs(s) && UserSettings.Scan.BackKey == Gamepad.JoyBase + 2 && UserSettings.Scan.SelectKey == Gamepad.XInputBase + 0x1000,
+                        "the gamepad buttons come back after a restart");
                 }
                 finally { UserData.DirectoryOverride = saved2; UserSettings.Reset(); try { Directory.Delete(dir2, true); } catch { } }
             }
             using (var d = new ScanSettingsDialog(new ScanSettings()))
             {
                 int A = Gamepad.XInputBase + 0x1000, B = Gamepad.XInputBase + 0x2000;
-                Assert(!d.TryCapturePad(A), "a button is not taken while none is being chosen");
-                d.BeginCapture(4);
+                Assert(!d.TryCapturePad(A), "a button is not taken while no switch is being chosen");
+                d.BeginCapture(1);
                 Assert(!d.TryCapturePad(0x20), "a key code is not a button");
-                Assert(d.TryCapturePad(A) && d.Result.SelectPad == A, "the button pressed after choosing becomes the select button");
-                d.BeginCapture(5);
-                Assert(d.TryCapturePad(A) && d.Result.StepPad == 0, "the same button cannot be two switches");
-                Assert(d.TryCapturePad(B) && d.Result.StepPad == B, "…another one can be the step button");
-                d.BeginCapture(6); d.TryCapturePad(Gamepad.JoyBase + 1);
-                Assert(d.Result.BackPad == Gamepad.JoyBase + 1, "…and the back button");
-                d.BeginCapture(4);
-                Assert(d.TryCapture(Keys.Delete) && d.Result.SelectPad == 0, "Delete clears the button being chosen");
-                d.BeginCapture(5);
-                Assert(d.TryCapture(Keys.Escape) && d.Result.StepPad == B && !d.TryCapturePad(A), "Esc cancels the choice");
+                Assert(d.TryCapturePad(A) && d.Result.SelectKey == A, "one choice for a key or a button: a button pressed after choosing becomes the select switch");
+                d.BeginCapture(2);
+                Assert(d.TryCapturePad(A) && d.Result.StepKey != A, "the same button cannot be two switches");
+                Assert(d.TryCapturePad(B) && d.Result.StepKey == B, "…another one can be the step switch");
+                d.BeginCapture(3); d.TryCapturePad(Gamepad.JoyBase + 1);
+                Assert(d.Result.BackKey == Gamepad.JoyBase + 1, "…and the back switch");
+                d.BeginCapture(1);
+                Assert(d.TryCapture(Keys.F6) && d.Result.SelectKey == 0x75, "…the same choice also takes a key of the keyboard");
+                d.BeginCapture(2);
+                Assert(d.TryCapture(Keys.Escape) && d.Result.StepKey == B && !d.TryCapturePad(A), "Esc cancels the choice");
             }
 
             Section("Scanning — dialog");
