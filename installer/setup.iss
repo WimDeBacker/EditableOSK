@@ -154,7 +154,7 @@ Source: "{#BuildDir}\worddb_EN.wfq";  DestDir: "{app}"; \
 Source: "{#BuildDir}\worddb_FR.wfq";                  DestDir: "{app}"; Flags: ignoreversion
 Source: "{#BuildDir}\worddb_IT.wfq";                  DestDir: "{app}"; Flags: ignoreversion
 Source: "{#BuildDir}\worddb_ES.wfq";                  DestDir: "{app}"; Flags: ignoreversion
-Source: "NOTICE_worddb.md";                           DestDir: "{app}"; Flags: ignoreversion
+Source: "..\NOTICE_worddb.md";                       DestDir: "{app}"; Flags: ignoreversion
 
 ; ── Translation ──────────────────────────────────────────────────────────
 Source: "{#BuildDir}\lang_nl.xml";                    DestDir: "{app}"; Flags: ignoreversion
