@@ -2,7 +2,7 @@
 
 ## Pending
 
-Only what is still to be done is listed here, in the order of the owner's priorities (Priority 5 and 6 are left). Numbering: **P** = priority, then steps and details (**1.1**, **6.3**); the numbers are kept when something moves, so a finished step keeps its number under Completed (the items there also keep the numbers they had when they were done: "Priority 7" there is not Priority 7 here). Not planned ideas and a bug that no longer shows up are under "On hold"; everything finished is under "Completed". Status marks: ✓ done, ▶ in progress, ☐ not started.
+Only what is still to be done is listed here, in the order of the owner's priorities (Priority 5 to 7 are left). Numbering: **P** = priority, then steps and details (**1.1**, **6.3**); the numbers are kept when something moves, so a finished step keeps its number under Completed (the items there also keep the numbers they had when they were done: "Priority 7" there is not Priority 7 here). Not planned ideas and a bug that no longer shows up are under "On hold"; everything finished is under "Completed". Status marks: ✓ done, ▶ in progress, ☐ not started.
 
 ### Priority 5 — French, Italian and Spanish: what is left ▶ *(screens, group names and installer are done, see Completed; requested by the owner 2026-10-11)*
 
@@ -20,6 +20,11 @@ A button in Edit Keyboard, tab **Info**, that resets the software completely (se
 - 6.1 **Ask about the word prediction:** ask separately whether the learned words of the word-prediction dictionary (`worddb_XX.learned.wfq`) are reset too.
 - 6.2 **Unsaved keyboard first:** check whether the current keyboard has unsaved changes; if so, ask to save it with **Save as…** before resetting.
 
+### Priority 7 — Remove dead code ☐ *(requested by the owner 2026-10-19)*
+
+- 7.1 **The old combo boxes:** every list in the dialogs is a `TouchChoiceButton` (checked 2026-10-19; also the Language, Toolbar theme and word-database lists of idea I.1, done with the rebuild of Edit Keyboard on 2026-10-04). Remove `TouchComboBox` (`TouchControls.cs`, its comment at the top of the file and its test in `UiGuardTests.cs`), `FluentDialogBase.SelectOrInsertFont(ComboBox, …)` (and its test in `OnScreenKeyboardTests.cs`, keep the `TouchChoiceButton` version and its test), and the `ComboBox` branches that are no longer reached (`FluentButton.cs`, `FluentDialogBase.cs`, `TouchControls.cs`). Check first that no `ComboBox` is left (file dialogs of Windows do not count).
+- 7.2 **The gear button's right-click menu and "Move gear button…":** the menu never opens (a WinForms `Button` raises `MouseClick` only for the left button), so `GearPlacement` cannot be reached; the gear is moved by dragging it in Edit mode. Remove `ShowGearMenu`, `StyledMenu`, `MI`, `MenuFont/Bg/Fg` and the `MouseClick` handler of `_gearBtn`; `StartGearPlacement`, `FinishGearPlacement` and `Mode.GearPlacement` with every branch for it (`KeyboardForm.cs`: `OnKeyClick`, the key highlight, Esc, the toolbar height, the gear's look); the string `📌 Move gear button…` in `LanguageManager.cs` and the four lang files; and the GearPlacement asserts of the window-height test in `OnScreenKeyboardTests.cs`. Check that dragging the gear in Edit mode still works.
+
 ---
 
 ## On hold — not current for now
@@ -28,7 +33,7 @@ Nothing here is to be worked on until it shows up again or the owner decides oth
 
 ### Ideas that are not planned *(decided later, if at all; from the touch-friendly work, 2.4.8)*
 
-- I.1 The same flyout for every other list (Language, Toolbar theme, word-database choice).
+- I.1 ~~The same flyout for every other list (Language, Toolbar theme, word-database choice).~~ Already done on 2026-10-04 (rebuild of Edit Keyboard); found 2026-10-19, the clean-up is 7.1.
 - I.2 A shortcut builder (`Ctrl`/`Alt`/`Shift`/`Win` toggles + key) instead of "Record", for people who cannot type combinations.
 - I.3 **Hold a key down for Windows (found by the owner 2026-10-09):** the keyboard cannot hold a key. A shortcut key sends Win, Space, release in one quick sequence, and a latched sticky Win exists only inside the keyboard (it is added to the *next* key, Windows never sees it held). So "hold Win and press Space several times" (the input-language switcher, Win+Space with three or more languages) does not work, with a shortcut key or with the sticky keys. It needs a real hold: a latched Win is sent to Windows as key-down (`SendInput`, `SendKeysHelper`) and as key-up when it is switched off. Decisions for the owner first:
   - **Which keys:** only Win (the safest, solves the language switcher), or every sticky modifier (Ctrl, Alt, Shift too).
