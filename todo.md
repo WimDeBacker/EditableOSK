@@ -2,7 +2,7 @@
 
 ## Pending
 
-Only what is still to be done is listed here, in the order of the owner's priorities (Priority 5 to 7 are left). Numbering: **P** = priority, then steps and details (**1.1**, **6.3**); the numbers are kept when something moves, so a finished step keeps its number under Completed (the items there also keep the numbers they had when they were done: "Priority 7" there is not Priority 7 here). Not planned ideas and a bug that no longer shows up are under "On hold"; everything finished is under "Completed". Status marks: ✓ done, ▶ in progress, ☐ not started.
+Only what is still to be done is listed here, in the order of the owner's priorities (Priority 5 to 8 are left). Numbering: **P** = priority, then steps and details (**1.1**, **6.3**); the numbers are kept when something moves, so a finished step keeps its number under Completed (the items there also keep the numbers they had when they were done: "Priority 7" there is not Priority 7 here). Not planned ideas and a bug that no longer shows up are under "On hold"; everything finished is under "Completed". Status marks: ✓ done, ▶ in progress, ☐ not started.
 
 ### Priority 5 — French, Italian and Spanish: what is left ▶ *(screens, group names and installer are done, see Completed; requested by the owner 2026-10-11)*
 
@@ -24,6 +24,12 @@ A button in Edit Keyboard, tab **Info**, that resets the software completely (se
 
 - 7.1 **The old combo boxes:** every list in the dialogs is a `TouchChoiceButton` (checked 2026-10-19; also the Language, Toolbar theme and word-database lists of idea I.1, done with the rebuild of Edit Keyboard on 2026-10-04). Remove `TouchComboBox` (`TouchControls.cs`, its comment at the top of the file and its test in `UiGuardTests.cs`), `FluentDialogBase.SelectOrInsertFont(ComboBox, …)` (and its test in `OnScreenKeyboardTests.cs`, keep the `TouchChoiceButton` version and its test), and the `ComboBox` branches that are no longer reached (`FluentButton.cs`, `FluentDialogBase.cs`, `TouchControls.cs`). Check first that no `ComboBox` is left (file dialogs of Windows do not count).
 - 7.2 **The gear button's right-click menu and "Move gear button…":** the menu never opens (a WinForms `Button` raises `MouseClick` only for the left button), so `GearPlacement` cannot be reached; the gear is moved by dragging it in Edit mode. Remove `ShowGearMenu`, `StyledMenu`, `MI`, `MenuFont/Bg/Fg` and the `MouseClick` handler of `_gearBtn`; `StartGearPlacement`, `FinishGearPlacement` and `Mode.GearPlacement` with every branch for it (`KeyboardForm.cs`: `OnKeyClick`, the key highlight, Esc, the toolbar height, the gear's look); the string `📌 Move gear button…` in `LanguageManager.cs` and the four lang files; and the GearPlacement asserts of the window-height test in `OnScreenKeyboardTests.cs`. Check that dragging the gear in Edit mode still works.
+
+### Priority 8 — Scroll buttons for the lists (`TouchList`) ☐ *(motor accessibility; requested by the owner 2026-10-19)*
+
+The three lists (Manage Stylegroups: the groups; Edit Keyboard › Word prediction: Candidates; Open a keyboard) stay open lists, not `TouchChoiceButton`s (decision 2026-10-19: they are master lists and browse lists, a flyout would hide what they show and cost a tap more). Their motor problem is scrolling: only the native thin scroll bar, the wheel, the keyboard or a drag (known limit in the head of `TouchList.cs`). The candidate list is only four rows high, so it overflows soon.
+- 8.1 Give `TouchList` the same two 44 px arrow strips as the flyout of `TouchChoiceButton` (press and hold repeats: 400 ms pause, then a row every 90 ms), shown only when the rows do not fit; share the code with the flyout instead of copying it.
+- 8.2 Keyboard, wheel and screen reader keep working; the strips are not in the Tab order. Update the head comment of `TouchList.cs`; tests for the strips (visible only on overflow, a tap scrolls one row, hold repeats, stop at the ends) and the layout guards / `T_NarrowDialogs` for the three dialogs.
 
 ---
 
