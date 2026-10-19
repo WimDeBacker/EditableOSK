@@ -2,12 +2,18 @@
 
 ## Pending
 
-Only what is still to be done is listed here, in the order of the owner's priorities (only Priority 5 is left). Numbering: **P** = priority, then steps and details (**1.1**, **6.3**); the numbers are kept when something moves, so a finished step keeps its number under Completed (the items there also keep the numbers they had when they were done: "Priority 7" there is not Priority 7 here). Not planned ideas and a bug that no longer shows up are under "On hold"; everything finished is under "Completed". Status marks: ✓ done, ▶ in progress, ☐ not started.
+Only what is still to be done is listed here, in the order of the owner's priorities (Priority 5 and 6 are left). Numbering: **P** = priority, then steps and details (**1.1**, **6.3**); the numbers are kept when something moves, so a finished step keeps its number under Completed (the items there also keep the numbers they had when they were done: "Priority 7" there is not Priority 7 here). Not planned ideas and a bug that no longer shows up are under "On hold"; everything finished is under "Completed". Status marks: ✓ done, ▶ in progress, ☐ not started.
 
 ### Priority 5 — French, Italian and Spanish: what is left ▶ *(screens, group names and installer are done, see Completed; requested by the owner 2026-10-11)*
 
 - 5.7 **Rules of the language of a keyboard (for when the other languages are worked out):** sentence and spacing rules per language (when a sentence starts and the next word is capitalised; French has a space before `? ! : ;` and inside « »), quotation marks (“ ” in English, „ ” in German, « » in French), and the decimal separator (a point or a comma) for the keys and the word prediction; chosen by the language tag of the keyboard (`LayoutMeta.Language`, Priority 4).
 - 5.6 **Quality:** a machine translation is only a first draft: each language needs a review by a native speaker, with the program in front of them (a word that fits a menu is not always the word for a button). Decision for the owner: who reviews, and whether a language is shipped before its review. **Also for the review:** the blocked (vulgar) words of `tools/WordDbBuilder/blocklist_fr/it/es.txt`, the must-have phrases (`musthave_*.txt`), and the word lists themselves (`worddb_FR/IT/ES.xml`: do the suggestions after common words sound natural?). A weakness known now: the lists lean on Tatoeba's learner sentences (e.g. Italian "il" → "passaporto", "francese").
+
+### Priority 6 — Reset: put the program back to its first-start state ☐ *(requested by the owner 2026-10-19)*
+
+A button in Edit Keyboard, tab **Info**, that resets the software completely (settings, user settings, so that the next start is like the first start).
+- 6.1 **Ask about the word prediction:** ask separately whether the learned words of the word-prediction dictionary (`worddb_XX.learned.wfq`) are reset too.
+- 6.2 **Unsaved keyboard first:** check whether the current keyboard has unsaved changes; if so, ask to save it with **Save as…** before resetting.
 
 ---
 
