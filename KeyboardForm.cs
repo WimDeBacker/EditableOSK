@@ -83,7 +83,9 @@ namespace OnScreenKeyboard
             if (!IsHandleCreated) return;
             // Not while a window of the keyboard is open over it (a dialog, a file dialog started from it): raising the keyboard then puts
             // it above that window, which is left behind it and cannot be used. It is raised again when the window has closed.
-            if (OwnedForms.Any(f => f.Visible)) return;
+            // A disabled keyboard is under a modal window that is not necessarily a visible owned form yet (it is being created) or at all
+            // (a file dialog or message box owned by handle only): also not raised then.
+            if (!Enabled || OwnedForms.Any(f => f.Visible)) return;
             var target = _window.AlwaysOnTop ? HWND_TOPMOST : HWND_NOTOPMOST;
             SetWindowPos(Handle, target, 0, 0, 0, 0,
                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);

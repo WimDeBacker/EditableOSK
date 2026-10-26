@@ -72,7 +72,8 @@ namespace OnScreenKeyboard
 
             // The dialog is always-on-top like the keyboard under it. Two always-on-top windows are ordered by when each was last
             // raised, so the dialog raises itself once it is shown: it must open in front of the keyboard, never behind it.
-            Shown += (s, e) => { if (TopMost) BringToFront(); ForceForeground(this); };
+            Shown += (s, e) => { if (TopMost) BringToFront(); ForceForeground(this); StartZOrderWatch(); };
+            FormClosed += (s, e) => StopZOrderWatch();
 
             _tip = new ToolTip { InitialDelay = 400, AutoPopDelay = 10000, ShowAlways = true };
             _err = new ErrorProvider { ContainerControl = this, BlinkStyle = ErrorBlinkStyle.BlinkIfDifferentError };
@@ -827,6 +828,113 @@ namespace OnScreenKeyboard
                 finally { if (attached) AttachThreadInput(me, fgThread, false); }
             }
             catch (Exception) { /* a dialog that cannot take the foreground still works: it is just not raised */ }
+        }
+
+        // ── Z-order watch ────────────────────────────────────────────────
+        // Raising the dialog once when it is shown has not been enough: now and then it still ended up behind the keyboard (the cause could
+        // not be reproduced). While a dialog is open and enabled it is therefore checked a few times a second: when a window of its owner
+        // chain is above it, it is raised again and the situation is logged once (up to a few entries) to find the cause.
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
+        [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        private static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder text, int max);
+
+        private const uint GW_HWNDPREV = 3, GW_OWNER = 4;
+        private const uint SWP_NOSIZE = 0x1, SWP_NOMOVE = 0x2, SWP_NOACTIVATE = 0x10;
+        private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
+        private static int _zLogged;
+        private System.Windows.Forms.Timer _zTimer;
+
+        private void StartZOrderWatch()
+        {
+            if (SendKeysHelper.TestMode || _zTimer != null || IsDisposed) return;
+            _zTimer = new System.Windows.Forms.Timer { Interval = 400 };
+            _zTimer.Tick += (s, e) =>
+            {
+                if (IsDisposed || !Visible || !Enabled || !TopMost) return;    // a dialog of its own on top of this one: that one is the one to watch
+                EnsureInFront(this, log: true);
+            };
+            _zTimer.Start();
+        }
+
+        private void StopZOrderWatch()
+        {
+            if (_zTimer == null) return;
+            _zTimer.Stop(); _zTimer.Dispose(); _zTimer = null;
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hWnd);
+        [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        private static extern int GetClassName(IntPtr hWnd, System.Text.StringBuilder name, int max);
+
+        /// <summary>
+        /// True when another visible window of this program that the dialog does not own is above it in the z-order (normally the keyboard, which
+        /// an owned dialog always stays in front of: so when this happens the dialog is not really owned by it, or the keyboard was raised
+        /// separately). Windows owned by the dialog itself (its own child dialogs) belong in front and do not count.
+        /// </summary>
+        internal static bool IsBehindOwner(Form form)
+        {
+            if (form == null || form.IsDisposed || !form.IsHandleCreated) return false;
+            uint myPid = (uint)Environment.ProcessId;
+            int guard = 0;
+            for (IntPtr w = GetWindow(form.Handle, GW_HWNDPREV); w != IntPtr.Zero && guard++ < 2000; w = GetWindow(w, GW_HWNDPREV))
+            {
+                if (!IsWindowVisible(w)) continue;
+                GetWindowThreadProcessId(w, out uint pid);
+                if (pid != myPid) continue;
+                var cls = new System.Text.StringBuilder(64);
+                GetClassName(w, cls, cls.Capacity);
+                if (!cls.ToString().StartsWith("WindowsForms10.Window", StringComparison.Ordinal)) continue;   // forms only: not tooltips or other helper windows
+                bool ownedByDialog = false;
+                for (IntPtr o = GetWindow(w, GW_OWNER); o != IntPtr.Zero; o = GetWindow(o, GW_OWNER))
+                    if (o == form.Handle) { ownedByDialog = true; break; }
+                if (!ownedByDialog) return true;
+            }
+            return false;
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
+        private static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int index, IntPtr value);
+        private const int GWLP_HWNDPARENT = -8;
+
+        /// <summary>
+        /// Gives the dialog its owner back when the owner relation of the window was lost (the owner's window was recreated, e.g. by a change of
+        /// the title bar): an unowned dialog is not kept above the keyboard by Windows. True when it had to be repaired.
+        /// </summary>
+        internal static bool RepairOwner(Form form)
+        {
+            if (form == null || form.IsDisposed || !form.IsHandleCreated) return false;
+            var owner = form.Owner;
+            if (owner == null || owner.IsDisposed || !owner.IsHandleCreated) return false;
+            if (GetWindow(form.Handle, GW_OWNER) == owner.Handle) return false;
+            SetWindowLongPtr(form.Handle, GWLP_HWNDPARENT, owner.Handle);
+            return true;
+        }
+
+        /// <summary>Raises <paramref name="form"/> above its owners again when it is behind one of them; true when it had to.</summary>
+        internal static bool EnsureInFront(Form form, bool log = false)
+        {
+            bool repaired = false;
+            try { repaired = RepairOwner(form); } catch (Exception) { }
+            if (!IsBehindOwner(form)) return repaired;
+            try
+            {
+                if (log && _zLogged < 5)
+                {
+                    _zLogged++;
+                    IntPtr fg = GetForegroundWindow();
+                    var sb = new System.Text.StringBuilder(128);
+                    if (fg != IntPtr.Zero) GetWindowText(fg, sb, sb.Capacity);
+                    Program.LogError("Z-order", new InvalidOperationException(
+                        $"Dialog '{form.Text}' was behind a window of the program; raised again (owner link repaired: {repaired}). Foreground window: '{sb}' ({(fg == form.Handle ? "the dialog" : "not the dialog")})."));
+                }
+                SetWindowPos(form.Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                form.BringToFront();
+                if (!log || _zLogged <= 5) ForceForeground(form);    // taking the foreground repeatedly would be a nuisance if something keeps a window above the dialog
+            }
+            catch (Exception) { /* best effort */ }
+            return true;
         }
 
         /// <summary>Sizes the window to its content, limited to the screen's working area, and centres it on its parent.</summary>

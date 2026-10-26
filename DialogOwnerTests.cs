@@ -53,6 +53,29 @@ namespace OnScreenKeyboard
             Assert(bad.Count == 0, "owners: every file dialog, message box and dialog is opened with an owner" + (bad.Count == 0 ? "" : " — " + string.Join("; ", bad)));
         }
 
+        private static void T_DialogZOrderWatch()
+        {
+            Section("A dialog that ends up behind its owner is raised again");
+
+            using var owner = new System.Windows.Forms.Form { TopMost = true, ShowInTaskbar = false, Opacity = 0.01, StartPosition = System.Windows.Forms.FormStartPosition.Manual, Size = new System.Drawing.Size(80, 80), Location = new System.Drawing.Point(0, 0) };
+            using var dlg   = new System.Windows.Forms.Form { TopMost = true, ShowInTaskbar = false, Opacity = 0.01, StartPosition = System.Windows.Forms.FormStartPosition.Manual, Size = new System.Drawing.Size(80, 80), Location = new System.Drawing.Point(0, 0) };
+            owner.Show();
+            dlg.Show();
+            dlg.BringToFront();
+            Assert(!FluentDialogBase.IsBehindOwner(dlg), "z-order: a freshly shown dialog is in front of its owner");
+
+            // Raise the owner above the dialog, as whatever intermittently does it in practice.
+            SetWindowPosForTest(owner.Handle);
+            Assert(FluentDialogBase.IsBehindOwner(dlg), "z-order: the raised owner is detected above the dialog");
+            Assert(FluentDialogBase.EnsureInFront(dlg), "z-order: EnsureInFront reports that it had to raise the dialog");
+            Assert(!FluentDialogBase.IsBehindOwner(dlg), "z-order: the dialog is in front of its owner again");
+            Assert(!FluentDialogBase.EnsureInFront(dlg), "z-order: nothing is done when the dialog is already in front");
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
+        private static void SetWindowPosForTest(IntPtr h) => SetWindowPos(h, new IntPtr(-1), 0, 0, 0, 0, 0x1 | 0x2 | 0x10);
+
         private static int LineOf(string text, int index) => text.Take(index).Count(c => c == '\n') + 1;
     }
 }

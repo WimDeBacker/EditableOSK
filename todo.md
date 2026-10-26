@@ -67,6 +67,10 @@ Nothing here is to be worked on until it shows up again or the owner decides oth
 
 ## Completed
 
+### The same flyout for every list ✓ *(was idea I.1 under "On hold"; found already done and closed 2026-10-26)*
+
+The lists of the Edit Keyboard window (Interface language, Keyboard language, Toolbar theme, the word-database choice) and of the other windows (first start, wizard, scanning settings) are `TouchChoiceButton`s: the same flyout with rows of 44 px as the Key Editor has. The only `ComboBox` that is still made is in a test (`OnScreenKeyboardTests.cs`); `TouchComboBox` remains as a control and in the UI tests. It was done during the touch-friendly redesign and the later windows, without the idea being closed in this file.
+
 ### Word lists for French, Italian and Spanish ✓ *(was 5.3; built 2026-10-18)*
 
 `worddb_FR.xml`, `worddb_IT.xml`, `worddb_ES.xml` (20,000 words each, 10 next words per word, 6.4–6.8 MB; csproj targets `ConvertWordDb_FR/IT/ES`, installer lines, found by `LanguageRegistry` as `fr`/`it`/`es`). Made by **`tools/WordDbBuilder`** (README there; the corpora are in `C:\dev\worddb_bronnen\`, not in git) from **Tatoeba** (CC BY 2.0 FR, weight 0.96: everyday sentences, 0.5–1M per language) and **Europarl v7** (weight 0.04: general vocabulary and names). Chosen under the owner's licence stance (no commercial use by others): no CC BY-SA sources (Wikipedia, FrequencyWords, Lexique, wordfreq); sources and terms in **`NOTICE_worddb.md`** (also installed). 
@@ -154,6 +158,10 @@ The wish was eight ready-made `.kbl` files (4 wizard styles × 2 key arrangement
 - **Consequences:** the heading "Window" was removed from Edit Keyboard to make room for the second language row (the supported minimum widths are 530 px for the Group Editor at +40 % text, was 520, and 560 px for Edit Keyboard at +80 % text, was 540). The owner found no old `.kbl` files to convert; the old-format reader is tested with a made-up old file (`T_GroupNames`). All manual checks of the owner done.
 
 **Not done, moved:** sentence and spacing rules, quotation marks and the decimal separator per language, : Priority 5 (5.7). The title and description per keyboard were done, see the entry above. Right-to-left was dropped. Translating names automatically is not planned.
+
+### Z-order watch for dialogs (2026-10-26, owner: the Edit Keyboard / Edit Key window still sometimes appears behind the keyboard)
+
+Cause not found (not reproducible). Defensive fix in `FluentDialogBase`: while a dialog is shown, enabled and top-most, a 400 ms timer checks whether another visible form of this program that the dialog does not own is above it (`IsBehindOwner`); if so it raises the dialog again (`EnsureInFront`) and logs the situation (foreground window) to `OnScreenKeyboard_error.log` (max 5 entries per run, tag `Z-order`). Test `T_DialogZOrderWatch`. **If the owner still sees it: read that log entry, it tells what was in front.**
 
 ### Dialogs opened behind the keyboard again ✓ *(was Priority 0; reported by the owner 2026-10-11, fixed and confirmed by the owner the same day)*
 
