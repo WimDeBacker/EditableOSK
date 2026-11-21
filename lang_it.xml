@@ -118,7 +118,6 @@
   <String key="tb: Split"     value="Dividi" />
 
   <!-- Gear menu -->
-  <String key="📌 Move gear button…" value="📌 Sposta il pulsante a forma di ingranaggio…" />
 
   <!-- Dialog buttons (clean keys, no emoji) -->
   <String key="Apply"      value="&amp;Applica" />

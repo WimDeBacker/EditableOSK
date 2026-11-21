@@ -118,7 +118,6 @@
   <String key="tb: Split"     value="Scinder" />
 
   <!-- Gear menu -->
-  <String key="📌 Move gear button…" value="📌 Déplacer le bouton roue dentée…" />
 
   <!-- Dialog buttons (clean keys, no emoji) -->
   <String key="Apply"      value="&amp;Appliquer" />

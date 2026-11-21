@@ -430,7 +430,6 @@ namespace OnScreenKeyboard
             ["Key height hint"]      = "1 = one key tall,  2 = two keys tall,  ...",
             ["-1 = global default  |  0 = no border  |  1-10 = px"]
                                      = "-1 = global default  |  0 = no border  |  1-10 = px",
-            ["📌 Move gear button…"] = "📌 Move gear button…",
             ["Send mode"]            = "Send mode",
             ["Text"]                 = "Text",
             ["Key/Shortcut"]         = "&Key/Shortcut",

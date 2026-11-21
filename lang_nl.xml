@@ -118,7 +118,6 @@
   <String key="tb: Split"     value="Splitsen" />
 
   <!-- Gear menu -->
-  <String key="📌 Move gear button…" value="📌 Tandwielknop verplaatsen…" />
 
   <!-- Dialog buttons (clean keys, no emoji) -->
   <String key="Apply"      value="Toe&amp;passen" />

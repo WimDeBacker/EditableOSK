@@ -950,10 +950,6 @@ namespace OnScreenKeyboard
                         txt.BackColor = SystemColors.Window;
                         txt.ForeColor = SystemColors.WindowText;
                         break;
-                    case ComboBox cmb:
-                        cmb.BackColor = SystemColors.Window;
-                        cmb.ForeColor = SystemColors.WindowText;
-                        break;
                     case NumericUpDown nud:
                         nud.BackColor = SystemColors.Window;
                         nud.ForeColor = SystemColors.WindowText;
@@ -1015,10 +1011,6 @@ namespace OnScreenKeyboard
                         case TextBox txt:
                             txt.BackColor = inputBg;
                             txt.ForeColor = fg;
-                            break;
-                        case ComboBox cmb:
-                            cmb.BackColor = inputBg;
-                            cmb.ForeColor = fg;
                             break;
                         case NumericUpDown nud:
                             nud.BackColor = inputBg;

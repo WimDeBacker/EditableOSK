@@ -310,35 +310,10 @@ namespace OnScreenKeyboard
             SettingsManager.ParseColor(hex, fallback);
 
         /// <summary>
-        /// Selects <paramref name="fontName"/> in <paramref name="combo"/>. If the name isn't
-        /// installed (so it's not already one of the combo's items), it's inserted rather than
-        /// silently substituted for whatever happens to be first in the list — a layout authored
-        /// on a machine that had this font must keep saying so on one that doesn't, or the real
-        /// font name gets permanently overwritten the next time the form is applied. Inserted at
-        /// index 1, not 0, so it never collides with a reserved "(inherit standard)" / "(none)"
-        /// placeholder some callers keep at index 0 — harmless for callers with no such
-        /// placeholder, since the list is otherwise just alphabetically sorted installed fonts.
-        /// </summary>
-        protected static void SelectOrInsertFont(ComboBox combo, string fontName)
-        {
-            if (string.IsNullOrEmpty(fontName))
-            {
-                combo.SelectedIndex = combo.Items.Count > 0 ? 0 : -1;
-                return;
-            }
-            int idx = combo.Items.IndexOf(fontName);
-            if (idx < 0)
-            {
-                idx = Math.Min(1, combo.Items.Count);
-                combo.Items.Insert(idx, fontName);
-            }
-            combo.SelectedIndex = idx;
-        }
-
-        /// <summary>
-        /// The <see cref="TouchChoiceButton"/> version of <see cref="SelectOrInsertFont(ComboBox, string)"/>: selects
-        /// <paramref name="name"/> without raising the change event; a font that isn't installed is inserted (at index 1,
-        /// after a possible "(inherit)" placeholder at index 0), not substituted. An empty name selects index 0.
+        /// Selects <paramref name="name"/> in <paramref name="chooser"/> without raising the change event. A font that isn't installed is
+        /// inserted (at index 1, after a possible "(inherit)" placeholder at index 0), not substituted for whatever happens to be first in
+        /// the list: a layout authored on a machine that had this font must keep saying so on one that doesn't, or the real font name gets
+        /// permanently overwritten the next time the form is applied. An empty name selects index 0.
         /// </summary>
         internal static void SelectOrInsertFont(TouchChoiceButton chooser, string name)
         {
@@ -717,7 +692,7 @@ namespace OnScreenKeyboard
             input.Margin = new Padding(0, 4, 0, 4);
             if (fill)
             {
-                if (input is TextBoxBase || input is ComboBox)
+                if (input is TextBoxBase)
                     input.MinimumSize = new Size(Math.Max(input.MinimumSize.Width, Touch.InputMinWidth), Touch.Target);
                 input.Dock = DockStyle.Fill;
             }

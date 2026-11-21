@@ -3,13 +3,13 @@
 // Why these exist
 //   The on-screen keyboard is meant for people with a motor disability, so every clickable
 //   control in the editors must be a comfortable target: at least 44 x 44 design pixels
-//   (WCAG 2.5.5, "Target Size"). The stock WinForms TextBox / ComboBox / NumericUpDown take
+//   (WCAG 2.5.5, "Target Size"). The stock WinForms TextBox / NumericUpDown take
 //   their height from the font (about 26–30 px) and NumericUpDown's spin arrows are only a few
-//   pixels wide, so they are wrapped or replaced here:
+//   pixels wide, so they are wrapped or replaced here (a list of choices is a TouchChoiceButton,
+//   see TouchChoiceButton.cs; there is no ComboBox in the program):
 //
 //     TouchTextBox   a real TextBox (same type, same API) drawn 44 px tall with the text
 //                    vertically centred
-//     TouchComboBox  a real ComboBox, owner-drawn so it and its list rows are 44 px tall
 //     TouchCheckBox  a real CheckBox whose whole 44 px row is the click target
 //     TouchStepper   "[-] value [+]" with two 44 px buttons, replaces NumericUpDown
 //     SectionBar     large segmented buttons that switch between the sections of a dialog
@@ -42,12 +42,12 @@ namespace OnScreenKeyboard
         /// </summary>
         public const int LabelMaxWidth = 260;
 
-        /// <summary>Narrowest text or combo input, so a section is never squeezed to nothing.</summary>
+        /// <summary>Narrowest text input, so a section is never squeezed to nothing.</summary>
         public const int InputMinWidth = 240;
 
         /// <summary>The kinds of control the user clicks, taps or types into (checked by the size guard).</summary>
         public static bool IsPointerControl(Control c) =>
-            c is ButtonBase || c is ComboBox || c is TextBoxBase || c is NumericUpDown || c is TrackBar;
+            c is ButtonBase || c is TextBoxBase || c is NumericUpDown || c is TrackBar;
 
         /// <summary>Font of the "-" and "+" glyphs on a stepper button.</summary>
         internal static readonly Font StepperFont = new Font(Fluent.FontLabel.FontFamily, 16f, FontStyle.Bold);
@@ -217,70 +217,6 @@ namespace OnScreenKeyboard
                 return;   // the nested assignment already raised TextChanged with the clean text
             }
             base.OnTextChanged(e);
-        }
-    }
-
-    // ════════════════════════════════════════════════════════════════════
-    //  TouchComboBox
-    // ════════════════════════════════════════════════════════════════════
-
-    /// <summary>
-    /// A drop-down list <see cref="ComboBox"/> that is at least 44 px tall, and whose list rows
-    /// are big enough to tap. Owner-drawn: a ComboBox's height follows its item height, and the
-    /// drawing has to honour the dialog's dark / light / high-contrast colours itself.
-    /// </summary>
-    internal class TouchComboBox : ComboBox
-    {
-        public TouchComboBox()
-        {
-            DropDownStyle  = ComboBoxStyle.DropDownList;
-            DrawMode       = DrawMode.OwnerDrawFixed;
-            FlatStyle      = FlatStyle.Flat;
-            IntegralHeight = false;
-            Font           = Fluent.FontInput;
-            ItemHeight     = Touch.Target - 8;
-            MinimumSize    = new Size(0, Touch.Target);
-        }
-
-        protected override void OnHandleCreated(EventArgs e)
-        {
-            base.OnHandleCreated(e);
-            EnsureTouchHeight();
-        }
-
-        protected override void OnFontChanged(EventArgs e)
-        {
-            base.OnFontChanged(e);
-            if (IsHandleCreated) EnsureTouchHeight();
-        }
-
-        /// <summary>Grows the item height until the closed box reaches the (DPI-scaled) target size.</summary>
-        private void EnsureTouchHeight()
-        {
-            int min = (int)Math.Round(Touch.Target * DeviceDpi / 96.0);
-            for (int guard = 0; Height < min && guard < 60; guard++) ItemHeight++;
-        }
-
-        protected override void OnDrawItem(DrawItemEventArgs e)
-        {
-            bool hc      = SystemInformation.HighContrast;
-            bool inList  = (e.State & DrawItemState.ComboBoxEdit) == 0;
-            bool hot     = inList && (e.State & DrawItemState.Selected) != 0;
-            Color bg = hot ? (hc ? SystemColors.Highlight     : Fluent.Accent)
-                           : (hc ? SystemColors.Window        : BackColor);
-            Color fg = hot ? (hc ? SystemColors.HighlightText : Color.White)
-                           : (hc ? SystemColors.WindowText    : ForeColor);
-
-            using (var b = new SolidBrush(bg)) e.Graphics.FillRectangle(b, e.Bounds);
-            if (e.Index >= 0)
-            {
-                var textRect = new Rectangle(e.Bounds.X + 8, e.Bounds.Y, Math.Max(0, e.Bounds.Width - 12), e.Bounds.Height);
-                TextRenderer.DrawText(e.Graphics, GetItemText(Items[e.Index]), Font, textRect, fg,
-                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter |
-                    TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
-            }
-            if (!inList && (e.State & DrawItemState.Focus) != 0)
-                ControlPaint.DrawFocusRectangle(e.Graphics, Rectangle.Inflate(e.Bounds, -2, -2), fg, bg);
         }
     }
 

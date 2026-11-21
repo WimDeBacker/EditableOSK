@@ -25,8 +25,8 @@ namespace OnScreenKeyboard
     ///   <item><b>No focus stealing</b> — <c>WS_EX_NOACTIVATE</c> and
     ///   <c>NoActivateButton</c> ensure clicking the keyboard never takes focus away
     ///   from the application the user is typing into.</item>
-    ///   <item><b>Three modes</b> — Normal (typing), Edit (layout editing), and
-    ///   GearPlacement (repositioning the gear button).</item>
+    ///   <item><b>Two modes</b> — Normal (typing) and Edit (layout editing; the gear
+    ///   button is moved there by dragging it).</item>
     ///   <item><b>All state in memory</b> — the layout is auto-saved to XML after every
     ///   edit so no data is lost if the app closes unexpectedly.</item>
     /// </list>
@@ -123,7 +123,7 @@ namespace OnScreenKeyboard
         internal WindowState  _window = new WindowState();
         internal LayoutMeta   _meta   = new LayoutMeta();
 
-        private enum Mode { Normal, Edit, GearPlacement }
+        private enum Mode { Normal, Edit }
 
         // Gear button appearance per mode
         // Normal-mode colors come from the standard group (StdKeyColor / StdFontColor)
@@ -535,7 +535,6 @@ namespace OnScreenKeyboard
                 if (_meta.HoldToEdit) return;   // handled by _holdTimer instead
                 SetMode(_mode == Mode.Edit ? Mode.Normal : Mode.Edit);
             };
-            _gearBtn.MouseClick += (s, e) => { if (e.Button == MouseButtons.Right) ShowGearMenu(); };
 
             // Hold-to-edit timer: fires after 1 second when HoldToEdit setting is on.
             _holdTimer = new System.Windows.Forms.Timer { Interval = 1000 };
@@ -632,7 +631,7 @@ namespace OnScreenKeyboard
 
         /// <summary>
         /// Creates the thin coloured bar docked to the bottom of the window.
-        /// It is hidden in Normal mode and shown in Edit / GearPlacement mode as a
+        /// It is hidden in Normal mode and shown in Edit mode as a
         /// visual indicator that the keyboard is not in its typing state.
         /// </summary>
         private void BuildEditStrip()
@@ -1165,7 +1164,7 @@ namespace OnScreenKeyboard
 
         /// <summary>
         /// Creates a single keyboard button for the given <paramref name="cell"/> and
-        /// wires all mouse event handlers needed for Normal, Edit, and GearPlacement modes.
+        /// wires all mouse event handlers needed for Normal and Edit mode.
         /// <para>
         /// Uses <see cref="NoActivateButton"/> so clicking the key never steals focus from
         /// the application the user is typing into.
@@ -1550,15 +1549,6 @@ namespace OnScreenKeyboard
                 btn.FlatAppearance.BorderColor = Color.FromArgb(80, 80, 100);
                 btn.FlatAppearance.BorderSize  = 1;
                 btn.Text = "";
-            }
-            else if (_mode == Mode.GearPlacement)
-            {
-                // Empty cells must be visible and clickable so the user can
-                // place the gear button on them.  The blue highlight is applied
-                // by RefreshAllButtons; just ensure the button is shown.
-                btn.Visible = true;
-                btn.Enabled = true;
-                btn.Text    = "";
             }
             else
             {
@@ -2149,48 +2139,34 @@ namespace OnScreenKeyboard
                     bool isWP = p.Send != null &&
                                 p.Send.StartsWith("wp:", StringComparison.Ordinal);
                     bool latched = _latchedMods.Contains(cell);
-                    if (_mode == Mode.GearPlacement)
+                    ApplyPropsToButton(btn, p, latched, _lockedMods.Contains(cell));
+                    if (skipFontCalc)
                     {
-                        // Highlight all keys — user picks the new gear location
-                        btn.BackColor = Color.FromArgb(50, 60, 160);
-                        btn.ForeColor = Color.White;
-                        btn.FlatAppearance.BorderColor = Color.FromArgb(120, 140, 255);
-                        btn.FlatAppearance.BorderSize  = 2;
-                        // SetButtonFont is skipped in this mode, so update tags directly
+                        // Font already set by the preceding LayoutButtons() call;
+                        // just refresh the tag/label without re-measuring text.
+                        // WP buttons are skipped — LayoutButtons() already ran ApplyWPTags().
                         if (!isWP)
                             UpdateCornerTag(btn, p, shifted, altGr);
                     }
                     else
                     {
-                        ApplyPropsToButton(btn, p, latched, _lockedMods.Contains(cell));
-                        if (skipFontCalc)
-                        {
-                            // Font already set by the preceding LayoutButtons() call;
-                            // just refresh the tag/label without re-measuring text.
-                            // WP buttons are skipped — LayoutButtons() already ran ApplyWPTags().
-                            if (!isWP)
-                                UpdateCornerTag(btn, p, shifted, altGr);
-                        }
-                        else
-                        {
-                            // SetButtonFont calculates size AND calls UpdateCornerTag internally.
-                            SetButtonFont(btn, p, btn.Height, btn.Width, shifted, altGr);
-                        }
-                        ApplyEmptyKeyStyle(btn, p);
-                        // Selection highlight — the ring is painted entirely in OnButtonPaint
-                        // (a dark→white→dark sandwich ring, visible on any key colour).
-                        // Set BorderSize = 0 so WinForms doesn't overdraw our ring.
-                        if (_mode == Mode.Edit && cell == _selectedCell)
-                            btn.FlatAppearance.BorderSize = 0;
-
-                        // WP buttons need an explicit Invalidate() when skipFontCalc is
-                        // true: UpdateCornerTag AND ApplyWPTags are both skipped in that
-                        // path, so there is no other repaint trigger.  Without this the
-                        // selection ring can get stuck (BorderSize was already 0, setter
-                        // detects no change, skips its internal Invalidate).
-                        if (_mode == Mode.Edit && isWP && skipFontCalc)
-                            btn.Invalidate();
+                        // SetButtonFont calculates size AND calls UpdateCornerTag internally.
+                        SetButtonFont(btn, p, btn.Height, btn.Width, shifted, altGr);
                     }
+                    ApplyEmptyKeyStyle(btn, p);
+                    // Selection highlight — the ring is painted entirely in OnButtonPaint
+                    // (a dark→white→dark sandwich ring, visible on any key colour).
+                    // Set BorderSize = 0 so WinForms doesn't overdraw our ring.
+                    if (_mode == Mode.Edit && cell == _selectedCell)
+                        btn.FlatAppearance.BorderSize = 0;
+
+                    // WP buttons need an explicit Invalidate() when skipFontCalc is
+                    // true: UpdateCornerTag AND ApplyWPTags are both skipped in that
+                    // path, so there is no other repaint trigger.  Without this the
+                    // selection ring can get stuck (BorderSize was already 0, setter
+                    // detects no change, skips its internal Invalidate).
+                    if (_mode == Mode.Edit && isWP && skipFontCalc)
+                        btn.Invalidate();
                 }
             }
             finally { ResumeLayout(false); }
@@ -2333,40 +2309,6 @@ namespace OnScreenKeyboard
         /// </summary>
         private static string BtnText(string s) => (s ?? "").Replace("&","&&");
 
-        // ── Gear menu ─────────────────────────────────────────────────
-        // The gear button's right-click context menu. Currently it has one entry:
-        // "Move gear button…" which enters GearPlacement mode.
-
-        private static readonly Font   MenuFont = new Font("Segoe UI", 11.5f);
-        private static readonly Color  MenuBg   = ColorTranslator.FromHtml("#1A1A2E");
-        private static readonly Color  MenuFg   = ColorTranslator.FromHtml("#E0E0FF");
-
-        /// <summary>Shows the gear button's right-click context menu below the gear button.</summary>
-        private void ShowGearMenu()
-        {
-            var menu = StyledMenu();
-            menu.Closed += (s, e) => BeginInvoke((Action)menu.Dispose);
-            MI(menu, Lang.T("📌 Move gear button…"), StartGearPlacement);
-            menu.Show(_gearBtn, new Point(0, _gearBtn.Height));
-        }
-
-        /// <summary>Creates a dark-themed <see cref="ContextMenuStrip"/> styled to match the toolbar.</summary>
-        private ContextMenuStrip StyledMenu()
-        {
-            var m = new ContextMenuStrip();
-            m.BackColor = MenuBg; m.ForeColor = MenuFg; m.Font = MenuFont;
-            return m;
-        }
-
-        /// <summary>Adds a styled menu item to the given context menu strip.</summary>
-        private void MI(ContextMenuStrip m, string text, Action action)
-        {
-            var item = new ToolStripMenuItem(text)
-            { BackColor = MenuBg, ForeColor = MenuFg, Font = MenuFont };
-            item.Click += (s, e) => action();
-            m.Items.Add(item);
-        }
-
         // ── Key click ─────────────────────────────────────────────────
 
         /// <summary>
@@ -2378,8 +2320,7 @@ namespace OnScreenKeyboard
         {
             switch (_mode)
             {
-                case Mode.Normal:        HandleNormalClick(cell);   break;
-                case Mode.GearPlacement: FinishGearPlacement(cell); break;
+                case Mode.Normal: HandleNormalClick(cell); break;
             }
         }
 
@@ -2909,7 +2850,7 @@ namespace OnScreenKeyboard
         /// Mirrors the <c>th</c> calculation in <see cref="LayoutButtons"/>:
         /// <list type="bullet">
         ///   <item><see cref="Mode.Edit"/>: <c>_toolbar</c> (row 1) + <c>_toolbarEdit</c> (row 2)</item>
-        ///   <item><see cref="Mode.Normal"/> / <see cref="Mode.GearPlacement"/>: 0 (no toolbars visible)</item>
+        ///   <item><see cref="Mode.Normal"/>: 0 (no toolbars visible)</item>
         /// </list>
         /// </remarks>
         private int ToolbarHeightForMode(Mode mode)
@@ -3130,43 +3071,6 @@ namespace OnScreenKeyboard
         }
 
         /// <summary>
-        /// Enters GearPlacement mode: all keys are highlighted in blue so the user can
-        /// click one to become the new gear button home cell.
-        /// The window height is adjusted to keep the key-grid size constant.
-        /// </summary>
-        private void StartGearPlacement()
-        {
-            int heightDelta = ToolbarHeightForMode(Mode.GearPlacement) - ToolbarHeightForMode(_mode);
-            _mode = Mode.GearPlacement;
-            _inModeTransition = true;
-            try   { if (heightDelta != 0) Height += heightDelta; }
-            finally { _inModeTransition = false; }
-            ApplyModeIndicators();          // sets toolbar visibility + LayoutButtons()
-            RefreshAllButtons(skipFontCalc: true);
-            UpdateScanning();
-        }
-
-        /// <summary>
-        /// Completes GearPlacement mode by recording the chosen cell's row/column as the
-        /// gear button's new home, then returning to Normal mode.
-        /// The window height is adjusted to keep the key-grid size constant.
-        /// </summary>
-        private void FinishGearPlacement(GridCell cell)
-        {
-            _meta.GearRow = cell.Row;
-            _meta.GearCol = cell.Col;
-            int heightDelta = ToolbarHeightForMode(Mode.Normal) - ToolbarHeightForMode(_mode);
-            _mode = Mode.Normal;
-            _inModeTransition = true;
-            try   { if (heightDelta != 0) Height += heightDelta; }
-            finally { _inModeTransition = false; }
-            ApplyModeIndicators();           // sets toolbar visibility + LayoutButtons()
-            RefreshAllButtons(skipFontCalc: true);
-            AutoSave();
-            UpdateScanning();
-        }
-
-        /// <summary>
         /// Updates all visual indicators that reflect the current mode: edit strip colour,
         /// toolbar visibility, gear button glyph and colour, and the enabled state of toolbar
         /// buttons. Always ends with <see cref="LayoutButtons"/> to reflow the key grid.
@@ -3186,15 +3090,6 @@ namespace OnScreenKeyboard
                     // Set Tag to empty text so OnButtonPaint draws nothing — WinForms renders the image.
                     _gearBtn.Image       = SvgIconLoader.Load("stopEditing.svg", Color.White, 30);
                     _gearBtn.Tag         = ("", "", "", Color.White, false, 0);
-                    _gearBtn.Invalidate();
-                    break;
-                case Mode.GearPlacement:
-                    _editStrip.BackColor = Color.FromArgb(80, 80, 200);
-                    _editStrip.Visible   = true;
-                    _toolbar.Visible     = false;
-                    _gearBtn.BackColor   = Color.FromArgb(60, 60, 180);
-                    _gearBtn.Image       = null;
-                    _gearBtn.Tag         = ("📌", "", "", Color.White, false, 0);
                     _gearBtn.Invalidate();
                     break;
                 default:
@@ -3693,14 +3588,6 @@ namespace OnScreenKeyboard
                 _fmtPaintMode = false; UpdatePaintModeCursors();
                 _keyPaintMode = false; UpdateKeyPaintModeCursors();
                 RefreshToolbarEditState();
-                e.Handled = true;
-                return;
-            }
-            if (_mode == Mode.GearPlacement && e.KeyCode == Keys.Escape)
-            {
-                _mode = Mode.Normal;
-                ApplyModeIndicators();          // ends with LayoutButtons()
-                RefreshAllButtons(skipFontCalc: true);
                 e.Handled = true;
                 return;
             }

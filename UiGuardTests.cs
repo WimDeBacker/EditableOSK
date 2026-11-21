@@ -182,7 +182,7 @@ namespace OnScreenKeyboard
         // ════════════════════════════════════════════════════════════════
         private static void T_TouchControls()
         {
-            Section("Touch controls — TouchTextBox / TouchComboBox / TouchCheckBox");
+            Section("Touch controls — TouchTextBox / TouchCheckBox");
 
             using (var host = new Form())
             {
@@ -206,17 +206,6 @@ namespace OnScreenKeyboard
                 Assert(tb.Text == "x y" && changed == 1, $"TouchTextBox: one TextChanged for a cleaned paste ({changed})");
                 tb.Height = 10;
                 Assert(tb.Height >= Touch.Target, "TouchTextBox: cannot be made shorter than the target size");
-
-                // ── TouchComboBox ──
-                var cb = new TouchComboBox();
-                cb.Items.AddRange(new object[] { "one", "two" });
-                host.Controls.Add(cb);
-                _ = cb.Handle;
-                int minH = (int)Math.Round(Touch.Target * cb.DeviceDpi / 96.0);
-                Assert(cb.Height >= minH, $"TouchComboBox: at least {minH} px tall ({cb.Height})");
-                Assert(cb.DropDownStyle == ComboBoxStyle.DropDownList && cb.DrawMode == DrawMode.OwnerDrawFixed,
-                    "TouchComboBox: drop-down list, owner-drawn");
-                Assert(cb.ItemHeight >= Touch.Target - 8, $"TouchComboBox: list rows are tall enough to tap ({cb.ItemHeight})");
 
                 // ── TouchCheckBox ──
                 var ck = new TouchCheckBox { Text = "Auto" };

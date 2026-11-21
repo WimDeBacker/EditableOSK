@@ -4437,23 +4437,17 @@ namespace OnScreenKeyboard
             // KeyboardForm.ToolbarHeightForMode mirrors the 'th' calculation in LayoutButtons:
             //   Mode.Edit          → _toolbar.Height + _toolbarEdit.Height  = 54 + 54 = 108
             //   Mode.Normal        → 0  (no toolbars visible)
-            //   Mode.GearPlacement → 0  (no toolbars visible)
             const int ToolbarH     = 54;   // KeyboardForm._toolbar.Height
             const int ToolbarEditH = 54;   // KeyboardForm._toolbarEdit.Height
             const int ThEdit   = ToolbarH + ToolbarEditH;  // 108
             const int ThNormal = 0;
-            const int ThGear   = 0;
 
             Assert(ThEdit == 108, "GrowWindow: Edit mode toolbar height = 108 px (54 + 54)");
 
-            // Per-transition height deltas (SetMode / StartGearPlacement / FinishGearPlacement
-            // apply: Height += ToolbarHeightForMode(newMode) - ToolbarHeightForMode(oldMode))
+            // Per-transition height deltas (SetMode applies:
+            // Height += ToolbarHeightForMode(newMode) - ToolbarHeightForMode(oldMode))
             Assert(ThEdit   - ThNormal ==  108, "GrowWindow: Normal → Edit  grows window by 108 px");
             Assert(ThNormal - ThEdit   == -108, "GrowWindow: Edit → Normal  shrinks window by 108 px");
-            Assert(ThGear   - ThEdit   == -108, "GrowWindow: Edit → GearPlacement  shrinks window by 108 px");
-            Assert(ThEdit   - ThGear   ==  108, "GrowWindow: GearPlacement → Edit  grows window by 108 px");
-            Assert(ThNormal - ThGear   ==    0, "GrowWindow: Normal → GearPlacement  delta is 0 px");
-            Assert(ThGear   - ThNormal ==    0, "GrowWindow: GearPlacement → Normal  delta is 0 px");
 
             // usableH invariant: after the mode switch the key-grid area is unchanged.
             // usableH = ClientSize.Height - th - Pad*2 - Gap*(rows-1)
@@ -4860,30 +4854,7 @@ namespace OnScreenKeyboard
                     "font warning: a layout: key does not use up the warning; opening the same file from the Load dialog still warns");
             }
 
-            // ── FluentDialogBase.SelectOrInsertFont ─────────────────────────
-            {
-                var combo = new ComboBox();
-                combo.Items.Add("(none)");
-                combo.Items.Add("Arial");
-                combo.Items.Add("Calibri");
-                var mi = typeof(FluentDialogBase).GetMethod("SelectOrInsertFont",
-                    BindingFlags.NonPublic | BindingFlags.Static, null, new[] { typeof(ComboBox), typeof(string) }, null);
-
-                mi.Invoke(null, new object[] { combo, FakeFont });
-                Assert(combo.SelectedItem?.ToString() == FakeFont,
-                    "SelectOrInsertFont: an uninstalled font is selected, not substituted");
-                Assert(combo.SelectedIndex != 0,
-                    "SelectOrInsertFont: doesn't land on index 0 (reserved for a '(none)'-style placeholder)");
-
-                mi.Invoke(null, new object[] { combo, "Arial" });
-                Assert(combo.SelectedItem?.ToString() == "Arial",
-                    "SelectOrInsertFont: an installed font is still just selected normally");
-                int arialCount = 0;
-                foreach (var item in combo.Items) if (item.ToString() == "Arial") arialCount++;
-                Assert(arialCount == 1, "SelectOrInsertFont: doesn't duplicate an already-listed font");
-            }
-
-            // ── The same for the touch chooser (the Key Editor and the Group Editor use it) ──
+            // ── FluentDialogBase.SelectOrInsertFont (the touch chooser of the Key Editor and the Group Editor) ──
             {
                 var chooser = new TouchChoiceButton();
                 chooser.SetItems(new[] { "(inherit)", "Arial", "Calibri" }.Select(n => new TouchChoice { Text = n }), 0);
