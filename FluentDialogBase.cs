@@ -828,6 +828,7 @@ namespace OnScreenKeyboard
             _zTimer.Tick += (s, e) =>
             {
                 if (IsDisposed || !Visible || !Enabled || !TopMost) return;    // a dialog of its own on top of this one: that one is the one to watch
+                if (Opacity < 0.1) return;                                      // the invisible windows of the gallery and the tests: nobody sees them, nothing to log
                 EnsureInFront(this, log: true);
             };
             _zTimer.Start();

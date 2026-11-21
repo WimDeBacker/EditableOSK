@@ -64,6 +64,12 @@ namespace OnScreenKeyboard
         /// <summary>Set when Save or Save As closed the dialog: the caller copies the results and then saves the layout file.</summary>
         public KeyboardFileAction FileAction { get; private set; } = KeyboardFileAction.None;
 
+        /// <summary>
+        /// Set when the person pressed Reset (Info): the dialog closed without applying anything, and the caller asks the real question
+        /// (<see cref="ResetDialog"/>) and does the reset.
+        /// </summary>
+        public bool ResetRequested { get; private set; }
+
         /// <summary>Two columns (word prediction) and the widest label need a little more than the default.</summary>
         protected override int ContentMaxWidth => 920;
 
@@ -86,7 +92,7 @@ namespace OnScreenKeyboard
         private TouchStepper      _stpOpacity;
         private ColorChip         _chipBackground;
         private TouchCheckBox     _chkAlwaysOnTop, _chkHideTitlebar;
-        private FluentButton      _btnSaveFile, _btnSaveAsFile, _btnLoadFile, _btnExportText;
+        private FluentButton      _btnSaveFile, _btnSaveAsFile, _btnLoadFile, _btnExportText, _btnReset;
 
         // ── Controls: Accessibility ──────────────────────────────────
         private TouchCheckBox    _chkStickyMods, _chkHoldToEdit, _chkTimingAnimation, _chkCornerLabels;
@@ -256,6 +262,21 @@ namespace OnScreenKeyboard
             hint.Text = Lang.T("info: language hint");
             _transTexts.Add((hint, () => Lang.T("info: language hint")));
             AddWideRow(t, hint, fill: false);
+
+            // Reset: the program back to its first start. The question (and what is removed) is asked by the caller once this window has closed.
+            AddWideRow(t, Heading(() => Lang.T("Reset")), fill: false);
+            var resetHint = Wrap(new Label
+            {
+                AutoSize = true, UseMnemonic = false, Font = Fluent.FontHint, BackColor = Color.Transparent, ForeColor = Fluent.TextPrimary,
+                MaximumSize = new Size(Touch.LabelMaxWidth * 3 / 2 + 60, 0), Margin = new Padding(0, 4, 0, 4),
+            });
+            resetHint.Text = Lang.T("info: reset hint");
+            _transTexts.Add((resetHint, () => Lang.T("info: reset hint")));
+            AddWideRow(t, resetHint, fill: false);
+            _btnReset = MakeTouchButton(() => Lang.T("Reset the program…"), FluentButton.Variant.Danger);
+            SetTip(_btnReset, () => Lang.T("tip: Reset the program"));
+            _btnReset.Click += (s, e) => { ResetRequested = true; DialogResult = DialogResult.Cancel; Close(); };
+            AddWideRow(t, ButtonRow(_btnReset), fill: false);
         }
 
         // ── Section 1: General ──────────────────────────────────────

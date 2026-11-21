@@ -445,7 +445,8 @@ namespace OnScreenKeyboard
                 // Best-effort, same as SaveIfDirty's own catch: losing the last
                 // ~30 s of learned words is acceptable, losing the layout/window
                 // state and leaking GDI handles on every failed shutdown is not.
-                try { WordDatabase.SaveNow(); } catch (Exception ex) { Program.LogError("closing: saving the learned words", ex); }   // best effort, but not silent
+                if (!_resetting)    // a reset has saved or discarded them itself, and the files are gone
+                    try { WordDatabase.SaveNow(); } catch (Exception ex) { Program.LogError("closing: saving the learned words", ex); }   // best effort, but not silent
                 _window.WindowWidth  = Width;
                 _window.WindowHeight = Height - ToolbarHeightForMode(_mode);
                 AutoSave();
@@ -3617,7 +3618,11 @@ namespace OnScreenKeyboard
                 groups:      _layout.Groups,
                 getGroups:   () => _layout.Groups,
                 getSettings: () => (_theme, _window, _meta));
-            if (dlg.ShowDialog(this) != DialogResult.OK) return;
+            if (dlg.ShowDialog(this) != DialogResult.OK)
+            {
+                if (dlg.ResetRequested) ResetProgram();
+                return;
+            }
             PushUndo();
 
             // Copy new values into the existing objects (keeps _theme/_window/_meta as stable
@@ -4018,8 +4023,52 @@ namespace OnScreenKeyboard
             _lblSelectedKey?.Invalidate();
         }
 
+        // Set while the program is being reset (ResetProgram): from then on nothing may be written to the data folder any more.
+        private bool _resetting;
+
+        /// <summary>
+        /// Edit Keyboard › Info › Reset: asks what to do (<see cref="ResetDialog"/>: also the learned words? save the keyboard first?), removes
+        /// the settings (see <see cref="ProgramReset"/>) and starts the program again, which then asks the first-start questions.
+        /// </summary>
+        private void ResetProgram()
+        {
+            using var dlg = new ResetDialog(
+                keyboardOnlyInSettings: !ProgramReset.IsInOwnFile(_currentFilePath, SettingsManager.DefaultPath, UserData.MayWriteLayout),
+                saveAs: () =>
+                {
+                    SaveSettings(true);
+                    return ProgramReset.IsInOwnFile(_currentFilePath, SettingsManager.DefaultPath, UserData.MayWriteLayout);
+                });
+            if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+            bool forgetWords = dlg.ForgetLearnedWords;
+            _resetting = true;                         // from here on neither AutoSave nor the close handler writes anything
+            _wpSaveTimer?.Stop();
+            if (forgetWords) WordDatabase.StopWriting();
+            else
+            {
+                try { WordDatabase.SaveNow(); } catch (Exception ex) { Program.LogError("reset: saving the learned words", ex); }
+                WordDatabase.StopWriting();            // kept words are saved above; nothing may touch the files again
+            }
+
+            var failed = ProgramReset.DeleteData(UserData.Directory, forgetWords);
+            if (failed.Count > 0)
+            {
+                _resetting = false;
+                WordDatabase.ResumeWriting();
+                _wpSaveTimer?.Start();
+                TouchMessage.Info(this, Lang.T("reset: title"),
+                    string.Format(Lang.T("reset: failed msg"), string.Join("\n", failed.Select(f => Path.GetFileName(f)))));
+                return;
+            }
+
+            if (!ProgramReset.Relaunch()) TouchMessage.Info(this, Lang.T("reset: title"), Lang.T("reset: restart failed msg"));
+            Close();
+        }
+
         private void AutoSave()
         {
+            if (_resetting) return;
             string path = _currentFilePath ?? SettingsManager.DefaultPath;
             // A layout in a folder this user cannot write to (a layout installed with the program, in Program Files): the changes go
             // to the user's own settings file, which the next start opens, and the original stays as it was.

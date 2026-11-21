@@ -379,6 +379,19 @@
   <String key="Export as text…"                  value="En texte…" />
   <String key="tip: Export as text"              value="Enregistre les touches de ce clavier dans un simple fichier texte : une ligne par rangée, un mot par touche. Vous pouvez le modifier à la main et le coller dans l’assistant Nouveau clavier. Les couleurs, les groupes et les paramètres n’y figurent pas." />
   <String key="info: language hint"              value="Ces textes sont dans la langue du clavier (Général › Langue du clavier). Choisissez-y une autre langue pour écrire aussi les textes dans cette langue." />
+  <String key="Reset"                            value="Réinitialiser" />
+  <String key="info: reset hint"                 value="Remet le programme dans l’état de son tout premier démarrage : la langue, les touches et le style vous sont redemandés. Les fichiers de clavier que vous avez enregistrés vous-même ne sont pas touchés." />
+  <String key="Reset the program…"               value="Réinitialiser le programme…" />
+  <String key="tip: Reset the program"           value="Demande d’abord ce qu’il faut supprimer, puis supprime les paramètres et le clavier utilisé et relance le programme comme s’il démarrait pour la première fois." />
+  <String key="reset: title"                     value="Réinitialiser le programme" />
+  <String key="reset: intro"                     value="Cela supprime tous les paramètres : la langue des écrans, le balayage, la fenêtre et le clavier utilisé actuellement avec ses paramètres. Le programme redémarre ensuite comme s’il démarrait pour la première fois." />
+  <String key="reset: kept"                      value="Les fichiers de clavier (.kbl) que vous avez enregistrés vous-même ne sont pas touchés." />
+  <String key="reset: unsaved"                   value="Le clavier utilisé actuellement n’est pas dans un fichier à lui, seulement dans les paramètres du programme. Une réinitialisation le supprime. Enregistrez-le d’abord dans un fichier si vous voulez le garder." />
+  <String key="reset: forget words"              value="Oublier aussi les mots appris par la prédiction de mots" />
+  <String key="reset: words hint"                value="Désactivé : les mots appris sont conservés et réutilisés après le redémarrage." />
+  <String key="reset: button"                    value="Réinitialiser et redémarrer" />
+  <String key="reset: failed msg"                value="Ces fichiers n’ont pas pu être supprimés (ils sont peut-être utilisés) :&#10;{0}&#10;&#10;Le programme n’a pas été redémarré." />
+  <String key="reset: restart failed msg"        value="Les paramètres ont été supprimés, mais le programme n’a pas pu se relancer. Il se ferme maintenant ; relancez-le vous-même." />
   <String key="Title"                            value="Titre" />
   <String key="Description"                      value="Description" />
   <String key="tip: Keyboard title"              value="Le nom de ce clavier dans la langue choisie ci-dessus. La liste des claviers l’affiche. Vide : le clavier n’a pas de nom." />

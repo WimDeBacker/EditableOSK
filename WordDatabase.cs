@@ -1240,6 +1240,7 @@ namespace OnScreenKeyboard
         /// </summary>
         private static void WriteSaveData(SaveData data, string path, string language = null)
         {
+            if (_writesStopped) return;
             string tmp = path + ".tmp";
             try
             {
@@ -1356,6 +1357,18 @@ namespace OnScreenKeyboard
 
         /// <summary>One writer of the overlay file at a time: the periodic background save and the save when the keyboard closes.</summary>
         private static readonly object _writeLock = new object();
+
+        private static volatile bool _writesStopped;
+
+        /// <summary>
+        /// Stops every later write of the learned words and forgets what was waiting to be written (waits for a write that is running).
+        /// For the reset of the program: the overlay files are deleted afterwards, and a background save that was still queued must not
+        /// bring one back. <see cref="ResumeWriting"/> undoes it (a reset that failed, and the tests).
+        /// </summary>
+        public static void StopWriting() { lock (_writeLock) { _writesStopped = true; _dirty = false; } }
+
+        /// <summary>Allows writing the learned words again after <see cref="StopWriting"/>.</summary>
+        public static void ResumeWriting() { lock (_writeLock) _writesStopped = false; }
 
         /// <summary>For the tests: makes every write take this long (milliseconds), so a save that overlaps another can be provoked.</summary>
         internal static int WriteDelayMsForTest;

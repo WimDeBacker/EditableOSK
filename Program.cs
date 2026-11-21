@@ -116,8 +116,13 @@ namespace OnScreenKeyboard
             Application.ThreadException += (s, e) => LogError("UI thread", e.Exception);
             AppDomain.CurrentDomain.UnhandledException += (s, e) => LogError("unhandled", e.ExceptionObject as Exception);
 
+            // Started by a reset (Edit Keyboard › Info): wait until that process has ended, so two keyboards never run side by side.
+            // Nothing is taken over from the program folder then: a reset must really start from nothing.
+            int afterReset = ProgramReset.ParseAfterReset(args);
+            if (afterReset > 0) ProgramReset.WaitForEnd(afterReset);
+
             // Earlier versions wrote settings and learned words next to the exe: take them over into the user's folder (once).
-            if (UserData.UsesStandardFolder) UserData.MigrateFrom(UserData.AppFolder);
+            if (afterReset == 0 && UserData.UsesStandardFolder) UserData.MigrateFrom(UserData.AppFolder);
 
             // A layout file on the command line (double-click on a .kbl): a keyboard that is already running opens it and this
             // process ends; otherwise this keyboard starts with it.

@@ -379,6 +379,19 @@
   <String key="Export as text…"                  value="Come testo…" />
   <String key="tip: Export as text"              value="Salva i tasti di questa tastiera come semplice file di testo: una riga per fila, una parola per tasto. Si può modificare a mano e incollare nella procedura guidata Nuova tastiera. Colori, gruppi e impostazioni non ne fanno parte." />
   <String key="info: language hint"              value="Questi testi sono nella lingua della tastiera (Generale › Lingua della tastiera). Scegliere lì un’altra lingua per scrivere i testi anche in quella lingua." />
+  <String key="Reset"                            value="Ripristina" />
+  <String key="info: reset hint"                 value="Riporta il programma allo stato del suo primo avvio: lingua, tasti e stile vengono richiesti di nuovo. I file di tastiera salvati da sé non vengono toccati." />
+  <String key="Reset the program…"               value="Ripristina il programma…" />
+  <String key="tip: Reset the program"           value="Chiede prima che cosa eliminare, poi elimina le impostazioni e la tastiera in uso e riavvia il programma come se partisse per la prima volta." />
+  <String key="reset: title"                     value="Ripristina il programma" />
+  <String key="reset: intro"                     value="Vengono eliminate tutte le impostazioni: la lingua delle schermate, la scansione, la finestra e la tastiera in uso con le sue impostazioni. Il programma si riavvia poi come se partisse per la prima volta." />
+  <String key="reset: kept"                      value="I file di tastiera (.kbl) salvati da sé non vengono toccati." />
+  <String key="reset: unsaved"                   value="La tastiera in uso non è in un file proprio, ma solo nelle impostazioni del programma. Il ripristino la elimina. Salvarla prima come file per conservarla." />
+  <String key="reset: forget words"              value="Dimenticare anche le parole apprese dalla previsione delle parole" />
+  <String key="reset: words hint"                value="Disattivato: le parole apprese vengono conservate e riutilizzate dopo il riavvio." />
+  <String key="reset: button"                    value="Ripristina e riavvia" />
+  <String key="reset: failed msg"                value="Questi file non si sono potuti eliminare (forse sono in uso):&#10;{0}&#10;&#10;Il programma non è stato riavviato." />
+  <String key="reset: restart failed msg"        value="Le impostazioni sono state eliminate, ma il programma non è riuscito a riavviarsi. Ora si chiude; riavviarlo manualmente." />
   <String key="Title"                            value="Titolo" />
   <String key="Description"                      value="Descrizione" />
   <String key="tip: Keyboard title"              value="Il nome di questa tastiera nella lingua scelta sopra. L’elenco delle tastiere lo mostra. Vuoto: la tastiera non ha nome." />

@@ -555,6 +555,9 @@ namespace OnScreenKeyboard
                 new FirstRunDialog(new[] { ("nl", "Nederlands"), ("en", "English") }, "qwerty", "nl"));
             // The settings of scanning (opened from the gear button's menu).
             CheckDialogGuards("ScanSettingsDialog", () => new ScanSettingsDialog(new ScanSettings()));
+            // The question asked before the program is reset (Edit Keyboard › Info), with and without the warning about an unsaved keyboard.
+            CheckDialogGuards("ResetDialog (keyboard only in the settings)", () => new ResetDialog(true, () => true));
+            CheckDialogGuards("ResetDialog", () => new ResetDialog(false, () => true));
         }
 
         // ════════════════════════════════════════════════════════════════

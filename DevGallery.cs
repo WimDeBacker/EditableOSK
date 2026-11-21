@@ -198,6 +198,11 @@ namespace OnScreenKeyboard
                         Show(f);
                         Save(f, Path.Combine(outDir, $"scanning_{theme}_{tag}.png"));
                     }
+                    using (var f = new ResetDialog(true, () => true))
+                    {
+                        Show(f);
+                        Save(f, Path.Combine(outDir, $"reset_{theme}_{tag}.png"));
+                    }
                 }
             }
             finally { ToolbarButton.IsLightTheme = wasLight; }

@@ -379,6 +379,19 @@
   <String key="Export as text…"                  value="Como texto…" />
   <String key="tip: Export as text"              value="Guarda las teclas de este teclado como un archivo de texto sin formato: una fila por línea, una tecla por palabra. Puede editarlo a mano y pegarlo en el asistente Nuevo teclado. Los colores, los grupos y la configuración no están incluidos." />
   <String key="info: language hint"              value="Estos textos están en el idioma del teclado (General › Idioma del teclado). Elija allí otro idioma para escribir también los textos en ese idioma." />
+  <String key="Reset"                            value="Restablecer" />
+  <String key="info: reset hint"                 value="Devuelve el programa al estado de su primer inicio: se vuelve a preguntar por el idioma, las teclas y el estilo. Los archivos de teclado que usted mismo guardó no se tocan." />
+  <String key="Reset the program…"               value="Restablecer el programa…" />
+  <String key="tip: Reset the program"           value="Pregunta primero qué eliminar, luego elimina la configuración y el teclado en uso y vuelve a iniciar el programa como si arrancara por primera vez." />
+  <String key="reset: title"                     value="Restablecer el programa" />
+  <String key="reset: intro"                     value="Esto elimina toda la configuración: el idioma de las pantallas, el escaneo, la ventana y el teclado que usa ahora con su configuración. Después el programa se inicia de nuevo como si arrancara por primera vez." />
+  <String key="reset: kept"                      value="Los archivos de teclado (.kbl) que usted mismo guardó no se tocan." />
+  <String key="reset: unsaved"                   value="El teclado que usa ahora no está en un archivo propio, solo en la configuración del programa. Al restablecer se elimina. Guárdelo antes como archivo si quiere conservarlo." />
+  <String key="reset: forget words"              value="Olvidar también las palabras que aprendió la predicción de palabras" />
+  <String key="reset: words hint"                value="Desactivado: las palabras aprendidas se conservan y se vuelven a usar tras el reinicio." />
+  <String key="reset: button"                    value="Restablecer y reiniciar" />
+  <String key="reset: failed msg"                value="No se pudieron eliminar estos archivos (quizá estén en uso):&#10;{0}&#10;&#10;El programa no se ha reiniciado." />
+  <String key="reset: restart failed msg"        value="Se ha eliminado la configuración, pero el programa no pudo iniciarse de nuevo. Se cierra ahora; inícielo usted mismo." />
   <String key="Title"                            value="Título" />
   <String key="Description"                      value="Descripción" />
   <String key="tip: Keyboard title"              value="El nombre de este teclado en el idioma elegido arriba. La lista de teclados lo muestra. Vacío: el teclado no tiene nombre." />

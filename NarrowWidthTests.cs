@@ -89,6 +89,7 @@ namespace OnScreenKeyboard
             ("LayoutPickerDialog", () => new LayoutPickerDialog(new List<LayoutInfo> { new LayoutInfo { Path = "a.kbl", Title = "AZERTY", Description = "AZERTY-toetsenbord met functietoetsen, cijfers, leestekens en een rij voor woordvoorspelling." } }), 480, 520, 0),
             ("FirstRunDialog",     () => new FirstRunDialog(new[] { ("nl", "Nederlands"), ("en", "English") }, "qwerty", "nl"), 480, 520, 580),
             ("ScanSettingsDialog", () => new ScanSettingsDialog(new ScanSettings()),                         480, 520, 580),
+            ("ResetDialog",        () => new ResetDialog(true, () => true),                                  480, 520, 580),     // with the warning: its widest form
         };
 
         private static void T_NarrowDialogs()

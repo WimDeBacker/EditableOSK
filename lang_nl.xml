@@ -382,6 +382,19 @@
   <String key="Export as text…"             value="Als tekst…" />
   <String key="tip: Export as text"         value="Slaat de toetsen van dit toetsenbord op als gewoon tekstbestand: één rij per regel, één toets per woord. Je kunt het met de hand aanpassen en in de wizard Nieuw toetsenbord plakken. Kleuren, groepen en instellingen staan er niet in." />
   <String key="info: language hint"         value="Deze teksten staan in de taal van het toetsenbord (Algemeen › Taal van het toetsenbord). Kies daar een andere taal om de teksten ook in die taal te schrijven." />
+  <String key="Reset"                       value="Herstellen" />
+  <String key="info: reset hint"            value="Zet het programma terug zoals bij de allereerste start: je wordt opnieuw gevraagd naar de taal, de toetsen en de stijl. Toetsenbordbestanden die je zelf hebt bewaard blijven ongemoeid." />
+  <String key="Reset the program…"          value="Programma herstellen…" />
+  <String key="tip: Reset the program"      value="Vraagt eerst wat er gewist moet worden, wist dan de instellingen en het toetsenbord dat je nu gebruikt en start het programma opnieuw op alsof het voor het eerst gestart wordt." />
+  <String key="reset: title"                value="Programma herstellen" />
+  <String key="reset: intro"                value="Dit wist alle instellingen: de taal van de schermen, het scannen, het venster en het toetsenbord dat je nu gebruikt met zijn instellingen. Het programma start daarna opnieuw op alsof het voor het eerst gestart wordt." />
+  <String key="reset: kept"                 value="Toetsenbordbestanden (.kbl) die je zelf hebt bewaard blijven ongemoeid." />
+  <String key="reset: unsaved"              value="Het toetsenbord dat je nu gebruikt staat niet in een eigen bestand, alleen in de instellingen van het programma. Bij het herstellen verdwijnt het. Bewaar het eerst als bestand als je het wilt houden." />
+  <String key="reset: forget words"         value="Ook de woorden vergeten die de woordvoorspelling heeft geleerd" />
+  <String key="reset: words hint"           value="Uit: de geleerde woorden blijven bewaard en worden na het opnieuw starten weer gebruikt." />
+  <String key="reset: button"               value="Herstellen en opnieuw starten" />
+  <String key="reset: failed msg"           value="Deze bestanden konden niet gewist worden (misschien zijn ze in gebruik):&#10;{0}&#10;&#10;Het programma is niet opnieuw gestart." />
+  <String key="reset: restart failed msg"   value="De instellingen zijn gewist, maar het programma kon zichzelf niet opnieuw starten. Het sluit nu; start het zelf opnieuw op." />
   <String key="Title"                       value="Titel" />
   <String key="Description"                 value="Omschrijving" />
   <String key="tip: Keyboard title"         value="De naam van dit toetsenbord in de hierboven gekozen taal. De lijst met toetsenborden toont ze. Leeg: het toetsenbord heeft geen naam." />
